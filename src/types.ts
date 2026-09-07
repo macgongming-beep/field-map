@@ -223,6 +223,7 @@ export type VisitHistory = {
   specialPeriodId?: number | null
   invitationLeft?: boolean
   visitType?: 'card' | 'restaurant'
+  createdByUserId?: number | null
 }
 
 export type RestaurantRequest = {

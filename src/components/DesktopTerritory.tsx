@@ -391,7 +391,7 @@ export function DesktopTerritory({
 
   const deletePointVisitHistory = async (history: VisitHistory) => {
     if (!onDeleteVisitHistory) return
-    if (!(await confirmDialog({ message: '이 방문 기록을 삭제할까요?', danger: true, confirmLabel: '삭제' }))) return
+    if (!(await confirmDialog({ message: msg('잘못 기록한 방문으로 처리할까요? 원본은 관리자 기록에 보존됩니다.'), danger: true, confirmLabel: msg('잘못 기록함') }))) return
     onDeleteVisitHistory(history.id, history.unitId)
     setOpenHistoryActionId(null)
   }

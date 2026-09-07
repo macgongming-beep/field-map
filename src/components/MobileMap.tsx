@@ -2900,7 +2900,7 @@ function UnitDetailScreen({
                           <button onClick={() => { setHistoryToEdit(h); setEditingHistoryId(null) }}
                             style={{ padding: '2px 8px', border: '1px solid var(--line)', borderRadius: 5, background: 'var(--surface)', color: 'var(--ink)', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
                             type="button">{t(language, 'common.edit')}</button>
-                          <button onClick={async () => { if (await confirmDialog({ message: t(language, 'map.deleteHistoryConfirm'), danger: true, confirmLabel: msg('삭제') })) onDeleteVisitHistory(h.id, unit.id); setEditingHistoryId(null) }}
+                          <button onClick={async () => { if (await confirmDialog({ message: t(language, 'map.deleteHistoryConfirm'), danger: true, confirmLabel: msg('잘못 기록함') })) onDeleteVisitHistory(h.id, unit.id); setEditingHistoryId(null) }}
                             style={{ padding: '2px 8px', border: '1px solid #fecaca', borderRadius: 5, background: '#fef2f2', color: '#dc2626', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
                             type="button">{t(language, 'common.delete')}</button>
                           <button onClick={() => setEditingHistoryId(null)}

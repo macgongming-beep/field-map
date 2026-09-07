@@ -125,6 +125,7 @@ export function useStore(enabled: boolean = true) {
   const [informalGroups, setInformalGroups] = useState<InformalGroup[]>([])
   const [restaurantRequests, setRestaurantRequests] = useState<RestaurantRequest[]>([])
   const [globalSettings, setGlobalSettings] = useState<Record<string, string>>({})
+  const globalSettingsRef = useRef<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   /**
    * 이번 로그인에서 fetchAll 을 시작했는가.
@@ -294,7 +295,8 @@ export function useStore(enabled: boolean = true) {
         const [visitsRes, sessionsRes] = await Promise.all([
           fetchAllPages((from, to) => supabase
             .from('visit_histories')
-            .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, service_session_id, special_period_id, invitation_left, created_at')
+            .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, service_session_id, special_period_id, invitation_left, created_at, created_by_user_id')
+            .is('invalidated_at', null)
             .gte('created_at', oneYearAgo)
             .order('created_at', { ascending: false })
             .range(from, to)),
@@ -458,7 +460,9 @@ export function useStore(enabled: boolean = true) {
       case 'system': {
         const settingsRes = await supabase.from('app_settings').select('*')
         measure(settingsRes.data)
-        setGlobalSettings(settingsRes.error ? {} : Object.fromEntries((settingsRes.data as { key: string; value: string }[]).map((r) => [r.key, r.value])))
+        const nextGlobalSettings = settingsRes.error ? {} : Object.fromEntries((settingsRes.data as { key: string; value: string }[]).map((r) => [r.key, r.value]))
+        globalSettingsRef.current = nextGlobalSettings
+        setGlobalSettings(nextGlobalSettings)
         return approxBytes
       }
     }
@@ -821,10 +825,22 @@ export function useStore(enabled: boolean = true) {
 
   // app_settings 키/값 서버 저장 (기기 간 공유). 캘린더 프리셋 등에 사용.
   const upsertGlobalSetting = async (key: string, value: string): Promise<boolean> => {
-    setGlobalSettings((prev) => ({ ...prev, [key]: value }))  // optimistic
+    const previousValue = globalSettingsRef.current[key]
+    const optimisticSettings = { ...globalSettingsRef.current, [key]: value }
+    globalSettingsRef.current = optimisticSettings
+    setGlobalSettings(optimisticSettings)
     const { error } = await supabase.from('app_settings').upsert({ key, value }, { onConflict: 'key' })
     if (error) {
       console.warn('[app_settings] 저장 실패', error)
+      // 같은 키에 더 최신 저장이 시작됐다면 이전 실패가 새 값을 되돌리지 않는다.
+      if (globalSettingsRef.current[key] === value) {
+        const next = { ...globalSettingsRef.current }
+        if (previousValue === undefined) delete next[key]
+        else next[key] = previousValue
+        globalSettingsRef.current = next
+        setGlobalSettings(next)
+      }
+      showToast(msg('설정을 저장하지 못했습니다.'), 'error')
       return false
     }
     return true

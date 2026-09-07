@@ -17,6 +17,7 @@ import { confirmDialog } from '../lib/confirm'
 import { getLocalDateString } from '../utils/dateUtils'
 import { toCsv, parseCsv, normalizeDate, parseYN, isDeleteMark, VISIT_RESULTS, TIME_SLOTS, downloadCsvFile } from '../utils/roundTripCsv'
 import { msg } from '../lib/msg'
+import { getAuthToken } from '../lib/authToken'
 
 // ── supabase 페이징 조회 (기본 1000행 제한 대응) ─────────────
 async function fetchAllRows<T>(build: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
@@ -85,7 +86,7 @@ const VISIT_HEADERS = ['기록ID', '세대ID', '방문일', '시간대', '방문
 type RawVisitRow = { id: number; unit_id: number; visitor_name: string; result: string; time_slot: string | null; memo: string | null; visited_at: string; special_period_id: number | null }
 
 type VisitPlan = {
-  updates: Array<{ id: number; patch: Record<string, unknown>; label: string }>
+  updates: Array<{ id: number; patch: Record<string, unknown>; current: RawVisitRow; label: string }>
   inserts: Array<{ row: Record<string, unknown>; label: string }>
   deletes: Array<{ id: number; label: string }>
   errors: Array<{ line: number; reason: string }>
@@ -133,6 +134,7 @@ export function DataRoundTrip() {
       const visits = await fetchAllRows<RawVisitRow>((f, t) =>
         supabase.from('visit_histories')
           .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, special_period_id')
+          .is('invalidated_at', null)
           .gte('visited_at', fromDate).lte('visited_at', toDate)
           .order('visited_at').order('id').range(f, t))
       const rows: string[][] = [VISIT_HEADERS.slice()]
@@ -216,7 +218,8 @@ export function DataRoundTrip() {
       for (let i = 0; i < idsInFile.length; i += 500) {
         const chunk = idsInFile.slice(i, i + 500)
         const { data, error } = await supabase.from('visit_histories')
-          .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, special_period_id').in('id', chunk)
+          .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, special_period_id')
+          .in('id', chunk).is('invalidated_at', null)
         if (error) throw error
         for (const row of (data ?? []) as RawVisitRow[]) existing.set(row.id, row)
       }
@@ -238,7 +241,7 @@ export function DataRoundTrip() {
         if ((cur.result ?? '') !== p.result) patch.result = p.result
         if ((cur.memo ?? '') !== p.memo) patch.memo = p.memo || null
         if (Object.keys(patch).length === 0) { plan.unchanged++; continue }
-        plan.updates.push({ id: p.id, patch, label })
+        plan.updates.push({ id: p.id, patch, current: cur, label })
       }
       setVisitPlan(plan)
     } catch (e) {
@@ -251,7 +254,7 @@ export function DataRoundTrip() {
     if (!visitPlan) return
     const { updates, inserts, deletes } = visitPlan
     const ok = await confirmDialog({
-      message: msg('방문 기록에 적용할까요?\n수정 {length} · 추가 {v1} · 삭제 {v2}\n(적용 전 백업(npm run backup)을 권장합니다)', { length: updates.length, v1: inserts.length, v2: deletes.length }),
+      message: msg('방문 기록에 적용할까요?\n수정 {length} · 추가 {v1} · 무효 처리 {v2}\n무효 처리한 원본은 관리자 기록에 보존됩니다.\n(적용 전 백업(npm run backup)을 권장합니다)', { length: updates.length, v1: inserts.length, v2: deletes.length }),
       danger: deletes.length > 0,
       confirmLabel: '적용',
     })
@@ -259,13 +262,26 @@ export function DataRoundTrip() {
     setBusy('visit-apply')
     let done = 0; let failed = 0
     try {
-      for (let i = 0; i < deletes.length; i += 200) {
-        const ids = deletes.slice(i, i + 200).map((d) => d.id)
-        const { error } = await supabase.from('visit_histories').delete().in('id', ids)
-        if (error) failed += ids.length; else done += ids.length
+      const token = getAuthToken()
+      if (!token) throw new Error('로그인이 필요합니다')
+      for (const item of deletes) {
+        const { error } = await supabase.rpc('invalidate_visit_history_tx', {
+          p_token: token, p_history_id: item.id, p_reason: '데이터 관리 CSV 정정',
+        })
+        if (error) failed++; else done++
       }
       for (const u of updates) {
-        const { error } = await supabase.from('visit_histories').update(u.patch).eq('id', u.id)
+        const next = { ...u.current, ...u.patch }
+        const { error } = await supabase.rpc('update_visit_history_tx', {
+          p_token: token,
+          p_history_id: u.id,
+          p_result: next.result,
+          p_time_slot: next.time_slot,
+          p_memo: next.memo ?? '',
+          p_visited_at: next.visited_at,
+          p_visitor_name: next.visitor_name,
+          p_reason: '데이터 관리 CSV 정정',
+        })
         if (error) failed++; else done++
       }
       for (let i = 0; i < inserts.length; i += 200) {
@@ -403,7 +419,7 @@ export function DataRoundTrip() {
       <section className="desk-card ds-card">
         <h2 className="desk-card__title" style={{ marginBottom: 12 }}>방문 기록 엑셀 편집</h2>
         <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.6 }}>
-          기간의 방문 기록(만남/부재/대상외 등)을 CSV로 내려받아 엑셀에서 수정·추가·삭제 후 다시 업로드합니다.
+          기간의 방문 기록(만남/부재/대상외 등)을 CSV로 내려받아 엑셀에서 수정·추가·무효 처리 후 다시 업로드합니다.
           기록ID로 행을 식별하며, 적용 전 변경 내용을 미리 보여줍니다. 참고(카드/건물 등) 칸 수정은 무시됩니다.
         </p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>

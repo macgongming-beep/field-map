@@ -479,6 +479,9 @@ export const messagesEn: Record<string, string> = {
   "세대 속성 {length}개를 수정할까요?\n(적용 전 백업(npm run backup)을 권장합니다)": "Update {length} unit attributes?\n(Back up first: npm run backup)",
   "오래된 데이터 {total}건(채팅 {chat} · 알림 {notif} · 운영로그 {svc} · 로그인 {login})을 지금 영구 삭제할까요?": "Permanently delete {total} old records now? (chat {chat} · alerts {notif} · logs {svc} · logins {login})",
   "이 방문 기록을 삭제할까요?": "Delete this visit record?",
+  "잘못 기록한 방문으로 처리할까요? 원본은 관리자 기록에 보존됩니다.": "Mark this visit as entered by mistake? The original is kept in the admin log.",
+  "잘못 기록함": "Entered by mistake",
+  "잘못 기록한 방문을 취소했습니다": "The mistaken visit entry was cancelled.",
   "저장 실패": "Save failed",
   "저장되었습니다.": "Saved.",
   "적용": "Apply",
@@ -819,4 +822,5 @@ export const messagesEn: Record<string, string> = {
   "장소 또는 주소를 눌러 선택하세요": "Select a place or address",
   "장소나 주소를 찾지 못했습니다.": "No place or address was found.",
   "장소 검색을 쓸 수 없습니다. 잠시 뒤 다시 시도해 주세요.": "Place search is unavailable. Please try again shortly.",
+  "설정을 저장하지 못했습니다.": "Could not save the settings.",
 }

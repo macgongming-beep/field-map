@@ -976,6 +976,8 @@ function EventAddSheet({ language,
   const [timeSettingsOpen, setTimeSettingsOpen] = useState(false)
   const [placePresets, setPlacePresets] = useState<PlacePreset[]>(() => resolvePlacePresets(globalSettings[PLACE_PRESET_SETTING_KEY]))
   const [placeSettingsOpen, setPlaceSettingsOpen] = useState(false)
+  const timePresetSaveVersionRef = useRef(0)
+  const placePresetSaveVersionRef = useRef(0)
   // 다른 기기에서 바뀐 서버 프리셋이 fetch 되면 반영 (편집 중 아닐 때)
   useEffect(() => {
     if (timeSettingsOpen) return
@@ -994,18 +996,30 @@ function EventAddSheet({ language,
   const repeatCount = repeat && repeatEnd ? getWeeklyDates(date, repeatEnd).length : 0
   const selectedPreset = timePresets.find((preset) => preset.time === time)?.label ?? ''
 
-  const updateTimePresets = (next: TimePreset[]) => {
+  const updateTimePresets = async (next: TimePreset[]) => {
     const normalized = normalizeTimePresets(next)
+    const previous = timePresets
+    const version = ++timePresetSaveVersionRef.current
     setTimePresets(normalized)
     saveTimePresets(normalized)  // 로컬 캐시
-    void onUpsertGlobalSetting?.(TIME_PRESET_SETTING_KEY, JSON.stringify(normalized))  // 서버 공유
+    const saved = await onUpsertGlobalSetting?.(TIME_PRESET_SETTING_KEY, JSON.stringify(normalized))
+    if (saved === false && timePresetSaveVersionRef.current === version) {
+      setTimePresets(previous)
+      saveTimePresets(previous)
+    }
   }
 
-  const updatePlacePresets = (next: PlacePreset[]) => {
+  const updatePlacePresets = async (next: PlacePreset[]) => {
     const normalized = normalizePlacePresets(next)
+    const previous = placePresets
+    const version = ++placePresetSaveVersionRef.current
     setPlacePresets(normalized)
     savePlacePresets(normalized)  // 로컬 캐시
-    void onUpsertGlobalSetting?.(PLACE_PRESET_SETTING_KEY, JSON.stringify(normalized))  // 서버 공유
+    const saved = await onUpsertGlobalSetting?.(PLACE_PRESET_SETTING_KEY, JSON.stringify(normalized))
+    if (saved === false && placePresetSaveVersionRef.current === version) {
+      setPlacePresets(previous)
+      savePlacePresets(previous)
+    }
   }
 
   const applyPlacePreset = (preset: PlacePreset) => {

@@ -120,4 +120,22 @@ describe('PC 일정 배정 권한', () => {
     expect(screen.getByText('신청자10')).toBeTruthy()
     expect(screen.queryByText('+3')).toBeNull()
   })
+
+  test('일반 사용자와 인도자에게 일정 추가 진입점을 노출하지 않는다', () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <DesktopCalendar {...(calendarProps({ role: 'user', actualRole: 'user' }) as never)} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.queryAllByRole('button', { name: '+ 일정 추가' })).toHaveLength(0)
+
+    rerender(
+      <MemoryRouter>
+        <DesktopCalendar {...(calendarProps({ role: 'leader', actualRole: 'leader' }) as never)} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.queryAllByRole('button', { name: '+ 일정 추가' })).toHaveLength(0)
+  })
 })

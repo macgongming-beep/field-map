@@ -45,7 +45,7 @@ export const en = {
     'map.deleteUnit': 'Delete Unit',
     'map.editUnit': 'Edit Unit',
     'map.deleteBuildingConfirm': 'Are you sure you want to delete this building? All units and histories will be permanently removed.',
-    'map.deleteHistoryConfirm': 'Delete this history?',
+    'map.deleteHistoryConfirm': 'Mark this visit as entered by mistake? The original is kept in the admin log.',
     'map.deleteUnitConfirm': 'Delete this unit?',
     'map.checkingAddress': 'Checking Address',
     'map.checkLocation': 'Check Location',
@@ -605,7 +605,7 @@ export const en = {
 
     'territory.notFound': 'Regular visit not found.',
     'territory.backToList': 'Back to list',
-    'territory.deleteLogConfirm': 'Delete this record?',
+    'territory.deleteLogConfirm': 'Mark this visit as entered by mistake? The original is kept in the admin log.',
     'territory.lastVisitPrefix': 'Last visit ·',
     'territory.avgInterval': 'Avg. interval {days} days',
     'territory.nextRecommend': 'Next recommended {date}',

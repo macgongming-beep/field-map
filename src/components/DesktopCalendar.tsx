@@ -192,6 +192,8 @@ export function DesktopCalendar({
   const [placeSettingsOpen, setPlaceSettingsOpen] = useState(false)
   const [timePresets, setTimePresets] = useState<TimePreset[]>(() => resolveTimePresets(globalSettings[TIME_PRESET_SETTING_KEY]))
   const [timeSettingsOpen, setTimeSettingsOpen] = useState(false)
+  const placePresetSaveVersionRef = useRef(0)
+  const timePresetSaveVersionRef = useRef(0)
   const [newTime, setNewTime] = useState('10:00')
   const [newEndTime, setNewEndTime] = useState('12:00')
   const [newPlace, setNewPlace] = useState('')
@@ -263,18 +265,30 @@ export function DesktopCalendar({
     setShowCreateForm(false)
   }
 
-  const updatePlacePresets = (next: PlacePreset[]) => {
+  const updatePlacePresets = async (next: PlacePreset[]) => {
     const normalized = normalizePlacePresets(next)
+    const previous = placePresets
+    const version = ++placePresetSaveVersionRef.current
     setPlacePresets(normalized)
     savePlacePresets(normalized)  // 로컬 캐시
-    void onUpsertGlobalSetting?.(PLACE_PRESET_SETTING_KEY, JSON.stringify(normalized))  // 서버 공유
+    const saved = await onUpsertGlobalSetting?.(PLACE_PRESET_SETTING_KEY, JSON.stringify(normalized))
+    if (saved === false && placePresetSaveVersionRef.current === version) {
+      setPlacePresets(previous)
+      savePlacePresets(previous)
+    }
   }
 
-  const updateTimePresets = (next: TimePreset[]) => {
+  const updateTimePresets = async (next: TimePreset[]) => {
     const normalized = normalizeTimePresets(next)
+    const previous = timePresets
+    const version = ++timePresetSaveVersionRef.current
     setTimePresets(normalized)
     saveTimePresets(normalized)  // 로컬 캐시
-    void onUpsertGlobalSetting?.(TIME_PRESET_SETTING_KEY, JSON.stringify(normalized))  // 서버 공유
+    const saved = await onUpsertGlobalSetting?.(TIME_PRESET_SETTING_KEY, JSON.stringify(normalized))
+    if (saved === false && timePresetSaveVersionRef.current === version) {
+      setTimePresets(previous)
+      saveTimePresets(previous)
+    }
   }
 
   // 다른 기기에서 바뀐 서버 프리셋이 fetch 되면 반영 (편집 중 아닐 때)
@@ -821,11 +835,13 @@ export function DesktopCalendar({
             </div>
           </div>
 
-          <div className="cal-pane-footer">
-            <button className="cal-add-btn" onClick={openCreate} type="button">
-              + 일정 추가
-            </button>
-          </div>
+          {(role === 'admin' || role === 'developer') && (
+            <div className="cal-pane-footer">
+              <button className="cal-add-btn" onClick={openCreate} type="button">
+                + 일정 추가
+              </button>
+            </div>
+          )}
         </aside>
       </section>
       {chatEvent && (

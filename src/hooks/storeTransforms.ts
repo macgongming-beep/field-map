@@ -187,6 +187,7 @@ export type RawVisitHistory = {
   special_period_id?: number | null
   invitation_left?: boolean | null
   visit_type?: 'card' | 'restaurant' | null
+  created_by_user_id?: number | null
 }
 
 export type RawRestaurantRequest = {
@@ -538,6 +539,7 @@ export function toVisitHistory(raw: RawVisitHistory): VisitHistory {
     specialPeriodId: raw.special_period_id ?? null,
     invitationLeft: raw.invitation_left ?? false,
     visitType: raw.visit_type ?? 'card',
+    createdByUserId: raw.created_by_user_id ?? null,
   }
 }
 

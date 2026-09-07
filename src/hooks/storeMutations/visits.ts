@@ -3,10 +3,10 @@ import { buildVisitUpdatePayload } from '../../utils/visitUpdatePayload'
 import { getCurrentTimeSlot } from '../../utils/timeUtils'
 import { supabase, showToast, reportMutationError, getLocalDateString, requireVisitor } from './shared'
 import { logServiceAction } from './serviceLog'
-import { t, currentLang } from '../../i18n'
 import { msg } from '../../lib/msg'
 import { normalizeUnitNumber } from '../../utils/duplicateBuildingMerge'
 import { canonicalUnitNumber } from '../../utils/unitNumber'
+import { getAuthToken } from '../../lib/authToken'
 
 export function makeVisitMutations(deps: {
   fetchAll: () => Promise<void>
@@ -64,6 +64,7 @@ export function makeVisitMutations(deps: {
       .eq('visitor_name', visitor)
       .eq('visited_at', visitedAt)
       .eq('time_slot', effectiveTimeSlot)
+      .is('invalidated_at', null)
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -134,6 +135,7 @@ export function makeVisitMutations(deps: {
       .eq('visitor_name', visitor)
       .eq('visited_at', todayStr)
       .eq('time_slot', slot)
+      .is('invalidated_at', null)
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -215,6 +217,7 @@ export function makeVisitMutations(deps: {
       .eq('visitor_name', visitor)
       .eq('visited_at', todayStr)
       .eq('time_slot', slot)
+      .is('invalidated_at', null)
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -351,18 +354,22 @@ export function makeVisitMutations(deps: {
     const previousHistory = unitHistories[1]
     if (!latestHistory) return
 
-    const deleteResult = await supabase.from('visit_histories').delete().eq('id', latestHistory.id)
-    if (deleteResult.error) {
-      reportMutationError(msg('최근 방문 이력을 취소하지 못했습니다.'), deleteResult.error)
+    const token = getAuthToken()
+    if (!token) {
+      reportMutationError(msg('최근 방문 이력을 취소하지 못했습니다.'), new Error('로그인이 필요합니다'))
+      return
+    }
+    const { error: deleteError } = await supabase.rpc('invalidate_visit_history_tx', {
+      p_token: token,
+      p_history_id: latestHistory.id,
+      p_reason: '방금 등록 취소',
+    })
+    if (deleteError) {
+      reportMutationError(msg('최근 방문 이력을 취소하지 못했습니다.'), deleteError)
       return
     }
 
     const restoreStatus: UnitStatus = previousHistory?.result ?? '미방문'
-    const statusResult = await supabase.from('units').update({ status: restoreStatus }).eq('id', unitId)
-    if (statusResult.error) {
-      reportMutationError(msg('방문 이력은 취소됐지만 호수 상태를 되돌리지 못했습니다.'), statusResult.error)
-      return
-    }
     patchUnit(unitId, { status: restoreStatus })
 
     // 봉사 로그: 최근 방문 취소
@@ -395,25 +402,34 @@ export function makeVisitMutations(deps: {
     // 바꾸기 **전** 방문자. 감사 로그에 남긴다 (아래).
     const previousVisitor = visitHistories.find((h) => h.id === historyId)?.visitor ?? null
     // 무엇을 보낼지는 utils/visitUpdatePayload 가 정한다 (시험이 붙어 있다).
-    const historyResult = await supabase
-      .from('visit_histories')
-      .update(buildVisitUpdatePayload(input))
-      .eq('id', historyId)
-
-    if (historyResult.error) {
-      reportMutationError(msg('방문 이력을 수정하지 못했습니다.'), historyResult.error)
+    const token = getAuthToken()
+    if (!token) {
+      reportMutationError(msg('방문 이력을 수정하지 못했습니다.'), new Error('로그인이 필요합니다'))
       return false
     }
+    const nextVisitor = input.visitor?.trim() || previousVisitor || ''
+    const correctionReason = nextVisitor !== previousVisitor
+      ? '방문자 및 방문기록 정정'
+      : previousVisitor && previousVisitor !== requireVisitor()
+        ? '다른 봉사자 방문기록 정정'
+        : ''
+    const patch = buildVisitUpdatePayload(input)
+    const { error: historyError } = await supabase.rpc('update_visit_history_tx', {
+      p_token: token,
+      p_history_id: historyId,
+      p_result: patch.result,
+      p_time_slot: patch.time_slot,
+      p_memo: patch.memo ?? '',
+      p_visited_at: patch.visited_at,
+      p_visitor_name: patch.visitor_name ?? previousVisitor,
+      p_reason: correctionReason,
+    })
 
-    const latestHistory = visitHistories.find((h) => h.unitId === unitId)
-    if (latestHistory?.id === historyId) {
-      const statusResult = await supabase.from('units').update({ status: input.result }).eq('id', unitId)
-      if (statusResult.error) {
-        reportMutationError(msg('방문 이력은 수정됐지만 호수 대표 상태를 맞추지 못했습니다.'), statusResult.error)
-        return false
-      }
-      patchUnit(unitId, { status: input.result })
+    if (historyError) {
+      reportMutationError(msg('방문 이력을 수정하지 못했습니다.'), historyError)
+      return false
     }
+    if (visitHistories.find((h) => h.unitId === unitId)?.id === historyId) patchUnit(unitId, { status: input.result })
 
     // 봉사 로그: 방문 기록 수정 (건물은 units 테이블 경유 → 기존 로그에서 building_id 역추적)
     const prevLog = visitHistories.find((h) => h.id === historyId)
@@ -512,9 +528,22 @@ export function makeVisitMutations(deps: {
 
   const deleteVisitHistory = async (historyId: number, unitId: number) => {
     const prevLog = visitHistories.find((h) => h.id === historyId)
-    const result = await supabase.from('visit_histories').delete().eq('id', historyId)
-    if (result.error) {
-      reportMutationError(msg('방문 히스토리 삭제를 실패했습니다.'), result.error)
+    const token = getAuthToken()
+    if (!token) {
+      reportMutationError(msg('방문 기록을 무효 처리하지 못했습니다.'), new Error('로그인이 필요합니다'))
+      return
+    }
+    const currentVisitor = requireVisitor()
+    const reason = prevLog?.visitor && currentVisitor && prevLog.visitor !== currentVisitor
+      ? '관리자/인도자 정정'
+      : '잘못 기록함'
+    const { error } = await supabase.rpc('invalidate_visit_history_tx', {
+      p_token: token,
+      p_history_id: historyId,
+      p_reason: reason,
+    })
+    if (error) {
+      reportMutationError(msg('방문 기록을 무효 처리하지 못했습니다.'), error)
       return
     }
 
@@ -522,12 +551,7 @@ export function makeVisitMutations(deps: {
     const latestRemaining = remainingHistories[0]
     const newStatus = latestRemaining?.result ?? '미방문'
 
-    const statusUpdate = await supabase.from('units').update({ status: newStatus }).eq('id', unitId)
-    if (statusUpdate.error) {
-      reportMutationError(msg('호수 상태 동기화에 실패했습니다.'), statusUpdate.error)
-    } else {
-      patchUnit(unitId, { status: newStatus })
-    }
+    patchUnit(unitId, { status: newStatus })
 
     // 봉사 로그: 방문 기록 삭제
     if (prevLog) {
@@ -548,7 +572,7 @@ export function makeVisitMutations(deps: {
     }
 
     await fetchAll()
-    showToast(t(currentLang(), 'toast.deleted'))
+    showToast(msg('잘못 기록한 방문을 취소했습니다'))
   }
 
   return {

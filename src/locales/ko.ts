@@ -45,7 +45,7 @@ export const ko = {
     'map.deleteUnit': '세대 삭제',
     'map.editUnit': '세대 수정',
     'map.deleteBuildingConfirm': '정말 이 건물을 삭제하시겠습니까? 모든 호수와 방문 이력이 영구적으로 삭제됩니다',
-    'map.deleteHistoryConfirm': '이 기록을 삭제할까요?',
+    'map.deleteHistoryConfirm': '잘못 기록한 방문으로 처리할까요? 원본은 관리자 기록에 보존됩니다.',
     'map.deleteUnitConfirm': '이 세대를 삭제할까요?',
     'map.checkingAddress': '주소 확인 중',
     'map.checkLocation': '위치 확인',
@@ -612,7 +612,7 @@ export const ko = {
 
     'territory.notFound': '정기방문 항목을 찾을 수 없습니다.',
     'territory.backToList': '목록으로',
-    'territory.deleteLogConfirm': '이 기록을 삭제할까요?',
+    'territory.deleteLogConfirm': '잘못 기록한 방문으로 처리할까요? 원본은 관리자 기록에 보존됩니다.',
     'territory.lastVisitPrefix': '마지막 방문 ·',
     'territory.avgInterval': '평균 방문 간격 {days}일',
     'territory.nextRecommend': '다음 권장 {date}',

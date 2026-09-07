@@ -58,6 +58,7 @@ try {
   if (madeLeader.error) throw madeLeader.error
   madeUsers.push(madeLeader.data.id)
   const leaderToken = await login(leaderLogin, '4321')
+  const leader = client(leaderToken)
 
   const card = await db.from('cards').select('id').limit(1).single()
   if (card.error || !card.data) throw card.error ?? new Error('test card missing')
@@ -167,7 +168,7 @@ try {
   check(reassignedVisit.data?.created_by === userName && preservedLogs.data?.length === 1,
     '재배정해도 이전 등록자와 방문 기록은 보존한다')
 
-  const linkedAddress = await user.from('return_visits')
+  const linkedAddress = await leader.from('return_visits')
     .update({ address: '바뀌면 안 되는 주소' }).eq('id', visitId).select('id')
   check(Boolean(linkedAddress.error), '세대에 연결된 주소는 따로 바꾸지 못한다')
 

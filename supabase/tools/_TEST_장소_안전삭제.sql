@@ -58,26 +58,38 @@ begin
     raise exception '빈 건물 삭제 신호에 건물과 하위 세대가 함께 담기지 않았습니다';
   end if;
 
-  -- 세대 자체에 방문 상태가 있으면 별도 기록이 없어도 요청으로 바뀐다.
+  -- 인도자는 연결 자료가 있어도 영향과 스냅샷을 기록하고 즉시 삭제한다.
   insert into public.buildings(card_id,name,address,type,lat,lng)
   values(v_card_id,v_marker||'_기록건물',v_marker||' 기록주소','주택',37.2,127.2)
   returning id into v_building_id;
   insert into public.units(building_id,number,status,created_at)
   values(v_building_id,'201','만남',now()-interval '1 day') returning id into v_unit_id;
-  v_result := public.delete_place_or_request_tx(v_leader_token,'unit',v_unit_id,'unit_missing','현장 확인 필요');
-  if v_result->>'action' <> 'requested' or not exists(select 1 from public.units where id=v_unit_id) then
-    raise exception '연결 자료가 있는 인도자 삭제가 안전 요청으로 바뀌지 않았습니다: %',v_result;
-  end if;
-  if not exists(select 1 from public.units where id=v_unit_id and status='만남') then
-    raise exception '인도자 요청 과정에서 세대 상태가 사라졌습니다';
-  end if;
-
-  -- 관리자도 연결 자료가 있으면 요청함에서 영향 범위를 확인해야 한다.
   insert into public.visit_histories(unit_id,visitor_name,result,time_slot,visited_at)
   values(v_unit_id,v_marker||'_인도자','만남','오후',current_date);
-  v_result := public.delete_place_or_request_tx(v_admin_token,'unit',v_unit_id,'unit_missing','');
+  v_result := public.delete_place_or_request_tx(v_leader_token,'unit',v_unit_id,'unit_missing','현장 확인 필요');
+  if v_result->>'action' <> 'deleted' or exists(select 1 from public.units where id=v_unit_id) then
+    raise exception '인도자가 연결 자료를 감사 삭제하지 못했습니다: %',v_result;
+  end if;
+  if (v_result->'impact'->>'visit_history_count')::integer <> 1 then
+    raise exception '인도자 삭제 결과에 방문기록 영향이 없습니다';
+  end if;
+  if not exists (
+    select 1 from public.service_logs
+    where action='unit_deleted' and target_id=v_unit_id
+      and details->>'actor_role'='leader'
+      and (details->'impact'->>'visit_history_count')::integer=1
+  ) then
+    raise exception '인도자 삭제 감사 로그가 남지 않았습니다';
+  end if;
+
+  -- 일반 사용자는 연결 자료가 있는 세대도 요청만 남긴다.
+  insert into public.units(building_id,number,status,created_at)
+  values(v_building_id,'202','만남',now()-interval '1 day') returning id into v_unit_id;
+  insert into public.visit_histories(unit_id,visitor_name,result,time_slot,visited_at)
+  values(v_unit_id,v_marker||'_사용자','만남','오후',current_date);
+  v_result := public.delete_place_or_request_tx(v_user_token,'unit',v_unit_id,'remove_place','잘못된 세대');
   if v_result->>'action' <> 'requested' or not exists(select 1 from public.units where id=v_unit_id) then
-    raise exception '관리자의 연결 자료 삭제가 요청으로 바뀌지 않았습니다: %',v_result;
+    raise exception '일반 사용자의 연결 자료 삭제가 요청으로 바뀌지 않았습니다: %',v_result;
   end if;
   v_request_id := (v_result->>'request_id')::bigint;
   if (select (impact_snapshot->>'visit_history_count')::integer from public.place_change_requests where id=v_request_id) <> 1 then
@@ -98,8 +110,8 @@ begin
     raise exception '삭제 요청 반려가 장소나 기록을 삭제했습니다';
   end if;
 
-  -- 요청함의 영구 삭제만 장소와 연결 자료를 한 트랜잭션으로 정리한다.
-  v_result := public.delete_place_or_request_tx(v_admin_token,'unit',v_unit_id,null,'');
+  -- 새 요청은 관리자 확정 RPC가 장소와 연결 자료를 한 트랜잭션으로 정리한다.
+  v_result := public.delete_place_or_request_tx(v_user_token,'unit',v_unit_id,null,'다시 요청');
   v_request_id := (v_result->>'request_id')::bigint;
   begin
     perform public.execute_place_deletion_request_tx(v_user_token,v_request_id);
@@ -134,9 +146,8 @@ begin
   if v_count <> 0 then raise exception '건물·세대의 임시 DELETE 정책이 남았습니다'; end if;
   select count(*) into v_count from pg_policies
   where schemaname='public' and tablename in ('buildings','units')
-    and cmd='DELETE' and policyname in ('buildings_delete_admin','units_delete_admin')
-    and coalesce(qual,'') like '%request_is_admin%';
-  if v_count <> 2 then raise exception '관리자 전용 직접 DELETE 정책이 정확히 두 개가 아닙니다'; end if;
+    and cmd in ('ALL','DELETE');
+  if v_count <> 0 then raise exception '건물·세대 직접 DELETE 정책이 남았습니다'; end if;
   if not has_function_privilege('anon','public.delete_place_or_request_tx(uuid,text,bigint,text,text)','execute') then
     raise exception 'anon이 안전 삭제 RPC를 호출할 수 없습니다';
   end if;

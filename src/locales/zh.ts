@@ -45,7 +45,7 @@ export const zh = {
     'map.deleteUnit': '删除住户',
     'map.editUnit': '修改住户',
     'map.deleteBuildingConfirm': '确定要删除此建筑吗？所有住户及访问记录将被永久删除',
-    'map.deleteHistoryConfirm': '确定要删除此记录吗？',
+    'map.deleteHistoryConfirm': '要将这次访问标记为误录吗？原记录会保留在管理日志中。',
     'map.deleteUnitConfirm': '确定要删除此住户吗？',
     'map.checkingAddress': '正在验证地址',
     'map.checkLocation': '检查位置',
@@ -606,7 +606,7 @@ export const zh = {
 
     'territory.notFound': '找不到该固定续放项目。',
     'territory.backToList': '返回列表',
-    'territory.deleteLogConfirm': '要删除这条记录吗？',
+    'territory.deleteLogConfirm': '要将这次访问标记为误录吗？原记录会保留在管理日志中。',
     'territory.lastVisitPrefix': '最后访问 ·',
     'territory.avgInterval': '平均访问间隔 {days} 天',
     'territory.nextRecommend': '建议下次 {date}',

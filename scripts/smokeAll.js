@@ -23,6 +23,11 @@ const scripts = [
   'smokeReturnVisitEnd.js',
   'smokePlaceDeletion.js',
   'smokePhoneSurveys.js',
+  'smokeAdminPolicyPilot.js',
+  'smokeCalendarAssignmentPolicies.js',
+  'smokePersonalServicePolicies.js',
+  'smokeTerritoryStructurePolicies.js',
+  'smokeVisitHistoryPolicies.js',
 ]
 
 for (const script of scripts) {

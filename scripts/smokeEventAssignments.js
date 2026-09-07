@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-// 봉사 배정(비공식·식당)은 인도자와 관리자가 한다.
+// 봉사 배정(비공식·식당)은 해당 일정 인도자와 관리자가 한다.
 //   · 전도인(user)은 배정하지도 해제하지도 못한다 — 라우터가 /assignment 를
 //     막지 않으므로 여기가 실질적인 문이다
-//   · 인도자는 배정하고 해제한다
-//   · UPDATE 는 관리자만 (화면 경로는 없고 이름 바꾸기 폴백만 쓴다)
+//   · 일정 인도자는 배정·수정·해제하고, 다른 일정 인도자는 못 한다
 // 테스트 DB 전용이며 testEnvGuard 가 운영 DB 쓰기를 막는다.
 import { loadTestEnv } from './testEnvGuard.js'
 
@@ -53,30 +52,35 @@ try {
   if (!developerToken) throw new Error('테스트 개발자로 로그인하지 못했습니다')
 
   const actors = []
-  for (const role of ['user', 'leader', 'admin']) {
-    const loginId = `${marker}_${role}`
+  for (const key of ['user', 'leader', 'otherLeader', 'admin']) {
+    const role = key === 'otherLeader' ? 'leader' : key
+    const loginId = `${marker}_${key}`
     const made = await rest('app_users?select=id,name', {
       method: 'POST',
       body: JSON.stringify({
-        login_id: loginId, name: `${marker}_${role}_name`, pin: '4321', role,
+        login_id: loginId, name: `${marker}_${key}_name`, pin: '4321', role,
         approval_status: 'approved', is_active: true,
       }),
     }, developerToken)
     const row = (await rows(made))[0]
-    if (!row?.id) throw new Error(`${role} fixture를 만들지 못했습니다`)
+    if (!row?.id) throw new Error(`${key} fixture를 만들지 못했습니다`)
     userIds.push(row.id)
     const token = (await login(loginId, '4321'))?.token ?? null
-    if (!token) throw new Error(`${role} fixture로 로그인하지 못했습니다`)
-    actors.push({ role, token, name: row.name })
+    if (!token) throw new Error(`${key} fixture로 로그인하지 못했습니다`)
+    actors.push({ key, role, token, name: row.name })
   }
-  const user = actors.find((a) => a.role === 'user')
-  const leader = actors.find((a) => a.role === 'leader')
-  const admin = actors.find((a) => a.role === 'admin')
+  const user = actors.find((a) => a.key === 'user')
+  const leader = actors.find((a) => a.key === 'leader')
+  const otherLeader = actors.find((a) => a.key === 'otherLeader')
+  const admin = actors.find((a) => a.key === 'admin')
 
   // 배정이 걸릴 일정과 비공식 자료
   const event = (await rows(await rest('calendar_events?select=id', {
     method: 'POST',
-    body: JSON.stringify({ event_date: '2026-09-05', time: '09:00', title: `${marker}_일정`, type: '봉사' }),
+    body: JSON.stringify({
+      event_date: '2026-09-05', time: '09:00', title: `${marker}_일정`, type: '봉사',
+      leader_name: leader.name,
+    }),
   }, developerToken)))[0]
   eventId = event?.id ?? null
   if (!eventId) throw new Error('일정 fixture를 만들지 못했습니다')
@@ -109,20 +113,30 @@ try {
     method: 'POST', body: body(leader.name),
   }, leader.token)
   const leaderAssignmentId = (await rows(byLeader))[0]?.id ?? null
-  check('인도자는 배정한다', byLeader.ok && Boolean(leaderAssignmentId), `HTTP ${byLeader.status}`)
+  check('해당 일정 인도자는 배정한다', byLeader.ok && Boolean(leaderAssignmentId), `HTTP ${byLeader.status}`)
+
+  const byOtherLeader = await rest('event_informal_assignments?select=id', {
+    method: 'POST', body: body(otherLeader.name),
+  }, otherLeader.token)
+  check('다른 일정 인도자는 배정하지 못한다', !byOtherLeader.ok, `HTTP ${byOtherLeader.status}`)
 
   const publicRead = await rest(`event_informal_assignments?event_id=eq.${eventId}&select=id`)
   check('무세션 공개 읽기를 유지한다', publicRead.ok && (await rows(publicRead)).length === 1,
     `HTTP ${publicRead.status}`)
 
-  // ── 수정 (화면 경로 없음. 이름 바꾸기 폴백만 쓴다) ──
-  for (const actor of [user, leader]) {
+  // ── 수정 ──
+  for (const actor of [user, otherLeader]) {
     const patched = await rest(`event_informal_assignments?id=eq.${leaderAssignmentId}&select=id`, {
       method: 'PATCH', body: JSON.stringify({ user_name: `${marker}_바꿈` }),
     }, actor.token)
-    check(`${actor.role}는 배정을 고치지 못한다`, (await rows(patched)).length === 0,
+    check(`${actor.key}는 배정을 고치지 못한다`, (await rows(patched)).length === 0,
       `HTTP ${patched.status}`)
   }
+  const leaderPatch = await rest(`event_informal_assignments?id=eq.${leaderAssignmentId}&select=id,user_name`, {
+    method: 'PATCH', body: JSON.stringify({ user_name: leader.name }),
+  }, leader.token)
+  check('해당 일정 인도자는 배정을 고친다',
+    (await rows(leaderPatch))[0]?.user_name === leader.name, `HTTP ${leaderPatch.status}`)
   const adminPatch = await rest(`event_informal_assignments?id=eq.${leaderAssignmentId}&select=id,user_name`, {
     method: 'PATCH', body: JSON.stringify({ user_name: leader.name }),
   }, admin.token)
@@ -136,6 +150,12 @@ try {
   check('전도인은 배정을 해제하지 못한다', (await rows(userDelete)).length === 0,
     `HTTP ${userDelete.status}`)
 
+  const otherLeaderDelete = await rest(`event_informal_assignments?id=eq.${leaderAssignmentId}&select=id`, {
+    method: 'DELETE',
+  }, otherLeader.token)
+  check('다른 일정 인도자는 배정을 해제하지 못한다', (await rows(otherLeaderDelete)).length === 0,
+    `HTTP ${otherLeaderDelete.status}`)
+
   const stillThere = await rows(await rest(
     `event_informal_assignments?id=eq.${leaderAssignmentId}&select=id`, {}, developerToken))
   check('차단된 요청 뒤 배정은 그대로다', stillThere.length === 1)
@@ -143,7 +163,7 @@ try {
   const leaderDelete = await rest(`event_informal_assignments?id=eq.${leaderAssignmentId}&select=id`, {
     method: 'DELETE',
   }, leader.token)
-  check('인도자는 배정을 해제한다', (await rows(leaderDelete)).length === 1,
+  check('해당 일정 인도자는 배정을 해제한다', (await rows(leaderDelete)).length === 1,
     `HTTP ${leaderDelete.status}`)
 
   // ── 식당 배정도 같은 규칙이다 ──────────────────────
@@ -160,12 +180,18 @@ try {
   }, user.token)
   check('전도인은 식당도 배정하지 못한다', !restaurantByUser.ok, `HTTP ${restaurantByUser.status}`)
 
+  const restaurantByOtherLeader = await rest('event_restaurant_assignments?select=id', {
+    method: 'POST', body: restaurantBody(otherLeader.name),
+  }, otherLeader.token)
+  check('다른 일정 인도자는 식당을 배정하지 못한다', !restaurantByOtherLeader.ok,
+    `HTTP ${restaurantByOtherLeader.status}`)
+
   // 막혔다는 것을 같은 요청이 인도자에게는 통하는 것으로 확인한다.
   // 이게 없으면 스키마 오류를 권한으로 착각한다.
   const restaurantByLeader = await rest('event_restaurant_assignments?select=id', {
     method: 'POST', body: restaurantBody(leader.name),
   }, leader.token)
-  check('인도자는 식당을 배정한다', restaurantByLeader.ok, `HTTP ${restaurantByLeader.status}`)
+  check('해당 일정 인도자는 식당을 배정한다', restaurantByLeader.ok, `HTTP ${restaurantByLeader.status}`)
 } catch (error) {
   console.error(`❌ smoke 중단 — ${error?.message ?? error}`)
   failures += 1
