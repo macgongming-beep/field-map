@@ -222,14 +222,34 @@ try {
     }),
   }, actors.other.token)
   check('다른 사용자는 남의 정기방문에 기록을 추가하지 못한다', await blocked(otherLogInsert))
-  const otherLogUpdate = await rows(await rest(`return_visit_logs?id=eq.${logId}&select=id`, {
-    method: 'PATCH', body: JSON.stringify({ memo: 'other' }),
-  }, actors.other.token))
-  check('다른 사용자는 기록을 수정하지 못한다', otherLogUpdate.length === 0)
-  const ownerLogUpdate = await rows(await rest(`return_visit_logs?id=eq.${logId}&select=id,memo`, {
-    method: 'PATCH', body: JSON.stringify({ memo: 'owner-updated' }),
+  const otherLogUpdate = await rpc('update_return_visit_log_tx', {
+    p_token: actors.other.token, p_log_id: logId, p_result: '부재', p_memo: 'other', p_reason: '',
+  }, actors.other.token)
+  check('다른 사용자는 기록을 수정하지 못한다', !otherLogUpdate.ok)
+  const ownerLogUpdate = await rpc('update_return_visit_log_tx', {
+    p_token: actors.user.token, p_log_id: logId, p_result: '만남', p_memo: 'owner-updated', p_reason: '',
+  }, actors.user.token)
+  const ownerLogUpdateValue = await json(ownerLogUpdate)
+  const updatedLog = await rows(await rest(`return_visit_logs?id=eq.${logId}&select=memo`, {}, developerToken))
+  check('작성자는 자기 기록을 수정한다', ownerLogUpdate.ok && ownerLogUpdateValue?.ok === true && updatedLog[0]?.memo === 'owner-updated')
+
+  const ownerDirectDelete = await rows(await rest(`return_visit_logs?id=eq.${logId}&select=id`, {
+    method: 'DELETE',
   }, actors.user.token))
-  check('작성자는 자기 기록을 수정한다', ownerLogUpdate[0]?.memo === 'owner-updated')
+  const leaderDirectDelete = await rows(await rest(`return_visit_logs?id=eq.${logId}&select=id`, {
+    method: 'DELETE',
+  }, actors.leader.token))
+  check('작성자도 방문기록을 표에서 직접 삭제하지 못한다', ownerDirectDelete.length === 0)
+  check('인도자도 방문기록을 표에서 직접 삭제하지 못한다', leaderDirectDelete.length === 0)
+
+  const leaderWithoutReason = await rpc('update_return_visit_log_tx', {
+    p_token: actors.leader.token, p_log_id: logId, p_result: '부재', p_memo: 'leader-edit', p_reason: '',
+  }, actors.leader.token)
+  check('관리자가 남의 기록을 고칠 때는 사유가 필요하다', !leaderWithoutReason.ok)
+  const leaderWithReason = await rpc('update_return_visit_log_tx', {
+    p_token: actors.leader.token, p_log_id: logId, p_result: '부재', p_memo: 'leader-edit', p_reason: 'smoke correction',
+  }, actors.leader.token)
+  check('관리자는 사유를 남기고 다른 사람의 기록을 고친다', leaderWithReason.ok)
 
   const leaderLog = await rows(await rest('return_visit_logs?select=id', {
     method: 'POST', body: JSON.stringify({
@@ -238,6 +258,16 @@ try {
   }, actors.leader.token))
   if (leaderLog[0]?.id) ids.logs.push(leaderLog[0].id)
   check('인도자는 담당 활동에 기록을 추가한다', leaderLog.length === 1)
+
+  const invalidated = await rpc('invalidate_return_visit_log_tx', {
+    p_token: actors.leader.token, p_log_id: leaderLog[0]?.id, p_reason: '',
+  }, actors.leader.token)
+  const invalidatedValue = await json(invalidated)
+  const invalidatedRow = await rows(await rest(
+    `return_visit_logs?id=eq.${leaderLog[0]?.id}&select=id,invalidated_at`, {}, developerToken,
+  ))
+  check('작성자는 자기 기록을 취소한다', invalidated.ok && invalidatedValue?.ok === true && Boolean(invalidatedRow[0]?.invalidated_at))
+  check('취소한 기록의 원본 행은 감사용으로 남는다', invalidatedRow.length === 1)
 
   const endByOther = await rpc('end_return_visit_tx', {
     p_token: actors.other.token, p_return_visit_id: returnId,

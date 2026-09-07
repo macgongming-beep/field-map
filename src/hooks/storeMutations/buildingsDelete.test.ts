@@ -4,9 +4,11 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   toast: vi.fn(),
   error: vi.fn(),
+  prompt: vi.fn(),
 }))
 
 vi.mock('../../lib/authToken', () => ({ getAuthToken: () => '00000000-0000-0000-0000-000000000008' }))
+vi.mock('../../lib/confirm', () => ({ promptDialog: mocks.prompt }))
 vi.mock('./shared', () => ({
   supabase: { rpc: mocks.rpc },
   showToast: mocks.toast,
@@ -18,6 +20,7 @@ beforeEach(() => {
   mocks.rpc.mockReset()
   mocks.toast.mockReset()
   mocks.error.mockReset()
+  mocks.prompt.mockReset().mockResolvedValue('테스트 삭제 사유')
 })
 
 async function mutations() {
@@ -46,7 +49,7 @@ describe('건물·세대 안전 삭제', () => {
     mocks.rpc.mockResolvedValue({ data: { ok: true, action: 'requested' }, error: null })
     const store = await mutations()
     await store.deleteBuilding(9)
-    expect(mocks.toast).toHaveBeenCalledWith('연결된 자료가 있어 관리자에게 삭제 요청을 보냈습니다')
+    expect(mocks.toast).toHaveBeenCalledWith('연결된 자료가 있어 삭제 요청으로 접수했습니다')
     expect(mocks.toast).not.toHaveBeenCalledWith('건물이 삭제됐습니다')
   })
 
@@ -58,6 +61,19 @@ describe('건물·세대 안전 삭제', () => {
     const store = await mutations()
     await store.deleteBuildings([1, 2, 3])
     expect(mocks.toast).toHaveBeenCalledTimes(1)
-    expect(mocks.toast).toHaveBeenCalledWith('건물 2개 삭제 · 1개 관리자 요청')
+    expect(mocks.toast).toHaveBeenCalledWith('건물 2개 삭제 · 1개 삭제 요청')
+    expect(mocks.prompt).toHaveBeenCalledTimes(1)
+    expect(mocks.rpc).toHaveBeenCalledTimes(3)
+    for (const [, payload] of mocks.rpc.mock.calls) {
+      expect(payload.p_note).toBe('테스트 삭제 사유')
+    }
+  })
+
+  it('일괄 삭제 사유가 공백이면 다시 묻거나 RPC를 호출하지 않는다', async () => {
+    mocks.prompt.mockResolvedValue('   ')
+    const store = await mutations()
+    await store.deleteBuildings([1, 2, 3])
+    expect(mocks.prompt).toHaveBeenCalledTimes(1)
+    expect(mocks.rpc).not.toHaveBeenCalled()
   })
 })

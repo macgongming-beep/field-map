@@ -1,5 +1,5 @@
 import type { CalendarEvent } from '../../types'
-import { supabase, showToast, reportMutationError, getCurrentVisitor } from './shared'
+import { supabase, showToast, reportMutationError, getCurrentVisitor, ensureAffectedRows } from './shared'
 import { createSystemChatMessage } from './chatSystem'
 import { logServiceAction } from './serviceLog'
 import { msg } from '../../lib/msg'
@@ -138,11 +138,12 @@ export function makeCalendarMutations(deps: {
   }
 
   const deleteCalendarEvent = async (eventId: number) => {
-    const result = await supabase.from('calendar_events').delete().eq('id', eventId)
+    const result = await supabase.from('calendar_events').delete().eq('id', eventId).select('id')
     if (result.error) {
       reportMutationError(msg('일정을 삭제하지 못했습니다.'), result.error)
       return
     }
+    if (!ensureAffectedRows(result.data, msg('일정을 삭제하지 못했습니다.'))) return
     await fetchAll()
     showToast(msg('일정이 삭제됐습니다'))
   }
@@ -152,10 +153,12 @@ export function makeCalendarMutations(deps: {
       .delete()
       .eq('series_id', seriesId)
       .gte('event_date', fromDate)
+      .select('id')
     if (result.error) {
       reportMutationError(msg('반복 일정 삭제에 실패했습니다.'), result.error)
       return
     }
+    if (!ensureAffectedRows(result.data, msg('반복 일정 삭제에 실패했습니다.'))) return
     await fetchAll()
     showToast(msg('이후 반복 일정이 모두 삭제됐습니다'))
   }
@@ -165,8 +168,15 @@ export function makeCalendarMutations(deps: {
     const result = await supabase.from('calendar_events')
       .update({ series_id: seriesId })
       .in('id', eventIds)
+      .select('id')
     if (result.error) {
       reportMutationError(msg('시리즈 묶기에 실패했습니다. series_id 컬럼이 있는지 확인해 주세요.'), result.error)
+      return
+    }
+    const changed = result.data ?? []
+    if (!ensureAffectedRows(changed, msg('시리즈 묶기에 실패했습니다.'))) return
+    if (changed.length !== new Set(eventIds).size) {
+      reportMutationError(msg('시리즈 묶기에 실패했습니다.'), new Error('일부 일정만 변경됐습니다.'))
       return
     }
     await fetchAll()
@@ -187,10 +197,13 @@ export function makeCalendarMutations(deps: {
         .delete()
         .eq('event_id', eventId)
         .eq('user_name', currentVisitor)
+        .eq('role', '신청')
+        .select('id')
       if (result.error) {
         reportMutationError(msg('봉사 신청을 취소하지 못했습니다.'), result.error)
         return
       }
+      if (!ensureAffectedRows(result.data, msg('봉사 신청을 취소하지 못했습니다.'))) return
       await logServiceAction({
         eventId,
         action: 'left',

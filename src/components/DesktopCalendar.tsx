@@ -757,6 +757,7 @@ export function DesktopCalendar({
                       events={events}
                       leaderNames={leaderNames}
                       globalSettings={globalSettings}
+                      canDelete={actualRole === 'admin' || actualRole === 'developer'}
                       onClearEdit={clearEdit}
                       onDelete={(id) => {
                         if (event.seriesId) {
@@ -1289,6 +1290,7 @@ function EditCard({
   events,
   leaderNames = [],
   globalSettings = {},
+  canDelete,
   onClearEdit,
   onDelete,
   onLinkEventsToSeries,
@@ -1300,6 +1302,7 @@ function EditCard({
   events: CalendarEvent[]
   leaderNames?: string[]
   globalSettings?: Record<string, string>
+  canDelete: boolean
   onClearEdit: () => void
   onDelete: (id: number) => void
   onLinkEventsToSeries: (ids: number[]) => void
@@ -1438,7 +1441,7 @@ function EditCard({
 
       <div style={{ display: 'flex', gap: '8px', marginTop: '18px' }}>
         <button className="cal-save-btn" onClick={() => onSave(event.id, draft)} type="button">저장</button>
-        <button className="danger-action" onClick={() => onDelete(event.id)} style={{ borderRadius: '999px', minHeight: '48px', padding: '0 20px' }} type="button">삭제</button>
+        {canDelete && <button className="danger-action" onClick={() => onDelete(event.id)} style={{ borderRadius: 'var(--r-sm)', minHeight: '40px', padding: '0 16px' }} type="button">삭제</button>}
       </div>
     </article>
   )

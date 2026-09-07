@@ -4,6 +4,7 @@ import { isValidMapCoordinate } from '../../utils/mapUtils'
 import { buildImportPayload } from '../../utils/importBuildingPayload'
 import { explainDbError } from '../../utils/dbError'
 import { getAuthToken } from '../../lib/authToken'
+import { promptDialog } from '../../lib/confirm'
 import type { MergeResult } from '../../utils/duplicateBuildingMerge'
 import { ensureAffectedRows, supabase, showToast, reportMutationError } from './shared'
 import { logServiceAction } from './serviceLog'
@@ -232,18 +233,26 @@ export function makeBuildingMutations(deps: {
   const deletePlace = async (
     targetType: 'building' | 'unit',
     targetId: number,
+    suppliedReason?: string,
   ): Promise<{ action: 'deleted' | 'requested' } | null> => {
     const token = getAuthToken()
     if (!token) {
       showToast(msg('다시 로그인해 주세요.'), 'error')
       return null
     }
+    const reason = suppliedReason?.trim() || await promptDialog({
+      title: msg(targetType === 'building' ? '건물 삭제' : '세대 삭제'),
+      message: msg('삭제하거나 요청하는 이유를 입력해 주세요.'),
+      placeholder: msg('예: 중복 등록, 철거, 잘못 등록함'),
+      confirmLabel: msg('계속'),
+    })
+    if (!reason) return null
     const result = await supabase.rpc('delete_place_or_request_tx', {
       p_token: token,
       p_target_type: targetType,
       p_target_id: targetId,
       p_request_type: 'remove_place',
-      p_note: '',
+      p_note: reason,
     })
     const action = result.data?.action
     if (result.error || (action !== 'deleted' && action !== 'requested')) {
@@ -260,7 +269,7 @@ export function makeBuildingMutations(deps: {
     const result = await deletePlace('unit', unitId)
     if (!result) return
     if (result.action === 'requested') {
-      showToast(msg('연결된 자료가 있어 관리자에게 삭제 요청을 보냈습니다'))
+      showToast(msg('연결된 자료가 있어 삭제 요청으로 접수했습니다'))
       return
     }
     removeUnit(unitId)
@@ -271,7 +280,7 @@ export function makeBuildingMutations(deps: {
     const result = await deletePlace('building', buildingId)
     if (!result) return
     if (result.action === 'requested') {
-      showToast(msg('연결된 자료가 있어 관리자에게 삭제 요청을 보냈습니다'))
+      showToast(msg('연결된 자료가 있어 삭제 요청으로 접수했습니다'))
       return
     }
     await fetchAll()
@@ -284,16 +293,23 @@ export function makeBuildingMutations(deps: {
       showToast(msg('삭제할 건물이 없습니다.'), 'info')
       return
     }
-    const results = await Promise.all(ids.map((id) => deletePlace('building', id)))
+    const reason = (await promptDialog({
+      title: msg('건물 일괄 삭제'),
+      message: msg('{count}개 건물을 삭제하거나 삭제 요청으로 접수합니다. 이유를 입력해 주세요.', { count: ids.length }),
+      placeholder: msg('예: 중복 등록, 구역 밖 자료 정리'),
+      confirmLabel: msg('계속'),
+    }))?.trim()
+    if (!reason) return
+    const results = await Promise.all(ids.map((id) => deletePlace('building', id, reason)))
     const deleted = results.filter((result) => result?.action === 'deleted').length
     const requested = results.filter((result) => result?.action === 'requested').length
     if (deleted > 0) await fetchAll()
     if (deleted > 0 && requested > 0) {
-      showToast(msg('건물 {deleted}개 삭제 · {requested}개 관리자 요청', { deleted, requested }))
+      showToast(msg('건물 {deleted}개 삭제 · {requested}개 삭제 요청', { deleted, requested }))
     } else if (deleted > 0) {
       showToast(msg('건물 {length}개가 삭제됐습니다', { length: deleted }))
     } else if (requested > 0) {
-      showToast(msg('건물 {length}개의 삭제 요청을 보냈습니다', { length: requested }))
+      showToast(msg('건물 {length}개의 삭제 요청을 접수했습니다', { length: requested }))
     }
   }
 

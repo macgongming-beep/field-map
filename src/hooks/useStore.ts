@@ -396,7 +396,7 @@ export function useStore(enabled: boolean = true) {
       case 'returnVisits': {
         const [returnVisitsRes, returnVisitLogsRes] = await Promise.all([
           supabase.from('return_visits').select('*').is('ended_at', null).order('created_at', { ascending: false }),
-          supabase.from('return_visit_logs').select('*').order('visited_at', { ascending: false }),
+          supabase.from('return_visit_logs').select('*').is('invalidated_at', null).order('visited_at', { ascending: false }),
         ])
 
         measure(returnVisitsRes.data)

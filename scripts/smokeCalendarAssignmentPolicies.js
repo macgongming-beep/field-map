@@ -162,6 +162,16 @@ try {
   const selfCancel = await rows(await deleteRows('event_participants',
     `event_id=eq.${ownedEventId}&user_name=eq.${encodeURIComponent(actors.user.name)}`, actors.user.token))
   check('일반 사용자는 자기 신청을 취소한다', selfCancel.length === 1)
+  const assignedUser = await createRow('event_participants', {
+    event_id: ownedEventId, user_name: actors.user.name, role: '게스트',
+  }, actors.leader.token)
+  check('일정 인도자는 참가자를 직접 추가한다', assignedUser.row?.role === '게스트')
+  const selfAssignedCancel = await rows(await deleteRows('event_participants',
+    `event_id=eq.${ownedEventId}&user_name=eq.${encodeURIComponent(actors.user.name)}`, actors.user.token))
+  check('일반 사용자는 인도자가 추가한 참가 줄을 스스로 지우지 못한다', selfAssignedCancel.length === 0)
+  const managerAssignedCancel = await rows(await deleteRows('event_participants',
+    `event_id=eq.${ownedEventId}&user_name=eq.${encodeURIComponent(actors.user.name)}`, actors.leader.token))
+  check('일정 인도자는 직접 추가한 참가자를 제외한다', managerAssignedCancel.length === 1)
   const otherRemove = await rows(await deleteRows('event_participants',
     `event_id=eq.${ownedEventId}&user_name=eq.${encodeURIComponent(actors.admin.name)}`, actors.otherLeader.token))
   check('다른 인도자는 참가자를 제외하지 못한다', otherRemove.length === 0)

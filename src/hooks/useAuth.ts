@@ -15,7 +15,7 @@ import type { Role } from '../types'
 import { t, currentLang } from '../i18n'
 import { msg } from '../lib/msg'
 import { describeDbError } from '../utils/dbError'
-import { renameInNameList } from '../utils/nameList'
+import { promptDialog } from '../lib/confirm'
 
 export type AuthUser = {
   id: number
@@ -59,6 +59,12 @@ function isAdminLike(role: Role | undefined) {
   return role === 'admin' || role === 'developer'
 }
 
+function hasAffectedUserRows(data: Array<{ id: number }> | null, message: string): boolean {
+  if (data && data.length > 0) return true
+  showToast(msg(message), 'error')
+  return false
+}
+
 function toAuthUser(data: { id: number; name: string; phone?: string | null; login_id?: string | null; role: string; token?: string | null }): AuthUser {
   return {
     id: data.id,
@@ -89,63 +95,18 @@ function getDeviceLabel() {
 async function migrateUserNameReferences(oldName: string, newName: string): Promise<void> {
   if (!oldName || oldName === newName) return
 
-  // 1순위: 한 트랜잭션 RPC. 유니크 제약이 걸린 표는 옛 줄을 지워 합치고,
-  // anon 이 못 쓰는 표(chat_messages / service_logs)까지 여기서만 옮길 수 있다.
   const token = getAuthToken()
-  if (token) {
-    const rpc = await supabase.rpc('rename_user_name_references', {
-      p_token: token,
-      p_old: oldName,
-      p_new: newName,
-    })
-    if (!rpc.error) return
-    console.warn('[migrateUserNameReferences] RPC 실패 — 레거시 경로로 시도', rpc.error)
+  if (!token) {
+    showToast(msg('이름과 연결된 기록을 옮기지 못했습니다. 다시 로그인해 주세요.'), 'error')
+    return
   }
-
-  // 폴백: RPC 가 아직 안 올라간 DB. 옮길 수 있는 만큼만 옮기고 실패는 알린다.
-  const targets: Array<[table: string, column: string]> = [
-    ['visit_histories', 'visitor_name'],
-    ['service_sessions', 'user_name'],
-    ['regular_visits', 'visitor_name'],
-    ['card_leader_assignments', 'user_name'],
-    ['card_assignments', 'user_name'],
-    ['event_participants', 'user_name'],
-    ['event_card_assignments', 'user_name'],
-    ['event_card_assignment_cards', 'user_name'],
-    ['event_restaurant_assignments', 'user_name'],
-    ['event_informal_assignments', 'user_name'],
-    ['cards', 'leader_name'],
-    ['comments', 'author_name'],
-    ['notices', 'author'],
-    ['return_visits', 'assigned_user_name'],
-    ['return_visits', 'created_by'],
-    ['restaurant_requests', 'requested_by'],
-    ['restaurant_requests', 'reviewer'],
-    ['phone_surveys', 'checked_by'],
-    ['phone_surveys', 'uploaded_by'],
-  ]
-  const results = await Promise.all(
-    targets.map(([table, column]) =>
-      supabase.from(table).update({ [column]: newName }).eq(column, oldName)),
-  )
-  const failed = results.filter((r) => r.error)
-  results.forEach((r, i) => {
-    if (r.error) console.warn('[migrateUserNameReferences] 이관 실패', targets[i][0], r.error)
+  const rpc = await supabase.rpc('rename_user_name_references', {
+    p_token: token,
+    p_old: oldName,
+    p_new: newName,
   })
-
-  // 일정 인도자는 "가, 나, 다" 로 한 칸에 들어 있어 eq 로 안 걸린다
-  const { data: events } = await supabase
-    .from('calendar_events')
-    .select('id, leader_name')
-    .like('leader_name', `%${oldName}%`)
-  for (const ev of (events ?? []) as Array<{ id: number; leader_name: string | null }>) {
-    const next = renameInNameList(ev.leader_name, oldName, newName)
-    if (next === (ev.leader_name ?? '')) continue
-    const { error } = await supabase.from('calendar_events').update({ leader_name: next }).eq('id', ev.id)
-    if (error) failed.push({ error } as (typeof results)[number])
-  }
-
-  if (failed.length > 0) {
+  if (rpc.error) {
+    console.warn('[migrateUserNameReferences] RPC 실패', rpc.error)
     showToast(msg('옛 이름으로 남은 기록 일부를 옮기지 못했습니다. 관리자에게 알려 주세요.'), 'error')
   }
 }
@@ -392,15 +353,17 @@ export function useAuth() {
   // 비밀번호 변경 (본인용)
   const changePin = async (newPin: string) => {
     if (!user) return false
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .update({ pin: newPin })
       .eq('id', user.id)
+      .select('id')
 
     if (error) {
       showToast(msg('비밀번호 변경에 실패했습니다.'), 'error')
       return false
     }
+    if (!hasAffectedUserRows(data, '비밀번호가 변경되지 않았습니다. 다시 로그인해 주세요.')) return false
     showToast(t(currentLang(), 'auth.pwChanged'), 'success')
     return true
   }
@@ -432,10 +395,11 @@ export function useAuth() {
     }
 
     const previousName = user.name
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .update({ name: trimmedName, phone: trimmedPhone || null })
       .eq('id', user.id)
+      .select('id')
 
     if (error) {
       if ((error as { message?: string })?.message?.includes('phone')) {
@@ -445,6 +409,7 @@ export function useAuth() {
       showToast(msg('개인 정보 변경에 실패했습니다.'), 'error')
       return false
     }
+    if (!hasAffectedUserRows(data, '개인 정보가 변경되지 않았습니다. 다시 로그인해 주세요.')) return false
 
     // 이름이 바뀌면 이름으로 저장된 기록도 함께 옮긴다 —
     // 안 하면 본인 방문 기록·봉사 시간이 옛 이름에 남아 통계가 갈라진다
@@ -539,15 +504,17 @@ export function useAuth() {
 
   const resetUserPin = async (userId: number, newPin: string = '0000') => {
     if (!isAdminLike(user?.role)) return false
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .update({ pin: newPin })
       .eq('id', userId)
+      .select('id')
 
     if (error) {
       showToast(msg('비밀번호 초기화에 실패했습니다.'), 'error')
       return false
     }
+    if (!hasAffectedUserRows(data, '비밀번호가 초기화되지 않았습니다. 권한을 확인해 주세요.')) return false
     showToast(t(currentLang(), 'auth.pwChanged') + ` (${newPin})`, 'success')
     return true
   }
@@ -599,15 +566,17 @@ export function useAuth() {
     const to = newName.trim()
     if (!from || !to || from === to) return false
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .update({ group_name: to })
       .eq('group_name', from)
+      .select('id')
 
     if (error) {
       showToast(msg('집단 이름 변경에 실패했습니다.'), 'error')
       return false
     }
+    if (!hasAffectedUserRows(data, '변경할 집단 사용자를 찾지 못했습니다.')) return false
     await fetchAllUsers()
     notifyUsersChanged()
     return true
@@ -615,15 +584,17 @@ export function useAuth() {
 
   const updateUserRole = async (userId: number, newRole: Role) => {
     if (!isAdminLike(user?.role)) return false
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .update({ role: newRole })
       .eq('id', userId)
+      .select('id')
 
     if (error) {
       showToast(msg('권한 변경에 실패했습니다.'), 'error')
       return false
     }
+    if (!hasAffectedUserRows(data, '권한이 변경되지 않았습니다.')) return false
     showToast(t(currentLang(), 'auth.permissionChanged'), 'success')
     await fetchAllUsers()
     notifyUsersChanged()
@@ -637,37 +608,25 @@ export function useAuth() {
       return false
     }
 
-    const targetName = allUsers.find((item) => item.id === userId)?.name ?? null
-
-    const { error } = await supabase
-      .from('app_users')
-      .delete()
-      .eq('id', userId)
-
-    if (error) {
-      showToast(msg('사용자 제거에 실패했습니다.'), 'error')
+    const token = getAuthToken()
+    if (!token) {
+      showToast(msg('다시 로그인해 주세요.'), 'error')
       return false
     }
+    const reason = await promptDialog({
+      title: '사용자 제거',
+      message: '계정을 비활성화하고 앞으로의 배정에서 제외합니다. 제거 사유를 입력해 주세요.',
+      placeholder: '예: 전출, 중복 계정',
+      confirmLabel: '제거',
+    })
+    if (!reason) return false
+    const result = await supabase.rpc('deactivate_app_user_tx', {
+      p_token: token, p_user_id: userId, p_reason: reason,
+    })
 
-    // 이름 잔재 정리 — 지난 기록은 남기고 앞으로의 것만 뗀다.
-    // (예전에는 세 표만 치워서, 지운 사람이 미래 일정의 인도자 줄과
-    //  팀 배정에 유령으로 남았다. 인도자는 쉼표 목록이라 더 안 걸렸다)
-    if (targetName) {
-      const token = getAuthToken()
-      const purge = token
-        ? await supabase.rpc('purge_user_name_references', { p_token: token, p_name: targetName })
-        : { error: { message: 'no token' } }
-      if (purge.error) {
-        console.warn('[deleteUser] 이름 정리 RPC 실패 — 레거시 경로', purge.error)
-        const cleanups = await Promise.all([
-          supabase.from('card_leader_assignments').delete().eq('user_name', targetName),
-          supabase.from('card_assignments').delete().eq('user_name', targetName),
-          supabase.from('regular_visits').delete().eq('visitor_name', targetName),
-        ])
-        if (cleanups.some((r) => r.error)) {
-          showToast(msg('계정은 지웠지만 배정에 남은 이름을 다 치우지 못했습니다.'), 'error')
-        }
-      }
+    if (result.error || result.data?.ok !== true) {
+      showToast(msg('사용자 제거에 실패했습니다.'), 'error')
+      return false
     }
 
     showToast(t(currentLang(), 'auth.userRemoved'), 'success')
@@ -717,9 +676,10 @@ export function useAuth() {
       return false
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .insert({ login_id: trimmedLoginId, name: trimmedName, pin: trimmedPin, role, approval_status: 'approved' })
+      .select('id')
 
     if (error) {
       if ((error as { message?: string })?.message?.includes('login_id')) {
@@ -730,7 +690,8 @@ export function useAuth() {
         const fallback = await supabase
           .from('app_users')
           .insert({ login_id: trimmedLoginId, name: trimmedName, pin: trimmedPin, role })
-        if (!fallback.error) {
+          .select('id')
+        if (!fallback.error && hasAffectedUserRows(fallback.data, '사용자가 추가되지 않았습니다.')) {
           showToast(t(currentLang(), 'auth.userAdded'), 'success')
           await fetchAllUsers()
           notifyUsersChanged()
@@ -740,6 +701,7 @@ export function useAuth() {
       showToast(msg('사용자 추가에 실패했습니다.'), 'error')
       return false
     }
+    if (!hasAffectedUserRows(data, '사용자가 추가되지 않았습니다.')) return false
 
     showToast(t(currentLang(), 'auth.userAdded'), 'success')
     await fetchAllUsers()
@@ -754,10 +716,11 @@ export function useAuth() {
       return false
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .update({ approval_status: approvalStatus })
       .eq('id', userId)
+      .select('id')
 
     if (error) {
       if ((error as { message?: string })?.message?.includes('approval_status')) {
@@ -767,6 +730,7 @@ export function useAuth() {
       showToast(msg('가입 신청 상태 변경에 실패했습니다.'), 'error')
       return false
     }
+    if (!hasAffectedUserRows(data, '가입 신청 상태가 변경되지 않았습니다.')) return false
 
     showToast(
       approvalStatus === 'approved'
@@ -810,10 +774,11 @@ export function useAuth() {
       return false
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('app_users')
       .update({ login_id: trimmedLoginId, name: trimmedName })
       .eq('id', userId)
+      .select('id')
 
     if (error) {
       if ((error as { message?: string })?.message?.includes('login_id')) {
@@ -823,6 +788,7 @@ export function useAuth() {
       showToast(msg('아이디/닉네임 변경에 실패했습니다.'), 'error')
       return false
     }
+    if (!hasAffectedUserRows(data, '아이디/닉네임이 변경되지 않았습니다.')) return false
 
     // 닉네임 변경 시 이름 텍스트로 저장된 배정/참여 데이터도 새 이름으로 이관 (best-effort)
     // (안 하면 옛 이름이 배정 화면에 잔재로 남고, 본인 배정을 잃어버림)

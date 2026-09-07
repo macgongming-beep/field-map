@@ -92,13 +92,17 @@ try {
     && blockedState.data?.building_access_events?.some((event) => event.action === 'blocked'
       && event.visitor_name === userName && event.memo === '현장 확인'),
   '일반 사용자의 출입불가 확인을 건물 상태와 이력에 함께 남긴다')
-  const reopenedBuilding = await user.rpc('set_building_access_tx', {
+  const userReopen = await user.rpc('set_building_access_tx', {
     p_token: userToken, p_building_id: madeBuilding, p_blocked: false, p_note: '재확인',
+  })
+  check(Boolean(userReopen.error), '일반 사용자는 출입불가 건물을 다시 열지 못한다')
+  const reopenedBuilding = await leader.rpc('set_building_access_tx', {
+    p_token: leaderToken, p_building_id: madeBuilding, p_blocked: false, p_note: '인도자 재확인',
   })
   const reopenedState = await db.from('buildings').select('access_status,warning').eq('id', madeBuilding).single()
   check(!reopenedBuilding.error && reopenedState.data?.access_status === 'normal'
     && reopenedState.data?.warning === false,
-  '출입불가 해제도 상태와 레거시 표시를 함께 맞춘다')
+  '인도자의 출입불가 해제는 상태와 레거시 표시를 함께 맞춘다')
 
   const base = {
     p_token: userToken,

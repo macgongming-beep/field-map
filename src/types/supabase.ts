@@ -905,31 +905,49 @@ export type Database = {
         Row: {
           created_at: string | null
           created_by: string | null
+          created_by_user_id: number | null
           id: number
+          invalidated_at: string | null
+          invalidated_by_user_id: number | null
+          invalidation_reason: string | null
           memo: string | null
           result: string | null
           return_visit_id: number | null
           service_session_id: number | null
+          updated_at: string | null
+          updated_by_user_id: number | null
           visited_at: string | null
         }
         Insert: {
           created_at?: string | null
           created_by?: string | null
+          created_by_user_id?: number | null
           id?: number
+          invalidated_at?: string | null
+          invalidated_by_user_id?: number | null
+          invalidation_reason?: string | null
           memo?: string | null
           result?: string | null
           return_visit_id?: number | null
           service_session_id?: number | null
+          updated_at?: string | null
+          updated_by_user_id?: number | null
           visited_at?: string | null
         }
         Update: {
           created_at?: string | null
           created_by?: string | null
+          created_by_user_id?: number | null
           id?: number
+          invalidated_at?: string | null
+          invalidated_by_user_id?: number | null
+          invalidation_reason?: string | null
           memo?: string | null
           result?: string | null
           return_visit_id?: number | null
           service_session_id?: number | null
+          updated_at?: string | null
+          updated_by_user_id?: number | null
           visited_at?: string | null
         }
         Relationships: [
@@ -1337,6 +1355,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      deactivate_app_user_tx: {
+        Args: { p_reason: string; p_token: string; p_user_id: number }
+        Returns: Json
+      }
+      invalidate_return_visit_log_tx: {
+        Args: { p_log_id: number; p_reason?: string; p_token: string }
+        Returns: Json
+      }
+      update_return_visit_log_tx: {
+        Args: { p_log_id: number; p_memo: string; p_reason?: string; p_result: string | null; p_token: string }
+        Returns: Json
+      }
       set_building_access_tx: {
         Args: {
           p_blocked: boolean

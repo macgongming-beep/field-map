@@ -46,7 +46,7 @@ begin
   values(v_card_id,v_marker||'_빈건물',v_marker||' 빈주소','주택',37.2,127.2)
   returning id into v_building_id;
   insert into public.units(building_id,number,status) values(v_building_id,'101','미방문');
-  v_result := public.delete_place_or_request_tx(v_leader_token,'building',v_building_id,null,'');
+  v_result := public.delete_place_or_request_tx(v_leader_token,'building',v_building_id,null,'빈 건물 정리');
   if v_result->>'action' <> 'deleted' or exists(select 1 from public.buildings where id=v_building_id) then
     raise exception '인도자가 빈 건물을 정리하지 못했습니다: %',v_result;
   end if;
@@ -58,7 +58,7 @@ begin
     raise exception '빈 건물 삭제 신호에 건물과 하위 세대가 함께 담기지 않았습니다';
   end if;
 
-  -- 인도자는 연결 자료가 있어도 영향과 스냅샷을 기록하고 즉시 삭제한다.
+  -- 인도자도 연결 자료가 있으면 즉시 삭제하지 않고 관리자 요청으로 보낸다.
   insert into public.buildings(card_id,name,address,type,lat,lng)
   values(v_card_id,v_marker||'_기록건물',v_marker||' 기록주소','주택',37.2,127.2)
   returning id into v_building_id;
@@ -67,19 +67,17 @@ begin
   insert into public.visit_histories(unit_id,visitor_name,result,time_slot,visited_at)
   values(v_unit_id,v_marker||'_인도자','만남','오후',current_date);
   v_result := public.delete_place_or_request_tx(v_leader_token,'unit',v_unit_id,'unit_missing','현장 확인 필요');
-  if v_result->>'action' <> 'deleted' or exists(select 1 from public.units where id=v_unit_id) then
-    raise exception '인도자가 연결 자료를 감사 삭제하지 못했습니다: %',v_result;
+  if v_result->>'action' <> 'requested' or not exists(select 1 from public.units where id=v_unit_id) then
+    raise exception '인도자의 연결 자료 삭제가 요청으로 바뀌지 않았습니다: %',v_result;
   end if;
-  if (v_result->'impact'->>'visit_history_count')::integer <> 1 then
-    raise exception '인도자 삭제 결과에 방문기록 영향이 없습니다';
-  end if;
+  v_request_id := (v_result->>'request_id')::bigint;
   if not exists (
-    select 1 from public.service_logs
-    where action='unit_deleted' and target_id=v_unit_id
-      and details->>'actor_role'='leader'
-      and (details->'impact'->>'visit_history_count')::integer=1
+    select 1 from public.place_change_requests
+    where id=v_request_id
+      and (impact_snapshot->>'visit_history_count')::integer=1
+      and jsonb_array_length(impact_snapshot->'rows'->'visit_histories')=1
   ) then
-    raise exception '인도자 삭제 감사 로그가 남지 않았습니다';
+    raise exception '인도자 삭제 요청에 연결 기록 원문이 보존되지 않았습니다';
   end if;
 
   -- 일반 사용자는 연결 자료가 있는 세대도 요청만 남긴다.

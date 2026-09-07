@@ -44,6 +44,7 @@
     "smoke:personal-service-policies": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokePersonalServicePolicies.js",
     "smoke:territory-structure-policies": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeTerritoryStructurePolicies.js",
     "smoke:visit-history-policies": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeVisitHistoryPolicies.js",
+    "smoke:app-user-policies": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeAppUserPolicies.js",
     "smoke:all": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeAll.js",
     "apply:lockdown": "node scripts/applyLockdown.js",
     "apply:security-followup": "node scripts/applySecurityFollowup.js",

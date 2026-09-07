@@ -117,23 +117,55 @@ try {
   }, actors.leader.token))
   check('인도자는 호수·용도를 수정한다', leaderUnitEdit[0]?.number === '102' && leaderUnitEdit[0]?.usage_type === '상가')
 
+  const blockedByUser = await body(await rpc('set_building_access_tx', {
+    p_token: actors.user.token, p_building_id: buildingId, p_blocked: true, p_note: 'smoke blocked',
+  }, actors.user.token))
+  check('일반 사용자는 현장에서 건물 출입불가를 표시한다', blockedByUser?.ok === true)
+  const reopenByUser = await rpc('set_building_access_tx', {
+    p_token: actors.user.token, p_building_id: buildingId, p_blocked: false, p_note: 'smoke reopen',
+  }, actors.user.token)
+  check('일반 사용자는 출입불가 건물을 다시 열지 못한다', !reopenByUser.ok)
+  const reopenByLeader = await body(await rpc('set_building_access_tx', {
+    p_token: actors.leader.token, p_building_id: buildingId, p_blocked: false, p_note: 'smoke verified',
+  }, actors.leader.token))
+  check('인도자는 확인 뒤 출입불가 건물을 다시 연다', reopenByLeader?.ok === true)
+
   const directDelete = await rows(await rest(`units?id=eq.${unitId}&select=id`, { method: 'DELETE' }, developerToken))
   check('관리자도 세대를 표에서 직접 삭제하지 못한다', directDelete.length === 0)
   const history = await rows(await rest('visit_histories?select=id', {
     method: 'POST', body: JSON.stringify({ unit_id: unitId, visitor_name: actors.user.name, result: '부재', time_slot: '오후' }),
   }, developerToken))
   if (!history[0]?.id) throw new Error('연결 방문기록 fixture 생성 실패')
-  const deleted = await body(await rpc('delete_place_or_request_tx', {
+  const missingReason = await rpc('delete_place_or_request_tx', {
+    p_token: actors.leader.token, p_target_type: 'unit', p_target_id: unitId,
+    p_request_type: 'remove_place', p_note: '',
+  }, actors.leader.token)
+  check('장소 삭제·요청에는 사유가 필요하다', !missingReason.ok)
+  const requested = await body(await rpc('delete_place_or_request_tx', {
     p_token: actors.leader.token, p_target_type: 'unit', p_target_id: unitId,
     p_request_type: 'remove_place', p_note: 'smoke linked deletion',
   }, actors.leader.token))
-  check('인도자는 연결 자료가 있는 세대도 감사 RPC로 삭제한다', deleted?.action === 'deleted' && deleted?.impact?.visit_history_count === 1)
+  check('연결 자료가 있으면 인도자도 즉시 삭제하지 않고 요청한다', requested?.action === 'requested' && requested?.has_linked_data === true)
+  const beforeApproval = await rows(await rest(`units?id=eq.${unitId}&select=id`, {}, developerToken))
+  check('관리자 실행 전에는 삭제 대상이 남아 있다', beforeApproval.length === 1)
+  const requestRows = await rows(await rest(
+    `place_change_requests?id=eq.${requested?.request_id}&select=id,impact_snapshot`, {}, developerToken,
+  ))
+  const snapshot = requestRows[0]?.impact_snapshot
+  check('삭제 요청은 개수뿐 아니라 연결 기록 원문도 보존한다',
+    snapshot?.visit_history_count === 1
+      && Array.isArray(snapshot?.rows?.visit_histories)
+      && snapshot.rows.visit_histories[0]?.id === history[0].id)
+  const executed = await body(await rpc('execute_place_deletion_request_tx', {
+    p_token: developerToken, p_request_id: requested?.request_id,
+  }, developerToken))
+  check('관리자는 영향 자료를 확인한 요청을 실행한다', executed?.ok === true)
   const gone = await rows(await rest(`units?id=eq.${unitId}&select=id`, {}, developerToken))
-  check('삭제 대상이 실제로 사라진다', gone.length === 0)
+  check('관리자 실행 뒤 삭제 대상이 실제로 사라진다', gone.length === 0)
   const logs = await body(await rpc('get_service_logs', {
     p_token: developerToken, p_filter_event_id: null, p_filter_card_id: cardId, p_limit: 20,
   }, developerToken))
-  check('삭제 감사 기록에 행위자·대상·영향이 남는다', Array.isArray(logs) && logs.some((log) => log.action === 'unit_deleted' && log.target_id === unitId && log.details?.actor_role === 'leader' && log.details?.impact?.visit_history_count === 1))
+  check('삭제 감사 기록에 행위자·대상·영향이 남는다', Array.isArray(logs) && logs.some((log) => log.action === 'unit_deleted' && log.target_id === unitId && log.details?.impact?.visit_history_count === 1))
 } catch (error) {
   console.error(`FAIL smoke 중단 - ${error?.message ?? error}`)
   failures += 1

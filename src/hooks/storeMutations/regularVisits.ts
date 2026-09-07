@@ -2,6 +2,7 @@ import type { Building, EndReturnVisitInput, ManualReturnVisitInput, ReturnVisit
 import { supabase, showToast, reportMutationError, requireVisitor } from './shared'
 import { msg } from '../../lib/msg'
 import { getAuthToken } from '../../lib/authToken'
+import { promptDialog } from '../../lib/confirm'
 
 export function makeRegularVisitMutations(deps: {
   fetchAll: () => Promise<void>
@@ -129,7 +130,7 @@ export function makeRegularVisitMutations(deps: {
       memo,
       created_by: visitor,
       visited_at: now,
-    })
+    }).select('id')
     if (logRes.error) {
       reportMutationError(msg('기록을 저장하지 못했습니다.'), logRes.error)
       return
@@ -206,15 +207,33 @@ export function makeRegularVisitMutations(deps: {
   }
 
   const updateReturnVisitLog = async (id: number, result: '만남' | '부재' | null, memo: string) => {
-    const res = await supabase.from('return_visit_logs').update({ result: result ?? null, memo }).eq('id', id)
-    if (res.error) { reportMutationError(msg('기록을 수정하지 못했습니다.'), res.error); return }
+    const token = getAuthToken()
+    if (!token) { showToast(msg('다시 로그인해 주세요.'), 'error'); return }
+    let res = await supabase.rpc('update_return_visit_log_tx', {
+      p_token: token, p_log_id: id, p_result: result, p_memo: memo, p_reason: '',
+    })
+    if (res.error?.code === '22023') {
+      const reason = await promptDialog({ title: '기록 수정', message: res.error.message, confirmLabel: '수정' })
+      if (!reason) return
+      res = await supabase.rpc('update_return_visit_log_tx', {
+        p_token: token, p_log_id: id, p_result: result, p_memo: memo, p_reason: reason,
+      })
+    }
+    if (res.error || res.data?.ok !== true) { reportMutationError(msg('기록을 수정하지 못했습니다.'), res.error); return }
     await fetchAll()
     showToast(msg('기록이 수정됐습니다'))
   }
 
   const deleteReturnVisitLog = async (id: number) => {
-    const res = await supabase.from('return_visit_logs').delete().eq('id', id)
-    if (res.error) {
+    const token = getAuthToken()
+    if (!token) { showToast(msg('다시 로그인해 주세요.'), 'error'); return }
+    let res = await supabase.rpc('invalidate_return_visit_log_tx', { p_token: token, p_log_id: id, p_reason: '' })
+    if (res.error?.code === '22023') {
+      const reason = await promptDialog({ title: '기록 삭제', message: res.error.message, confirmLabel: '삭제' })
+      if (!reason) return
+      res = await supabase.rpc('invalidate_return_visit_log_tx', { p_token: token, p_log_id: id, p_reason: reason })
+    }
+    if (res.error || res.data?.ok !== true) {
       reportMutationError(msg('기록을 삭제하지 못했습니다.'), res.error)
       return
     }

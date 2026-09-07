@@ -1,4 +1,4 @@
-import { supabase, showToast, reportMutationError, getCurrentVisitor } from './shared'
+import { supabase, showToast, reportMutationError, getCurrentVisitor, ensureAffectedRows } from './shared'
 import { msg } from '../../lib/msg'
 
 export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<void> }) {
@@ -190,11 +190,13 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
           assignment_shared_by: options.status === 'shared' ? getCurrentVisitor() : null,
         })
         .eq('id', eventId)
+        .select('id')
 
       if (statusResult.error) {
         reportMutationError(msg('배정 공유 상태를 저장하지 못했습니다. event_assignment_status SQL을 먼저 실행해 주세요.'), statusResult.error)
         return
       }
+      if (!ensureAffectedRows(statusResult.data, msg('배정 공유 상태를 저장하지 못했습니다.'))) return
     }
 
     await fetchAll()
