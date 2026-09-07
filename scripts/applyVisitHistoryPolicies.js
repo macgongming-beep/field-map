@@ -6,7 +6,10 @@ import { join } from 'node:path'
 const PROD_REF = 'qdxemvdorasoryfysuoq'
 const TEST_REF = 'itjlykpjmlcvanqpmkmc'
 const FILES = {
-  apply: 'supabase/migrations/20260907_1400_finalize_visit_history_policies.sql',
+  apply: [
+    'supabase/migrations/20260907_1400_finalize_visit_history_policies.sql',
+    'supabase/migrations/20260907_1410_fix_visit_history_null_ownership.sql',
+  ],
   rollback: 'supabase/tools/_ROLLBACK_20260907_방문기록정책.sql',
   verify: 'supabase/tools/_VERIFY_20260907_방문기록정책.sql',
 }
@@ -39,7 +42,7 @@ const newestBackup = () => {
   }).sort((a, b) => b.time - a.time)[0] ?? null
 }
 
-Object.values(FILES).forEach((file) => { if (!existsSync(file)) die(`${file}이 없습니다`) })
+Object.values(FILES).flat().forEach((file) => { if (!existsSync(file)) die(`${file}이 없습니다`) })
 const isTest = has('--test'), rollback = has('--rollback'), ref = isTest ? TEST_REF : PROD_REF
 const conn = connect(envValue(isTest ? 'SUPABASE_TEST_DB_URL' : 'SUPABASE_DB_URL'), ref)
 const preflight = `begin transaction read only; select json_build_object(
@@ -72,6 +75,8 @@ if (!isTest) {
   if (!complete || age > 30) die('30분 이내 완료된 전체 백업이 필요합니다')
 }
 if (rollback && state.temp === 3) process.exit(0)
-psql(conn, ['--single-transaction', '-f', rollback ? FILES.rollback : FILES.apply])
+psql(conn, rollback
+  ? ['--single-transaction', '-f', FILES.rollback]
+  : ['--single-transaction', ...FILES.apply.flatMap((file) => ['-f', file])])
 if (!rollback) psql(conn, ['-f', FILES.verify])
 console.log(`\n  OK ${rollback ? 'rollback' : '정책 적용'} 완료\n`)

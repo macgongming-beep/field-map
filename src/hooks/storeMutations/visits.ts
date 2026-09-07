@@ -7,6 +7,7 @@ import { msg } from '../../lib/msg'
 import { normalizeUnitNumber } from '../../utils/duplicateBuildingMerge'
 import { canonicalUnitNumber } from '../../utils/unitNumber'
 import { getAuthToken } from '../../lib/authToken'
+import { promptDialog } from '../../lib/confirm'
 
 export function makeVisitMutations(deps: {
   fetchAll: () => Promise<void>
@@ -407,14 +408,8 @@ export function makeVisitMutations(deps: {
       reportMutationError(msg('방문 이력을 수정하지 못했습니다.'), new Error('로그인이 필요합니다'))
       return false
     }
-    const nextVisitor = input.visitor?.trim() || previousVisitor || ''
-    const correctionReason = nextVisitor !== previousVisitor
-      ? '방문자 및 방문기록 정정'
-      : previousVisitor && previousVisitor !== requireVisitor()
-        ? '다른 봉사자 방문기록 정정'
-        : ''
     const patch = buildVisitUpdatePayload(input)
-    const { error: historyError } = await supabase.rpc('update_visit_history_tx', {
+    const updateWithReason = (reason: string) => supabase.rpc('update_visit_history_tx', {
       p_token: token,
       p_history_id: historyId,
       p_result: patch.result,
@@ -422,8 +417,19 @@ export function makeVisitMutations(deps: {
       p_memo: patch.memo ?? '',
       p_visited_at: patch.visited_at,
       p_visitor_name: patch.visitor_name ?? previousVisitor,
-      p_reason: correctionReason,
+      p_reason: reason,
     })
+    let { error: historyError } = await updateWithReason('')
+    if (historyError?.code === '22023' && historyError.message?.includes('사유')) {
+      const reason = await promptDialog({
+        title: '방문 기록 정정 사유',
+        message: '다른 봉사자의 기록을 고치거나 방문자를 바꾸려면 사유를 남겨야 합니다.',
+        placeholder: '예: 실제 방문자 확인',
+        confirmLabel: '사유 남기고 저장',
+      })
+      if (!reason) return false
+      ;({ error: historyError } = await updateWithReason(reason))
+    }
 
     if (historyError) {
       reportMutationError(msg('방문 이력을 수정하지 못했습니다.'), historyError)
@@ -533,15 +539,22 @@ export function makeVisitMutations(deps: {
       reportMutationError(msg('방문 기록을 무효 처리하지 못했습니다.'), new Error('로그인이 필요합니다'))
       return
     }
-    const currentVisitor = requireVisitor()
-    const reason = prevLog?.visitor && currentVisitor && prevLog.visitor !== currentVisitor
-      ? '관리자/인도자 정정'
-      : '잘못 기록함'
-    const { error } = await supabase.rpc('invalidate_visit_history_tx', {
+    const invalidateWithReason = (reason: string) => supabase.rpc('invalidate_visit_history_tx', {
       p_token: token,
       p_history_id: historyId,
       p_reason: reason,
     })
+    let { error } = await invalidateWithReason('')
+    if (error?.code === '22023' && error.message?.includes('사유')) {
+      const reason = await promptDialog({
+        title: '방문 기록 무효 처리 사유',
+        message: '다른 봉사자의 기록을 무효 처리하려면 사유를 남겨야 합니다.',
+        placeholder: '예: 중복 입력 확인',
+        confirmLabel: '사유 남기고 처리',
+      })
+      if (!reason) return
+      ;({ error } = await invalidateWithReason(reason))
+    }
     if (error) {
       reportMutationError(msg('방문 기록을 무효 처리하지 못했습니다.'), error)
       return

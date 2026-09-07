@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // 방문기록 작성자 소유권, 관리자 사유 정정, 무효 처리와 상태 재계산을 검증한다.
 import { loadTestEnv } from './testEnvGuard.js'
+import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 
 const env = loadTestEnv()
 if (!env.allowWrites) throw new Error('쓰기 가드가 열리지 않았습니다')
@@ -15,6 +17,15 @@ const check = (label, ok, detail = '') => { console.log(`${ok ? 'OK' : 'FAIL'} $
 const marker = `_visit_policy_${Date.now()}`
 const made = { users: [], cards: [] }
 let adminToken
+const testEnvText = readFileSync(new URL('../.env.test.local', import.meta.url), 'utf8')
+const dbUrlRaw = testEnvText.match(/^SUPABASE_DB_URL=(.*)$/m)?.[1]?.trim().replace(/^["']|["']$/g, '')
+if (!dbUrlRaw || !dbUrlRaw.includes(env.ref)) throw new Error('테스트 DB psql 주소가 없거나 ref가 다릅니다')
+const dbUrl = new URL(dbUrlRaw)
+const dbPassword = decodeURIComponent(dbUrl.password)
+dbUrl.password = ''
+const psql = (sql) => execFileSync(process.env.PSQL_BIN ?? 'psql', ['-X', '-v', 'ON_ERROR_STOP=1', dbUrl.toString(), '-c', sql], {
+  stdio: 'pipe', env: { ...process.env, PGPASSWORD: dbPassword, PGCONNECT_TIMEOUT: '10' },
+})
 try {
   adminToken = (await login('test-admin', '1234'))?.token
   if (!adminToken) throw new Error('테스트 개발자로 로그인하지 못했습니다')
@@ -47,6 +58,30 @@ try {
   check('작성자는 자기 기록을 직접 수정한다', ownerEdit[0]?.memo === marker)
   const ownerVisitorChange = await rest(`visit_histories?id=eq.${historyId}&select=id`, { method: 'PATCH', body: JSON.stringify({ visitor_name: actors.leader.name }) }, actors.user.token)
   check('작성자도 방문자를 직접 바꾸지 못한다', !ownerVisitorChange.ok)
+  const invalidResult = await rpc('update_visit_history_tx', { p_token: actors.user.token, p_history_id: historyId, p_result: '미방문', p_time_slot: '오후', p_memo: '', p_visited_at: '2026-09-06', p_visitor_name: actors.user.name, p_reason: '' }, actors.user.token)
+  const invalidResultBody = await body(invalidResult)
+  check('미방문은 원시 CHECK 오류 전에 친절하게 거부한다', !invalidResult.ok && invalidResultBody?.code === '22023' && String(invalidResultBody?.message).includes('방문 결과'), `HTTP ${invalidResult.status} ${JSON.stringify(invalidResultBody)}`)
+
+  const orphanRows = await rows(await rest('visit_histories?select=id', { method: 'POST', body: JSON.stringify([
+    { unit_id: unitId, visitor_name: actors.user.name, result: '부재', time_slot: '오전', visited_at: '2026-09-04' },
+    { unit_id: unitId, visitor_name: actors.user.name, result: '부재', time_slot: '오전', visited_at: '2026-09-03' },
+  ]) }, actors.user.token))
+  const blankId = orphanRows[0]?.id
+  const formerId = orphanRows[1]?.id
+  if (!blankId || !formerId) throw new Error('미연결 작성자 fixture 생성 실패')
+  psql(`update public.visit_histories set created_by_user_id=null, visitor_name=case id when ${blankId} then '' else '탈퇴자' end where id in (${blankId},${formerId})`)
+  for (const [label, orphanId, visitor] of [['빈 방문자', blankId, ''], ['탈퇴한 방문자', formerId, '탈퇴자']]) {
+    const edit = await rpc('update_visit_history_tx', { p_token: actors.user.token, p_history_id: orphanId, p_result: '만남', p_time_slot: '오전', p_memo: 'forged', p_visited_at: '2026-09-04', p_visitor_name: visitor, p_reason: '' }, actors.user.token)
+    check(`일반 사용자는 작성자 미연결(${label}) 기록을 수정하지 못한다`, !edit.ok, `HTTP ${edit.status}`)
+    const invalidate = await rpc('invalidate_visit_history_tx', { p_token: actors.user.token, p_history_id: orphanId, p_reason: '' }, actors.user.token)
+    check(`일반 사용자는 작성자 미연결(${label}) 기록을 무효 처리하지 못한다`, !invalidate.ok, `HTTP ${invalidate.status}`)
+  }
+  const leaderNoReasonOrphan = await rpc('invalidate_visit_history_tx', { p_token: actors.leader.token, p_history_id: blankId, p_reason: '' }, actors.leader.token)
+  check('인도자도 미연결 기록은 사유 없이 무효 처리하지 못한다', !leaderNoReasonOrphan.ok, `HTTP ${leaderNoReasonOrphan.status}`)
+  const leaderWithReasonOrphan = await rpc('invalidate_visit_history_tx', { p_token: actors.leader.token, p_history_id: blankId, p_reason: '수입 자료 중복 확인' }, actors.leader.token)
+  check('인도자는 사유를 남겨 미연결 기록을 무효 처리한다', leaderWithReasonOrphan.ok, `HTTP ${leaderWithReasonOrphan.status}`)
+  const leaderInvalidatesFormer = await rpc('invalidate_visit_history_tx', { p_token: actors.leader.token, p_history_id: formerId, p_reason: '탈퇴자 기록 fixture 정리' }, actors.leader.token)
+  check('인도자는 사유를 남겨 탈퇴자 기록도 무효 처리한다', leaderInvalidatesFormer.ok, `HTTP ${leaderInvalidatesFormer.status}`)
 
   const noReason = await rpc('update_visit_history_tx', { p_token: actors.leader.token, p_history_id: historyId, p_result: '만남', p_time_slot: '저녁', p_memo: '', p_visited_at: '2026-09-06', p_visitor_name: actors.user.name, p_reason: '' }, actors.leader.token)
   check('인도자는 사유 없이 남의 기록을 정정하지 못한다', !noReason.ok)

@@ -14,11 +14,24 @@ export type ConfirmOptions = {
   danger?: boolean        // 확인 버튼을 다크 레드로
 }
 
-export type DialogRequest = ConfirmOptions & {
+export type PromptOptions = Omit<ConfirmOptions, 'danger'> & {
+  placeholder?: string
+  initialValue?: string
+}
+
+type ConfirmRequest = ConfirmOptions & {
   id: number
   kind: 'confirm' | 'alert'
   resolve: (value: boolean) => void
 }
+
+type PromptRequest = PromptOptions & {
+  id: number
+  kind: 'prompt'
+  resolve: (value: string | null) => void
+}
+
+export type DialogRequest = ConfirmRequest | PromptRequest
 
 type DialogListener = (req: DialogRequest) => void
 
@@ -52,5 +65,16 @@ export function alertDialog(opts: ConfirmOptions): Promise<boolean> {
       return
     }
     _listener({ ...opts, id: ++_nextId, kind: 'alert', resolve })
+  })
+}
+
+/** 빈 값은 제출할 수 없는 한 줄 입력 다이얼로그. 취소하면 null. */
+export function promptDialog(opts: PromptOptions): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (!_listener) {
+      resolve(window.prompt([opts.title, opts.message].filter(Boolean).join('\n'), opts.initialValue ?? ''))
+      return
+    }
+    _listener({ ...opts, id: ++_nextId, kind: 'prompt', resolve })
   })
 }

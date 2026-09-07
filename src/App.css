@@ -19972,6 +19972,29 @@ button:focus-visible {
   white-space: pre-line;
 }
 
+.cdlg-input {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-200, #d8d6d1);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--ink-900, #171714);
+  font: inherit;
+  outline: none;
+}
+
+.cdlg-input:focus {
+  border-color: var(--ink-500, #77746d);
+  box-shadow: 0 0 0 3px rgba(23, 23, 20, 0.08);
+}
+
+.cdlg-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .cdlg-actions {
   display: flex;
   gap: 10px;

@@ -1,12 +1,13 @@
 // 전역 Confirm/Alert 렌더러 — Toast 와 동일하게 앱 루트에 1회 마운트.
 // confirm.ts 의 이벤트 버스를 구독해 큐에 쌓고, 맨 앞 요청 하나만 표시한다.
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { msg } from '../lib/msg'
 import { registerDialogListener, type DialogRequest } from '../lib/confirm'
 
 export function ConfirmDialog() {
   const [queue, setQueue] = useState<DialogRequest[]>([])
+  const promptInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     return registerDialogListener((req) => {
@@ -16,9 +17,10 @@ export function ConfirmDialog() {
 
   const current = queue[0]
 
-  const close = useCallback((value: boolean) => {
+  const close = useCallback((value: boolean | string | null) => {
     if (!current) return
-    current.resolve(value)
+    if (current.kind === 'prompt') current.resolve(typeof value === 'string' ? value : null)
+    else current.resolve(value === true)
     setQueue((prev) => prev.slice(1))
   }, [current])
 
@@ -26,8 +28,14 @@ export function ConfirmDialog() {
   useEffect(() => {
     if (!current) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); close(false) }
-      else if (e.key === 'Enter') { e.preventDefault(); close(true) }
+      if (e.key === 'Escape') { e.preventDefault(); close(current.kind === 'prompt' ? null : false) }
+      else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (current.kind === 'prompt') {
+          const value = promptInputRef.current?.value.trim() ?? ''
+          if (value) close(value)
+        } else close(true)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -44,7 +52,7 @@ export function ConfirmDialog() {
   return (
     <div
       className="cdlg-backdrop"
-      onClick={() => close(current.kind === 'alert')}
+      onClick={() => close(current.kind === 'alert' ? true : current.kind === 'prompt' ? null : false)}
       role="presentation"
     >
       <div
@@ -55,17 +63,31 @@ export function ConfirmDialog() {
       >
         {current.title && <h2 className="cdlg-title">{msg(current.title)}</h2>}
         <p className="cdlg-message">{msg(current.message)}</p>
+        {current.kind === 'prompt' && (
+          <input
+            className="cdlg-input"
+            ref={promptInputRef}
+            defaultValue={current.initialValue ?? ''}
+            placeholder={msg(current.placeholder ?? '사유를 입력하세요')}
+            maxLength={200}
+            autoFocus
+          />
+        )}
         <div className="cdlg-actions">
-          {current.kind === 'confirm' && (
-            <button className="cdlg-btn cdlg-cancel" onClick={() => close(false)} type="button">
+          {current.kind !== 'alert' && (
+            <button className="cdlg-btn cdlg-cancel" onClick={() => close(current.kind === 'prompt' ? null : false)} type="button">
               {cancelLabel}
             </button>
           )}
           <button
-            className={`cdlg-btn cdlg-confirm${current.danger ? ' cdlg-danger' : ''}`}
-            onClick={() => close(true)}
+            className={`cdlg-btn cdlg-confirm${current.kind !== 'prompt' && current.danger ? ' cdlg-danger' : ''}`}
+            onClick={() => {
+              if (current.kind !== 'prompt') { close(true); return }
+              const value = promptInputRef.current?.value.trim() ?? ''
+              if (value) close(value)
+            }}
             type="button"
-            autoFocus
+            autoFocus={current.kind !== 'prompt'}
           >
             {confirmLabel}
           </button>
