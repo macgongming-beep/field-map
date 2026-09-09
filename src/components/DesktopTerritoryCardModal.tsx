@@ -191,7 +191,7 @@ export function CardCreateModal({
                 <label>상위 시 <span style={{ fontWeight: 400, color: 'var(--muted)' }}>— &lsquo;구&rsquo;일 때만</span></label>
                 <input
                   className="cal-input"
-                  placeholder="예: 수지구 → 용인시 / 안성시라면 비워 두세요"
+                  placeholder="예: 구 단위 지역이면 상위 시 입력 / 시 자체라면 비워 두세요"
                   value={newRegion.city}
                   onChange={(e) => setNewRegion({ ...newRegion, city: e.target.value })}
                 />

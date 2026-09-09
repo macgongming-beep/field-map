@@ -10,11 +10,13 @@ const renderScreen = (over: {
   eventId: number
   informal?: EventInformalAssignment[]
   restaurant?: EventRestaurantAssignment[]
+  guests?: string[]
 }) =>
   render(
     <TeamBuildScreen
       eventId={over.eventId}
       participants={['가나다']}
+      guests={over.guests}
       teams={[TEAM] as never}
       cards={[] as never}
       canEdit
@@ -59,5 +61,12 @@ describe('팀 줄 밑 글자', () => {
   test('아무것도 없으면 구역 미배정', () => {
     renderScreen({ eventId: 342 })
     expect(screen.getByText(/구역 미배정/)).toBeTruthy()
+  })
+
+  test('손님은 글자 배지 없이 파란 테두리 상태만 붙는다', () => {
+    renderScreen({ eventId: 342, guests: ['가나다'] })
+    const guest = screen.getByRole('button', { name: '가나다, 손님' })
+    expect(guest.classList.contains('is-guest')).toBe(true)
+    expect(screen.queryByText('손님')).toBeNull()
   })
 })

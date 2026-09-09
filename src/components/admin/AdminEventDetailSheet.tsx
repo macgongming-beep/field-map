@@ -17,6 +17,9 @@ import { buildSharedAssignmentTeams } from './sharedAssignmentTeams'
 import { confirmDialog } from '../../lib/confirm'
 import { t, translateKoreanAddress, type AppLanguage } from '../../i18n'
 import { CommentSection, type MentionUser } from '../CommentSection'
+import { ParticipantAddContent } from '../calendar/ParticipantAddContent'
+import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
+import { msg } from '../../lib/msg'
 
 type Props = {
   /** 비공식 봉사 배정 — 구역이 없어도 맡은 일이 있으면 보여 준다 */
@@ -32,12 +35,13 @@ type Props = {
   currentVisitor: string
   currentUserId?: number | null
   mentionUsers?: MentionUser[]
+  participantUsers?: EventParticipantUser[]
   onClose: () => void
   onDelete?: () => void
   onEdit?: () => void
   onApply?: () => void
   onCancelApply?: () => void
-  onAddParticipant?: (userName: string) => void
+  onAddParticipant?: (userName: string, role?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   onRemoveParticipant?: (userName: string) => void
   onOpenAssignment?: () => void
   globalSettings?: Record<string, string>
@@ -159,6 +163,7 @@ export function AdminEventDetailSheet({
   currentVisitor,
   currentUserId,
   mentionUsers = [],
+  participantUsers = [],
   onClose,
   onDelete,
   onEdit,
@@ -186,7 +191,6 @@ export function AdminEventDetailSheet({
   
   const [isAddParticipantModalOpen, setIsAddParticipantModalOpen] = useState(false)
   const [isRemoveParticipantMode, setIsRemoveParticipantMode] = useState(false)
-  const [participantSearchText, setParticipantSearchText] = useState('')
 
   const hideParticipants = globalSettings.hide_participants_from_users === 'true' && role === 'user'
   const [menuOpen, setMenuOpen] = useState(false)
@@ -555,6 +559,8 @@ export function AdminEventDetailSheet({
           >
             {applicants.map((name) => (
               <span
+                aria-label={event.guests.includes(name) ? `${name}, ${msg('손님')}` : name}
+                className={`event-detail-participant-chip${event.guests.includes(name) ? ' is-guest' : ''}`}
                 key={name}
                 style={{
                   display: 'inline-flex',
@@ -678,41 +684,14 @@ export function AdminEventDetailSheet({
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{t(language, 'calendar.manualAddApplicant')}</h3>
               <button onClick={() => setIsAddParticipantModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', padding: 4 }}>×</button>
             </div>
-            <div style={{ padding: 12, borderBottom: '1px solid var(--line-muted)' }}>
-              <input 
-                type="text" 
-                placeholder={t(language, 'calendar.searchName')} 
-                value={participantSearchText}
-                onChange={e => setParticipantSearchText(e.target.value)}
-                style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--line-muted)', background: 'var(--surface)', fontSize: 14 }}
-              />
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {(mentionUsers || [])
-                .filter(u => !applicants.includes(u.name))
-                .filter(u => participantSearchText ? u.name.includes(participantSearchText) : true)
-                .map(u => (
-                  <div 
-                    key={u.id}
-                    onClick={() => {
-                      if (onAddParticipant) onAddParticipant(u.name);
-                      setIsAddParticipantModalOpen(false);
-                      setParticipantSearchText('');
-                    }}
-                    style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderRadius: 8 }}
-                    onMouseOver={e => e.currentTarget.style.background = 'var(--surface)'}
-                    onMouseOut={e => e.currentTarget.style.background = 'none'}
-                  >
-                    <Avatar name={u.name} size={28} />
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>{u.name}</span>
-                  </div>
-              ))}
-              {(mentionUsers || []).filter(u => !applicants.includes(u.name)).length === 0 && (
-                <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
-                  {t(language, 'calendar.noMembersToAdd')}
-                </div>
-              )}
-            </div>
+            <ParticipantAddContent
+              existingNames={applicants}
+              onAdd={(name, participantRole) => onAddParticipant?.(name, participantRole)}
+              onAdded={() => {
+                setIsAddParticipantModalOpen(false)
+              }}
+              users={participantUsers}
+            />
           </div>
         </div>
       )}

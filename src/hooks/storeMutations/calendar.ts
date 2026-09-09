@@ -1,9 +1,9 @@
 import type { CalendarEvent } from '../../types'
 import { supabase, showToast, reportMutationError, getCurrentVisitor, ensureAffectedRows } from './shared'
-import { createSystemChatMessage } from './chatSystem'
 import { logServiceAction } from './serviceLog'
 import { msg } from '../../lib/msg'
 import { getAuthToken } from '../../lib/authToken'
+import { eventParticipantNameKey, normalizeEventParticipantName } from '../../utils/eventParticipantUsers'
 
 /** 일정 입력 공통 타입 */
 export type CalendarEventInput = {
@@ -213,31 +213,23 @@ export function makeCalendarMutations(deps: {
     } else {
       const result = await supabase.from('event_participants').upsert(
         { event_id: eventId, user_name: currentVisitor, role: '신청' },
-        { onConflict: 'event_id,user_name' },
-      )
+        { onConflict: 'event_id,user_name', ignoreDuplicates: true },
+      ).select('id')
       if (result.error) {
         reportMutationError(msg('봉사 신청을 저장하지 못했습니다.'), result.error)
         return
       }
-      // 시스템 채팅 메시지 ("합류했습니다") 제거 — 불필요 알림 줄이기
-      await logServiceAction({
-        eventId,
-        action: 'joined',
-        targetType: 'event_participant',
-        details: { user_name: currentVisitor, source: 'self_apply' },
-      })
+      if ((result.data?.length ?? 0) > 0) {
+        await logServiceAction({
+          eventId,
+          action: 'joined',
+          targetType: 'event_participant',
+          details: { user_name: currentVisitor, source: 'self_apply' },
+        })
+      }
     }
     await fetchAll()
     showToast(isApplied ? '신청이 취소됐습니다' : '일정에 신청됐습니다')
-  }
-
-  const assignToEvent = async (eventId: number, userName: string) => {
-    await supabase.from('event_participants').upsert(
-      { event_id: eventId, user_name: userName, role: '입명' },
-      { onConflict: 'event_id,user_name' },
-    )
-    await createSystemChatMessage(eventId, `${userName}님이 배정되었습니다.`)
-    await fetchAll()
   }
 
   const removeParticipantFromEvent = async (eventId: number, userName: string) => {
@@ -310,28 +302,37 @@ export function makeCalendarMutations(deps: {
    * @param role '신청' = 본인이 신청 · '게스트' = 앱 계정이 없는 손님
    *   게스트도 같은 표에 들어간다. user_name 이 app_users 를 참조하지 않아
    *   계정 없는 이름을 넣을 수 있다.
-   */
+  */
   const addParticipantToEvent = async (eventId: number, userName: string, role: '신청' | '게스트' = '신청') => {
+    const normalizedName = normalizeEventParticipantName(userName)
     const event = calendarEvents.find((e) => e.id === eventId)
-    if (!event) return
-    if (event.applicants.includes(userName)) return
+    if (!event || !normalizedName) return false
+    if (event.applicants.some((name) => eventParticipantNameKey(name) === eventParticipantNameKey(normalizedName))) {
+      showToast(msg('이미 이 일정에 있는 이름입니다.'), 'info')
+      return false
+    }
     const result = await supabase.from('event_participants').upsert(
-      { event_id: eventId, user_name: userName, role },
+      { event_id: eventId, user_name: normalizedName, role },
       { onConflict: 'event_id,user_name' },
-    )
+    ).select('id')
     if (result.error) {
       reportMutationError(msg('참가자를 추가하지 못했습니다.'), result.error)
-      return
+      return false
     }
+    if (!ensureAffectedRows(result.data, msg('참가자를 추가하지 못했습니다.'))) return false
     // 시스템 채팅 메시지 ("합류했습니다") 제거 — 불필요 알림 줄이기
     await logServiceAction({
       eventId,
       action: 'joined',
       targetType: 'event_participant',
-      details: { user_name: userName, source: 'admin_add' },
+      details: { user_name: normalizedName, source: role === '게스트' ? 'admin_add_guest' : 'admin_add' },
     })
     await fetchAll()
-    showToast(msg('{userName}님을 신청자로 추가했습니다', { userName: userName }))
+    showToast(msg(
+      role === '게스트' ? '{userName}님을 게스트로 추가했습니다' : '{userName}님을 신청자로 추가했습니다',
+      { userName: normalizedName },
+    ))
+    return true
   }
 
   return {
@@ -343,7 +344,6 @@ export function makeCalendarMutations(deps: {
     deleteCalendarEventSeries,
     linkEventsToSeries,
     applyToEvent,
-    assignToEvent,
     removeParticipantFromEvent,
     addParticipantToEvent,
   }

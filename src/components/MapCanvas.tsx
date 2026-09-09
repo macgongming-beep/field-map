@@ -7,7 +7,7 @@ import { getBuildingStatus, getCardName, getMockPosition, isValidMapCoordinate }
 import { getBuildingPin, BUILDING_STATUS_COLORS, TONE_COLORS } from '../utils/buildingPin'
 import { INFORMAL_KIND_STYLE, informalKindSvgPath } from '../utils/informalKind'
 import type { InformalKind } from '../types'
-import { TERRITORY_BOUNDARY } from '../data/territoryBoundary'
+import { getCongregationProfile, getTerritoryBoundary } from '../lib/congregationProfile'
 import { showToast } from '../lib/toast'
 import { msg } from '../lib/msg'
 import { stripRegionPrefix } from '../lib/regions'
@@ -58,7 +58,12 @@ function getMapPalette() {
 }
 
 function getBoundaryBox() {
-  return TERRITORY_BOUNDARY.reduce(
+  const boundary = getTerritoryBoundary()
+  if (boundary.length === 0) {
+    const { lat, lng } = getCongregationProfile().mapCenter
+    return { minLng: lng - 0.01, maxLng: lng + 0.01, minLat: lat - 0.01, maxLat: lat + 0.01 }
+  }
+  return boundary.reduce(
     (box, [lng, lat]) => ({
       minLng: Math.min(box.minLng, lng),
       maxLng: Math.max(box.maxLng, lng),
@@ -79,7 +84,7 @@ function getMockBoundaryPoints() {
   const lngRange = box.maxLng - box.minLng || 1
   const latRange = box.maxLat - box.minLat || 1
 
-  return TERRITORY_BOUNDARY.map(([lng, lat]) => {
+  return getTerritoryBoundary().map(([lng, lat]) => {
     const x = ((lng - box.minLng) / lngRange) * 100
     const y = (1 - (lat - box.minLat) / latRange) * 100
     return `${x.toFixed(2)},${y.toFixed(2)}`
@@ -909,12 +914,13 @@ function NaverMapCanvas({
  
   const fitTerritoryBoundary = () => {
     const naver = (window as any).naver
-    if (!naver?.maps || !mapInstanceRef.current || TERRITORY_BOUNDARY.length === 0) return
+    const territoryBoundary = getTerritoryBoundary()
+    if (!naver?.maps || !mapInstanceRef.current || territoryBoundary.length === 0) return
     const bounds = new naver.maps.LatLngBounds(
-      new naver.maps.LatLng(TERRITORY_BOUNDARY[0][1], TERRITORY_BOUNDARY[0][0]),
-      new naver.maps.LatLng(TERRITORY_BOUNDARY[0][1], TERRITORY_BOUNDARY[0][0]),
+      new naver.maps.LatLng(territoryBoundary[0][1], territoryBoundary[0][0]),
+      new naver.maps.LatLng(territoryBoundary[0][1], territoryBoundary[0][0]),
     )
-    TERRITORY_BOUNDARY.forEach((p) => bounds.extend(new naver.maps.LatLng(p[1], p[0])))
+    territoryBoundary.forEach((p) => bounds.extend(new naver.maps.LatLng(p[1], p[0])))
     mapInstanceRef.current.fitBounds(bounds, { margin: getFitMargin() })
   }
 
@@ -1479,7 +1485,10 @@ function NaverMapCanvas({
           ? new naver.maps.LatLng(Number(focusTarget!.lat), Number(focusTarget!.lng))
           : buildingsRef.current.length > 0
             ? new naver.maps.LatLng(buildingsRef.current[0].lat, buildingsRef.current[0].lng)
-            : new naver.maps.LatLng(37.2384, 127.2142)
+          : new naver.maps.LatLng(
+              getCongregationProfile().mapCenter.lat,
+              getCongregationProfile().mapCenter.lng,
+            )
 
       mapInstanceRef.current = new naver.maps.Map(mapRef.current, {
         center,
@@ -1505,20 +1514,23 @@ function NaverMapCanvas({
       if (hasFocusTarget) lastFocusedBuildingIdRef.current = focusBuildingIdRef.current ?? null
 
       // 구역 경계선 폴리곤
-      boundaryRef.current = new naver.maps.Polygon({
-        map: mapInstanceRef.current,
-        paths: TERRITORY_BOUNDARY.map(([lng, lat]) => new naver.maps.LatLng(lat, lng)),
-        fillColor: getMapPalette().brand,
-        fillOpacity: 0.05,
-        strokeColor: getMapPalette().brand,
-        strokeOpacity: 0.6,
-        strokeWeight: 2,
-        strokeStyle: 'shortdash',
-      })
+      const territoryBoundary = getTerritoryBoundary()
+      if (territoryBoundary.length >= 3) {
+        boundaryRef.current = new naver.maps.Polygon({
+          map: mapInstanceRef.current,
+          paths: territoryBoundary.map(([lng, lat]) => new naver.maps.LatLng(lat, lng)),
+          fillColor: getMapPalette().brand,
+          fillOpacity: 0.05,
+          strokeColor: getMapPalette().brand,
+          strokeOpacity: 0.6,
+          strokeWeight: 2,
+          strokeStyle: 'shortdash',
+        })
 
-      naver.maps.Event.addListener(boundaryRef.current, 'rightclick', (event: any) => {
-        onMapRightClickRef.current?.(event.coord.lat(), event.coord.lng())
-      })
+        naver.maps.Event.addListener(boundaryRef.current, 'rightclick', (event: any) => {
+          onMapRightClickRef.current?.(event.coord.lat(), event.coord.lng())
+        })
+      }
 
       // 선택된 카드나 범위가 있으면 해당 경계로 줌인, 없으면 전체 영역
       // (건물을 지정해서 들어온 경우엔 이미 그 건물에 맞춰져 있으므로 건너뛴다)
@@ -2190,7 +2202,7 @@ export function MapCanvas({
       <div className="mock-map-road road-one" />
       <div className="mock-map-road road-two" />
       <div className="mock-map-road road-three" />
-      <p className="mock-map-label">전체 구역 경계선 · KML {TERRITORY_BOUNDARY.length}개 좌표</p>
+      <p className="mock-map-label">전체 구역 경계선 · KML {getTerritoryBoundary().length}개 좌표</p>
       {aggregateMarkers.length > 0 && aggregateMarkers.map((marker) => {
         const pos = getMockPoint({ lat: marker.lat, lng: marker.lng })
         return (

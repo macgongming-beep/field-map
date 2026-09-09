@@ -126,7 +126,7 @@ export function findCardForCoordinates(
 
 /**
  * Return sorted area options for a given region.
- * Combines areas defined in territoryAreasByRegion with actual card areas found in context.
+ * Combines the caller's configured areas with actual card areas found in context.
  * '미배정' is always appended as the final option.
  */
 export function getSortedAreaOptions(

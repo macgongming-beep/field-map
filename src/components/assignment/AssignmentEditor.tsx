@@ -18,6 +18,7 @@ import { ZoneAssignScreen } from './ZoneAssignScreen'
 import { showToast } from '../../lib/toast'
 import { pushBackHandler } from '../../lib/backStack'
 import { msg } from '../../lib/msg'
+import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
 
 // "5/29 (금) 10:00 · 봉사 모임" 형식
 function formatEventDateTime(event: CalendarEvent): string {
@@ -50,7 +51,8 @@ type Props = {
   onRemoveRestaurantAssignment?: (assignmentId: number) => Promise<void>
   onClose: () => void
   /** 손님 추가 — 없으면 추가 칸을 숨긴다 */
-  onAddGuest?: (eventId: number, name: string) => Promise<void> | void
+  onAddGuest?: (eventId: number, name: string) => boolean | void | Promise<boolean | void>
+  registeredUsers?: EventParticipantUser[]
   onShare: (
     eventId: number,
     assignments: Array<{ userName: string; cardIds: number[]; teamKey?: string }>,
@@ -58,7 +60,7 @@ type Props = {
   ) => Promise<void> | void
 }
 
-export function AssignmentEditor({ event, cards, allCards = [], buildings, visitHistories = [], cardBoundaries, currentVisitor, canEdit, informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onClose, onShare , onAddGuest}: Props) {
+export function AssignmentEditor({ event, cards, allCards = [], buildings, visitHistories = [], cardBoundaries, currentVisitor, canEdit, informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onClose, onShare, onAddGuest, registeredUsers = [] }: Props) {
   // 편집 시작 시점의 서버 공유시각 — 공유 때 충돌 감지에 사용 (P0-3)
   const [entrySharedAt] = useState<string | null>(event.assignmentSharedAt ?? null)
   // 진입 시 draft 결정 (lazy 1회). 충돌이면 server로 시작하고 모달 띄움.
@@ -243,6 +245,7 @@ export function AssignmentEditor({ event, cards, allCards = [], buildings, visit
         participants={participants}
         guests={event.guests}
         onAddGuest={onAddGuest ? (name) => onAddGuest(event.id, name) : undefined}
+        registeredUsers={registeredUsers}
         teams={teams}
         cards={cards}
         canEdit={canEdit}

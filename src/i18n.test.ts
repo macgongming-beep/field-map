@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { t, isAppLanguage, formatJoined } from './i18n'
+import { t, isAppLanguage, formatJoined, translateKoreanAddress } from './i18n'
+import { applyCongregationSettings, CONGREGATION_PROFILE_KEY } from './lib/congregationProfile'
 import { ko } from './locales/ko'
 import { zh } from './locales/zh'
 import { en } from './locales/en'
@@ -50,5 +51,18 @@ describe('formatJoined', () => {
     expect(formatJoined('ko', 3)).toBe('참여 3명')
     expect(formatJoined('zh', 3)).toBe('参与 3人')
     expect(formatJoined('en', 3)).toBe('3 joined')
+  })
+})
+
+describe('회중별 지명 번역', () => {
+  it('설정에 넣은 다른 지역 이름을 번역한다', () => {
+    applyCongregationSettings({
+      [CONGREGATION_PROFILE_KEY]: JSON.stringify({
+        placeNames: [['구월동', '九月洞', 'Guwol-dong']],
+      }),
+    })
+    expect(translateKoreanAddress('남동구 구월동', 'zh')).toContain('九月洞')
+    expect(translateKoreanAddress('남동구 구월동', 'en')).toContain('Guwol-dong')
+    applyCongregationSettings({})
   })
 })

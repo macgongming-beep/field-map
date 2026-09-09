@@ -28,7 +28,7 @@ export type TerritoryRegionInfo = {
 const FALLBACK: TerritoryRegionInfo[] = FALLBACK_NAMES.map((name, i) => ({
   id: 0,
   name,
-  city: name === '영통구' ? '수원시' : name.endsWith('구') ? '용인시' : '',
+  city: '',
   sortOrder: i + 1,
   nameZh: '',
   nameEn: '',
@@ -43,6 +43,12 @@ export function setRegions(next: TerritoryRegionInfo[]): void {
   // 빈 목록으로 덮으면 지역 필터가 통째로 사라진다. 불러오기 실패와 구분되지 않으니
   // 무시하고 이전 값을 지킨다.
   if (next.length === 0) return
+  regions = [...next].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ko'))
+  names = regions.map((r) => r.name)
+}
+
+/** DB 조회가 성공한 결과. 빈 배열도 '아직 지역을 만들지 않은 새 회중'이라는 유효한 값이다. */
+export function setRegionsFromDatabase(next: TerritoryRegionInfo[]): void {
   regions = [...next].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ko'))
   names = regions.map((r) => r.name)
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   setRegions,
+  setRegionsFromDatabase,
   getRegions,
   getRegionNames,
   getRegionCity,
@@ -27,6 +28,11 @@ describe('목록 불러오기', () => {
   it('빈 목록으로는 덮지 않는다 — 불러오기 실패와 구분되지 않는다', () => {
     setRegions([])
     expect(getRegions().length).toBe(4)
+  })
+
+  it('DB 조회가 성공한 빈 목록은 새 회중의 실제 상태로 반영한다', () => {
+    setRegionsFromDatabase([])
+    expect(getRegions()).toEqual([])
   })
 
   it('DB 에서 순서가 뒤섞여 와도 정렬해서 쓴다', () => {

@@ -5,6 +5,7 @@
 //   자동 배정은 구역선·카드 목록을 봐야 해서 화면이 들고 있을 일이 아니다.
 import { useRef, useState } from 'react'
 import type { Building } from '../types'
+import { getAddressExample } from '../lib/congregationProfile'
 
 export type AddBuildingForm = {
   name: string
@@ -108,8 +109,9 @@ export function AddBuildingModal({ cards, onClose, onGeocode, onSubmit }: Props)
               <span>주소 <em className="add-building-required">*</em></span>
               <div className="add-building-address-row">
                 <input
+                  aria-label="주소"
                   className="add-building-input"
-                  placeholder="예) 경기도 용인시 처인구 언동로 213"
+                  placeholder={getAddressExample()}
                   value={form.address}
                   onChange={(e) => {
                     changeAddress(e.target.value)

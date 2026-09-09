@@ -22,6 +22,7 @@ import { countEventNotifyTargets, countEventNotifyTargetsMany } from '../../util
 import type { Building, CalendarEvent, CardBoundary, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, InformalGroup, Role, SpecialPeriod, TerritoryCard, VisitHistory } from '../../types'
 import type { AppLanguage } from '../../i18n'
 import { AssignmentEditor } from '../assignment/AssignmentEditor'
+import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
 import { savePlacePresets, normalizePlacePresets, resolvePlacePresets, parsePlacePresetsValue, PLACE_PRESET_SETTING_KEY, PLACE_PRESETS_MAX } from '../../lib/placePresets'
 import type { PlacePreset } from '../../lib/placePresets'
 import {
@@ -73,6 +74,7 @@ type Props = {
   cardBoundaries?: CardBoundary[]
   leaderNames?: string[]
   mentionUsers?: MentionUser[]
+  participantUsers?: EventParticipantUser[]
   onAssignCardsToEventParticipantsBulk?: (
     eventId: number,
     assignments: Array<{ userName: string; cardId?: number | null; cardIds?: number[] | null }>,
@@ -93,7 +95,7 @@ type Props = {
   onUpdateEvent?: (id: number, input: EventInput, notify?: boolean) => void | Promise<boolean>
   onUpdateEventSeries?: (seriesId: string, fromDate: string, input: EventInput, notify?: boolean) => void | Promise<boolean>
   onApplyToEvent?: (eventId: number) => void
-  onAddParticipantToEvent?: (eventId: number, userName: string, role?: '신청' | '게스트') => void
+  onAddParticipantToEvent?: (eventId: number, userName: string, role?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   onRemoveParticipantFromEvent?: (eventId: number, userName: string) => void
   specialPeriods?: SpecialPeriod[]
   globalSettings?: Record<string, string>
@@ -179,6 +181,7 @@ export function AdminMobileCalendar({
   currentUserId,
   leaderNames = [],
   mentionUsers = [],
+  participantUsers = [],
   onAssignCardsToEventParticipantsBulk,
   informalAssets = [],
   informalGroups = [],
@@ -556,7 +559,8 @@ export function AdminMobileCalendar({
           currentVisitor={currentVisitor}
           currentUserId={currentUserId}
           mentionUsers={mentionUsers}
-          onAddParticipant={(userName) => onAddParticipantToEvent?.(detailEvent.id, userName)}
+          participantUsers={participantUsers}
+          onAddParticipant={(userName, participantRole) => onAddParticipantToEvent?.(detailEvent.id, userName, participantRole)}
           onRemoveParticipant={(userName) => onRemoveParticipantFromEvent?.(detailEvent.id, userName)}
           onClose={() => {
             // setDetailEventId(null) → 위 useEffect cleanup 이 더미 히스토리 정리
@@ -615,6 +619,7 @@ export function AdminMobileCalendar({
             cardBoundaries={cardBoundaries}
             currentVisitor={currentVisitor}
             canEdit={canEdit}
+            registeredUsers={participantUsers}
             allCards={cards}
             informalAssets={informalAssets}
             informalGroups={informalGroups}

@@ -5,7 +5,8 @@ import { withLoadDeadline } from '../lib/loadDeadline'
 import { msg } from '../lib/msg'
 import { showToast } from '../lib/toast'
 import { findActivePeriodId } from '../utils/specialPeriod'
-import { setRegions } from '../lib/regions'
+import { getRegionNames, setRegionsFromDatabase } from '../lib/regions'
+import { applyCongregationSettings } from '../lib/congregationProfile'
 import { isRestaurantAssignmentDeleted, resolvePlaceDeletionScope } from '../utils/placeDeletionSignal'
 import type {
   Building,
@@ -226,20 +227,19 @@ export function useStore(enabled: boolean = true) {
       case 'cards': {
         // 지역 목록도 여기서 받는다 — 카드의 region 값을 해석하는 재료라 늘 함께 쓰인다.
         // 표가 아직 없거나 실패하면 lib/regions 의 기본값이 그대로 남는다 (화면이 비지 않는다).
-        void supabase.from('territory_regions')
+        const regionsRes = await supabase.from('territory_regions')
           .select('id, name, city, sort_order, name_zh, name_en')
           .order('sort_order')
-          .then(({ data, error }) => {
-            if (error || !data) return
-            setRegions(data.map((r) => ({
-              id: r.id,
-              name: r.name,
-              city: r.city ?? '',
-              sortOrder: r.sort_order ?? 0,
-              nameZh: r.name_zh ?? '',
-              nameEn: r.name_en ?? '',
-            })))
-          })
+        if (!regionsRes.error && regionsRes.data) {
+          setRegionsFromDatabase(regionsRes.data.map((r) => ({
+            id: r.id,
+            name: r.name,
+            city: r.city ?? '',
+            sortOrder: r.sort_order ?? 0,
+            nameZh: r.name_zh ?? '',
+            nameEn: r.name_en ?? '',
+          })))
+        }
 
         // cards에 card_leader_assignments 컬럼이 없으면 폴백
         const cardsQueryPromise = (async () => {
@@ -461,6 +461,7 @@ export function useStore(enabled: boolean = true) {
         const settingsRes = await supabase.from('app_settings').select('*')
         measure(settingsRes.data)
         const nextGlobalSettings = settingsRes.error ? {} : Object.fromEntries((settingsRes.data as { key: string; value: string }[]).map((r) => [r.key, r.value]))
+        applyCongregationSettings(nextGlobalSettings)
         globalSettingsRef.current = nextGlobalSettings
         setGlobalSettings(nextGlobalSettings)
         return approxBytes
@@ -547,11 +548,12 @@ export function useStore(enabled: boolean = true) {
         .select('id')
         .eq('name', '미배정 건물')
         .limit(1)
-      if (existing?.length === 0) {
+      const firstRegion = getRegionNames()[0]
+      if (existing?.length === 0 && firstRegion) {
         await supabase.from('cards').insert({
           name: '미배정 건물',
           area: '미배정',
-          region: '처인구',
+          region: firstRegion,
           type: '전체',
           status: '미배정',
         })
@@ -763,7 +765,6 @@ export function useStore(enabled: boolean = true) {
     deleteCalendarEventSeries,
     linkEventsToSeries,
     applyToEvent,
-    assignToEvent,
     removeParticipantFromEvent,
     addParticipantToEvent,
   } = makeCalendarMutations({
@@ -827,6 +828,7 @@ export function useStore(enabled: boolean = true) {
   const upsertGlobalSetting = async (key: string, value: string): Promise<boolean> => {
     const previousValue = globalSettingsRef.current[key]
     const optimisticSettings = { ...globalSettingsRef.current, [key]: value }
+    applyCongregationSettings(optimisticSettings)
     globalSettingsRef.current = optimisticSettings
     setGlobalSettings(optimisticSettings)
     const { error } = await supabase.from('app_settings').upsert({ key, value }, { onConflict: 'key' })
@@ -837,6 +839,7 @@ export function useStore(enabled: boolean = true) {
         const next = { ...globalSettingsRef.current }
         if (previousValue === undefined) delete next[key]
         else next[key] = previousValue
+        applyCongregationSettings(next)
         globalSettingsRef.current = next
         setGlobalSettings(next)
       }
@@ -916,7 +919,6 @@ export function useStore(enabled: boolean = true) {
     deleteCalendarEventSeries,
     linkEventsToSeries,
     applyToEvent,
-    assignToEvent,
     removeParticipantFromEvent,
     addParticipantToEvent,
     mergeDuplicateBuildings,

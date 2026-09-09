@@ -76,6 +76,14 @@ try {
     if (!token) throw new Error(`${key} fixture 로그인이 실패했습니다`)
     actors[key] = { id: row.id, name, token }
   }
+  const inactiveName = `${marker} inactive name`
+  const inactive = await createRow('app_users', {
+    login_id: `${marker}_inactive`, name: inactiveName, pin: '4321', role: 'user',
+    approval_status: 'approved', is_active: false,
+  }, developerToken)
+  if (!inactive.row?.id) throw new Error(`inactive fixture를 만들지 못했습니다: ${JSON.stringify(inactive.error)}`)
+  ids.users.push(inactive.row.id)
+  actors.inactive = { id: inactive.row.id, name: inactiveName, token: null }
 
   const cardResult = await createRow('cards', {
     name: `${marker}_card`, area: marker, region: marker, type: '전체', status: '미배정',
@@ -137,6 +145,16 @@ try {
     event_id: ownedEventId, user_name: actors.user.name, role: '신청',
   }, actors.user.token)
   check('일반 사용자는 본인을 신청한다', selfApply.row?.user_name === actors.user.name)
+  const staleReapplyResponse = await rest('event_participants?on_conflict=event_id,user_name&select=id', {
+    method: 'POST',
+    body: JSON.stringify({ event_id: ownedEventId, user_name: actors.user.name, role: '신청' }),
+    headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+  }, actors.user.token)
+  const staleReapplyValue = await json(staleReapplyResponse)
+  const staleReapplyRows = Array.isArray(staleReapplyValue) ? staleReapplyValue : []
+  check('낡은 화면에서 같은 신청을 다시 보내도 오류 없이 기존 행을 유지한다',
+    staleReapplyResponse.ok && staleReapplyRows.length === 0,
+    `HTTP ${staleReapplyResponse.status} ${JSON.stringify(staleReapplyValue)}`)
   const forgedApply = await createRow('event_participants', {
     event_id: ownedEventId, user_name: actors.otherLeader.name, role: '신청',
   }, actors.user.token)
@@ -151,21 +169,41 @@ try {
   check('신청을 받지 않는 일정에는 신청하지 못한다', !closedApply.row)
 
   const managerAdd = await createRow('event_participants', {
-    event_id: ownedEventId, user_name: actors.admin.name, role: '게스트',
+    event_id: ownedEventId, user_name: actors.admin.name, role: '신청',
   }, actors.leader.token)
   check('일정 인도자는 다른 참가자를 추가한다', managerAdd.row?.user_name === actors.admin.name)
   const otherLeaderAdd = await createRow('event_participants', {
-    event_id: ownedEventId, user_name: actors.otherLeader.name, role: '게스트',
+    event_id: ownedEventId, user_name: actors.leader.name, role: '신청',
   }, actors.otherLeader.token)
   check('다른 인도자는 참가자를 추가하지 못한다', !otherLeaderAdd.row)
+
+  const inactiveAdd = await createRow('event_participants', {
+    event_id: ownedEventId, user_name: actors.inactive.name, role: '신청',
+  }, actors.leader.token)
+  check('일정 인도자도 비활성 계정을 참가자로 추가하지 못한다', !inactiveAdd.row)
+  const registeredAsGuest = await createRow('event_participants', {
+    event_id: ownedEventId, user_name: actors.inactive.name, role: '게스트',
+  }, actors.leader.token)
+  check('비활성 계정 이름을 게스트로 우회하지 못한다', !registeredAsGuest.row)
+  const registeredAsGuestWithSpacing = await createRow('event_participants', {
+    event_id: ownedEventId,
+    user_name: actors.inactive.name.replace(/ /g, '  ').toUpperCase(),
+    role: '게스트',
+  }, actors.leader.token)
+  check('공백·대소문자를 바꾼 비활성 계정 이름도 게스트로 우회하지 못한다', !registeredAsGuestWithSpacing.row)
+  const guestName = `${marker}_real_guest`
+  const guestAdd = await createRow('event_participants', {
+    event_id: ownedEventId, user_name: guestName, role: '게스트',
+  }, actors.leader.token)
+  check('일정 인도자는 계정 없는 게스트를 추가한다', guestAdd.row?.role === '게스트')
 
   const selfCancel = await rows(await deleteRows('event_participants',
     `event_id=eq.${ownedEventId}&user_name=eq.${encodeURIComponent(actors.user.name)}`, actors.user.token))
   check('일반 사용자는 자기 신청을 취소한다', selfCancel.length === 1)
   const assignedUser = await createRow('event_participants', {
-    event_id: ownedEventId, user_name: actors.user.name, role: '게스트',
+    event_id: ownedEventId, user_name: actors.user.name, role: '입명',
   }, actors.leader.token)
-  check('일정 인도자는 참가자를 직접 추가한다', assignedUser.row?.role === '게스트')
+  check('일정 인도자는 참가자를 직접 배정한다', assignedUser.row?.role === '입명')
   const selfAssignedCancel = await rows(await deleteRows('event_participants',
     `event_id=eq.${ownedEventId}&user_name=eq.${encodeURIComponent(actors.user.name)}`, actors.user.token))
   check('일반 사용자는 인도자가 추가한 참가 줄을 스스로 지우지 못한다', selfAssignedCancel.length === 0)

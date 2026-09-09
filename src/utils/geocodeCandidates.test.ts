@@ -2,8 +2,16 @@
 import { describe, test, expect, beforeEach } from 'vitest'
 import { getGeocodeCandidates } from './geocodeCandidates'
 import { setRegions } from '../lib/regions'
+import { applyCongregationSettings, CONGREGATION_PROFILE_KEY } from '../lib/congregationProfile'
 
 beforeEach(() => {
+  applyCongregationSettings({
+    [CONGREGATION_PROFILE_KEY]: JSON.stringify({
+      province: '경기도',
+      provinceShort: '경기',
+      defaultCity: '용인시',
+    }),
+  })
   setRegions([
     { id: 1, name: '처인구', city: '용인시', sortOrder: 1, nameZh: '', nameEn: '' },
     { id: 2, name: '기흥구', city: '용인시', sortOrder: 2, nameZh: '', nameEn: '' },
@@ -35,5 +43,22 @@ describe('getGeocodeCandidates', () => {
   test('빈 주소는 후보가 없다 — 지도를 괜히 부르지 않는다', () => {
     expect(getGeocodeCandidates('')).toEqual([])
     expect(getGeocodeCandidates('   ')).toEqual([])
+  })
+
+  test('다른 회중은 자기 주소권역을 붙이고 용인시를 섞지 않는다', () => {
+    applyCongregationSettings({
+      [CONGREGATION_PROFILE_KEY]: JSON.stringify({
+        province: '인천광역시',
+        provinceShort: '인천',
+        defaultCity: '인천광역시',
+      }),
+    })
+    setRegions([
+      { id: 9, name: '남동구', city: '인천광역시', sortOrder: 1, nameZh: '', nameEn: '' },
+    ])
+
+    const candidates = getGeocodeCandidates('남동구 구월로 10')
+    expect(candidates).toContain('인천광역시 남동구 구월로 10')
+    expect(candidates.some((candidate) => candidate.includes('용인시'))).toBe(false)
   })
 })

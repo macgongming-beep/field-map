@@ -1,6 +1,8 @@
 import { ko } from './locales/ko'
 import { zh } from './locales/zh'
 import { en } from './locales/en'
+import { getCongregationProfile } from './lib/congregationProfile'
+import { getRegions } from './lib/regions'
 
 export type AppLanguage = 'ko' | 'zh' | 'en'
 
@@ -76,79 +78,26 @@ export const weekdayShortLabels: Record<AppLanguage, string[]> = {
 }
 
 // 한국 지명 번역 테이블 [한국어, 중국어, 영어]
-const PLACE_NAME_TABLE: [string, string, string][] = [
-  // 광역/시 단위
-  ['경기도', '京畿道', 'Gyeonggi-do'],
-  ['서울특별시', '首尔特别市', 'Seoul'],
-  ['용인시', '龙仁市', 'Yongin-si'],
-  ['화성시', '华城市', 'Hwaseong-si'],
-  ['수원시', '水原市', 'Suwon-si'],
-  // 구
-  ['처인구', '处仁区', 'Cheoin-gu'],
-  ['기흥구', '器兴区', 'Giheung-gu'],
-  ['수지구', '水枝区', 'Suji-gu'],
-  ['영통구', '灵通区', 'Yeongton-gu'],
-  // 처인구 동·읍·면
-  ['김량장동', '金良场洞', 'Gimnyangjiang-dong'],
-  ['고림동', '古林洞', 'Gorim-dong'],
-  ['해곡동', '海谷洞', 'Haegok-dong'],
-  ['포곡읍', '蒲谷邑', 'Pogok-eup'],
-  ['모현읍', '慕贤邑', 'Mohyeon-eup'],
-  ['이동읍', '二东邑', 'Idong-eup'],
-  ['남사읍', '南沙邑', 'Namsa-eup'],
-  ['원삼면', '元三面', 'Wonsam-myeon'],
-  ['백암면', '白岩面', 'Baegam-myeon'],
-  ['양지면', '阳智面', 'Yangji-myeon'],
-  ['역북동', '驿北洞', 'Yeokbuk-dong'],
-  ['마평동', '麻坪洞', 'Mapyeong-dong'],
-  ['유방동', '柳芳洞', 'Yubang-dong'],
-  ['삼가동', '三街洞', 'Samga-dong'],
-  ['운학동', '云鹤洞', 'Unhak-dong'],
-  ['남동', '南洞', 'Nam-dong'],
-  // 기흥구 동
-  ['동백동', '冬柏洞', 'Dongbaek-dong'],
-  ['마북동', '麻北洞', 'Mabuk-dong'],
-  ['보라동', '宝罗洞', 'Bora-dong'],
-  ['상하동', '上下洞', 'Sangha-dong'],
-  ['서천동', '西川洞', 'Seocheon-dong'],
-  ['신갈동', '新葛洞', 'Singal-dong'],
-  ['영덕동', '永德洞', 'Yeongdeok-dong'],
-  ['지곡동', '芝谷洞', 'Jigok-dong'],
-  ['청덕동', '清德洞', 'Cheongdeok-dong'],
-  ['공세동', '贡税洞', 'Gongse-dong'],
-  ['고매동', '古梅洞', 'Gomae-dong'],
-  ['언남동', '彦南洞', 'Eonnam-dong'],
-  ['구갈동', '旧葛洞', 'Gugal-dong'],
-  ['기흥동', '器兴洞', 'Giheung-dong'],
-  ['농서동', '农书洞', 'Nongseo-dong'],
-  ['하갈동', '下葛洞', 'Hagal-dong'],
-  ['상갈동', '上葛洞', 'Sanggal-dong'],
-  ['보정동', '宝亭洞', 'Bojeong-dong'],
-  ['구성동', '驹城洞', 'Guseong-dong'],
-  ['중동', '中洞', 'Jung-dong'],
-  // 수지구 동
-  ['풍덕천동', '丰德川洞', 'Pungdeokcheon-dong'],
-  ['성복동', '星福洞', 'Seongbok-dong'],
-  ['신봉동', '新凤洞', 'Sinbong-dong'],
-  ['죽전동', '竹田洞', 'Jukjeon-dong'],
-  ['동천동', '洞川洞', 'Dongcheon-dong'],
-  ['상현동', '上峴洞', 'Sanghyeon-dong'],
-  ['손곡동', '孙谷洞', 'Songok-dong'],
-  ['고기동', '古基洞', 'Gogi-dong'],
-  // 영통구 동
-  ['영통동', '灵通洞', 'Yeongtong-dong'],
-  // 화성시 동
-  ['장지동', '长芝洞', 'Jangji-dong'],
-  ['오산동', '乌山洞', 'Osan-dong'],
-  ['영천동', '灵泉洞', 'Yeongcheon-dong'],
-  ['송동', '松洞', 'Song-dong'],
-  // 기타
+const COMMON_PLACE_NAMES: [string, string, string][] = [
   ['기타', '其他', 'Other'],
   ['미배정', '未分配', 'Unassigned'],
 ]
 
 // 긴 이름부터 바꾼다 — '남동' 같은 짧은 이름이 '강남동' 안을 먼저 바꿔버리지 않도록
-const SORTED_PLACE_NAMES = [...PLACE_NAME_TABLE].sort((a, b) => b[0].length - a[0].length)
+function getSortedPlaceNames(): [string, string, string][] {
+  const dynamic: [string, string, string][] = [
+    ...getCongregationProfile().placeNames,
+    ...getRegions().map((region): [string, string, string] => [region.name, region.nameZh, region.nameEn]),
+  ]
+  const seen = new Set<string>()
+  return [...dynamic, ...COMMON_PLACE_NAMES]
+    .filter(([ko]) => {
+      if (!ko || seen.has(ko)) return false
+      seen.add(ko)
+      return true
+    })
+    .sort((a, b) => b[0].length - a[0].length)
+}
 
 /**
  * 한국어 주소/지명 문자열을 대상 언어로 번역.
@@ -161,8 +110,9 @@ export function translateKoreanAddress(
 ): string {
   if (lang === 'ko' || !enabled) return address
   let result = address
-  for (const [ko, zh, en] of SORTED_PLACE_NAMES) {
-    result = result.replaceAll(ko, lang === 'zh' ? zh : en)
+  for (const [ko, zh, en] of getSortedPlaceNames()) {
+    const translated = lang === 'zh' ? zh : en
+    if (translated) result = result.replaceAll(ko, translated)
   }
   return result
 }

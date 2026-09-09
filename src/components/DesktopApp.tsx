@@ -74,7 +74,6 @@ export function DesktopApp({
   onApplyToEvent,
   onSetCardLeaders,
   onSetMultipleCardLeaders,
-  onAssignToEvent,
   onStartServiceSession,
   onEndServiceSession,
   onAssignCardToEventParticipant,
@@ -189,7 +188,6 @@ export function DesktopApp({
   onApplyToEvent: (eventId: number) => void
   onSetCardLeaders: (cardId: number, leaderNames: string[], options?: { silentSuccess?: boolean }) => Promise<void> | void
   onSetMultipleCardLeaders: (cardIds: number[], leaderNames: string[], options?: { silentSuccess?: boolean }) => Promise<void> | void
-  onAssignToEvent: (eventId: number, userName: string) => void
   onStartServiceSession: (input: {
     role: Role
     timeSlot: TimeSlot
@@ -258,7 +256,7 @@ export function DesktopApp({
   specialPeriods: SpecialPeriod[]
   onDeleteUnit: (buildingId: number, unitId: number) => void
   onRemoveParticipantFromEvent: (eventId: number, userName: string) => void
-  onAddParticipantToEvent: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => void | Promise<void>
+  onAddParticipantToEvent: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   allUsers: Array<{ id: number; name: string; role: string; approvalStatus?: 'pending' | 'approved' | 'blocked'; isActive?: boolean }>
   returnVisits?: ReturnVisit[]
   returnVisitLogs?: ReturnVisitLog[]
@@ -592,10 +590,9 @@ export function DesktopApp({
             events={calendarEvents}
             role={viewMode}
             actualRole={actualRole}
-            allUserNames={allUsers.map((u) => u.name)}
+            participantUsers={allUsers}
             mentionUsers={allUsers.map((user) => ({ id: user.id, name: user.name, role: user.role }))}
             onApplyToEvent={onApplyToEvent}
-            onAssignToEvent={onAssignToEvent}
             onAssignCardToEventParticipant={onAssignCardToEventParticipant}
             onAssignCardsToEventParticipantsBulk={onAssignCardsToEventParticipantsBulk}
             onAssignInformalToUser={onAssignInformalToUser}

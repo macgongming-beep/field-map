@@ -29,7 +29,7 @@ function setup(geocode: ReturnType<typeof vi.fn>) {
   return { onSubmit, onClose }
 }
 
-const address = () => screen.getByPlaceholderText(/경기도 용인시/)
+const address = () => screen.getByRole('textbox', { name: '주소' })
 
 describe('AddBuildingModal — 좌표 찾기', () => {
   test('찾으면 좌표를 보여 준다', async () => {

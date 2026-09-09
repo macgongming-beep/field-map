@@ -144,7 +144,6 @@ function App() {
     deleteCalendarEventSeries,
     linkEventsToSeries,
     applyToEvent,
-    assignToEvent,
     removeParticipantFromEvent,
     addParticipantToEvent,
     mergeDuplicateBuildings,
@@ -355,7 +354,6 @@ function App() {
             onApplyToEvent={applyToEvent}
             onSetCardLeaders={setCardLeaders}
             onSetMultipleCardLeaders={setMultipleCardLeaders}
-            onAssignToEvent={assignToEvent}
             onAssignCardToEventParticipant={assignCardToEventParticipant}
             onAssignCardsToEventParticipantsBulk={assignCardsToEventParticipantsBulk}
             onCreateCalendarEvent={createCalendarEvent}

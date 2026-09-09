@@ -342,7 +342,7 @@ export function MobileHome({
   onUpdateMyProfile: (input: { name: string; phone?: string | null }) => Promise<boolean>
   onFetchMyLoginLogs: (limit?: number) => Promise<LoginLogRecord[]>
   onApplyToEvent: (eventId: number) => void
-  onAddParticipantToEvent?: (eventId: number, userName: string, role?: '신청' | '게스트') => void
+  onAddParticipantToEvent?: (eventId: number, userName: string, role?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   onRemoveParticipantFromEvent?: (eventId: number, userName: string) => void
   onToggleUser: (cardId: number, userName: string) => void
   onEndServiceSession: (sessionId: number) => void
@@ -890,6 +890,7 @@ export function MobileHome({
                   cardBoundaries={cardBoundaries}
                   leaderNames={leaderNames}
                   mentionUsers={allUsers.map((user) => ({ id: user.id, name: user.name, role: user.role }))}
+                  participantUsers={allUsers}
                   onAssignCardsToEventParticipantsBulk={onAssignCardsToEventParticipantsBulk}
                   informalAssets={informalAssets}
                   informalGroups={informalGroups}

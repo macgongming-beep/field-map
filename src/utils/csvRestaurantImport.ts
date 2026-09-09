@@ -7,7 +7,7 @@
 import type { Building } from '../types'
 
 export type CsvRow = {
-  sigu: string    // 시구 (예: 경기도 용인시 처인구)
+  sigu: string    // 시구 (예: 가상도 예시시 중앙구)
   dong: string    // 동
   address: string // 상세주소 (예: 경안천로256번길 73)
   name: string    // 식당명
@@ -128,6 +128,6 @@ export function matchRestaurantsToBuildings(rows: CsvRow[], buildings: Building[
 // ── 샘플 CSV 콘텐츠 ──────────────────────────────────────────────
 export const SAMPLE_CSV_CONTENT =
   '시구,동,상세주소,식당명\n' +
-  '경기도 용인시 처인구,고림동,경안천로256번길 73,승원반점\n' +
-  '경기도 용인시 처인구,고림동,경안천로256번길 45,홍콩반점\n' +
-  '경기도 용인시 처인구,김량장동,중부대로1413번길 5,만리장성\n'
+  '가상도 예시시 중앙구,새봄동,새봄로 73,예시반점\n' +
+  '가상도 예시시 중앙구,새봄동,새봄로 45,샘플식당\n' +
+  '가상도 예시시 중앙구,푸른동,푸른길 5,중앙반점\n'

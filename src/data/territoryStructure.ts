@@ -8,15 +8,7 @@
 // 어긋나 있었다 — 코드에 두면 이렇게 방치된다)
 import type { TerritoryRegion, VisitTargetType } from '../types'
 
-/** DB 를 읽기 전 잠깐 쓰는 기본값. lib/regions.ts 의 FALLBACK 재료다 */
-export const territoryRegions: TerritoryRegion[] = ['처인구', '기흥구', '수지구', '영통구', '화성시']
-
-export const territoryAreasByRegion: Record<TerritoryRegion, string[]> = {
-  처인구: ['고림동', '김량장동', '역북동', '유방동', '포곡읍'],
-  기흥구: ['신갈동', '상하동', '구갈동', '보정동', '동백동'],
-  수지구: ['풍덕천동', '죽전동', '상현동', '성복동'],
-  영통구: ['매탄동', '영통동', '원천동'],
-  화성시: ['병점동', '동탄동', '진안동', '봉담읍'],
-}
+/** DB 를 읽기 전에는 비운다. 다른 회중에 용인 지역을 잠깐이라도 보여주지 않는다. */
+export const territoryRegions: TerritoryRegion[] = []
 
 export const visitTargetTypes: VisitTargetType[] = ['전체', '상가', '주택']

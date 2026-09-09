@@ -19,6 +19,8 @@ import { ImportEventsModal } from './calendar/ImportEventsModal'
 import { msg } from '../lib/msg'
 import { AssignmentEditor } from './assignment/AssignmentEditor'
 import { buildSharedAssignmentTeams } from './admin/sharedAssignmentTeams'
+import { ParticipantAddContent } from './calendar/ParticipantAddContent'
+import type { EventParticipantUser } from '../utils/eventParticipantUsers'
 
 
 function getCalendarDays(year: number, month: number): (number | null)[] {
@@ -78,10 +80,9 @@ export function DesktopCalendar({
   events,
   role = 'user',
   actualRole = role,
-  allUserNames = [],
+  participantUsers = [],
   mentionUsers = [],
   onApplyToEvent,
-  onAssignToEvent: _onAssignToEvent,
   onAssignCardToEventParticipant: _onAssignCardToEventParticipant,
   onAssignCardsToEventParticipantsBulk,
   onAssignInformalToUser,
@@ -117,10 +118,9 @@ export function DesktopCalendar({
   events: CalendarEvent[]
   role?: Role
   actualRole?: Role
-  allUserNames?: string[]
+  participantUsers?: EventParticipantUser[]
   mentionUsers?: MentionUser[]
   onApplyToEvent: (eventId: number) => void
-  onAssignToEvent: (eventId: number, userName: string) => void
   onAssignCardToEventParticipant: (eventId: number, userName: string, cardId: number | null) => void
   onAssignCardsToEventParticipantsBulk?: (
     eventId: number,
@@ -136,7 +136,7 @@ export function DesktopCalendar({
   onRemoveInformalAssignment?: (assignmentId: number) => Promise<void>
   onAssignRestaurantToUser?: (input: { eventId: number; userName: string; buildingId: number; unitId?: number | null; assignedBy: string }) => Promise<boolean>
   onRemoveRestaurantAssignment?: (assignmentId: number) => Promise<void>
-  onAddParticipant?: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => void | Promise<void>
+  onAddParticipant?: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   onCreateEvent: (input: EventInput & { date: string }) => void
   onCreateRepeatEvents: (dates: string[], input: EventInput) => void
   onDeleteEvent: (eventId: number) => void
@@ -236,9 +236,7 @@ export function DesktopCalendar({
   const [periodEnd, setPeriodEnd] = useState('')
   const [periodColor, setPeriodColor] = useState(PERIOD_COLORS[0].value)
   const [addParticipantEventId, setAddParticipantEventId] = useState<number | null>(null)
-  const [addParticipantQuery, setAddParticipantQuery] = useState('')
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
-  const addParticipantRef = useRef<HTMLDivElement>(null)
 
   const calendarDays = getCalendarDays(year, month)
   const selectedDateStr = toDateStr(year, month, selectedDay)
@@ -804,10 +802,8 @@ export function DesktopCalendar({
                     currentUserId={currentUserId}
                     currentVisitor={currentVisitor}
                     mentionUsers={mentionUsers}
-                    allUserNames={allUserNames}
+                    participantUsers={participantUsers}
                     addParticipantEventId={addParticipantEventId}
-                    addParticipantRef={addParticipantRef}
-                    addParticipantQuery={addParticipantQuery}
                     onAddParticipant={onAddParticipant}
                     onApply={() => onApplyToEvent(event.id)}
                     onRemoveParticipant={onRemoveParticipant}
@@ -829,7 +825,6 @@ export function DesktopCalendar({
                       }
                     }}
                     setAddParticipantEventId={setAddParticipantEventId}
-                    setAddParticipantQuery={setAddParticipantQuery}
                   />
                 )
               })}
@@ -891,6 +886,7 @@ export function DesktopCalendar({
             cardBoundaries={cardBoundaries}
             currentVisitor={currentVisitor}
             canEdit={canEditAssignment}
+            registeredUsers={participantUsers}
             informalAssets={informalAssets}
             informalGroups={informalGroups}
             eventInformalAssignments={eventInformalAssignments}
@@ -972,10 +968,8 @@ function EventDetailCard({
   currentUserId,
   currentVisitor,
   mentionUsers,
-  allUserNames,
+  participantUsers,
   addParticipantEventId,
-  addParticipantRef,
-  addParticipantQuery,
   onAddParticipant,
   onApply,
   onRemoveParticipant,
@@ -984,7 +978,6 @@ function EventDetailCard({
   onEdit,
   onDelete,
   setAddParticipantEventId,
-  setAddParticipantQuery,
 }: {
   /** 비공식 봉사 배정 — 구역이 없어도 맡은 일이 있으면 보여 준다 */
   informalAssets?: InformalAsset[]
@@ -1003,11 +996,9 @@ function EventDetailCard({
   currentUserId?: number | null
   currentVisitor: string
   mentionUsers: import('./CommentSection').MentionUser[]
-  allUserNames: string[]
+  participantUsers: EventParticipantUser[]
   addParticipantEventId: number | null
-  addParticipantRef: React.RefObject<HTMLDivElement | null>
-  addParticipantQuery: string
-  onAddParticipant?: (eventId: number, userName: string) => void | Promise<void>
+  onAddParticipant?: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   onApply: () => void
   onRemoveParticipant: (eventId: number, userName: string) => void
   onOpenChat: () => void
@@ -1015,7 +1006,6 @@ function EventDetailCard({
   onEdit: () => void
   onDelete: () => void
   setAddParticipantEventId: (id: number | null) => void
-  setAddParticipantQuery: (q: string) => void
 }) {
   const [dotsOpen, setDotsOpen] = useState(false)
   const [isParticipantRemoveMode, setIsParticipantRemoveMode] = useState(false)
@@ -1125,7 +1115,7 @@ function EventDetailCard({
             {(canManageParticipants || onAddParticipant) && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {(role === 'leader' || role === 'admin' || role === 'developer') && onAddParticipant && (
-                  <div className="cal-add-participant-wrap" ref={addParticipantEventId === event.id ? addParticipantRef : undefined}>
+                  <div className="cal-add-participant-wrap">
                     <button
                       className="cal-add-participant-chip-btn"
                       type="button"
@@ -1134,7 +1124,6 @@ function EventDetailCard({
                           setAddParticipantEventId(null)
                         } else {
                           setAddParticipantEventId(event.id)
-                          setAddParticipantQuery('')
                         }
                       }}
                     >
@@ -1146,35 +1135,12 @@ function EventDetailCard({
                     </button>
                     {addParticipantEventId === event.id && (
                       <div className="cal-add-participant-dropdown">
-                        <input
-                          className="cal-add-participant-input"
-                          autoFocus
-                          placeholder="이름 검색..."
-                          value={addParticipantQuery}
-                          onChange={(e) => setAddParticipantQuery(e.target.value)}
+                        <ParticipantAddContent
+                          existingNames={event.applicants}
+                          onAdd={(name, participantRole) => onAddParticipant(event.id, name, participantRole)}
+                          onAdded={() => setAddParticipantEventId(null)}
+                          users={participantUsers}
                         />
-                        <div className="cal-add-participant-list">
-                          {allUserNames
-                            .filter((n) => !event.applicants.includes(n) && n.includes(addParticipantQuery))
-                            .map((name) => (
-                              <button
-                                key={name}
-                                type="button"
-                                className="cal-add-participant-item"
-                                onClick={() => {
-                                  onAddParticipant(event.id, name)
-                                  setAddParticipantEventId(null)
-                                }}
-                              >
-                                {name}
-                              </button>
-                            ))}
-                          {allUserNames.filter((n) => !event.applicants.includes(n) && n.includes(addParticipantQuery)).length === 0 && (
-                            <div style={{ padding: '10px', fontSize: 12, color: 'var(--gray-400)', textAlign: 'center' }}>
-                              검색 결과가 없습니다
-                            </div>
-                          )}
-                        </div>
                       </div>
                     )}
                   </div>
@@ -1200,7 +1166,11 @@ function EventDetailCard({
           </div>
         <div className="event-applicants-strip">
           {event.applicants.map((name) => (
-            <span className="event-applicant-chip" key={name}>
+            <span
+              aria-label={event.guests.includes(name) ? `${name}, ${msg('손님')}` : name}
+              className={`event-applicant-chip${event.guests.includes(name) ? ' is-guest' : ''}`}
+              key={name}
+            >
               <span className={`event-applicant-avatar${event.assigned.includes(name) ? ' assigned' : ''}`}>{name.slice(0, 1)}</span>
               <span className="event-applicant-name">{name}</span>
               {canManageParticipants && isParticipantRemoveMode && (

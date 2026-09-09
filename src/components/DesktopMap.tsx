@@ -38,6 +38,7 @@ import type { CardMergeUndoSnapshot } from '../hooks/storeMutations/cardBoundari
 import { msg } from '../lib/msg'
 import { placeDeletionCopy } from '../utils/placeDeletion'
 import { buildingHasUsage, effectiveUnitUsage, scopeBuildingToUsage, unitsForUsage } from '../utils/unitUsage'
+import { getCongregationProfile } from '../lib/congregationProfile'
 import { getNextMobileMapDetailLevel, type MobileMapDetailLevel } from '../utils/mapClustering'
 
 type VisitResultFilter = '전체' | '부재' | '만남'
@@ -230,7 +231,10 @@ export function DesktopMap({
   const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(buildings[1]?.id ?? buildings[0]?.id ?? null)
   const [newBuildingCardId, setNewBuildingCardId] = useState(cards[0]?.id ?? 1)
   const [newBuildingName, setNewBuildingName] = useState('새 건물')
-  const [newBuildingAddress, setNewBuildingAddress] = useState('경기 용인시 처인구 고림동')
+  const [newBuildingAddress, setNewBuildingAddress] = useState(() => {
+    const profile = getCongregationProfile()
+    return [profile.provinceShort || profile.province, profile.defaultCity].filter(Boolean).join(' ')
+  })
   const [newBuildingType, setNewBuildingType] = useState<Building['type']>('주택')
   const [newBuildingLat, setNewBuildingLat] = useState<number | null>(null)
   const [newBuildingLng, setNewBuildingLng] = useState<number | null>(null)
@@ -2732,7 +2736,7 @@ export function DesktopMap({
                   <label>{t(currentLang(), 'map.addressLabel')}</label>
                   <textarea
                     className="cal-input"
-                    placeholder="경기 용인시 처인구 고림동"
+                    placeholder={[getCongregationProfile().provinceShort || getCongregationProfile().province, getCongregationProfile().defaultCity].filter(Boolean).join(' ')}
                     value={newBuildingAddress}
                     rows={2}
                     style={{

@@ -57,7 +57,7 @@ const informalCopy = {
     changeKind: '종류 바꾸기 (눌러서 전환)',
     renamePlace: '이름 변경',
     renamePlacePrompt: '장소 이름을 입력하세요',
-    addressPlaceholder: '이름이나 주소로 찾기 (예: 용인 강남대학교)',
+    addressPlaceholder: '이름이나 주소로 찾기',
     noPlaceResults: '찾지 못했습니다. 지도를 눌러 위치를 정해 주세요.',
     search: '찾기',
     searching: '찾는 중…',
@@ -292,7 +292,7 @@ export function InformalCardsTab({
   /**
    * 이름이나 주소로 찾는다.
    *
-   * 이름 검색(네이버 지역 검색)을 먼저 쓴다 — '용인 강남대학교' 처럼 사람이
+   * 이름 검색(네이버 지역 검색)을 먼저 쓴다 — 장소명처럼 사람이
    * 실제로 치는 말이 그쪽으로만 걸린다. 후보가 없으면 주소 지오코딩으로
    * 한 번 더 시도한다 (정확한 도로명을 넣은 경우).
    */

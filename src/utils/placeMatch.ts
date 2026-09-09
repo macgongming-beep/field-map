@@ -11,6 +11,7 @@
 //   없으면 신규
 
 import { getAddressStripPattern } from '../lib/regions'
+import { getCongregationProfile } from '../lib/congregationProfile'
 
 export type SurveyRow = {
   placeId: string
@@ -56,13 +57,23 @@ export type MatchResult = {
  */
 export function normalizeRoadAddress(address: string): string {
   if (!address) return ''
+  const { province, provinceShort } = getCongregationProfile()
+  const provincePattern = [province, provinceShort]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+    .map(escapeForRegex)
+    .join('|')
   const cleaned = address
-    .replace(/경기도|경기/g, ' ')
+    .replace(provincePattern ? new RegExp(provincePattern, 'g') : /(?!)/g, ' ')
     // 시·구 이름은 지역 목록에서 만든다. 예전에는 여기에 따로 적혀 있어서
     // 지역이 늘어도 이 줄만 옛날 목록으로 남았다 (다른 회중에서 대조가 전멸한다)
     .replace(getAddressStripPattern(), ' ')
   const m = cleaned.match(/([가-힣0-9]+(?:대?로|길))\s*([0-9]+(?:-[0-9]+)?)/)
   return m ? `${m[1]} ${m[2]}` : ''
+}
+
+function escapeForRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /**

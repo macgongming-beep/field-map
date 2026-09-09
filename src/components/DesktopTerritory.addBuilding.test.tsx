@@ -42,7 +42,7 @@ async function openAddBuilding(user: ReturnType<typeof userEvent.setup>) {
 async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>, address: string, name = '언동로빌라') {
   await openAddBuilding(user)
   const modal = screen.getByText('건물 추가', { selector: 'h2' }).closest('.cal-modal') as HTMLElement
-  await user.type(within(modal).getByPlaceholderText(/경기도 용인시/), address)
+  await user.type(within(modal).getByRole('textbox', { name: '주소' }), address)
   await user.type(within(modal).getByPlaceholderText(/언동로빌라/), name)
   await user.click(within(modal).getByRole('button', { name: '건물 추가' }))
   return modal
@@ -143,12 +143,12 @@ describe('건물 추가 — 다시 열기', () => {
     open({ cards: [testCard(1, '수지구 죽전동 1')] })
 
     const modal = await openAddBuilding(user)
-    await user.type(within(modal).getByPlaceholderText(/경기도 용인시/), '지우고 싶은 주소')
+    await user.type(within(modal).getByRole('textbox', { name: '주소' }), '지우고 싶은 주소')
     await user.click(within(modal).getByRole('button', { name: '취소' }))
 
     // 지금은 조건부 렌더링이라 언마운트되며 상태가 사라진다.
     // 나중에 '숨김' 방식으로 바꾸면 옛 입력이 남는다 — 그때 이 테스트가 잡는다.
     const again = await openAddBuilding(user)
-    expect((within(again).getByPlaceholderText(/경기도 용인시/) as HTMLInputElement).value).toBe('')
+    expect((within(again).getByRole('textbox', { name: '주소' }) as HTMLInputElement).value).toBe('')
   })
 })

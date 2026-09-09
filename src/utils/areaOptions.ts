@@ -8,7 +8,6 @@
 // '백암면 '(공백)이나 '백앙면' 이 정식 항목으로 굳어져 한 동이 둘로 갈라진다.
 // 사람 이름이 갈려 통계가 반토막 났던 것과 같은 사고라, 여기서 미리 막는다.
 
-import { territoryAreasByRegion } from '../data/territoryStructure'
 import { findSimilarName, normalizeName } from './nameSimilarity'
 import type { TerritoryCard } from '../types'
 
@@ -20,8 +19,8 @@ export function normalizeAreaName(raw: string): string {
 }
 
 /**
- * 실제 카드에 쓰인 동 목록. 카드가 한 장도 없는 지역은 옛 구조 데이터로 넘어간다
- * (아무것도 못 고르는 상태를 피하려는 안전망일 뿐, 정답은 실제 데이터다).
+ * 실제 카드에 쓰인 동 목록. 카드가 한 장도 없으면 빈 목록이다.
+ * 공용 코드의 옛 동 목록으로 넘어가면 새 회중 화면에 다른 회중 자료가 섞인다.
  */
 export function getAreaOptions(cards: TerritoryCard[], region: string): string[] {
   const used = new Set<string>()
@@ -29,10 +28,6 @@ export function getAreaOptions(cards: TerritoryCard[], region: string): string[]
     if (region && card.region !== region) continue
     const area = normalizeAreaName(card.area ?? '')
     if (area && area !== UNASSIGNED_AREA) used.add(area)
-  }
-  if (used.size === 0) {
-    const seed = territoryAreasByRegion[region as keyof typeof territoryAreasByRegion] ?? []
-    for (const area of seed) used.add(area)
   }
   return [...used].sort((a, b) => a.localeCompare(b, 'ko'))
 }

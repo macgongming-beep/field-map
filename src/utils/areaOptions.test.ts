@@ -28,10 +28,9 @@ describe('동 목록 뽑기', () => {
     expect(getAreaOptions(cards, '기흥구')).toEqual(['서천동'])
   })
 
-  it('카드가 없는 지역은 옛 구조 데이터로 넘어간다 (빈 목록 방지)', () => {
+  it('카드가 없는 지역에 다른 회중의 옛 동 목록을 섞지 않는다', () => {
     const options = getAreaOptions(cards, '수지구')
-    expect(options.length).toBeGreaterThan(0)
-    expect(options).toContain('풍덕천동')
+    expect(options).toEqual([])
   })
 
   it('공백만 다른 이름을 하나로 본다', () => {

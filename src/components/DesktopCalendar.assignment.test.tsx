@@ -60,7 +60,6 @@ function calendarProps(overrides: Record<string, unknown> = {}) {
     actualRole: 'admin',
     specialPeriods: [],
     onApplyToEvent: vi.fn(),
-    onAssignToEvent: vi.fn(),
     onAssignCardToEventParticipant: vi.fn(),
     onAssignCardsToEventParticipantsBulk: vi.fn(),
     onAddParticipant: vi.fn(),

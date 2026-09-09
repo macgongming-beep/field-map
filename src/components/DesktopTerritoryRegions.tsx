@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { getRegions } from '../lib/regions'
 import { confirmDialog } from '../lib/confirm'
 import { msg } from '../lib/msg'
+import { getCongregationProfile } from '../lib/congregationProfile'
 
 type RegionRow = {
   name: string
@@ -136,7 +137,7 @@ export function DesktopTerritoryRegions({
                       <label>상위 시 <span style={{ fontWeight: 400, color: 'var(--muted)' }}>— &lsquo;구&rsquo;일 때만</span></label>
                       <input
                         className="cal-input"
-                        placeholder="예: 용인시 (시 자체라면 비워 두세요)"
+                        placeholder={`예: ${getCongregationProfile().defaultCity || '상위 시'} (시 자체라면 비워 두세요)`}
                         value={editing.row.city}
                         onChange={(e) => setEditing({ ...editing, row: { ...editing.row, city: e.target.value } })}
                       />

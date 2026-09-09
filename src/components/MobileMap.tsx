@@ -26,6 +26,7 @@ import { getNextMobileMapDetailLevel, type MobileMapDetailLevel } from '../utils
 import { getFloatingMenuPosition } from '../utils/floatingMenu'
 import { isBareUnitSearch, searchMapData, type MapSearchResult } from '../utils/mapSearch'
 import { OverlayPortal } from './OverlayPortal'
+import { getCongregationProfile } from '../lib/congregationProfile'
 import { getCurrentRestaurantAssignmentsForUnit } from '../utils/restaurantAssignments'
 import { buildingHasUsage, effectiveUnitUsage, scopeBuildingToUsage, unitsForUsage } from '../utils/unitUsage'
 
@@ -34,7 +35,19 @@ type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
 type BuildingTypeFilter = '전체' | Building['type']
 
 function shortenAddress(addr: string): string {
-  return addr.replace(/^경기도\s*용인시\s*/, '')
+  const { province, provinceShort, defaultCity } = getCongregationProfile()
+  let shortened = addr.trim()
+  for (const prefix of [
+    [province, defaultCity].filter(Boolean).join(' '),
+    [provinceShort, defaultCity].filter(Boolean).join(' '),
+    defaultCity,
+  ].filter(Boolean)) {
+    if (shortened.startsWith(prefix)) {
+      shortened = shortened.slice(prefix.length).trimStart()
+      break
+    }
+  }
+  return shortened
 }
 
 /** 종류의 화면 이름. 값(kind)과 라벨을 섞지 않는다 */
@@ -2210,7 +2223,10 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                   </div>
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'map.address')}</label>
-                    <input value={addAddress} onChange={e => setAddAddress(e.target.value)} placeholder={t(language, 'map.addressPlaceholder')}
+                    <input
+                      value={addAddress}
+                      onChange={e => setAddAddress(e.target.value)}
+                      placeholder={[getCongregationProfile().provinceShort || getCongregationProfile().province, getCongregationProfile().defaultCity, '...'].filter(Boolean).join(' ')}
                       style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px', boxSizing: 'border-box' }} />
                   </div>
                   <div>
