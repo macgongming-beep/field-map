@@ -666,7 +666,6 @@ export function DesktopCalendar({
               const dayStr = day ? toDateStr(year, month, day) : null
               const dayEvents = dayStr ? events.filter((e) => e.date === dayStr) : []
               const activePeriod = dayStr ? findActivePeriod(specialPeriods, dayStr) : null
-              const isPeriodStart = activePeriod && dayStr === activePeriod.startDate
               return (
                 <button
                   className={['day-cell', day === selectedDay ? 'selected' : '', !day ? 'muted' : '', activePeriod ? 'in-period' : ''].join(' ')}
@@ -680,13 +679,12 @@ export function DesktopCalendar({
                       setEditingEventId(null)
                     }
                   }}
-                  style={activePeriod && day !== selectedDay ? { background: activePeriod.color + '14' } : undefined}
                   type="button"
                 >
                   <div className="day-head">
                     <span className="day-number">{day ?? ''}</span>
-                    {isPeriodStart && <small className="period-start-label" style={{ background: activePeriod.color + '22', color: activePeriod.color }}>{activePeriod.label}</small>}
                   </div>
+                  {activePeriod && <span className="period-full-bar" style={{ background: activePeriod.color }} aria-hidden="true" />}
                   <div className="day-events">
                     {dayEvents.map((event) => (
                       <small 

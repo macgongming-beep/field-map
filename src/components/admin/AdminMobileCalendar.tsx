@@ -289,6 +289,13 @@ export function AdminMobileCalendar({
     () => events.filter((e) => e.date.startsWith(`${year}-${pad2(month)}`)),
     [events, year, month],
   )
+  const monthPeriods = useMemo(() => {
+    const monthStart = toDateStr(year, month, 1)
+    const monthEnd = toDateStr(year, month, new Date(year, month, 0).getDate())
+    return specialPeriods
+      .filter((period) => period.startDate <= monthEnd && period.endDate >= monthStart)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+  }, [month, specialPeriods, year])
   const selectedEvents = useMemo(
     () =>
       events
@@ -360,6 +367,17 @@ export function AdminMobileCalendar({
             {msg('오늘')}
           </button>
         </div>
+        {monthPeriods.length > 0 && (
+          <div className="mobile-calendar-period-row" aria-label={monthPeriods.map((period) => period.label).join(', ')}>
+            {monthPeriods.map((period) => (
+              <div className="mobile-calendar-period-key" key={period.id}>
+                <span className="mobile-calendar-period-dot" style={{ background: period.color }} aria-hidden="true" />
+                <strong>{period.label}</strong>
+                <span>{period.startDate.slice(5).replace('-', '.')}–{period.endDate.slice(5).replace('-', '.')}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div
           style={{
             display: 'grid',
@@ -396,14 +414,16 @@ export function AdminMobileCalendar({
                 key={`d-${day}-${idx}`}
                 type="button"
                 onClick={() => setSelectedDay(day)}
+                className="mobile-calendar-day"
                 style={{
                   height: 40,
+                  position: 'relative',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 3,
-                  background: activePeriod && !isSelected ? activePeriod.color + '14' : 'transparent',
+                  background: 'transparent',
                   border: 'none',
                   padding: 0,
                   cursor: 'pointer',
@@ -426,8 +446,16 @@ export function AdminMobileCalendar({
                 >
                   {day}
                 </span>
+                {activePeriod && (
+                  <span
+                    className={`mobile-calendar-period-mark${hasEvent ? ' has-event' : ''}`}
+                    style={{ background: activePeriod.color }}
+                    aria-hidden="true"
+                  />
+                )}
                 {hasEvent && (
                   <span
+                    className="mobile-calendar-event-dot"
                     style={{
                       width: 4,
                       height: 4,
