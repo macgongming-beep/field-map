@@ -448,7 +448,7 @@ export function AdminMobileCalendar({
                 </span>
                 {activePeriod && (
                   <span
-                    className={`mobile-calendar-period-mark${hasEvent ? ' has-event' : ''}`}
+                    className="mobile-calendar-period-mark"
                     style={{ background: activePeriod.color }}
                     aria-hidden="true"
                   />

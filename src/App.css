@@ -7005,14 +7005,10 @@ button:focus-visible {
 
 .mobile-calendar-day .mobile-calendar-period-mark {
   position: absolute;
-  bottom: 3px;
+  top: 2px;
   width: 16px;
   height: 2px;
   border-radius: 1px;
-}
-
-.mobile-calendar-day .mobile-calendar-period-mark.has-event {
-  bottom: 7px;
 }
 
 .mobile-calendar-day .mobile-calendar-event-dot {
@@ -10990,9 +10986,9 @@ button:focus-visible {
   /* 날짜 숫자 아래 특봉 기간 표시 — 셀 가로 전체 연결 */
   .period-full-bar {
     position: absolute;
-    top: 34px;
-    left: 0;
-    right: 0;
+    top: 4px;
+    left: 8px;
+    width: 18px;
     height: 2px;
     margin: 0;
     flex-shrink: 0;
