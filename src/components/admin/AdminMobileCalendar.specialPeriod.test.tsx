@@ -17,7 +17,7 @@ describe('모바일 캘린더 특별봉사 기간 표시', () => {
           events={[]}
           specialPeriods={[{
             id: 1,
-            label: '가을 특별봉사',
+            label: 'Autumn service',
             startDate: '2026-09-01',
             endDate: '2026-09-30',
             color: '#4f7d62',
@@ -27,7 +27,7 @@ describe('모바일 캘린더 특별봉사 기간 표시', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('가을 특별봉사')).not.toBeNull()
+    expect(screen.getByText('Autumn service')).not.toBeNull()
     expect(screen.getByText('09.01–09.30')).not.toBeNull()
 
     const dayButton = screen.getByText('12').closest('button')
