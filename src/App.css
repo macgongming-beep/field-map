@@ -3802,12 +3802,14 @@ button:focus-visible {
 
 .sps-form-body {
   display: grid;
+  min-width: 0;
   gap: 16px;
   padding: 20px 24px;
 }
 
 .sps-field {
   display: grid;
+  min-width: 0;
   gap: 7px;
   margin: 0;
 }
@@ -3826,6 +3828,8 @@ button:focus-visible {
 .sps-field input {
   box-sizing: border-box;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 42px;
   padding: 9px 11px;
   border: 1px solid var(--line-2, var(--line));
@@ -3845,6 +3849,7 @@ button:focus-visible {
 .sps-date-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-width: 0;
   gap: 12px;
 }
 
@@ -4086,6 +4091,20 @@ button:focus-visible {
   padding: 18px 18px 16px;
 }
 
+.mobile-settings-page .sps-date-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.mobile-settings-page .sps-field input[type='date'] {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 8px 10px;
+  font-size: 16px;
+  line-height: normal;
+}
+
 .mobile-settings-page .sps-form-actions {
   padding: 12px 18px calc(16px + env(safe-area-inset-bottom));
 }
@@ -4095,11 +4114,6 @@ button:focus-visible {
   flex: 1;
 }
 
-@media (max-width: 420px) {
-  .sps-date-grid {
-    grid-template-columns: 1fr;
-  }
-}
 
 .desk-settings-page {
   max-width: 880px;
