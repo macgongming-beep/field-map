@@ -433,26 +433,20 @@ export function AdminMobileCalendar({
                 }}
               >
                 <span
+                  className="mobile-calendar-day-number"
                   style={{
                     width: 28,
                     height: 28,
                     display: 'grid',
                     placeItems: 'center',
-                    borderRadius: '50%',
-                    background: isToday ? 'var(--ink)' : isSelected ? 'var(--tint)' : 'transparent',
+                    borderRadius: isToday ? '50%' : 6,
+                    background: isToday ? 'var(--ink)' : isSelected ? 'var(--tint)' : activePeriod ? activePeriod.color + '20' : 'transparent',
                     color: isToday ? '#fff' : isSun ? 'var(--status-danger)' : 'var(--text)',
                     fontWeight: isToday || isSelected ? 600 : 500,
                   }}
                 >
                   {day}
                 </span>
-                {activePeriod && (
-                  <span
-                    className="mobile-calendar-period-mark"
-                    style={{ background: activePeriod.color }}
-                    aria-hidden="true"
-                  />
-                )}
                 {hasEvent && (
                   <span
                     className="mobile-calendar-event-dot"

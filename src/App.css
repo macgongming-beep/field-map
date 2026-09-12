@@ -7003,14 +7003,6 @@ button:focus-visible {
   border-radius: 50%;
 }
 
-.mobile-calendar-day .mobile-calendar-period-mark {
-  position: absolute;
-  top: 2px;
-  width: 16px;
-  height: 2px;
-  border-radius: 1px;
-}
-
 .mobile-calendar-day .mobile-calendar-event-dot {
   position: absolute;
   bottom: 1px;
@@ -10983,19 +10975,6 @@ button:focus-visible {
     pointer-events: none;
   }
 
-  /* 날짜 숫자 아래 특봉 기간 표시 — 셀 가로 전체 연결 */
-  .period-full-bar {
-    position: absolute;
-    top: 4px;
-    left: 8px;
-    width: 18px;
-    height: 2px;
-    margin: 0;
-    flex-shrink: 0;
-    opacity: 0.6;
-    pointer-events: none;
-  }
-
   .day-cell:nth-child(7n) { border-right: 0; }
 
   .day-cell:hover:not(:disabled) { background: var(--gray-50); }
@@ -11029,6 +11008,11 @@ button:focus-visible {
   }
 
   .day-number {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    place-items: center;
+    border-radius: 5px;
     color: var(--gray-700);
     font-size: 13px;
     font-weight: 600;

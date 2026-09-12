@@ -682,9 +682,13 @@ export function DesktopCalendar({
                   type="button"
                 >
                   <div className="day-head">
-                    <span className="day-number">{day ?? ''}</span>
+                    <span
+                      className="day-number"
+                      style={activePeriod && day !== selectedDay ? { background: activePeriod.color + '20' } : undefined}
+                    >
+                      {day ?? ''}
+                    </span>
                   </div>
-                  {activePeriod && <span className="period-full-bar" style={{ background: activePeriod.color }} aria-hidden="true" />}
                   <div className="day-events">
                     {dayEvents.map((event) => (
                       <small 

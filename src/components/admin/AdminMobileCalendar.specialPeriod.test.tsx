@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { AdminMobileCalendar } from './AdminMobileCalendar'
 
 describe('모바일 캘린더 특별봉사 기간 표시', () => {
-  it('날짜 셀을 칠하지 않고 시즌 안내와 얇은 표시선을 보여준다', () => {
+  it('날짜 셀 대신 숫자 크기만 시즌 색으로 표시한다', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-12T09:00:00+09:00'))
 
@@ -32,8 +32,9 @@ describe('모바일 캘린더 특별봉사 기간 표시', () => {
 
     const dayButton = screen.getByText('12').closest('button')
     expect(dayButton?.style.background).toBe('transparent')
-    expect(dayButton?.querySelector('.mobile-calendar-period-mark')).not.toBeNull()
-    expect(container.querySelectorAll('.mobile-calendar-period-mark')).toHaveLength(30)
+    expect(screen.getByText('12').style.background).toBe('var(--ink)')
+    expect(screen.getByText('11').style.background).toBe('rgba(79, 125, 98, 0.125)')
+    expect(container.querySelector('.mobile-calendar-period-mark')).toBeNull()
 
     vi.useRealTimers()
   })
