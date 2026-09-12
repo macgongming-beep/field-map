@@ -75,11 +75,15 @@ function PeriodForm({
           <div className="sps-date-grid">
             <label className="sps-field">
               <span>{msg('시작일')}</span>
-              <input aria-label={msg('시작일')} type="date" value={startDate} onChange={(e) => changeStartDate(e.target.value)} />
+              <span className="sps-date-input">
+                <input aria-label={msg('시작일')} type="date" value={startDate} onChange={(e) => changeStartDate(e.target.value)} />
+              </span>
             </label>
             <label className="sps-field">
               <span>{msg('종료일')}</span>
-              <input aria-label={msg('종료일')} type="date" min={startDate || undefined} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <span className="sps-date-input">
+                <input aria-label={msg('종료일')} type="date" min={startDate || undefined} value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </span>
             </label>
           </div>
           {dateOrderInvalid && <p className="sps-field-error" role="alert">{msg('종료일은 시작일보다 빠를 수 없습니다.')}</p>}
