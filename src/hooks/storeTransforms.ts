@@ -25,6 +25,7 @@ import type {
   ServiceSessionStatus,
   TerritoryCard,
   TimeSlot,
+  Unit,
   UnitStatus,
   VisitHistory,
 } from '../types'
@@ -250,6 +251,26 @@ export const PRIORITY_MAP: Record<string, Notice['priority']> = {
 // ===============================================================
 // Transformer 함수
 // ===============================================================
+export function toUnit(raw: RawUnit): Unit {
+  return {
+    id: raw.id,
+    number: raw.number,
+    status: raw.status,
+    isChinese: raw.is_chinese,
+    isRestaurant: raw.is_restaurant ?? false,
+    usageType: raw.usage_type ?? undefined,
+    isForbidden: Boolean(raw.is_forbidden) || raw.status === '거절',
+    memo: raw.memo ?? undefined,
+    isRegularVisit: !!(raw.regular_visits && (Array.isArray(raw.regular_visits) ? raw.regular_visits.length > 0 : true)),
+    regularVisitor: raw.regular_visits
+      ? (Array.isArray(raw.regular_visits) ? raw.regular_visits[0]?.visitor_name : (raw.regular_visits as { visitor_name?: string }).visitor_name)
+      : undefined,
+    regularVisitStart: raw.regular_visits
+      ? (Array.isArray(raw.regular_visits) ? raw.regular_visits[0]?.registered_at ?? undefined : (raw.regular_visits as { registered_at?: string }).registered_at ?? undefined)
+      : undefined,
+  }
+}
+
 export function toBuilding(raw: RawBuilding): Building {
   return {
     id: raw.id,
@@ -276,23 +297,7 @@ export function toBuilding(raw: RawBuilding): Building {
     unitsSurveyed: raw.units_surveyed ?? false,
     units: [...raw.units]
       .sort((a, b) => unitNumberCollator.compare(a.number, b.number))
-      .map((u) => ({
-        id: u.id,
-        number: u.number,
-        status: u.status,
-        isChinese: u.is_chinese,
-        isRestaurant: u.is_restaurant ?? false,
-        usageType: u.usage_type ?? undefined,
-        isForbidden: Boolean(u.is_forbidden) || u.status === '거절',
-        memo: u.memo ?? undefined,
-        isRegularVisit: !!(u.regular_visits && (Array.isArray(u.regular_visits) ? u.regular_visits.length > 0 : true)),
-        regularVisitor: u.regular_visits
-          ? (Array.isArray(u.regular_visits) ? u.regular_visits[0]?.visitor_name : (u.regular_visits as { visitor_name?: string }).visitor_name)
-          : undefined,
-        regularVisitStart: u.regular_visits
-          ? (Array.isArray(u.regular_visits) ? u.regular_visits[0]?.registered_at ?? undefined : (u.regular_visits as { registered_at?: string }).registered_at ?? undefined)
-          : undefined,
-      })),
+      .map(toUnit),
   }
 }
 

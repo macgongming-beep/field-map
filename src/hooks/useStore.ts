@@ -43,6 +43,8 @@ import {
   toCardBoundary,
   toNotice,
   recomputeCardStats,
+  toUnit,
+  compareUnitNumbers,
 } from './storeTransforms'
 import {
   makeNoticeMutations,
@@ -74,6 +76,7 @@ import type {
   RawServiceSession,
   RawCardBoundary,
   RawNotice,
+  RawUnit,
 } from './storeTransforms'
 
 export function getCurrentVisitor(): string {
@@ -625,6 +628,37 @@ export function useStore(enabled: boolean = true) {
     )))
   }, [applyBuildingsChange])
 
+  // 다른 기기에서 새로 만든 세대만 가져온다. 전체 buildings slice는 400KB가 넘어
+  // 일괄 추가 때마다 다시 받지 않는다. 신호보다 건물이 늦게 보인 경우에만 전체 복구한다.
+  const syncCreatedUnits = useCallback(async (unitIds: number[]): Promise<void> => {
+    const ids = Array.from(new Set(unitIds.filter(Number.isFinite)))
+    if (ids.length === 0) return
+    const result = await supabase.from('units')
+      .select('id, building_id, number, status, is_chinese, is_restaurant, usage_type, memo, regular_visits(visitor_name, registered_at)')
+      .in('id', ids)
+    if (result.error) throw new Error('Created unit sync failed', { cause: result.error })
+
+    const rows = (result.data ?? []) as RawUnit[]
+    const knownBuildingIds = new Set(buildingsRef.current.map((building) => building.id))
+    if (rows.some((row) => !knownBuildingIds.has(row.building_id))) {
+      await fetchSlices(['buildings', 'cards'], { triggeredBy: 'realtime:unit-created-recovery' })
+      return
+    }
+
+    const rowsByBuilding = new Map<number, RawUnit[]>()
+    rows.forEach((row) => rowsByBuilding.set(row.building_id, [...(rowsByBuilding.get(row.building_id) ?? []), row]))
+    applyBuildingsChange((current) => current.map((building) => {
+      const created = rowsByBuilding.get(building.id)
+      if (!created?.length) return building
+      const existingIds = new Set(building.units.map((unit) => unit.id))
+      return {
+        ...building,
+        units: [...building.units, ...created.filter((row) => !existingIds.has(row.id)).map(toUnit)]
+          .sort((a, b) => compareUnitNumbers(a.number, b.number)),
+      }
+    }))
+  }, [applyBuildingsChange, fetchSlices])
+
   const removeUnit = useCallback((unitId: number) => {
     applyBuildingsChange((prev) => prev.map((building) => (
       building.units.some((u) => u.id === unitId)
@@ -853,6 +887,7 @@ export function useStore(enabled: boolean = true) {
     refetchAll: fetchAll,
     refetchSlices: fetchSlices,
     applyPlaceDeletionSignal,
+    syncCreatedUnits,
     cards,
     buildings,
     visitHistories,

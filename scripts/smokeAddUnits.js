@@ -10,6 +10,8 @@ const db = createClient(env.url, env.anonKey)
 const marker = `_smoke_add_units_${Date.now()}`
 let buildingId = null
 let failures = 0
+let realtimeChannel = null
+let admin = null
 
 const check = (ok, label, detail = '') => {
   console.log(`${ok ? '✅' : '❌'} ${label}${detail ? ` — ${detail}` : ''}`)
@@ -27,7 +29,30 @@ const client = (token) => createClient(env.url, env.anonKey, {
 try {
   const token = await login()
   if (!token) throw new Error('테스트 관리자로 로그인하지 못했습니다')
-  const admin = client(token)
+  admin = client(token)
+  const realtimeUnitIds = []
+  realtimeChannel = db
+    .channel(`smoke-unit-creation-${Date.now()}`)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'unit_creation_signals',
+    }, (payload) => {
+      const unitId = Number(payload.new?.unit_id)
+      if (Number.isFinite(unitId)) realtimeUnitIds.push(unitId)
+    })
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('세대 생성 Realtime 구독 시간이 초과됐습니다')), 10_000)
+    realtimeChannel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        clearTimeout(timeout)
+        resolve()
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        clearTimeout(timeout)
+        reject(new Error(`세대 생성 Realtime 구독 실패: ${status}`))
+      }
+    })
+  })
   const card = await db.from('cards').select('id').limit(1).single()
   if (card.error || !card.data) throw card.error ?? new Error('테스트 카드가 없습니다')
   const building = await admin.from('buildings').insert({
@@ -46,6 +71,21 @@ try {
     { building_id: buildingId, number: '403호', status: '부재' },
   ])
   if (fixtures.error) throw fixtures.error
+  const fixtureRows = await db.from('units').select('id').eq('building_id', buildingId)
+  if (fixtureRows.error) throw fixtureRows.error
+  const fixtureIds = new Set((fixtureRows.data ?? []).map((row) => row.id))
+  const realtimeDeadline = Date.now() + 5_000
+  while (![...fixtureIds].every((id) => realtimeUnitIds.includes(id)) && Date.now() < realtimeDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  check([...fixtureIds].every((id) => realtimeUnitIds.includes(id)),
+    '다른 기기가 받을 세대 생성 Realtime 신호가 도착한다')
+
+  const forgedSignal = await admin.from('unit_creation_signals').insert({
+    building_id: buildingId,
+    unit_id: fixtureRows.data?.[0]?.id,
+  })
+  check(Boolean(forgedSignal.error), '클라이언트는 세대 생성 신호를 직접 만들 수 없다')
 
   const all = []
   for (let floor = 1; floor <= 5; floor += 1) {
@@ -128,7 +168,23 @@ try {
   console.error(error)
   failures += 1
 } finally {
-  if (buildingId != null) await db.from('buildings').delete().eq('id', buildingId)
+  if (realtimeChannel) await db.removeChannel(realtimeChannel)
+  if (buildingId != null && admin) {
+    const cleanupToken = await login()
+    const cleanup = await admin.rpc('delete_place_or_request_tx', {
+      p_token: cleanupToken,
+      p_target_type: 'building',
+      p_target_id: buildingId,
+      p_request_type: 'remove_place',
+      p_note: '세대 추가 smoke 정리',
+    })
+    if (cleanup.data?.action === 'requested' && cleanup.data?.request_id) {
+      await admin.rpc('execute_place_deletion_request_tx', {
+        p_token: cleanupToken,
+        p_request_id: cleanup.data.request_id,
+      })
+    }
+  }
 }
 
 console.log(`\n${failures === 0 ? '✅ 세대 추가 smoke 통과' : `❌ ${failures}개 실패`}\n`)

@@ -11,6 +11,7 @@ import { PullToRefresh } from './components/PullToRefresh'
 import { useStore } from './hooks/useStore'
 import { useCalendarRealtime } from './hooks/useCalendarRealtime'
 import { usePlaceDeletionRealtime } from './hooks/usePlaceDeletionRealtime'
+import { useUnitCreationRealtime } from './hooks/useUnitCreationRealtime'
 import { useAuth } from './hooks/useAuth'
 import type { Role } from './types'
 import type { AppLanguage } from './i18n'
@@ -158,6 +159,7 @@ function App() {
     refetchAll,
     refetchSlices,
     applyPlaceDeletionSignal,
+    syncCreatedUnits,
     // v2 신 배정 모델
     informalAssets,
     eventInformalAssignments,
@@ -208,6 +210,21 @@ function App() {
       console.warn('[place deletion realtime] sync failed:', error)
       })
     },
+  })
+
+  // 다른 봉사자가 세대를 추가하면 해당 행만 받아 현재 건물에 붙인다.
+  const recoverCreatedUnits = useCallback(() => refetchSlices(
+    ['buildings', 'cards'],
+    { triggeredBy: 'realtime:unit-created-recovery' },
+  ), [refetchSlices])
+  useUnitCreationRealtime((unitIds) => {
+    void syncCreatedUnits(unitIds).catch((error) => {
+      console.warn('[unit creation realtime] sync failed:', error)
+      void recoverCreatedUnits()
+    })
+  }, {
+    enabled: Boolean(user),
+    onRecover: () => { void recoverCreatedUnits() },
   })
 
   // role이 leader 또는 admin인 유저만 인도자 목록으로
