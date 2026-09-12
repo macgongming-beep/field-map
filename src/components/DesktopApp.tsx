@@ -240,8 +240,8 @@ export function DesktopApp({
   }) => Promise<boolean>
   onImportBuildings: (inputs: CsvBuildingImport[]) => Promise<{ inserted: number; skipped: number }>
   onCreateNotice: (input: { title: string; content: string; priority: Notice['priority']; author: string }) => void
-  onCreateSpecialPeriod: (input: { label: string; startDate: string; endDate: string; color: string }) => void
-  onUpdateSpecialPeriod: (id: number, input: { label: string; startDate: string; endDate: string; color: string }) => void
+  onCreateSpecialPeriod: (input: { label: string; startDate: string; endDate: string; color: string }) => Promise<boolean | void> | boolean | void
+  onUpdateSpecialPeriod: (id: number, input: { label: string; startDate: string; endDate: string; color: string }) => Promise<boolean | void> | boolean | void
   onDeleteBuilding: (buildingId: number) => void
   onDeleteBuildings: (buildingIds: number[]) => void
   onDeleteCards: (cardIds: number[]) => void

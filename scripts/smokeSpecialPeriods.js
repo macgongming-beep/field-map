@@ -59,6 +59,11 @@ try {
   const publicRead = await rest(`special_periods?id=eq.${created.id}&select=id`)
   check('세션 없이도 특별기간을 읽는다', (await rows(publicRead)).length === 1, `HTTP ${publicRead.status}`)
 
+  const invalidRange = await rest('special_periods?select=id', {
+    method: 'POST', body: JSON.stringify({ label: `${marker}_invalid`, start_date: '2026-09-10', end_date: '2026-09-09', color: '#5D5B54' }),
+  }, adminToken)
+  check('종료일이 시작일보다 빠른 기간은 DB가 거부한다', await blocked(invalidRange), `HTTP ${invalidRange.status}`)
+
   const noSessionInsert = await rest('special_periods?select=id', {
     method: 'POST', body: JSON.stringify({ ...period, label: `${marker}_no_session` }),
   })

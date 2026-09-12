@@ -11,6 +11,10 @@ export function makeSpecialPeriodMutations(deps: { fetchAll: () => Promise<void>
     color: string
     hasInvitation?: boolean
   }) => {
+    if (!input.startDate || !input.endDate || input.endDate < input.startDate) {
+      showToast(msg('종료일은 시작일보다 빠를 수 없습니다.'), 'error')
+      return false
+    }
     const result = await supabase.from('special_periods').insert({
       label: input.label.trim(),
       start_date: input.startDate,
@@ -20,11 +24,12 @@ export function makeSpecialPeriodMutations(deps: { fetchAll: () => Promise<void>
     }).select('id')
     if (result.error) {
       reportMutationError(msg('특별기간을 등록하지 못했습니다. special_periods 테이블이 있는지 확인해 주세요.'), result.error)
-      return
+      return false
     }
-    if (!ensureAffectedRows(result.data, msg('특별기간을 등록하지 못했습니다.'))) return
+    if (!ensureAffectedRows(result.data, msg('특별기간을 등록하지 못했습니다.'))) return false
     await fetchAll()
     showToast(msg('특별기간이 등록됐습니다'))
+    return true
   }
 
   const updateSpecialPeriod = async (id: number, input: {
@@ -34,6 +39,10 @@ export function makeSpecialPeriodMutations(deps: { fetchAll: () => Promise<void>
     color: string
     hasInvitation?: boolean
   }) => {
+    if (!input.startDate || !input.endDate || input.endDate < input.startDate) {
+      showToast(msg('종료일은 시작일보다 빠를 수 없습니다.'), 'error')
+      return false
+    }
     const result = await supabase.from('special_periods').update({
       label: input.label.trim(),
       start_date: input.startDate,
@@ -43,11 +52,12 @@ export function makeSpecialPeriodMutations(deps: { fetchAll: () => Promise<void>
     }).eq('id', id).select('id')
     if (result.error) {
       reportMutationError(msg('특별기간을 수정하지 못했습니다.'), result.error)
-      return
+      return false
     }
-    if (!ensureAffectedRows(result.data, msg('특별기간을 수정하지 못했습니다.'))) return
+    if (!ensureAffectedRows(result.data, msg('특별기간을 수정하지 못했습니다.'))) return false
     await fetchAll()
     showToast(msg('특별기간이 수정됐습니다'))
+    return true
   }
 
   const deleteSpecialPeriod = async (id: number) => {

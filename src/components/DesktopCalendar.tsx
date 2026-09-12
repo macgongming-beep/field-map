@@ -145,7 +145,7 @@ export function DesktopCalendar({
   onRemoveParticipant: (eventId: number, userName: string) => void
   onUpdateEvent: (eventId: number, input: EditDraft, notify?: boolean) => void | Promise<boolean>
   onUpdateEventSeries: (seriesId: string, fromDate: string, input: EditDraft, notify?: boolean) => void | Promise<boolean>
-  onCreateSpecialPeriod: (input: { label: string; startDate: string; endDate: string; color: string }) => void
+  onCreateSpecialPeriod: (input: { label: string; startDate: string; endDate: string; color: string }) => Promise<boolean | void> | boolean | void
   onDeleteSpecialPeriod: (id: number) => void
   specialPeriods: SpecialPeriod[]
   globalSettings?: Record<string, string>
@@ -642,7 +642,7 @@ export function DesktopCalendar({
             {showPeriodForm && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <input placeholder="기간 이름" value={periodLabel} onChange={(e) => setPeriodLabel(e.target.value)} style={{ padding: '3px 8px', borderRadius: 'var(--r-sm)', border: '1px solid #d1d5db', fontSize: '12px', width: '100px' }} />
-                <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} style={{ padding: '3px 6px', borderRadius: 'var(--r-sm)', border: '1px solid #d1d5db', fontSize: '12px' }} />
+                <input type="date" value={periodStart} onChange={(e) => { const next = e.target.value; setPeriodStart(next); if (periodEnd && periodEnd < next) setPeriodEnd(next) }} style={{ padding: '3px 6px', borderRadius: 'var(--r-sm)', border: '1px solid #d1d5db', fontSize: '12px' }} />
                 <span style={{ fontSize: '12px', color: '#9ca3af' }}>~</span>
                 <input type="date" value={periodEnd} min={periodStart} onChange={(e) => setPeriodEnd(e.target.value)} style={{ padding: '3px 6px', borderRadius: 'var(--r-sm)', border: '1px solid #d1d5db', fontSize: '12px' }} />
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -652,7 +652,7 @@ export function DesktopCalendar({
                     </button>
                   ))}
                 </div>
-                <button disabled={!periodLabel.trim() || !periodStart || !periodEnd} onClick={() => { onCreateSpecialPeriod({ label: periodLabel.trim(), startDate: periodStart, endDate: periodEnd, color: periodColor }); setPeriodLabel(''); setPeriodStart(''); setPeriodEnd(''); setShowPeriodForm(false) }} style={{ padding: '3px 10px', borderRadius: 'var(--r-sm)', border: 'none', background: 'var(--ink-900)', color: '#fff', fontSize: '12px', cursor: 'pointer' }} type="button">저장</button>
+                <button disabled={!periodLabel.trim() || !periodStart || !periodEnd || periodEnd < periodStart} onClick={async () => { const saved = await onCreateSpecialPeriod({ label: periodLabel.trim(), startDate: periodStart, endDate: periodEnd, color: periodColor }); if (saved === false) return; setPeriodLabel(''); setPeriodStart(''); setPeriodEnd(''); setShowPeriodForm(false) }} style={{ padding: '3px 10px', borderRadius: 'var(--r-sm)', border: 'none', background: 'var(--ink-900)', color: '#fff', fontSize: '12px', cursor: 'pointer' }} type="button">저장</button>
                 <button onClick={() => setShowPeriodForm(false)} style={{ padding: '3px 8px', borderRadius: 'var(--r-sm)', border: '1px solid #e5e7eb', background: 'none', fontSize: '12px', cursor: 'pointer' }} type="button">취소</button>
               </div>
             )}

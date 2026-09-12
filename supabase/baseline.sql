@@ -664,6 +664,7 @@ alter table public.service_sessions add constraint service_sessions_user_date_sl
 alter table public.service_suggestions add constraint service_suggestions_pkey PRIMARY KEY (id);
 
 alter table public.special_periods add constraint special_periods_pkey PRIMARY KEY (id);
+alter table public.special_periods add constraint special_periods_valid_date_range check (start_date <= end_date);
 
 alter table public.territory_regions add constraint territory_regions_name_key UNIQUE (name);
 

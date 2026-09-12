@@ -390,8 +390,8 @@ export function MobileHome({
   onLogout: () => void
   visitHistories: VisitHistory[]
   specialPeriods?: SpecialPeriod[]
-  onCreateSpecialPeriod?: (input: { label: string; startDate: string; endDate: string; color: string }) => Promise<void> | void
-  onUpdateSpecialPeriod?: (id: number, input: { label: string; startDate: string; endDate: string; color: string }) => Promise<void> | void
+  onCreateSpecialPeriod?: (input: { label: string; startDate: string; endDate: string; color: string }) => Promise<boolean | void> | boolean | void
+  onUpdateSpecialPeriod?: (id: number, input: { label: string; startDate: string; endDate: string; color: string }) => Promise<boolean | void> | boolean | void
   onDeleteSpecialPeriod?: (id: number) => Promise<void> | void
   // v2 신 배정 모델
   informalAssets?: InformalAsset[]
@@ -1224,7 +1224,7 @@ export function MobileHome({
 
             {/* 특별 봉사 시즌 관리 */}
             <Route path="/special-periods" element={
-              role === 'admin' ? (
+              (actualRole === 'admin' || actualRole === 'developer') ? (
                 <div className="mobile-settings-page">
                   <AppHeader
                     pageTitle={t(language, 'settings.specialSeason')}
