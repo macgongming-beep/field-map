@@ -1834,8 +1834,7 @@ export function DesktopTerritory({
                 )}
                 <th className="territory-card-name-cell">카드</th>
                 <th style={{ width: 140 }}>진행</th>
-                <th>인도자</th>
-                <th className="territory-card-secondary" style={{ width: 150 }}>유형</th>
+                <th className="territory-card-leader-cell">인도자</th>
                 <th style={{ width: 80, textAlign: 'right' }}>중국어</th>
                 <th className="territory-card-secondary" style={{ width: 90, textAlign: 'right' }}>정기방문</th>
                 <th className="territory-card-secondary" style={{ width: 80 }}>구역선</th>
@@ -1848,8 +1847,6 @@ export function DesktopTerritory({
                 const cardBuildings = buildingsByCardId.get(card.id) ?? []
                 const operationalState = getTerritoryCardOperationalState(card)
                 const chinesePointCount = cardBuildings.reduce((sum, b) => sum + b.units.filter((u) => u.isChinese).length, 0)
-                const storeCount = cardBuildings.filter((building) => building.type === '상가').length
-                const houseCount = cardBuildings.filter((building) => building.type === '주택').length
                 const hasBoundary = cardBoundaries.some((b) => b.cardId === card.id)
                 const leaders = getCardLeaderList(card)
                 // 인도자가 많아 이름을 다 나열하면 길어짐 → 인원수만 표시 (미배정/N명)
@@ -1873,7 +1870,7 @@ export function DesktopTerritory({
                         <span className="tnum" style={{ fontSize: 12, color: 'var(--gray-600)', minWidth: 32, textAlign: 'right' }}>{card.progress}%</span>
                       </div>
                     </td>
-                    <td onClick={(e) => e.stopPropagation()}>
+                    <td className="territory-card-leader-cell" onClick={(e) => e.stopPropagation()}>
                       {isAdmin ? (
                         <details style={{ position: 'relative' }}>
                           <summary style={{ listStyle: 'none', cursor: 'pointer', fontSize: 13, color: leaders.length > 0 ? 'var(--gray-900)' : '#B45309', fontWeight: leaders.length > 0 ? 500 : 600 }}>
@@ -1894,13 +1891,6 @@ export function DesktopTerritory({
                           {leaderLabel}
                         </span>
                       )}
-                    </td>
-                    <td className="territory-card-secondary" style={{ width: 150 }}>
-                      <div className="card-building-type-summary">
-                        <span><b>전체</b> <em className="tnum">{card.buildings}</em></span>
-                        <span>주택 <em className="tnum">{houseCount}</em></span>
-                        <span>상가 <em className="tnum">{storeCount}</em></span>
-                      </div>
                     </td>
                     <td className="tnum" style={{ width: 80, textAlign: 'right', fontSize: 13 }}>
                       <div className="card-chinese-summary">
@@ -1934,7 +1924,7 @@ export function DesktopTerritory({
               })}
               {doneExcludedCards.length > 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 10 : 9} style={{ padding: '10px 18px', background: 'var(--bg-subtle)', borderTop: '1px solid var(--border-subtle)' }}>
+                  <td colSpan={isAdmin ? 9 : 8} style={{ padding: '10px 18px', background: 'var(--bg-subtle)', borderTop: '1px solid var(--border-subtle)' }}>
                     <button
                       className="tbl-ghost-btn sm"
                       onClick={() => setDoneExcludedOpen((open) => !open)}
@@ -1947,7 +1937,7 @@ export function DesktopTerritory({
                 </tr>
               )}
               {filteredCards.length === 0 && (
-                <tr><td colSpan={isAdmin ? 10 : 9} style={{ textAlign: 'center', padding: '32px 18px', color: 'var(--gray-400)', fontSize: 13 }}>
+                <tr><td colSpan={isAdmin ? 9 : 8} style={{ textAlign: 'center', padding: '32px 18px', color: 'var(--gray-400)', fontSize: 13 }}>
                   {cards.length === 0 ? '카드가 없습니다. 위의 + 카드 추가 버튼으로 첫 카드를 만들어보세요.' : '조건에 맞는 카드가 없습니다.'}
                 </td></tr>
               )}

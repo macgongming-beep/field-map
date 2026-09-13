@@ -21471,7 +21471,7 @@ button:focus-visible {
     overflow-x: auto;
   }
   .tbl--territory-cards {
-    min-width: 1040px;
+    min-width: 960px;
     table-layout: fixed;
   }
 
@@ -21489,6 +21489,10 @@ button:focus-visible {
   .tbl--territory-cards .territory-card-name-cell {
     width: 190px;
     min-width: 190px;
+  }
+  .tbl--territory-cards .territory-card-leader-cell {
+    width: 90px;
+    min-width: 90px;
   }
   .territory-card-name-cell .tbl__title,
   .territory-card-name-cell .tbl__sub {
