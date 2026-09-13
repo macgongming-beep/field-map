@@ -89,7 +89,7 @@ export function CartApplicantSection({
             <button
               aria-label={adding ? t(language, 'common.cancel') : t(language, 'calendar.addPeople')}
               aria-pressed={adding}
-              className={`cart-head-action${adding ? ' is-active' : ''}`}
+              className="participant-icon-button"
               onClick={() => {
                 setExpanded(true)
                 setRemoving(false)
@@ -97,12 +97,15 @@ export function CartApplicantSection({
               }}
               type="button"
             >
-              +
+              <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" aria-hidden>
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
             </button>
             <button
               aria-label={removing ? t(language, 'calendar.closeRemoveMode') : t(language, 'calendar.removeShort')}
               aria-pressed={removing}
-              className={`cart-head-action${removing ? ' is-active' : ''}`}
+              className={`participant-icon-button participant-icon-button--remove${removing ? ' is-active' : ''}`}
               disabled={cartApplicants.length === 0}
               onClick={() => {
                 setExpanded(true)
@@ -111,7 +114,9 @@ export function CartApplicantSection({
               }}
               type="button"
             >
-              −
+              <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" aria-hidden>
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
             </button>
           </div>
         )}

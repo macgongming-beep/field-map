@@ -32244,22 +32244,6 @@ button > svg {
 }
 .cart-summary-toggle:disabled { background: transparent; }
 .cart-head-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 5px; }
-.cart-head-action {
-  display: grid;
-  width: 30px;
-  min-height: 30px;
-  padding: 0;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 19px;
-  font-weight: 500;
-  line-height: 1;
-}
-.cart-head-action.is-active { border-color: var(--ink); background: var(--ink); color: #fff; }
-.cart-head-action:disabled { color: var(--muted-2); opacity: .45; }
 .cart-applicant-remove-button {
   display: grid;
   width: 25px;
