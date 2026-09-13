@@ -57,7 +57,7 @@ const deleteRows = (table, query, token) => {
 }
 
 try {
-  developerToken = await login('test-admin', '1234')
+  developerToken = await login(env.loginId, env.loginPin)
   if (!developerToken) throw new Error('테스트 개발자로 로그인하지 못했습니다')
   await deleteRows('app_users', `name=like.${encodeURIComponent('_calendar_policy_*')}`, developerToken)
 

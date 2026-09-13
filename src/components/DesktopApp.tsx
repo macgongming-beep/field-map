@@ -12,7 +12,6 @@ import { DesktopMap } from './DesktopMap'
 import { DesktopAdminAssignment } from './DesktopAdminAssignment'
 import { AdminSuggestions } from './admin/AdminSuggestions'
 import { MobileUsers } from './MobileUsers'
-import { MobileNotices } from './MobileNotices'
 import { MobileSignupRequests } from './MobileSignupRequests'
 import { DesktopProfileSettings } from './DesktopProfileSettings'
 import { DesktopDataManagement } from './DesktopDataManagement'
@@ -33,9 +32,10 @@ import type { AppLanguage } from '../i18n'
 import { msg } from '../lib/msg'
 import type { MergeResult } from '../utils/duplicateBuildingMerge'
 
+const IS_DEMO = import.meta.env.VITE_DEMO_MODE === 'true'
+
 const pageToPath: Record<DesktopPage, string> = {
   '홈': '/',
-  '공지': '/notices',
   '캘린더': '/calendar',
   '구역': '/zone',       // 구역 관리 (인도자/관리자)
   '활동': '/territory', // 개인 봉사 (봉사자/인도자)
@@ -48,7 +48,6 @@ const pageToPath: Record<DesktopPage, string> = {
 
 const pathToPage: Record<string, DesktopPage> = {
   '/': '홈',
-  '/notices': '공지',
   '/calendar': '캘린더',
   '/territory': '활동',
   '/zone': '구역',
@@ -68,10 +67,13 @@ export function DesktopApp({
   currentUserId,
   actualRole,
   viewMode,
-  notices,
+  notices: _notices,
   serviceSessions,
   onAddUnit,
   onApplyToEvent,
+  onApplyToCartEvent,
+  onManageCartApplication,
+  onSetCartTeamLeader,
   onSetCardLeaders,
   onSetMultipleCardLeaders,
   onStartServiceSession,
@@ -92,7 +94,7 @@ export function DesktopApp({
   onDeleteTerritoryRegion,
   onCreateBuilding,
   onImportBuildings,
-  onCreateNotice,
+  onCreateNotice: _onCreateNotice,
   onCreateSpecialPeriod,
   onUpdateSpecialPeriod,
   onDeleteBuilding,
@@ -102,7 +104,7 @@ export function DesktopApp({
   onDeleteCardBoundary,
   onMoveBuildingToCard,
   onReassignBuildingsToCards,
-  onDeleteNotice,
+  onDeleteNotice: _onDeleteNotice,
   onDeleteSpecialPeriod,
   specialPeriods,
   onDeleteUnit,
@@ -186,6 +188,9 @@ export function DesktopApp({
   serviceSessions: ServiceSession[]
   onAddUnit: (buildingId: number, unitNumber: string | string[], usageType?: Building['type']) => Promise<number[] | false>
   onApplyToEvent: (eventId: number) => void
+  onApplyToCartEvent: (eventId: number) => void
+  onManageCartApplication: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
+  onSetCartTeamLeader: (eventId: number, userId: number | null) => Promise<boolean> | boolean
   onSetCardLeaders: (cardId: number, leaderNames: string[], options?: { silentSuccess?: boolean }) => Promise<void> | void
   onSetMultipleCardLeaders: (cardIds: number[], leaderNames: string[], options?: { silentSuccess?: boolean }) => Promise<void> | void
   onStartServiceSession: (input: {
@@ -210,10 +215,10 @@ export function DesktopApp({
       onConflict?: (serverSharedAt: string | null) => void
     },
   ) => Promise<void> | void
-  onCreateCalendarEvent: (input: { date: string; time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }) => void
-  onCreateRepeatCalendarEvents: (dates: string[], input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }) => void
-  onUpdateCalendarEvent: (eventId: number, input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }) => void
-  onUpdateCalendarEventSeries: (seriesId: string, fromDate: string, input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }) => void
+  onCreateCalendarEvent: (input: { date: string; time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }) => void
+  onCreateRepeatCalendarEvents: (dates: string[], input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }) => void
+  onUpdateCalendarEvent: (eventId: number, input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }) => void
+  onUpdateCalendarEventSeries: (seriesId: string, fromDate: string, input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }) => void
   onDeleteCalendarEvent: (eventId: number) => void
   onDeleteCalendarEventSeries: (seriesId: string, fromDate: string) => void
   onLinkEventsToSeries: (eventIds: number[]) => void
@@ -257,7 +262,7 @@ export function DesktopApp({
   onDeleteUnit: (buildingId: number, unitId: number) => void
   onRemoveParticipantFromEvent: (eventId: number, userName: string) => void
   onAddParticipantToEvent: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
-  allUsers: Array<{ id: number; name: string; role: string; approvalStatus?: 'pending' | 'approved' | 'blocked'; isActive?: boolean }>
+  allUsers: Array<{ id: number; name: string; role: string; approvalStatus?: 'pending' | 'approved' | 'blocked'; isActive?: boolean; cartServiceApproved?: boolean }>
   returnVisits?: ReturnVisit[]
   returnVisitLogs?: ReturnVisitLog[]
   onAddReturnVisitLog: (returnVisitId: number, result: '만남' | '부재' | null, memo: string) => Promise<void>
@@ -467,7 +472,7 @@ export function DesktopApp({
           </div>
           <div className="nav-brand-text">
             <strong style={{ fontSize: 18 }}>Field Map</strong>
-            <span style={{ letterSpacing: '0.2em', fontSize: '10px' }}>YONGIN</span>
+            <span style={{ letterSpacing: '0.2em', fontSize: '10px' }}>{IS_DEMO ? 'DEMO' : 'YONGIN'}</span>
           </div>
         </div>
 
@@ -476,7 +481,6 @@ export function DesktopApp({
           {visibleDesktopPages.map((item) => {
             let icon = null;
             if (item === '홈') icon = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
-            else if (item === '공지') icon = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>;
             else if (item === '캘린더') icon = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>;
             else if (item === '구역') icon = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>;
             else if (item === '지도') icon = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>;
@@ -577,6 +581,7 @@ export function DesktopApp({
         } />
         <Route path="/calendar" element={
           <DesktopCalendar
+            language={language}
             buildings={buildings}
             cardBoundaries={cardBoundaries}
             visitHistories={visitHistories}
@@ -593,6 +598,9 @@ export function DesktopApp({
             participantUsers={allUsers}
             mentionUsers={allUsers.map((user) => ({ id: user.id, name: user.name, role: user.role }))}
             onApplyToEvent={onApplyToEvent}
+            onApplyToCartEvent={onApplyToCartEvent}
+            onManageCartApplication={onManageCartApplication}
+            onSetCartTeamLeader={onSetCartTeamLeader}
             onAssignCardToEventParticipant={onAssignCardToEventParticipant}
             onAssignCardsToEventParticipantsBulk={onAssignCardsToEventParticipantsBulk}
             onAssignInformalToUser={onAssignInformalToUser}
@@ -860,7 +868,7 @@ export function DesktopApp({
         <Route path="/settings" element={
           <DesktopSettings
             currentUserId={currentUserId}
-            actualRole={viewMode}
+            actualRole={actualRole}
             onLogout={onLogout}
             allUsers={allUsers}
             returnVisits={returnVisits ?? []}
@@ -897,7 +905,7 @@ export function DesktopApp({
           } />
           <Route path="data-management" element={
             (viewMode === 'admin' || viewMode === 'developer')
-              ? <DesktopDataManagement />
+              ? <DesktopDataManagement isDeveloper={actualRole === 'developer'} />
               : <Navigate to="/settings/profile" replace />
           } />
           <Route path="place-change-requests" element={
@@ -934,22 +942,6 @@ export function DesktopApp({
             (viewMode === 'admin' || viewMode === 'developer')
               ? <section className="la-page" style={{ alignItems: 'center' }}><div style={{ maxWidth: 640, width: '100%', position: 'relative', padding: '24px 0' }}><MobileSignupRequests isEmbedded /></div></section>
               : <Navigate to="/settings/profile" replace />
-          } />
-          <Route path="notices" element={
-            <section className="la-page" style={{ alignItems: 'center' }}>
-              <div style={{ maxWidth: 640, width: '100%', position: 'relative', padding: '24px 0' }}>
-                <MobileNotices
-                  notices={notices}
-                  language={language}
-                  currentVisitor={currentVisitor}
-                  currentUserId={currentUserId}
-                  role={actualRole}
-                  mentionUsers={allUsers.map((user) => ({ id: user.id, name: user.name, role: user.role }))}
-                  onCreateNotice={onCreateNotice}
-                  onDeleteNotice={onDeleteNotice}
-                />
-              </div>
-            </section>
           } />
           <Route path="service-logs" element={
             actualRole === 'developer'

@@ -10,6 +10,11 @@ import './lib/pwa' // Service Worker 등록 (사이드 이펙트만)
 import { applyUpdate } from './lib/pwa'
 import { msg } from './lib/msg'
 
+if (import.meta.env.VITE_DEMO_MODE === 'true') {
+  document.title = 'Field Map - DEMO'
+  document.querySelector('meta[property="og:title"]')?.setAttribute('content', 'Field Map - DEMO')
+}
+
 // Sentry 가장 먼저 (이후 발생하는 모든 에러 캐치)
 initSentry()
 

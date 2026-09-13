@@ -42,7 +42,7 @@ let adminToken = null
 let userId = null
 
 try {
-  adminToken = (await login('test-admin', '1234'))?.token ?? null
+  adminToken = (await login(env.loginId, env.loginPin))?.token ?? null
   if (!adminToken) throw new Error('테스트 관리자로 로그인하지 못했습니다')
 
   const createUser = await rest('app_users?select=id', {

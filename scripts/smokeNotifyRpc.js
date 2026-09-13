@@ -82,7 +82,7 @@ const main = async () => {
   }
 
   // 4) ── 여기부터가 진짜다: 실제 로그인해서 성공 경로를 본다 ──
-  const login = await rpc('auth_login', { p_login_id: 'test-admin', p_pin: '1234' })
+  const login = await rpc('auth_login', { p_login_id: env.loginId, p_pin: env.loginPin })
   const token = Array.isArray(login.data) ? login.data[0]?.token : login.data?.token
   check('테스트 관리자로 로그인된다', Boolean(token),
     token ? '' : `HTTP ${login.status} ${JSON.stringify(login.data).slice(0, 80)}`)

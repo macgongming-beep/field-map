@@ -595,27 +595,19 @@ export function AdminSuggestions(_props: Props) {
       )}
 
       <div className="detail-card" style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div className="suggestion-admin-toolbar">
           <h2 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: 'var(--ink)', flexShrink: 0, whiteSpace: 'nowrap' }}>대화 방법 제안 관리</h2>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {/* 숨김 파일 인풋 */}
+          <div className="suggestion-admin-actions">
             <input ref={fileInputRef} type="file" accept=".csv" onChange={handleFileChange} style={{ display: 'none' }} />
-            <button onClick={downloadSampleCSV} type="button"
-              style={{ padding: '7px 12px', border: '1px dashed var(--line-muted)', borderRadius: '8px', background: 'var(--bg)', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              샘플 CSV
-            </button>
-            <button onClick={() => fileInputRef.current?.click()} type="button"
-              style={{ padding: '7px 12px', border: '1px solid var(--line-muted)', borderRadius: '8px', background: 'var(--bg)', color: 'var(--ink)', fontSize: '12px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              CSV 가져오기
-            </button>
-            <button onClick={() => downloadSuggestionsCSV(suggestions)} disabled={suggestions.length === 0} type="button"
-              style={{ padding: '7px 12px', border: '1px solid var(--line-muted)', borderRadius: '8px', background: 'var(--bg)', color: 'var(--ink)', fontSize: '12px', fontWeight: 700, cursor: suggestions.length === 0 ? 'not-allowed' : 'pointer', opacity: suggestions.length === 0 ? 0.5 : 1, whiteSpace: 'nowrap' }}>
-              CSV 내보내기
-            </button>
-            <button onClick={handleCreateNew} type="button"
-              style={{ padding: '7px 12px', border: 0, borderRadius: '8px', background: 'var(--ink)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              + 새 제안 작성
-            </button>
+            <details className="suggestion-csv-menu">
+              <summary>CSV 관리</summary>
+              <div>
+                <button onClick={downloadSampleCSV} type="button">샘플 받기</button>
+                <button onClick={() => fileInputRef.current?.click()} type="button">가져오기</button>
+                <button onClick={() => downloadSuggestionsCSV(suggestions)} disabled={suggestions.length === 0} type="button">내보내기</button>
+              </div>
+            </details>
+            <button className="suggestion-create-button" onClick={handleCreateNew} type="button">+ 새 제안</button>
           </div>
         </div>
 
@@ -625,7 +617,7 @@ export function AdminSuggestions(_props: Props) {
             placeholder="제목 또는 태그로 검색..."
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-            style={{ ...inputStyle, borderRadius: 20, padding: '10px 16px', background: 'var(--bg-muted)' }}
+            style={{ ...inputStyle, borderRadius: 8, padding: '10px 12px', background: 'var(--bg-muted)' }}
           />
         </div>
 

@@ -4,6 +4,8 @@ import { logServiceAction } from './serviceLog'
 import { msg } from '../../lib/msg'
 import { getAuthToken } from '../../lib/authToken'
 import { eventParticipantNameKey, normalizeEventParticipantName } from '../../utils/eventParticipantUsers'
+import { alertDialog, confirmDialog } from '../../lib/confirm'
+import { CART_APPLICATIONS_ENABLED } from '../../config/features'
 
 /** 일정 입력 공통 타입 */
 export type CalendarEventInput = {
@@ -16,6 +18,8 @@ export type CalendarEventInput = {
   memo: string
   hasMeeting: boolean
   allowApplications: boolean
+  allowCartApplications?: boolean
+  cartCapacity?: number | null
 }
 
 /** DB payload 변환 (mapLink 옵셔널 처리 포함) */
@@ -29,6 +33,10 @@ function buildEventPayload(input: CalendarEventInput): Record<string, unknown> {
     memo: input.memo,
     has_meeting: input.hasMeeting,
     allow_applications: input.allowApplications,
+  }
+  if (CART_APPLICATIONS_ENABLED) {
+    payload.allow_cart_applications = input.allowCartApplications ?? false
+    payload.cart_capacity = input.allowCartApplications ? input.cartCapacity : null
   }
   if (input.mapLink?.trim()) payload.meeting_map_url = input.mapLink.trim()
   return payload
@@ -192,44 +200,150 @@ export function makeCalendarMutations(deps: {
       showToast(msg('이 일정은 봉사 신청을 받지 않습니다.'), 'info')
       return
     }
-    if (isApplied) {
-      const result = await supabase.from('event_participants')
-        .delete()
-        .eq('event_id', eventId)
-        .eq('user_name', currentVisitor)
-        .eq('role', '신청')
-        .select('id')
-      if (result.error) {
-        reportMutationError(msg('봉사 신청을 취소하지 못했습니다.'), result.error)
-        return
-      }
-      if (!ensureAffectedRows(result.data, msg('봉사 신청을 취소하지 못했습니다.'))) return
-      await logServiceAction({
-        eventId,
-        action: 'left',
-        targetType: 'event_participant',
-        details: { user_name: currentVisitor, source: 'self_cancel' },
-      })
-    } else {
-      const result = await supabase.from('event_participants').upsert(
-        { event_id: eventId, user_name: currentVisitor, role: '신청' },
-        { onConflict: 'event_id,user_name', ignoreDuplicates: true },
-      ).select('id')
-      if (result.error) {
-        reportMutationError(msg('봉사 신청을 저장하지 못했습니다.'), result.error)
-        return
-      }
-      if ((result.data?.length ?? 0) > 0) {
+    if (!CART_APPLICATIONS_ENABLED) {
+      if (isApplied) {
+        const result = await supabase.from('event_participants')
+          .delete()
+          .eq('event_id', eventId)
+          .eq('user_name', currentVisitor)
+          .eq('role', '신청')
+          .select('id')
+        if (result.error) {
+          reportMutationError(msg('봉사 신청을 취소하지 못했습니다.'), result.error)
+          return
+        }
+        if (!ensureAffectedRows(result.data, msg('봉사 신청을 취소하지 못했습니다.'))) return
         await logServiceAction({
           eventId,
-          action: 'joined',
+          action: 'left',
           targetType: 'event_participant',
-          details: { user_name: currentVisitor, source: 'self_apply' },
+          details: { user_name: currentVisitor, source: 'self_cancel' },
         })
+      } else {
+        const result = await supabase.from('event_participants').upsert(
+          { event_id: eventId, user_name: currentVisitor, role: '신청' },
+          { onConflict: 'event_id,user_name', ignoreDuplicates: true },
+        ).select('id')
+        if (result.error) {
+          reportMutationError(msg('봉사 신청을 저장하지 못했습니다.'), result.error)
+          return
+        }
+        if ((result.data?.length ?? 0) > 0) {
+          await logServiceAction({
+            eventId,
+            action: 'joined',
+            targetType: 'event_participant',
+            details: { user_name: currentVisitor, source: 'self_apply' },
+          })
+        }
       }
+      await fetchAll()
+      showToast(isApplied ? msg('신청이 취소됐습니다') : msg('일정에 신청됐습니다'))
+      return
+    }
+    if (!isApplied && event?.cartApplicants?.some((applicant) => applicant.name === currentVisitor)) {
+      const ok = await confirmDialog({
+        title: msg('신청 종류 변경'),
+        message: msg('전시대 신청을 취소하고 일반 봉사로 변경할까요?'),
+        confirmLabel: msg('변경'),
+      })
+      if (!ok) return
+    }
+    const token = getAuthToken()
+    if (!token) return showToast(msg('로그인 정보가 없습니다. 다시 로그인해 주세요.'), 'error')
+    const result = await supabase.rpc('toggle_event_application_tx', {
+      p_token: token, p_event_id: eventId, p_kind: 'service',
+    })
+    if (result.error || (result.data as { ok?: boolean } | null)?.ok !== true) {
+      reportMutationError(msg('봉사 신청을 저장하지 못했습니다.'), result.error ?? new Error('신청 처리 실패'))
+      return
     }
     await fetchAll()
-    showToast(isApplied ? '신청이 취소됐습니다' : '일정에 신청됐습니다')
+    const state = (result.data as { state?: string }).state
+    showToast(state === 'cancelled' ? msg('신청이 취소됐습니다') : state === 'switched' ? msg('일반 봉사 신청으로 변경됐습니다') : msg('일정에 신청됐습니다'))
+  }
+
+  const applyToCartEvent = async (eventId: number) => {
+    if (!CART_APPLICATIONS_ENABLED) return
+    const currentVisitor = getCurrentVisitor()
+    const event = calendarEvents.find((item) => item.id === eventId)
+    if (!event) return
+    const isApplied = event.cartApplicants?.some((applicant) => applicant.name === currentVisitor) ?? false
+    if (!isApplied && event.applicants.includes(currentVisitor)) {
+      const ok = await confirmDialog({
+        title: msg('신청 종류 변경'),
+        message: msg('일반 봉사 신청을 취소하고 전시대 봉사로 변경할까요?'),
+        confirmLabel: msg('변경'),
+      })
+      if (!ok) return
+    }
+    const token = getAuthToken()
+    if (!token) return showToast(msg('로그인 정보가 없습니다. 다시 로그인해 주세요.'), 'error')
+    const result = await supabase.rpc('toggle_event_application_tx', {
+      p_token: token, p_event_id: eventId, p_kind: 'cart',
+    })
+    if (result.error) {
+      reportMutationError(msg('전시대 신청을 저장하지 못했습니다.'), result.error)
+      return
+    }
+    const value = result.data as { ok?: boolean; reason?: string; state?: string } | null
+    if (!value?.ok) {
+      if (value?.reason === 'approval_required') {
+        await alertDialog({
+          title: msg('전시대 봉사 승인 필요'),
+          message: msg('전시대 봉사 승인이 필요합니다. 신청하려면 봉사 감독자에게 문의해 주세요.'),
+        })
+      } else if (value?.reason === 'full') {
+        await alertDialog({ title: msg('전시대 모집 마감'), message: msg('전시대 신청 정원이 모두 찼습니다.') })
+      } else {
+        showToast(msg('전시대 신청을 처리할 수 없습니다.'), 'error')
+      }
+      return
+    }
+    await fetchAll()
+    showToast(value.state === 'cancelled' ? msg('전시대 신청이 취소됐습니다') : value.state === 'switched' ? msg('전시대 봉사 신청으로 변경됐습니다') : msg('전시대 봉사에 신청됐습니다'))
+  }
+
+  const manageCartApplication = async (eventId: number, userId: number, action: 'add' | 'remove' | 'service') => {
+    if (!CART_APPLICATIONS_ENABLED) return false
+    const token = getAuthToken()
+    if (!token) return false
+    const result = await supabase.rpc('manage_cart_application_tx', {
+      p_token: token, p_event_id: eventId, p_user_id: userId, p_action: action,
+    })
+    const value = result.data as { ok?: boolean; reason?: string } | null
+    if (result.error || !value?.ok) {
+      const message = value?.reason === 'full'
+        ? msg('전시대 신청 정원이 모두 찼습니다.')
+        : value?.reason === 'normal_application_exists'
+          ? msg('배정된 참가자는 먼저 배정을 해제해 주세요.')
+          : msg('전시대 신청자를 변경하지 못했습니다.')
+      reportMutationError(message, result.error ?? new Error(value?.reason ?? 'cart application failed'))
+      return false
+    }
+    await fetchAll()
+    showToast(action === 'add'
+      ? msg('전시대 신청자를 추가했습니다')
+      : action === 'service'
+        ? msg('일반 봉사 신청으로 변경됐습니다')
+        : msg('전시대 신청자를 제외했습니다'))
+    return true
+  }
+
+  const setCartTeamLeader = async (eventId: number, userId: number | null) => {
+    if (!CART_APPLICATIONS_ENABLED) return false
+    const token = getAuthToken()
+    if (!token) return false
+    const result = await supabase.rpc('set_cart_team_leader_tx', {
+      p_token: token, p_event_id: eventId, p_user_id: userId,
+    })
+    if (result.error || (result.data as { ok?: boolean } | null)?.ok !== true) {
+      reportMutationError(msg('전시대 팀장을 변경하지 못했습니다.'), result.error ?? new Error('team lead failed'))
+      return false
+    }
+    await fetchAll()
+    showToast(userId == null ? msg('전시대 팀장 지정을 해제했습니다') : msg('전시대 팀장을 지정했습니다'))
+    return true
   }
 
   const removeParticipantFromEvent = async (eventId: number, userName: string) => {
@@ -307,6 +421,18 @@ export function makeCalendarMutations(deps: {
     const normalizedName = normalizeEventParticipantName(userName)
     const event = calendarEvents.find((e) => e.id === eventId)
     if (!event || !normalizedName) return false
+    const cartApplicant = CART_APPLICATIONS_ENABLED && role !== '게스트'
+      ? event.cartApplicants?.find((item) => eventParticipantNameKey(item.name) === eventParticipantNameKey(normalizedName))
+      : undefined
+    if (cartApplicant) {
+      const ok = await confirmDialog({
+        title: msg('신청 종류 변경'),
+        message: msg('전시대 신청을 취소하고 일반 봉사로 변경할까요?'),
+        confirmLabel: msg('변경'),
+      })
+      if (!ok) return false
+      return manageCartApplication(eventId, cartApplicant.userId, 'service')
+    }
     if (event.applicants.some((name) => eventParticipantNameKey(name) === eventParticipantNameKey(normalizedName))) {
       showToast(msg('이미 이 일정에 있는 이름입니다.'), 'info')
       return false
@@ -344,6 +470,9 @@ export function makeCalendarMutations(deps: {
     deleteCalendarEventSeries,
     linkEventsToSeries,
     applyToEvent,
+    applyToCartEvent,
+    manageCartApplication,
+    setCartTeamLeader,
     removeParticipantFromEvent,
     addParticipantToEvent,
   }

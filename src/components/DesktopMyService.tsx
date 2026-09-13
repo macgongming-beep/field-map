@@ -112,8 +112,10 @@ export function DesktopMyService({
     return todayEvents
       .map((event) => {
         const assignment = event.cardAssignments.find((item) => item.userName === currentVisitor)
+        const cartApplication = event.cartApplicants?.find((item) => item.name === currentVisitor)
         const isParticipant =
           !!assignment ||
+          !!cartApplication ||
           event.applicants.includes(currentVisitor) ||
           event.assigned.includes(currentVisitor) ||
           event.leaders.includes(currentVisitor)
@@ -124,9 +126,14 @@ export function DesktopMyService({
           .filter(Boolean) as TerritoryCard[]
         const teammates = getAssignmentTeamMembers(event, currentVisitor)
 
-        return { event, cards: assignedCards, teammates }
+        return { event, cards: assignedCards, teammates, cartApplication }
       })
-      .filter(Boolean) as Array<{ event: CalendarEvent; cards: TerritoryCard[]; teammates: string[] }>
+      .filter(Boolean) as Array<{
+        event: CalendarEvent
+        cards: TerritoryCard[]
+        teammates: string[]
+        cartApplication?: NonNullable<CalendarEvent['cartApplicants']>[number]
+      }>
   }, [calendarEvents, cards, currentVisitor, today])
 
   const currentSlot = getCurrentTimeSlot()
@@ -225,7 +232,7 @@ export function DesktopMyService({
               <div className="dms-empty">오늘 참여하는 봉사 일정이 없습니다.</div>
             ) : (
               <div className="dms-today-list">
-                {myTodayAssignments.map(({ event, cards: assignedCards, teammates }) => {
+                {myTodayAssignments.map(({ event, cards: assignedCards, teammates, cartApplication }) => {
                   const isOpen = expandedEventIds.has(event.id)
                   const myInformal = eventInformalAssignments.filter(
                     (assignment) => assignment.eventId === event.id && assignment.userName === currentVisitor,
@@ -252,7 +259,9 @@ export function DesktopMyService({
                         <div>
                           <strong>{event.time} {event.title}</strong>
                           {/* 인도자는 생략 — 같이 도는 팀원 이름만 보이면 충분하다 */}
-                          {teammates.length > 0 && <small>팀원 {teammates.join(', ')}</small>}
+                          {cartApplication
+                            ? <small>{t(language, 'calendar.cartService')}{cartApplication.isTeamLead ? ` · ${t(language, 'calendar.cartTeamLead')}` : ''}</small>
+                            : teammates.length > 0 && <small>팀원 {teammates.join(', ')}</small>}
                         </div>
                         <b>{t(language, 'territory.assignmentCount', { count: totalAssignments })}</b>
                       </button>
@@ -260,7 +269,9 @@ export function DesktopMyService({
                       {isOpen && (
                         <div className="dms-assigned-card-list">
                           {totalAssignments === 0 ? (
-                            <div className="dms-empty compact">{t(language, 'territory.noAssignedPlaces')}</div>
+                            <div className="dms-empty compact">
+                              {cartApplication ? t(language, 'calendar.cartService') : t(language, 'territory.noAssignedPlaces')}
+                            </div>
                           ) : (
                             <>
                               {assignedCards.map((card) => (

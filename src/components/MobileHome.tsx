@@ -3,7 +3,6 @@ import { FontScalePicker } from './FontScalePicker'
 import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { MobileAdminAssignment } from './MobileAdminAssignment'
 import { MobileMap } from './MobileMap'
-import { MobileNotices } from './MobileNotices'
 import { MobileTerritory } from './MobileTerritory'
 import { MobileRegularVisitDetail } from './MobileRegularVisitDetail'
 import { AdminMobileHome } from './admin/AdminMobileHome'
@@ -33,6 +32,8 @@ import { AppHeader } from './AppHeader'
 import { formatRelativeVisitDate, getLatestReturnVisitDate, getUserReturnVisits, normalizeVisitorName } from '../utils/returnVisits'
 import { msg } from '../lib/msg'
 import { useAdminAttentionCounts } from '../hooks/useAdminAttentionCounts'
+import { confirmDialog, alertDialog } from '../lib/confirm'
+import { resetDemoEnvironment } from '../lib/demoEnvironment'
 
 type MobileTab = '홈' | '캘린더' | '활동' | '구역' | '지도' | '배정' | '설정'
 
@@ -48,7 +49,6 @@ const tabToPath: Record<MobileTab, string> = {
 
 const pathToTab: Record<string, MobileTab> = {
   '/': '홈',
-  '/notices': '설정',
   '/profile': '설정',
   '/special-periods': '설정',
   '/signup-requests': '설정',
@@ -63,6 +63,7 @@ const pathToTab: Record<string, MobileTab> = {
 }
 
 type IconName = 'home' | 'calendar' | 'territory' | 'map' | 'assignment' | 'settings' | 'notice'
+const IS_DEMO = import.meta.env.VITE_DEMO_MODE === 'true'
 
 const navIcons: Record<MobileTab, IconName> = {
   '홈': 'home',
@@ -229,7 +230,7 @@ export function MobileHome({
   onChangeTranslatePlaceNames,
   actualRole,
   viewMode,
-  notices,
+  notices: _notices,
   serviceSessions,
   onChangeViewMode,
   onChangeLanguage,
@@ -241,6 +242,9 @@ export function MobileHome({
   onUpdateMyProfile,
   onFetchMyLoginLogs,
   onApplyToEvent,
+  onApplyToCartEvent,
+  onManageCartApplication,
+  onSetCartTeamLeader,
   onAddParticipantToEvent: _onAddParticipantToEvent,
   onRemoveParticipantFromEvent: _onRemoveParticipantFromEvent,
   onToggleUser: _onToggleUser,
@@ -258,8 +262,8 @@ export function MobileHome({
   onDeleteCalendarEventSeries,
   onUpdateCalendarEvent,
   onUpdateCalendarEventSeries,
-  onCreateNotice,
-  onDeleteNotice,
+  onCreateNotice: _onCreateNotice,
+  onDeleteNotice: _onDeleteNotice,
   returnVisits = [],
   returnVisitLogs = [],
   onToggleRegularVisit,
@@ -337,11 +341,14 @@ export function MobileHome({
   onSetCardLeaders: (cardId: number, leaderNames: string[], options?: { silentSuccess?: boolean }) => Promise<void> | void
   onAddUnit: (buildingId: number, unitNumber: string | string[], usageType?: Building['type']) => Promise<number[] | false>
   onSetBuildingAccess: (buildingId: number, blocked: boolean, note?: string) => Promise<boolean>
-  allUsers?: Array<{ id: number; name: string; phone?: string | null; role: string; approvalStatus?: 'pending' | 'approved' | 'blocked'; isActive?: boolean; groupName?: string | null }>
+  allUsers?: Array<{ id: number; name: string; phone?: string | null; role: string; approvalStatus?: 'pending' | 'approved' | 'blocked'; isActive?: boolean; groupName?: string | null; cartServiceApproved?: boolean }>
   onChangePin: (newPin: string) => Promise<boolean>
   onUpdateMyProfile: (input: { name: string; phone?: string | null }) => Promise<boolean>
   onFetchMyLoginLogs: (limit?: number) => Promise<LoginLogRecord[]>
   onApplyToEvent: (eventId: number) => void
+  onApplyToCartEvent: (eventId: number) => void
+  onManageCartApplication: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
+  onSetCartTeamLeader: (eventId: number, userId: number | null) => Promise<boolean> | boolean
   onAddParticipantToEvent?: (eventId: number, userName: string, role?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   onRemoveParticipantFromEvent?: (eventId: number, userName: string) => void
   onToggleUser: (cardId: number, userName: string) => void
@@ -358,12 +365,12 @@ export function MobileHome({
   /** 건물의 '세대를 다 파악함' 표시. 없으면 완료로 안 친다 (utils/buildingPin) */
   onSetUnitsSurveyed?: (buildingId: number, surveyed: boolean) => Promise<boolean> | void
   onDeleteUnit: (buildingId: number, unitId: number) => void
-  onCreateCalendarEvent: (input: { date: string; time: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }) => void
-  onCreateRepeatCalendarEvents?: (dates: string[], input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }) => void
+  onCreateCalendarEvent: (input: { date: string; time: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }) => void
+  onCreateRepeatCalendarEvents?: (dates: string[], input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }) => void
   onDeleteCalendarEvent: (id: number) => void
   onDeleteCalendarEventSeries?: (seriesId: string, fromDate: string) => void
-  onUpdateCalendarEvent: (id: number, input: { time: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }) => void
-  onUpdateCalendarEventSeries?: (seriesId: string, fromDate: string, input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }) => void
+  onUpdateCalendarEvent: (id: number, input: { time: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }) => void
+  onUpdateCalendarEventSeries?: (seriesId: string, fromDate: string, input: { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }) => void
   onCreateNotice: (input: { title: string; content: string; priority: Notice['priority']; author: string }) => void
   onDeleteNotice: (id: number) => void
   returnVisits?: ReturnVisit[]
@@ -459,9 +466,28 @@ export function MobileHome({
   const [returnVisitEnabled, setReturnVisitEnabled] = useState(
     () => window.localStorage.getItem('feat_returnVisit') === '1'
   )
+  const [demoResetting, setDemoResetting] = useState(false)
   const handleToggleReturnVisit = (enabled: boolean) => {
     setReturnVisitEnabled(enabled)
     window.localStorage.setItem('feat_returnVisit', enabled ? '1' : '0')
+  }
+
+  const handleDemoReset = async () => {
+    const confirmed = await confirmDialog({
+      message: msg('테스트 앱에서 만든 모든 자료를 지우고 기본 데모 자료로 되돌릴까요? 현재 개발자 계정과 전역 설정은 유지됩니다.'),
+      danger: true,
+      confirmLabel: msg('데모 데이터 초기화'),
+    })
+    if (!confirmed) return
+    setDemoResetting(true)
+    const result = await resetDemoEnvironment()
+    setDemoResetting(false)
+    if (!result.ok) {
+      void alertDialog({ message: msg(result.error ?? '데모 데이터를 초기화하지 못했습니다.') })
+      return
+    }
+    await alertDialog({ message: msg('기본 데모 자료로 초기화했습니다.') })
+    window.location.reload()
   }
 
   // A안 선택 날짜 (dot row 클릭으로 변경)
@@ -501,11 +527,12 @@ export function MobileHome({
     return todayEvents.map((event) => {
       const isLeader = event.leaders.includes(currentVisitor)
       const isApplicant = event.applicants.includes(currentVisitor)
+      const isCartApplicant = event.cartApplicants?.some((applicant) => applicant.name === currentVisitor) ?? false
       const isAssigned = event.cardAssignments.some((a) => a.userName === currentVisitor)
         || (event.assigned ?? []).includes(currentVisitor)
       const kind: 'lead' | 'join' | 'avail' = isLeader
         ? 'lead'
-        : (isApplicant || isAssigned) ? 'join' : 'avail'
+        : (isApplicant || isCartApplicant || isAssigned) ? 'join' : 'avail'
       return { event, kind }
     })
   }, [todayEvents, currentVisitor])
@@ -816,34 +843,6 @@ export function MobileHome({
               </>
             } />
 
-            {/* 공지 */}
-            <Route path="/notices" element={
-              <>
-                <AppHeader
-                  pageTitle={t(language, 'settings.notice')}
-                  language={language}
-                  subtitle={(t(language, 'settings.noticeSubtitle') ?? `공지 ${notices.length}개`).replace('{count}', String(notices.length))}
-                  showBack
-                  onBack={() => navigate('/settings')}
-                  userId={currentUser.id}
-                  userName={currentVisitor}
-                  role={role}
-                  chatUsers={headerChatUsers}
-                  onOpenMenu={() => navigate('/settings')}
-                />
-                <MobileNotices
-                  language={language}
-                  currentVisitor={currentVisitor}
-                  currentUserId={currentUser.id}
-                  notices={notices}
-                  role={role}
-                  mentionUsers={allUsers.map((user) => ({ id: user.id, name: user.name, role: user.role }))}
-                  onCreateNotice={onCreateNotice}
-                  onDeleteNotice={onDeleteNotice}
-                />
-              </>
-            } />
-
             {/* 내 정보 */}
             <Route path="/profile" element={
               <MobileProfileSettings
@@ -908,6 +907,9 @@ export function MobileHome({
                   onUpdateEvent={role === 'user' ? undefined : onUpdateCalendarEvent}
                   onUpdateEventSeries={role === 'user' ? undefined : onUpdateCalendarEventSeries}
                   onApplyToEvent={onApplyToEvent}
+                  onApplyToCartEvent={onApplyToCartEvent}
+                  onManageCartApplication={onManageCartApplication}
+                  onSetCartTeamLeader={onSetCartTeamLeader}
                   onAddParticipantToEvent={_onAddParticipantToEvent}
                   onRemoveParticipantFromEvent={_onRemoveParticipantFromEvent}
                   specialPeriods={specialPeriods}
@@ -952,7 +954,8 @@ export function MobileHome({
                       e.date === today && (
                         e.leaders.includes(currentVisitor) ||
                         e.assigned?.includes(currentVisitor) ||
-                        e.applicants?.includes(currentVisitor)
+                        e.applicants?.includes(currentVisitor) ||
+                        e.cartApplicants?.some((applicant) => applicant.name === currentVisitor)
                       )
                     )
                     return myEvents.length > 0 ? t(language, 'territory.serviceActive') : t(language, 'territory.serviceNone')
@@ -1446,18 +1449,6 @@ export function MobileHome({
                 {/* [소식 & 알림] 섹션 */}
                 <div style={{ marginTop: 24, paddingLeft: 16, marginBottom: 8, fontSize: 13, fontWeight: 700, color: 'var(--gray-500)', letterSpacing: 0.5 }}>{msg('소식 & 알림')}</div>
                 <section className="mobile-settings-menu" aria-label={msg('소식 및 알림 메뉴')}>
-                  {role === 'admin' && (
-                    <button onClick={() => navigate('/notices')} type="button">
-                      <span className="mobile-settings-icon mobile-settings-icon-neutral" aria-hidden="true">
-                        <SettingsIcon name="notice" />
-                      </span>
-                      <span className="mobile-settings-row-text">
-                        <strong>{t(language, 'settings.notice')}</strong>
-                        <small>{t(language, 'settings.noticeDesc')}</small>
-                      </span>
-                      <span className="mobile-settings-chevron" aria-hidden="true">›</span>
-                    </button>
-                  )}
                   <button onClick={() => navigate('/notification-settings')} type="button">
                     <span className="mobile-settings-icon mobile-settings-icon-neutral" aria-hidden="true">
                       <SettingsIcon name="notification" />
@@ -1554,6 +1545,18 @@ export function MobileHome({
                           <span className="mobile-settings-chevron" aria-hidden="true">›</span>
                         </button>
                       )}
+                      {actualRole === 'developer' && import.meta.env.VITE_DEMO_MODE === 'true' && (
+                        <button onClick={handleDemoReset} disabled={demoResetting} type="button">
+                          <span className="mobile-settings-icon mobile-settings-icon-danger" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v6h6" /></svg>
+                          </span>
+                          <span className="mobile-settings-row-text">
+                            <strong>{msg('테스트 앱 초기화')}</strong>
+                            <small>{demoResetting ? msg('초기화 중…') : msg('기본 데모 자료로 되돌리기')}</small>
+                          </span>
+                          <span className="mobile-settings-chevron" aria-hidden="true">›</span>
+                        </button>
+                      )}
                       <button onClick={() => navigate('/special-periods')} type="button">
                         <span className="mobile-settings-icon mobile-settings-icon-season" aria-hidden="true">
                           <SettingsIcon name="season" />
@@ -1601,7 +1604,9 @@ export function MobileHome({
                   {t(language, 'privacy.title')}
                 </button>
 
-                <p className="mobile-settings-version">{t(language, 'settings.version')}</p>
+                <p className="mobile-settings-version">
+                  {IS_DEMO ? 'Field Map · Demo · v1.0.0' : t(language, 'settings.version')}
+                </p>
               </div>
             } />
             {/* 모르는 경로는 홈으로. 없으면 아래 탭만 남고 본문이 빈 화면이 된다 —

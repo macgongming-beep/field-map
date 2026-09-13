@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { getAuthToken } from '../lib/authToken'
 import { subscribeWithRecovery } from '../lib/realtimeRecovery'
+import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import {
   USER_CHATS_CACHE_TTL,
   clearInflightUserChats,
@@ -115,6 +116,16 @@ export function useUserChats(
         .map((p) => p.events)
         .filter((e): e is EventRow => Boolean(e))
 
+      const { data: cartApplications } = CART_APPLICATIONS_ENABLED
+        ? await supabase
+          .from('event_cart_applications')
+          .select('event_id, events:calendar_events(id, event_date, time, title)')
+          .eq('user_id', userId)
+        : { data: [] }
+      const eventsFromCart = ((cartApplications ?? []) as unknown as ParticipantRow[])
+        .map((application) => application.events)
+        .filter((event): event is EventRow => Boolean(event))
+
       // 1-b. 인도자가 본인인 일정도 포함 (참가자 명단에 없을 수 있음)
       const { data: leaderEvents } = await supabase
         .from('calendar_events')
@@ -124,6 +135,7 @@ export function useUserChats(
       // 두 목록 합치기 (id 기준 중복 제거)
       const eventMap = new Map<number, EventRow>()
       eventsFromParticipants.forEach((e) => eventMap.set(e.id, e))
+      eventsFromCart.forEach((e) => eventMap.set(e.id, e))
       ;((leaderEvents ?? []) as EventRow[]).forEach((e) => eventMap.set(e.id, e))
       const events = Array.from(eventMap.values())
 
@@ -174,9 +186,18 @@ export function useUserChats(
         .from('event_participants')
         .select('event_id')
         .in('event_id', eventIds)
+      const { data: allCartParticipants } = CART_APPLICATIONS_ENABLED
+        ? await supabase
+          .from('event_cart_applications')
+          .select('event_id')
+          .in('event_id', eventIds)
+        : { data: [] }
 
       const participantCountByEvent = new Map<number, number>()
       ;((allParticipants ?? []) as { event_id: number }[]).forEach((p) => {
+        participantCountByEvent.set(p.event_id, (participantCountByEvent.get(p.event_id) ?? 0) + 1)
+      })
+      ;((allCartParticipants ?? []) as { event_id: number }[]).forEach((p) => {
         participantCountByEvent.set(p.event_id, (participantCountByEvent.get(p.event_id) ?? 0) + 1)
       })
 
@@ -282,11 +303,14 @@ export function useUserChats(
       pending = setTimeout(() => fetchAll({ force: true }), 1500)  // 800→1500ms 디바운스 강화
     }
 
-    const channel = supabase
+    let channel = supabase
       .channel(`user_chats:user:${userId}:${channelIdRef.current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_read_status', filter: `user_id=eq.${userId}` }, trigger)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_participants', filter: `user_name=eq.${userName}` }, trigger)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_message_signals' }, trigger)
+    if (CART_APPLICATIONS_ENABLED) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'event_cart_applications', filter: `user_id=eq.${userId}` }, trigger)
+    }
     // 재연결 시 끊긴 동안 놓친 채팅/참여 변경 즉시 catch-up (2분 폴링보다 빠름)
     subscribeWithRecovery(channel, () => fetchAll({ force: true }))
 

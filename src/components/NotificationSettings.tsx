@@ -9,13 +9,13 @@ import { supabase } from '../lib/supabase'
 import type { Role } from '../types'
 
 type PrefKey =
-  | 'pushNewNotice' | 'pushEventChange' | 'pushComment'
+  | 'pushEventChange'
   | 'pushChat' | 'pushMention' | 'pushServiceStatus' | 'pushDailyService'
 
 type SubItem = { key: PrefKey; labelKo: string; descKo: string; labelZh: string; descZh: string; labelEn: string; descEn: string }
 
 type Group = {
-  id: 'activity' | 'social' | 'notice'
+  id: 'activity' | 'social'
   labelKo: string; labelZh: string; labelEn: string
   descKo: string; descZh: string; descEn: string
   items: SubItem[]
@@ -35,19 +35,10 @@ const GROUPS: Group[] = [
   {
     id: 'social',
     labelKo: '소통', labelZh: '交流', labelEn: 'Social',
-    descKo: '채팅 · 멘션 · 댓글', descZh: '聊天 · @提及 · 评论', descEn: 'Chat · Mentions · Comments',
+    descKo: '채팅 · 멘션', descZh: '聊天 · @提及', descEn: 'Chat · Mentions',
     items: [
       { key: 'pushChat', labelKo: '채팅 메시지', descKo: '봉사 채팅방에 새 메시지가 올 때', labelZh: '聊天消息', descZh: '传道聊天室有新消息时', labelEn: 'Chat message', descEn: 'New message in service chat' },
       { key: 'pushMention', labelKo: '@멘션', descKo: '누군가 회원님을 언급할 때', labelZh: '@提及', descZh: '有人提及您时', labelEn: '@Mention', descEn: 'When someone mentions you' },
-      { key: 'pushComment', labelKo: '댓글', descKo: '내 게시물에 댓글이 달릴 때', labelZh: '评论', descZh: '我的帖子收到评论时', labelEn: 'Comment', descEn: 'When someone comments on your post' },
-    ],
-  },
-  {
-    id: 'notice',
-    labelKo: '공지', labelZh: '公告', labelEn: 'Notice',
-    descKo: '관리자가 새 공지를 올릴 때', descZh: '管理员发布新公告时', descEn: 'When admin posts a new notice',
-    items: [
-      { key: 'pushNewNotice', labelKo: '새 공지', descKo: '관리자가 새 공지를 올릴 때', labelZh: '新公告', descZh: '管理员发布新公告时', labelEn: 'New notice', descEn: 'When admin posts a new notice' },
     ],
   },
 ]

@@ -17,7 +17,7 @@ import { getLocalDateString } from '../utils/dateUtils'
 export async function askNotifyOnEventEdit(opts: {
   before: NotifiableEventFields
   after: NotifiableEventFields
-  /** 알림을 받을 사람 수 (신청자 + 인도자). 0이면 묻지 않는다 */
+  /** 알림을 받을 사람 수 (일반·전시대 신청자 + 인도자, 편집자·게스트 제외). 0이면 묻지 않는다 */
   recipientCount: number
   /** 반복 일정이면 몇 개가 바뀌는지 */
   seriesCount?: number

@@ -25,6 +25,9 @@ export function MobileNotices({
   notices,
   role,
   mentionUsers = [],
+  noticesEnabled = true,
+  variant = 'mobile',
+  onToggleNotices,
   onCreateNotice,
   onDeleteNotice,
 }: {
@@ -34,10 +37,13 @@ export function MobileNotices({
   notices: Notice[]
   role: Role
   mentionUsers?: MentionUser[]
+  noticesEnabled?: boolean
+  variant?: 'mobile' | 'desktop'
+  onToggleNotices?: (enabled: boolean) => Promise<boolean>
   onCreateNotice: (input: { title: string; content: string; priority: Notice['priority']; author: string }) => void
   onDeleteNotice: (id: number) => void
 }) {
-  const isAdmin = role === 'admin'
+  const isAdmin = role === 'admin' || role === 'developer'
   const [showCreate, setShowCreate] = useState(false)
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -70,9 +76,9 @@ export function MobileNotices({
     <div style={{ padding: '18px 18px 32px' }}>
       {showCreate && (
         <>
-          <div className="mobile-sheet-backdrop" onClick={() => setShowCreate(false)} />
-          <div className="mobile-sheet">
-            <div className="mobile-sheet-handle" />
+          <div className={variant === 'desktop' ? 'notice-create-backdrop' : 'mobile-sheet-backdrop'} onClick={() => setShowCreate(false)} />
+          <div className={variant === 'desktop' ? 'notice-create-dialog' : 'mobile-sheet'}>
+            {variant === 'mobile' && <div className="mobile-sheet-handle" />}
             <div className="mobile-sheet-title">
               <h2>{t(language, 'notices.create')}</h2>
               <button className="mobile-sheet-close" onClick={() => setShowCreate(false)} type="button">
@@ -103,9 +109,23 @@ export function MobileNotices({
         </>
       )}
 
+      {isAdmin && (
+        <label className="notice-feature-control">
+          <span>
+            <strong>{t(language, 'settings.noticesFeature')}</strong>
+            <small>{t(language, 'settings.noticesFeatureDesc')}</small>
+          </span>
+          <input
+            checked={noticesEnabled}
+            onChange={(event) => { void onToggleNotices?.(event.target.checked) }}
+            type="checkbox"
+          />
+        </label>
+      )}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--ink)', letterSpacing: '-0.01em' }}>{t(language, 'notices.sectionTitle')}</h2>
-        {isAdmin && (
+        {isAdmin && noticesEnabled && (
           <button
             onClick={() => setShowCreate(true)}
             style={{
@@ -121,13 +141,17 @@ export function MobileNotices({
         )}
       </div>
 
-      {notices.length === 0 && (
+      {!noticesEnabled && (
+        <div className="notice-feature-off">{t(language, 'notices.featureOff')}</div>
+      )}
+
+      {noticesEnabled && notices.length === 0 && (
         <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--muted)', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 12 }}>
           {t(language, 'notices.empty')}
         </div>
       )}
 
-      {notices.map((notice) => (
+      {noticesEnabled && notices.map((notice) => (
         <div className="mobile-notice-card" id={`mobile-notice-${notice.id}`} key={notice.id}>
           <span className="mobile-notice-priority" style={{ background: PRIORITY_COLOR[notice.priority]?.bg, color: PRIORITY_COLOR[notice.priority]?.color }}>
             {translatePriority(notice.priority, language)}

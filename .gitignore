@@ -31,3 +31,4 @@ supabase/.temp/
 # 일회성 작업 스크립트 (커밋 금지)
 *.py
 __pycache__/
+.env*.local

@@ -145,6 +145,9 @@ function App() {
     deleteCalendarEventSeries,
     linkEventsToSeries,
     applyToEvent,
+    applyToCartEvent,
+    manageCartApplication,
+    setCartTeamLeader,
     removeParticipantFromEvent,
     addParticipantToEvent,
     mergeDuplicateBuildings,
@@ -369,6 +372,9 @@ function App() {
             onFetchMyLoginLogs={fetchMyLoginLogs}
             onAddUnit={addUnitToBuilding}
             onApplyToEvent={applyToEvent}
+            onApplyToCartEvent={applyToCartEvent}
+            onManageCartApplication={manageCartApplication}
+            onSetCartTeamLeader={setCartTeamLeader}
             onSetCardLeaders={setCardLeaders}
             onSetMultipleCardLeaders={setMultipleCardLeaders}
             onAssignCardToEventParticipant={assignCardToEventParticipant}
@@ -487,6 +493,9 @@ function App() {
               onUpdateMyProfile={updateMyProfile}
               onFetchMyLoginLogs={fetchMyLoginLogs}
               onApplyToEvent={applyToEvent}
+              onApplyToCartEvent={applyToCartEvent}
+              onManageCartApplication={manageCartApplication}
+              onSetCartTeamLeader={setCartTeamLeader}
               onAddParticipantToEvent={addParticipantToEvent}
               onRemoveParticipantFromEvent={removeParticipantFromEvent}
               onCreateCalendarEvent={createCalendarEvent}

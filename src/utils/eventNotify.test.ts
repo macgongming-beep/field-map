@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { willNotifyOnEventChange, isNotifiableDate, countEventNotifyTargetsMany } from './eventNotify'
+import { willNotifyOnEventChange, isNotifiableDate, countEventNotifyTargets, countEventNotifyTargetsMany } from './eventNotify'
 
 const base = { date: '2026-09-01', time: '10:00', place: '신갈', mapLink: '', leader: '가, 나', title: '传道' }
 
@@ -68,5 +68,32 @@ describe('countEventNotifyTargetsMany — 회차마다 사람이 다르다', () 
 
   test('인도자 목록의 공백을 다듬는다', () => {
     expect(countEventNotifyTargetsMany([{ leader: ' 가 ,, 나 ' }])).toBe(2)
+  })
+
+  test('실제 일정 모델의 일반·전시대 신청자를 함께 세고 중복은 한 번만 센다', () => {
+    expect(countEventNotifyTargets({
+      applicants: ['일반신청자', '공동인도자'],
+      cartApplicants: [
+        { name: '전시대신청자' },
+        { name: '공동인도자' },
+      ],
+      leaders: ['공동인도자'],
+    })).toBe(3)
+  })
+
+  test('반복 일정의 전시대 신청자도 회차 전체 합집합에 포함한다', () => {
+    expect(countEventNotifyTargetsMany([
+      { applicants: ['일반신청자'], cartApplicants: [] },
+      { applicants: [], cartApplicants: [{ name: '전시대신청자' }] },
+    ])).toBe(2)
+  })
+
+  test('편집한 본인과 계정 없는 게스트는 예상 수신자에서 제외한다', () => {
+    expect(countEventNotifyTargets({
+      applicants: ['편집자', '일반신청자', '계정없는손님'],
+      guests: ['계정없는손님'],
+      cartApplicants: [{ name: '전시대신청자' }],
+      leaders: ['편집자'],
+    }, { exclude: '편집자' })).toBe(2)
   })
 })

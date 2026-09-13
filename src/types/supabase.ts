@@ -17,6 +17,9 @@ export type Database = {
       app_users: {
         Row: {
           approval_status: string
+          cart_service_approved: boolean
+          cart_service_approved_at: string | null
+          cart_service_approved_by_user_id: number | null
           created_at: string | null
           id: number
           is_active: boolean
@@ -29,6 +32,9 @@ export type Database = {
         }
         Insert: {
           approval_status?: string
+          cart_service_approved?: boolean
+          cart_service_approved_at?: string | null
+          cart_service_approved_by_user_id?: number | null
           created_at?: string | null
           id?: number
           is_active?: boolean
@@ -41,6 +47,9 @@ export type Database = {
         }
         Update: {
           approval_status?: string
+          cart_service_approved?: boolean
+          cart_service_approved_at?: string | null
+          cart_service_approved_by_user_id?: number | null
           created_at?: string | null
           id?: number
           is_active?: boolean
@@ -224,6 +233,8 @@ export type Database = {
       calendar_events: {
         Row: {
           allow_applications: boolean
+          allow_cart_applications: boolean
+          cart_capacity: number | null
           card_name: string
           created_at: string | null
           event_date: string
@@ -240,6 +251,8 @@ export type Database = {
         }
         Insert: {
           allow_applications?: boolean
+          allow_cart_applications?: boolean
+          cart_capacity?: number | null
           card_name?: string
           created_at?: string | null
           event_date: string
@@ -256,6 +269,8 @@ export type Database = {
         }
         Update: {
           allow_applications?: boolean
+          allow_cart_applications?: boolean
+          cart_capacity?: number | null
           card_name?: string
           created_at?: string | null
           event_date?: string
@@ -271,6 +286,48 @@ export type Database = {
           type?: string
         }
         Relationships: []
+      }
+      event_cart_applications: {
+        Row: {
+          added_by_user_id: number | null
+          created_at: string
+          event_id: number
+          id: number
+          is_team_lead: boolean
+          user_id: number
+        }
+        Insert: {
+          added_by_user_id?: number | null
+          created_at?: string
+          event_id: number
+          id?: number
+          is_team_lead?: boolean
+          user_id: number
+        }
+        Update: {
+          added_by_user_id?: number | null
+          created_at?: string
+          event_id?: number
+          id?: number
+          is_team_lead?: boolean
+          user_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_cart_applications_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_cart_applications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       card_assignments: {
         Row: {
@@ -1355,6 +1412,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      reset_demo_environment_tx: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      manage_cart_application_tx: {
+        Args: { p_action: string; p_event_id: number; p_token: string; p_user_id: number }
+        Returns: Json
+      }
+      set_cart_service_approval_tx: {
+        Args: { p_approved: boolean; p_token: string; p_user_id: number }
+        Returns: Json
+      }
+      set_cart_team_leader_tx: {
+        Args: { p_event_id: number; p_token: string; p_user_id?: number | null }
+        Returns: Json
+      }
+      toggle_event_application_tx: {
+        Args: { p_event_id: number; p_kind: string; p_token: string }
+        Returns: Json
+      }
       deactivate_app_user_tx: {
         Args: { p_reason: string; p_token: string; p_user_id: number }
         Returns: Json

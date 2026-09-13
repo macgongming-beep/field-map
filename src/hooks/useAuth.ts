@@ -16,6 +16,7 @@ import { t, currentLang } from '../i18n'
 import { msg } from '../lib/msg'
 import { describeDbError } from '../utils/dbError'
 import { promptDialog } from '../lib/confirm'
+import { CART_APPLICATIONS_ENABLED } from '../config/features'
 
 export type AuthUser = {
   id: number
@@ -35,6 +36,8 @@ export type AppUserRecord = {
   approvalStatus?: 'pending' | 'approved' | 'blocked'
   isActive?: boolean
   groupName?: string | null
+  cartServiceApproved?: boolean
+  cartServiceApprovedAt?: string | null
   created_at: string
   lastLoginAt?: string | null
 }
@@ -435,11 +438,13 @@ export function useAuth() {
     if (!user) return
     const { data, error } = await supabase
       .from('app_users')
-      .select('id, name, phone, login_id, role, approval_status, is_active, group_name, created_at, last_login_at')
+      .select(CART_APPLICATIONS_ENABLED
+        ? 'id, name, phone, login_id, role, approval_status, is_active, group_name, cart_service_approved, cart_service_approved_at, created_at, last_login_at'
+        : 'id, name, phone, login_id, role, approval_status, is_active, group_name, created_at, last_login_at')
       .order('created_at', { ascending: false })
 
     if (!error && data) {
-      const rows = data as Array<{ id: number; name: string; phone?: string | null; login_id: string | null; role: Role; approval_status?: AppUserRecord['approvalStatus'] | null; is_active?: boolean | null; group_name?: string | null; created_at: string; last_login_at?: string | null }>
+      const rows = data as unknown as Array<{ id: number; name: string; phone?: string | null; login_id: string | null; role: Role; approval_status?: AppUserRecord['approvalStatus'] | null; is_active?: boolean | null; group_name?: string | null; cart_service_approved?: boolean | null; cart_service_approved_at?: string | null; created_at: string; last_login_at?: string | null }>
       setAllUsers(rows
         .filter((item) => user.role === 'developer' || !isDeveloperAccount(item))
         .map((item) => ({
@@ -451,6 +456,8 @@ export function useAuth() {
           approvalStatus: item.approval_status ?? 'approved',
           isActive: item.is_active ?? true,
           groupName: item.group_name ?? null,
+          cartServiceApproved: item.cart_service_approved ?? false,
+          cartServiceApprovedAt: item.cart_service_approved_at ?? null,
           created_at: item.created_at,
           lastLoginAt: item.last_login_at ?? null,
         })))
@@ -745,6 +752,26 @@ export function useAuth() {
     return true
   }
 
+  const updateCartServiceApproval = async (userId: number, approved: boolean) => {
+    if (!CART_APPLICATIONS_ENABLED) return false
+    if (!isAdminLike(user?.role)) return false
+    const token = getAuthToken()
+    if (!token) return false
+    const { data, error } = await supabase.rpc('set_cart_service_approval_tx', {
+      p_token: token,
+      p_user_id: userId,
+      p_approved: approved,
+    })
+    if (error || (data as { ok?: boolean } | null)?.ok !== true) {
+      showToast(msg('전시대 봉사 승인 상태를 변경하지 못했습니다.'), 'error')
+      return false
+    }
+    await fetchAllUsers()
+    notifyUsersChanged()
+    showToast(approved ? msg('전시대 봉사를 승인했습니다') : msg('전시대 봉사 승인을 해제했습니다'))
+    return true
+  }
+
   const updateUserIdentity = async (userId: number, loginId: string, name: string) => {
     if (!isAdminLike(user?.role)) return false
     const trimmedLoginId = loginId.trim()
@@ -851,6 +878,7 @@ export function useAuth() {
     createUser,
     updateUserIdentity,
     updateUserApprovalStatus,
+    updateCartServiceApproval,
     fetchMyLoginLogs,
     fetchUserLoginLogs,
   }

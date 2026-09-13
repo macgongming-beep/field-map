@@ -71,7 +71,7 @@ const willClean = (path) => { trash.push(path); return path }
 const main = async () => {
   console.log('\n── anon 쓰기 차단 smoke ──\n')
 
-  const admin = await login('test-admin', '1234')
+  const admin = await login(env.loginId, env.loginPin)
   if (!admin?.token) throw new Error('테스트 관리자로 로그인 못 함')
   console.log('  (관리자 토큰 확보)\n')
 
@@ -252,7 +252,7 @@ main()
   .catch((e) => { console.error('\n  ✗ 도중에 죽었다:', e?.message ?? e); fail += 1 })
   .finally(async () => {
     // 죽었어도 관리자 토큰을 다시 얻어 치운다
-    if (!adminToken) adminToken = (await login('test-admin', '1234').catch(() => null))?.token ?? null
+    if (!adminToken) adminToken = (await login(env.loginId, env.loginPin).catch(() => null))?.token ?? null
     await cleanup(adminToken).catch((e) => console.error('  뒷정리 실패:', e?.message ?? e))
     console.log(`\n  ${fail === 0 ? '✅ 전부 통과' : `❌ ${fail}개 실패`}\n`)
     process.exit(fail === 0 ? 0 : 1)

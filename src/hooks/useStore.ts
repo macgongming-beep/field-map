@@ -7,6 +7,7 @@ import { showToast } from '../lib/toast'
 import { findActivePeriodId } from '../utils/specialPeriod'
 import { getRegionNames, setRegionsFromDatabase } from '../lib/regions'
 import { applyCongregationSettings } from '../lib/congregationProfile'
+import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { isRestaurantAssignmentDeleted, resolvePlaceDeletionScope } from '../utils/placeDeletionSignal'
 import type {
   Building,
@@ -332,7 +333,10 @@ export function useStore(enabled: boolean = true) {
         const [eventsRes, eventCardAssignmentsRes, eventAssignmentCardsRes] = await Promise.all([
           // 1,000개를 넘으면 조용히 잘리므로 끝까지 받는다 (현재 일정 700개 근처)
           fetchAllPages((from, to) => supabase.from('calendar_events')
-            .select('*, event_participants(*)').order('event_date').order('time').range(from, to)),
+            .select(CART_APPLICATIONS_ENABLED
+              ? '*, event_participants(*), event_cart_applications(user_id,is_team_lead,created_at,user:app_users!event_cart_applications_user_id_fkey(name))'
+              : '*, event_participants(*)')
+            .order('event_date').order('time').range(from, to)),
           fetchAllPages((from, to) => supabase.from('event_card_assignments').select('*').order('id').range(from, to)),
           fetchAllPages((from, to) => supabase.from('event_card_assignment_cards').select('*').order('id').range(from, to)),
         ])
@@ -351,7 +355,7 @@ export function useStore(enabled: boolean = true) {
         const merged = eventAssignmentCardsRes.error
           ? base
           : mergeEventCardAssignments(base, eventAssignmentCardsRes.data as RawEventCardAssignmentCard[])
-        const transformedEvents = (eventsRes.data as RawCalendarEvent[]).map((event) =>
+        const transformedEvents = (eventsRes.data as unknown as RawCalendarEvent[]).map((event) =>
           toCalendarEvent(event, merged.filter((a) => a.eventId === event.id)),
         )
         setCalendarEvents(transformedEvents)
@@ -799,6 +803,9 @@ export function useStore(enabled: boolean = true) {
     deleteCalendarEventSeries,
     linkEventsToSeries,
     applyToEvent,
+    applyToCartEvent,
+    manageCartApplication,
+    setCartTeamLeader,
     removeParticipantFromEvent,
     addParticipantToEvent,
   } = makeCalendarMutations({
@@ -954,6 +961,9 @@ export function useStore(enabled: boolean = true) {
     deleteCalendarEventSeries,
     linkEventsToSeries,
     applyToEvent,
+    applyToCartEvent,
+    manageCartApplication,
+    setCartTeamLeader,
     removeParticipantFromEvent,
     addParticipantToEvent,
     mergeDuplicateBuildings,

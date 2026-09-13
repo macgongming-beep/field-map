@@ -6,8 +6,9 @@ import { PhoneSurveyPanel } from './PhoneSurveyPanel'
 import { getCurrentVisitor } from '../hooks/useStore'
 import { t, currentLang } from '../i18n'
 import { msg } from '../lib/msg'
+import { resetDemoEnvironment } from '../lib/demoEnvironment'
 
-export function DesktopDataManagement() {
+export function DesktopDataManagement({ isDeveloper = false }: { isDeveloper?: boolean }) {
   
 
   const [resetEnabled, setResetEnabled] = useState(true)
@@ -17,6 +18,7 @@ export function DesktopDataManagement() {
   const [resetSaving, setResetSaving] = useState(false)
   const [manualResetting, setManualResetting] = useState(false)
   const [manualResetResult, setManualResetResult] = useState<number | null>(null)
+  const [demoResetting, setDemoResetting] = useState(false)
 
   const [purgeCutoffYear, setPurgeCutoffYear] = useState(new Date().getFullYear() - 1)
   const [purgeCutoffMonth, setPurgeCutoffMonth] = useState(new Date().getMonth() + 1)
@@ -141,6 +143,24 @@ export function DesktopDataManagement() {
     setManualResetting(false)
   }
 
+  const runDemoReset = async () => {
+    const confirmed = await confirmDialog({
+      message: '테스트 앱에서 만든 계정·구역·건물·일정·기록을 모두 지우고 기본 데모 자료로 되돌릴까요?\n현재 개발자 계정과 전역 설정은 유지됩니다.',
+      danger: true,
+      confirmLabel: '데모 데이터 초기화',
+    })
+    if (!confirmed) return
+    setDemoResetting(true)
+    const result = await resetDemoEnvironment()
+    setDemoResetting(false)
+    if (!result.ok) {
+      void alertDialog({ message: result.error ?? '데모 데이터를 초기화하지 못했습니다.' })
+      return
+    }
+    await alertDialog({ message: '기본 데모 자료로 초기화했습니다.' })
+    window.location.reload()
+  }
+
   const purgeCutoffStr = `${purgeCutoffYear}-${String(purgeCutoffMonth).padStart(2, '0')}-01`
 
   const loadPurgePreview = async () => {
@@ -173,6 +193,25 @@ export function DesktopDataManagement() {
     <div className="desk-settings-subpage" style={{ maxWidth: 640 }}>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--gray-900)', marginBottom: 24 }}>데이터 관리</h2>
       <div className="desktop-profile-stack" style={{ display: 'grid', gap: 24 }}>
+        {isDeveloper && import.meta.env.VITE_DEMO_MODE === 'true' && (
+          <section className="desk-card ds-card">
+            <h2 className="desk-card__title" style={{ marginBottom: 12 }}>테스트 앱 초기화</h2>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.6 }}>
+              시연 중 바뀐 자료를 지우고 계정·구역·건물·일정을 기본 데모 상태로 되돌립니다.
+              이 기능은 테스트 앱의 개발자 계정에서만 실행됩니다.
+            </p>
+            <button
+              className="ds-btn ds-btn-danger"
+              onClick={runDemoReset}
+              disabled={demoResetting}
+              type="button"
+              style={{ opacity: demoResetting ? 0.6 : 1 }}
+            >
+              {demoResetting ? '초기화 중…' : '기본 데모 자료로 초기화'}
+            </button>
+          </section>
+        )}
+
         {/* 방문 기록 / 세대 속성 엑셀 왕복 편집 */}
         <PhoneSurveyPanel currentVisitor={getCurrentVisitor()} />
         <DataRoundTrip />

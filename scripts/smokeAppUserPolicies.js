@@ -37,7 +37,7 @@ const made = []
 let developerToken = null
 
 try {
-  developerToken = (await login('test-admin', '1234')).value?.token ?? null
+  developerToken = (await login(env.loginId, env.loginPin)).value?.token ?? null
   if (!developerToken) throw new Error('테스트 개발자로 로그인하지 못했습니다')
 
   const createUser = async (key, role = 'user') => {

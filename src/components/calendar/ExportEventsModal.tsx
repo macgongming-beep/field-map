@@ -35,7 +35,10 @@ export function ExportEventsModal({ isOpen, onClose, events }: ExportEventsModal
     }
 
     // CSV 변환
-    const headers = ['날짜', '시작시간', '종료시간', '제목', '장소', '인도자', '참여가능여부', '참석자(명수)']
+    const headers = [
+      '날짜', '시작시간', '종료시간', '제목', '장소', '인도자',
+      '참여가능여부', '참석자(명수)', '전시대모집', '전시대정원', '전시대신청자(명수)',
+    ]
     const csvRows = [headers.join(',')]
 
     for (const e of filtered) {
@@ -49,7 +52,10 @@ export function ExportEventsModal({ isOpen, onClose, events }: ExportEventsModal
         `"${e.place.replace(/"/g, '""')}"`,
         `"${e.leader.replace(/"/g, '""')}"`,
         allowApps,
-        attendeesCount
+        attendeesCount,
+        e.allowCartApplications ? 'O' : 'X',
+        e.allowCartApplications ? (e.cartCapacity ?? '') : '',
+        e.cartApplicants?.length ?? 0,
       ]
       csvRows.push(row.join(','))
     }

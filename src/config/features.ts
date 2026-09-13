@@ -1,0 +1,1 @@
+export const CART_APPLICATIONS_ENABLED = import.meta.env.VITE_CART_APPLICATIONS_ENABLED === 'true'

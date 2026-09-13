@@ -12,6 +12,7 @@ type LoginProps = {
 }
 
 const LANGUAGES: AppLanguage[] = ['ko', 'zh', 'en']
+const IS_DEMO = import.meta.env.VITE_DEMO_MODE === 'true'
 
 export function Login({ language, onChangeLanguage, onLogin, onSignup }: LoginProps) {
   const [isSignup, setIsSignup] = useState(false)
@@ -65,7 +66,9 @@ export function Login({ language, onChangeLanguage, onLogin, onSignup }: LoginPr
             <img src="/icons/icon-192.png" alt="" />
           </div>
           <h1>{isSignup ? t(language, 'login.signupTitle') : t(language, 'login.appName')}</h1>
-          <p className={!isSignup ? 'login-yongin' : ''}>{isSignup ? t(language, 'login.signupSubtitle') : t(language, 'login.subtitle')}</p>
+          <p className={!isSignup ? 'login-yongin' : ''}>
+            {isSignup ? t(language, 'login.signupSubtitle') : IS_DEMO ? 'DEMO' : t(language, 'login.subtitle')}
+          </p>
           <div className="login-language-switcher" aria-label={t(language, 'settings.language')}>
             {LANGUAGES.map((item) => (
               <button
@@ -88,7 +91,7 @@ export function Login({ language, onChangeLanguage, onLogin, onSignup }: LoginPr
               type="text"
               value={loginId}
               onChange={(e) => setLoginId(e.target.value)}
-              placeholder={t(language, 'login.idPlaceholder')}
+              placeholder={IS_DEMO && !isSignup ? t(language, 'login.demoIdPlaceholder') : t(language, 'login.idPlaceholder')}
               required
               disabled={isSubmitting}
               enterKeyHint="next"

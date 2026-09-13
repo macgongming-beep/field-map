@@ -1,22 +1,12 @@
 import { useState } from 'react'
 import { showToast } from '../../lib/toast'
 import { msg } from '../../lib/msg'
-
-type ParsedEvent = {
-  date: string
-  time: string
-  endTime: string
-  title: string
-  place: string
-  leader: string
-  memo: string
-  allowApplications: boolean
-}
+import { parsePastedEvents, type ParsedEvent } from '../../utils/eventImport'
 
 type ImportEventsModalProps = {
   isOpen: boolean
   onClose: () => void
-  onCreateEvent: (input: { date: string; time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }) => void
+  onCreateEvent: (input: { date: string; time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }) => void
 }
 
 export function ImportEventsModal({ isOpen, onClose, onCreateEvent }: ImportEventsModalProps) {
@@ -32,36 +22,7 @@ export function ImportEventsModal({ isOpen, onClose, onCreateEvent }: ImportEven
       return
     }
 
-    const lines = pasteData.trim().split('\n')
-    const results: ParsedEvent[] = []
-
-    for (const line of lines) {
-      const cols = line.split('\t').map((c) => c.trim())
-      // 최소 4개 컬럼(날짜, 시작시간, 제목, 장소) 이상이어야 함
-      if (cols.length < 4) continue
-
-      const [dateRaw, timeRaw, endTimeRaw, titleRaw, placeRaw, leaderRaw] = cols
-
-      // 간단한 날짜 유효성 체크 (YYYY-MM-DD 형식으로 변환 시도)
-      // 실제 프로덕션에서는 더 정교한 파싱이 필요할 수 있습니다.
-      let date = dateRaw
-      if (date.includes('/')) date = date.replace(/\//g, '-')
-      if (date.length === 8 && !date.includes('-')) {
-        // 20260525 -> 2026-05-25
-        date = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`
-      }
-
-      results.push({
-        date,
-        time: timeRaw,
-        endTime: endTimeRaw || '',
-        title: titleRaw,
-        place: placeRaw || '',
-        leader: leaderRaw || '',
-        memo: '',
-        allowApplications: true, // 기본값
-      })
-    }
+    const results = parsePastedEvents(pasteData)
 
     if (results.length === 0) {
       showToast(msg('올바른 양식의 데이터를 찾을 수 없습니다. (엑셀에서 여러 열을 드래그하여 복사해주세요)'), 'error')
@@ -89,6 +50,8 @@ export function ImportEventsModal({ isOpen, onClose, onCreateEvent }: ImportEven
           memo: row.memo,
           hasMeeting: false,
           allowApplications: row.allowApplications,
+          allowCartApplications: row.allowCartApplications,
+          cartCapacity: row.cartCapacity,
         })
         // 서버 과부하 방지를 위해 30ms 대기
         await new Promise((r) => setTimeout(r, 30))

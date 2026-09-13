@@ -43,7 +43,7 @@ const main = async () => {
   // ② 진짜 토큰을 받아 온다
   const lg = await fetch(`${URL_}/rest/v1/rpc/auth_login`, {
     method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ p_login_id: 'test-admin', p_pin: '1234' }),
+    body: JSON.stringify({ p_login_id: env.loginId, p_pin: env.loginPin }),
   })
   const lgData = await lg.json().catch(() => null)
   const token = Array.isArray(lgData) ? lgData[0]?.token : lgData?.token

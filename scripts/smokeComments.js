@@ -46,7 +46,7 @@ const userIds = []
 const commentIds = []
 
 try {
-  const admin = await login('test-admin', '1234')
+  const admin = await login(env.loginId, env.loginPin)
   adminToken = admin?.token ?? null
   if (!adminToken) throw new Error('테스트 관리자로 로그인하지 못했습니다')
   const adminRow = (await rows(await rest('app_users?login_id=eq.test-admin&select=id,name', {}, adminToken)))[0]

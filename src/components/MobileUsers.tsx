@@ -15,6 +15,7 @@ import type { Role } from '../types'
 import { roleLabels } from '../types'
 import { AppHeader } from './AppHeader'
 import { msg } from '../lib/msg'
+import { CART_APPLICATIONS_ENABLED } from '../config/features'
 
 type UserFilter = 'all' | 'admin' | 'leader' | 'user'
 
@@ -59,6 +60,7 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
     resetUserPin,
     deleteUser,
     updateUsersGroup,
+    updateCartServiceApproval,
     renameUserGroup,
     fetchUserLoginLogs,
   } = useAuth()
@@ -85,6 +87,7 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
   const [editingGroup, setEditingGroup] = useState<string | null>(null)
   const [editingGroupName, setEditingGroupName] = useState('')
   const [selectMode, setSelectMode] = useState(false)
+  const [cartApprovalMode, setCartApprovalMode] = useState(false)
   const [checkedIds, setCheckedIds] = useState<Set<number>>(new Set())
   const [bulkGroup, setBulkGroup] = useState<string>('')
 
@@ -379,6 +382,23 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
           <p>{msg('관리자는 인도자와 봉사자 권한을 포함합니다.')}</p>
         </section>
 
+        {CART_APPLICATIONS_ENABLED && <section className="mobile-user-manage-card mobile-user-cart-card">
+          <div className="mobile-user-setting-row">
+            <div>
+              <h2>{msg('전시대 봉사')}</h2>
+              <p>{msg('승인된 사용자만 전시대 봉사에 신청할 수 있습니다.')}</p>
+            </div>
+            <button
+              aria-pressed={selectedUser.cartServiceApproved === true}
+              className={`mobile-user-compact-toggle${selectedUser.cartServiceApproved ? ' active' : ''}`}
+              onClick={() => void updateCartServiceApproval(selectedUser.id, !selectedUser.cartServiceApproved)}
+              type="button"
+            >
+              {selectedUser.cartServiceApproved ? msg('승인됨') : msg('미승인')}
+            </button>
+          </div>
+        </section>}
+
         <section className="mobile-user-manage-card mobile-user-password-card">
           <h2>{msg('비밀번호')}</h2>
           <button onClick={() => resetUserPin(selectedUser.id)} type="button">
@@ -481,13 +501,13 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
             </select>
           </label>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div className="mobile-users-command-row">
           <button className="mobile-users-add-toggle" onClick={() => setShowAddForm((value) => !value)} type="button">
-            {msg('사용자 추가')}
+            <span aria-hidden="true">＋</span>{msg('사용자 추가')}
           </button>
           <button
             className="mobile-users-add-toggle"
-            onClick={() => { setSelectMode((v) => !v); setCheckedIds(new Set()) }}
+            onClick={() => { setSelectMode((v) => !v); setCartApprovalMode(false); setCheckedIds(new Set()) }}
             type="button"
           >
             {selectMode ? msg('선택 취소') : msg('집단 일괄 지정')}
@@ -495,8 +515,22 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
           <button className="mobile-users-add-toggle" onClick={() => setGroupEditOpen((v) => !v)} type="button">
             {msg('집단 편집')}
           </button>
+          {CART_APPLICATIONS_ENABLED && <button
+            className={`mobile-users-add-toggle${cartApprovalMode ? ' active' : ''}`}
+            onClick={() => { setCartApprovalMode((value) => !value); setSelectMode(false); setCheckedIds(new Set()) }}
+            type="button"
+          >
+            {cartApprovalMode ? msg('승인 관리 닫기') : msg('전시대 승인')}
+          </button>}
         </div>
       </section>
+
+      {CART_APPLICATIONS_ENABLED && cartApprovalMode && (
+        <section className="mobile-user-manage-card mobile-users-mode-note">
+          <strong>{msg('전시대 봉사 승인 관리')}</strong>
+          <span>{msg('오른쪽 버튼으로 신청 가능 여부를 정합니다.')}</span>
+        </section>
+      )}
 
       {/* 집단 이름 편집 */}
       {groupEditOpen && (
@@ -667,11 +701,18 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
           <div className="mobile-users-empty">{msg('검색 결과가 없습니다.')}</div>
         ) : (
           filteredUsers.map((item) => (
-            <button
+            <div
               className="mobile-users-list-card"
               key={item.id}
-              onClick={() => (selectMode ? toggleChecked(item.id) : setSelectedUserId(item.id))}
-              type="button"
+              onClick={() => (selectMode ? toggleChecked(item.id) : cartApprovalMode ? undefined : setSelectedUserId(item.id))}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                if (selectMode) toggleChecked(item.id)
+                else if (!cartApprovalMode) setSelectedUserId(item.id)
+              }}
+              role="button"
+              tabIndex={0}
             >
               {selectMode ? (
                 <input
@@ -694,8 +735,21 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
               <span className={`mobile-user-role-badge ${roleClass(item.role)}`}>
                 {displayRole(item.role)}
               </span>
-              {!selectMode && <span className="mobile-users-chevron" aria-hidden="true">›</span>}
-            </button>
+              {CART_APPLICATIONS_ENABLED && cartApprovalMode ? (
+                <button
+                  aria-label={`${item.name} ${msg('전시대 승인')}`}
+                  aria-pressed={item.cartServiceApproved === true}
+                  className={`mobile-user-compact-toggle${item.cartServiceApproved ? ' active' : ''}`}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void updateCartServiceApproval(item.id, !item.cartServiceApproved)
+                  }}
+                  type="button"
+                >
+                  {item.cartServiceApproved ? msg('승인됨') : msg('미승인')}
+                </button>
+              ) : !selectMode && <span className="mobile-users-chevron" aria-hidden="true">›</span>}
+            </div>
           ))
         )}
       </section>

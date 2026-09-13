@@ -8,6 +8,41 @@ afterEach(() => {
 })
 
 describe('PC 나의 봉사 배정', () => {
+  test('전시대 신청 일정도 나의 봉사에 표시하고 일반 구역 배정으로 오인하지 않는다', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-06T10:00:00+09:00'))
+
+    const event = {
+      id: 12,
+      date: '2026-09-06',
+      time: '10:00',
+      title: '오전 봉사',
+      applicants: [],
+      assigned: [],
+      leaders: [],
+      cardAssignments: [],
+      cartApplicants: [{ userId: 3, name: '김사용', isTeamLead: true, createdAt: '2026-09-05' }],
+    } as unknown as CalendarEvent
+
+    render(
+      <DesktopMyService
+        language="ko"
+        buildings={[]}
+        calendarEvents={[event]}
+        cards={[]}
+        currentVisitor="김사용"
+        role="user"
+        serviceSessions={[]}
+        onOpenMap={vi.fn()}
+        onEndServiceSession={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('1개 일정')).toBeTruthy()
+    expect(screen.getByText('전시대 · 팀장')).toBeTruthy()
+    expect(screen.queryByText('배정된 장소가 없습니다')).toBeNull()
+  })
+
   test('구역·비공식·식당을 한 일정에 합치고 각각 올바른 대상으로 연다', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-06T10:00:00+09:00'))

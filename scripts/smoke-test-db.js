@@ -21,8 +21,8 @@ const check = (ok, label, detail = '') => {
 
 // ── 1. 로그인 (자체 인증 RPC) ────────────────────────────────────
 const login = await db.rpc('auth_login', {
-  p_login_id: process.env.TEST_LOGIN_ID ?? 'test-admin',
-  p_pin: process.env.TEST_LOGIN_PIN ?? '1234',
+  p_login_id: env.loginId,
+  p_pin: env.loginPin,
 })
 const session = login.data?.[0]
 check(!login.error && Boolean(session?.token), '로그인', login.error?.message ?? `role=${session?.role}`)

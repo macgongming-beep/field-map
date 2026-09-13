@@ -4,7 +4,7 @@
 --
 --   처음에는 '사용자가 5명 넘으면 중단' 으로 막았는데, 그건 막지 못한다.
 --   **새 회중은 첫 관리자 한 명으로 시작한다.** 그대로 통과해서, 공개된
---   비밀번호(test-admin / 1234)의 developer 계정이 남의 운영 DB 에 생긴다.
+--   테스트 개발자 계정이 남의 운영 DB 에 생길 수 있다.
 --
 --   그래서 사람 수 대신 **일부러 심은 표식**을 본다. 테스트 DB 에 한 번만
 --   손으로 넣는다. 운영에는 절대 넣지 않는다.
@@ -16,7 +16,8 @@
 --
 -- 넣는 것: 관리자 1 · 지역 1 · 카드 2 · 건물 2 · 호수 4 · 방문기록 2 ·
 --          정기방문 1 · 특별봉사 기간 1
--- 로그인:  test-admin / 1234
+-- test-admin 계정과 비밀번호는 이 파일이 만들지 않는다.
+-- 비밀번호는 .env.test.local 의 TEST_LOGIN_PIN 에만 둔다.
 
 do $$
 declare v_env text;
@@ -41,12 +42,20 @@ delete from public.buildings where name like 'T-%';
 delete from public.cards where name like '테스트구 %';
 delete from public.territory_regions where name = '테스트구';
 delete from public.special_periods where label = '테스트 특별봉사';
-delete from public.app_users where login_id = 'test-admin';
 
 -- ── 관리자 ──────────────────────────────────────────────────────
--- pin 은 평문으로 넣어도 트리거(hash_pin_if_plain)가 bcrypt 로 바꾼다
-insert into public.app_users (login_id, name, pin, role, approval_status, is_active)
-values ('test-admin', '테스트관리자', '1234', 'developer', 'approved', true);
+do $$
+begin
+  if not exists (
+    select 1 from public.app_users
+    where login_id = 'test-admin'
+      and role = 'developer'
+      and approval_status = 'approved'
+      and is_active
+  ) then
+    raise exception '비공개 test-admin 개발자 계정을 먼저 만드세요';
+  end if;
+end $$;
 
 -- ── 지역 · 카드 ─────────────────────────────────────────────────
 insert into public.territory_regions (name, city, sort_order)

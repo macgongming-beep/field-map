@@ -2,7 +2,7 @@ import type { RestaurantInitialState } from './types/restaurantRegistration'
 
 export type Role = 'user' | 'leader' | 'admin' | 'developer'
 export type ScheduleType = '비공식' | '상가' | '주택' | '정기방문' | '혼합'
-export type DesktopPage = '홈' | '공지' | '캘린더' | '구역' | '활동' | '지도' | '배정' | '사용자' | '통계' | '설정'
+export type DesktopPage = '홈' | '캘린더' | '구역' | '활동' | '지도' | '배정' | '사용자' | '통계' | '설정'
 export type UnitStatus = '미방문' | '만남' | '부재' | '대상외' | '거절' | '확인필요'
 export type BuildingStatus = '방문필요' | '방문완료' | '방문금지' | '정기방문'
 export type TimeSlot = '오전' | '오후' | '저녁'
@@ -39,6 +39,9 @@ export type CalendarEvent = {
   hasMeeting: boolean
   allowApplications: boolean
   applicants: string[]
+  allowCartApplications?: boolean
+  cartCapacity?: number | null
+  cartApplicants?: CartApplicant[]
   /** 앱 계정이 없는 손님. applicants 에도 들어 있고, 여기에 이름이 또 있으면 게스트다 */
   guests: string[]
   assigned: string[]
@@ -48,6 +51,13 @@ export type CalendarEvent = {
   assignmentSharedBy?: string | null
   memo: string
   seriesId?: string  // set when created as part of a repeat series
+}
+
+export type CartApplicant = {
+  userId: number
+  name: string
+  isTeamLead: boolean
+  createdAt: string
 }
 
 export type EventCardAssignment = {
@@ -269,7 +279,7 @@ export const roleLabels: Record<Role, string> = {
 }
 
 export const desktopPages: DesktopPage[] = [
-  '홈', '공지', '캘린더', '구역', '지도', '배정', '사용자', '통계', '설정',
+  '홈', '캘린더', '구역', '지도', '배정', '사용자', '통계', '설정',
 ]
 
 export const visitResults: UnitStatus[] = ['만남', '부재', '대상외', '거절', '확인필요']

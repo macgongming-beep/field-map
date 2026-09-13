@@ -29,7 +29,7 @@ describe('일괄 삭제는 보이는 카드만', () => {
     const user = userEvent.setup()
     const props = open({
       cards: [
-        testCard(1, '처인구 유방동 1'),
+        testCard(1, '처인구 유방동 1', { buildings: 1, units: 1 }),
         // 완료 카드 — 기본 상태에서는 접혀 화면에 안 보인다
         testCard(2, '처인구 김량장동 2', { status: '완료', progress: 100 }),
       ],
@@ -39,7 +39,7 @@ describe('일괄 삭제는 보이는 카드만', () => {
     if (all.length === 0) return   // 표가 안 그려지는 구성이면 이 시험은 의미 없다
     await user.click(all[0])       // 헤더의 전체선택
 
-    const del = screen.queryByRole('button', { name: /선택 삭제/ })
+    const del = screen.queryByRole('button', { name: '삭제' })
     expect(del).toBeTruthy()
     await user.click(del!)
 

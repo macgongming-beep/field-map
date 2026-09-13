@@ -29,7 +29,7 @@ const client = (token) => createClient(env.url, env.anonKey, {
 })
 
 try {
-  const adminToken = await login('test-admin', '1234')
+  const adminToken = await login(env.loginId, env.loginPin)
   const admin = client(adminToken)
   const userLogin = `${marker}_user`
   const userName = `${marker}_사용자`
@@ -295,7 +295,7 @@ try {
   console.error(`❌ smoke 중단 — ${error?.message ?? error}`)
   failures += 1
 } finally {
-  const adminToken = await login('test-admin', '1234').catch(() => null)
+  const adminToken = await login(env.loginId, env.loginPin).catch(() => null)
   if (adminToken) {
     const admin = client(adminToken)
     if (madeLooseVisit) await admin.from('return_visits').delete().eq('id', madeLooseVisit)

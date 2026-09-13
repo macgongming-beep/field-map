@@ -101,12 +101,20 @@ export type RawCalendarEvent = {
   card_name: string
   has_meeting: boolean
   allow_applications?: boolean | null
+  allow_cart_applications?: boolean | null
+  cart_capacity?: number | null
   assignment_status?: 'draft' | 'confirmed' | 'shared' | null
   assignment_shared_at?: string | null
   assignment_shared_by?: string | null
   memo: string
   series_id: string | null
   event_participants: { user_name: string; role: string }[]
+  event_cart_applications?: Array<{
+    user_id: number
+    is_team_lead: boolean
+    created_at: string
+    user: { name: string } | null
+  }>
 }
 
 export type RawEventCardAssignment = {
@@ -387,6 +395,17 @@ export function toCalendarEvent(
     hasMeeting: raw.has_meeting,
     allowApplications: raw.allow_applications ?? true,
     applicants: participants.map((p) => p.user_name),
+    allowCartApplications: raw.allow_cart_applications ?? false,
+    cartCapacity: raw.cart_capacity ?? null,
+    cartApplicants: (raw.event_cart_applications ?? [])
+      .map((application) => ({
+        userId: application.user_id,
+        name: application.user?.name ?? '',
+        isTeamLead: application.is_team_lead,
+        createdAt: application.created_at,
+      }))
+      .filter((application) => application.name)
+      .sort((a, b) => Number(b.isTeamLead) - Number(a.isTeamLead) || a.createdAt.localeCompare(b.createdAt)),
     assigned: participants.filter((p) => p.role === '입명').map((p) => p.user_name),
     guests: participants.filter((p) => p.role === '게스트').map((p) => p.user_name),
     cardAssignments,

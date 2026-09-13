@@ -33,7 +33,7 @@ const marker = `_territory_structure_${Date.now()}`
 const made = { users: [], cards: [] }
 let developerToken
 try {
-  developerToken = (await login('test-admin', '1234'))?.token
+  developerToken = (await login(env.loginId, env.loginPin))?.token
   if (!developerToken) throw new Error('테스트 개발자로 로그인하지 못했습니다')
   const actors = {}
   for (const role of ['user', 'leader']) {

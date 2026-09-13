@@ -988,7 +988,7 @@ export function DesktopTerritory({
 
   const toggleAllFilteredCards = () => {
     setCheckedCardIds((current) => {
-      const visibleIds = filteredCards.map((card) => card.id)
+      const visibleIds = renderedCards.map((card) => card.id)
       const allVisibleChecked = visibleIds.length > 0 && visibleIds.every((id) => current.has(id))
       const next = new Set(current)
       visibleIds.forEach((id) => {
@@ -1403,64 +1403,15 @@ export function DesktopTerritory({
                   </svg>
                   {detailPaneOpen ? '상세 접기' : '상세 열기'}
                 </button>
-                {isAdmin && (
-                  <>
-                    <button className="tbl-ghost-btn" onClick={exportCardBoundaries} type="button">
-                      구역선 백업
-                    </button>
-                    {onRestoreCardBoundaries && (
-                      <>
-                        <input
-                          ref={boundaryImportInputRef}
-                          accept="application/json"
-                          onChange={importCardBoundaries}
-                          style={{ display: 'none' }}
-                          type="file"
-                        />
-                        <button className="tbl-ghost-btn" onClick={() => boundaryImportInputRef.current?.click()} type="button">
-                          구역선 가져오기
-                        </button>
-                      </>
-                    )}
-                    {onMergeCardBoundaries && (
-                      <button className="tbl-ghost-btn" disabled={visibleCheckedCardIds.length < 2} onClick={handleOpenCardMergeModal} type="button">
-                        카드 병합{visibleCheckedCardIds.length > 1 ? ` ${visibleCheckedCardIds.length}` : ''}
-                      </button>
-                    )}
-                    <button className="tbl-ghost-btn" disabled={visibleCheckedCardIds.length === 0} onClick={handleDeleteCheckedCards} type="button">
-                      선택 삭제{visibleCheckedCardIds.length > 0 ? ` ${visibleCheckedCardIds.length}` : ''}
-                    </button>
-                    <button className="tbl-primary-btn" onClick={() => setShowCardModal(true)} type="button">+ 카드 추가</button>
-                  </>
-                )}
+                {isAdmin && <button className="tbl-primary-btn" onClick={() => setShowCardModal(true)} type="button">+ 카드 추가</button>}
               </>
             ) : (
               <>
-                {isAdmin && (
-                  <button className="tbl-ghost-btn" disabled={visibleCheckedBuildingIds.length === 0} onClick={handleDeleteCheckedBuildings} type="button">
-                    선택 삭제{visibleCheckedBuildingIds.length > 0 ? ` ${visibleCheckedBuildingIds.length}` : ''}
-                  </button>
-                )}
-                {buildingCardFilter === unassignedCardId && visibleCheckedBuildingIds.length > 0 && (
-                  <button
-                    className="tbl-ghost-btn"
-                    style={{ color: 'var(--primary-600)', fontWeight: 600 }}
-                    disabled={reassigningChecked}
-                    onClick={handleReassignCheckedByBoundary}
-                    type="button"
-                  >
-                    {reassigningChecked ? '재배정 중...' : `선택 ${visibleCheckedBuildingIds.length}개 카드 재배정`}
-                  </button>
-                )}
-                <button className="tbl-ghost-btn" disabled={reassigningByBoundary} onClick={handleReassignByBoundary} type="button">
-                  {reassigningByBoundary ? '재배정 중...' : '좌표 기준 재배정'}
-                </button>
                 {onCreateBuilding && (
-                  <button className="tbl-ghost-btn" onClick={() => setAddBuildingOpen(true)} type="button">
+                  <button className="tbl-primary-btn" onClick={() => setAddBuildingOpen(true)} type="button">
                     + 건물 추가
                   </button>
                 )}
-                <button className="tbl-primary-btn" onClick={() => setShowCsvModal(true)} type="button">건물 CSV 업로드</button>
               </>
             )}
             {onSwitchToMap && (
@@ -1469,8 +1420,80 @@ export function DesktopTerritory({
                 지도
               </button>
             )}
+            {activeTab === '카드 관리' && isAdmin && (
+              <details className="territory-action-menu">
+                <summary className="territory-overflow-trigger" aria-label="카드 관리 메뉴" title="카드 관리 메뉴">⋯</summary>
+                <div className="territory-action-menu-popover">
+                  <button onClick={exportCardBoundaries} type="button">구역선 백업</button>
+                  {onRestoreCardBoundaries && (
+                    <>
+                      <input
+                        ref={boundaryImportInputRef}
+                        accept="application/json"
+                        onChange={importCardBoundaries}
+                        style={{ display: 'none' }}
+                        type="file"
+                      />
+                      <button onClick={() => boundaryImportInputRef.current?.click()} type="button">구역선 가져오기</button>
+                    </>
+                  )}
+                </div>
+              </details>
+            )}
+            {activeTab === '건물 관리' && (
+              <details className="territory-action-menu">
+                <summary className="territory-overflow-trigger" aria-label="건물 관리 메뉴" title="건물 관리 메뉴">⋯</summary>
+                <div className="territory-action-menu-popover">
+                  <button disabled={reassigningByBoundary} onClick={handleReassignByBoundary} type="button">
+                    {reassigningByBoundary ? '재배정 중...' : '좌표 기준 재배정'}
+                  </button>
+                  <button onClick={() => setShowCsvModal(true)} type="button">건물 CSV 업로드</button>
+                </div>
+              </details>
+            )}
           </div>
         </div>
+
+        {activeTab === '카드 관리' && isAdmin && visibleCheckedCardIds.length > 0 && (
+          <div className="territory-selection-bar">
+            <strong>{visibleCheckedCardIds.length}개 카드 선택</strong>
+            <div className="territory-selection-actions">
+              <details className="territory-multi-select">
+                <summary>{bulkLeaderNames.length > 0 ? `인도자 선택 ${bulkLeaderNames.length}` : '인도자 선택'}</summary>
+                <div className="territory-multi-select-menu">
+                  {leaderOptions.map((name) => (
+                    <label key={name} className="territory-multi-option">
+                      <input type="checkbox" checked={bulkLeaderNames.includes(name)} onChange={() => toggleBulkLeaderName(name)} />
+                      {name}
+                    </label>
+                  ))}
+                  <button className="territory-multi-clear" onClick={() => setBulkLeaderNames([])} type="button">모두 해제</button>
+                </div>
+              </details>
+              <button className="tbl-ghost-btn sm" disabled={bulkAssigning} onClick={handleAssignLeaderBulk} type="button">
+                {bulkAssigning ? '적용 중...' : '인도자 적용'}
+              </button>
+              {onMergeCardBoundaries && visibleCheckedCardIds.length > 1 && (
+                <button className="tbl-ghost-btn sm" onClick={handleOpenCardMergeModal} type="button">카드 병합</button>
+              )}
+              <button className="tbl-ghost-btn sm danger" onClick={handleDeleteCheckedCards} type="button">삭제</button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === '건물 관리' && visibleCheckedBuildingIds.length > 0 && (
+          <div className="territory-selection-bar">
+            <strong>{visibleCheckedBuildingIds.length}개 건물 선택</strong>
+            <div className="territory-selection-actions">
+              {buildingCardFilter === unassignedCardId && (
+                <button className="tbl-ghost-btn sm" disabled={reassigningChecked} onClick={handleReassignCheckedByBoundary} type="button">
+                  {reassigningChecked ? '재배정 중...' : '카드 재배정'}
+                </button>
+              )}
+              {isAdmin && <button className="tbl-ghost-btn sm danger" onClick={handleDeleteCheckedBuildings} type="button">삭제</button>}
+            </div>
+          </div>
+        )}
 
         {/* ── KPI (카드 관리만) ── */}
         {activeTab === '카드 관리' && (
@@ -1565,26 +1588,6 @@ export function DesktopTerritory({
                 필터
                 {activeAdvancedCardFilterCount > 0 && <span>{activeAdvancedCardFilterCount}</span>}
               </button>
-              <div style={{ flex: 1 }} />
-              {isAdmin && (
-                <>
-                  <details className="territory-multi-select">
-                    <summary>{bulkLeaderNames.length > 0 ? `인도자 선택 ${bulkLeaderNames.length}` : '인도자 선택'}</summary>
-                    <div className="territory-multi-select-menu">
-                      {leaderOptions.map((name) => (
-                        <label key={name} className="territory-multi-option">
-                          <input type="checkbox" checked={bulkLeaderNames.includes(name)} onChange={() => toggleBulkLeaderName(name)} />
-                          {name}
-                        </label>
-                      ))}
-                      <button className="territory-multi-clear" onClick={() => setBulkLeaderNames([])} type="button">모두 해제</button>
-                    </div>
-                  </details>
-                  <button className="tbl-ghost-btn sm" disabled={checkedCardIds.size === 0 || bulkAssigning} onClick={handleAssignLeaderBulk} type="button">
-                    {bulkAssigning ? '적용 중...' : `일괄 적용${checkedCardIds.size > 0 ? ` ${checkedCardIds.size}` : ''}`}
-                  </button>
-                </>
-              )}
               {cardFilterPanelOpen && (
                 <div className="tbl-advanced-filter-panel">
                   <div className="tbl-filter-group">
@@ -1820,21 +1823,22 @@ export function DesktopTerritory({
 
           {/* ── 카드 관리 테이블 ── */}
           {activeTab === '카드 관리' ? (
-          <table className="tbl">
+          <div className="territory-card-table-scroll">
+          <table className={`tbl tbl--territory-cards${detailPaneOpen ? ' is-detail-open' : ''}`}>
             <thead>
               <tr>
                 {isAdmin && (
                   <th style={{ width: 52, paddingLeft: 18 }}>
-                    <input type="checkbox" checked={filteredCards.length > 0 && filteredCards.every((c) => checkedCardIds.has(c.id))} onChange={toggleAllFilteredCards} />
+                    <input type="checkbox" checked={renderedCards.length > 0 && renderedCards.every((c) => checkedCardIds.has(c.id))} onChange={toggleAllFilteredCards} />
                   </th>
                 )}
-                <th>카드</th>
+                <th className="territory-card-name-cell">카드</th>
                 <th style={{ width: 140 }}>진행</th>
                 <th>인도자</th>
-                <th style={{ width: 150 }}>유형</th>
+                <th className="territory-card-secondary" style={{ width: 150 }}>유형</th>
                 <th style={{ width: 80, textAlign: 'right' }}>중국어</th>
-                <th style={{ width: 90, textAlign: 'right' }}>정기방문</th>
-                <th style={{ width: 80 }}>구역선</th>
+                <th className="territory-card-secondary" style={{ width: 90, textAlign: 'right' }}>정기방문</th>
+                <th className="territory-card-secondary" style={{ width: 80 }}>구역선</th>
                 <th style={{ width: 80 }}>상태</th>
                 <th style={{ width: 160, textAlign: 'right', paddingRight: 18 }}>작업</th>
               </tr>
@@ -1857,7 +1861,7 @@ export function DesktopTerritory({
                         <input type="checkbox" checked={checkedCardIds.has(card.id)} onChange={() => toggleCheckedCard(card.id)} />
                       </td>
                     )}
-                    <td>
+                    <td className="territory-card-name-cell" title={card.name}>
                       <div className="tbl__title">{card.name}</div>
                       <div className="tbl__sub">{card.region} {card.area}</div>
                     </td>
@@ -1891,7 +1895,7 @@ export function DesktopTerritory({
                         </span>
                       )}
                     </td>
-                    <td style={{ width: 150 }}>
+                    <td className="territory-card-secondary" style={{ width: 150 }}>
                       <div className="card-building-type-summary">
                         <span><b>전체</b> <em className="tnum">{card.buildings}</em></span>
                         <span>주택 <em className="tnum">{houseCount}</em></span>
@@ -1903,8 +1907,8 @@ export function DesktopTerritory({
                         <span>{chinesePointCount}건</span>
                       </div>
                     </td>
-                    <td className="tnum" style={{ width: 90, textAlign: 'right', fontSize: 13 }}>{card.regularVisits}건</td>
-                    <td style={{ width: 80 }}>
+                    <td className="tnum territory-card-secondary" style={{ width: 90, textAlign: 'right', fontSize: 13 }}>{card.regularVisits}건</td>
+                    <td className="territory-card-secondary" style={{ width: 80 }}>
                       <span style={{ padding: '2px 8px', borderRadius: 'var(--radius-sm)', background: hasBoundary ? 'var(--gray-100)' : 'transparent', color: hasBoundary ? 'var(--gray-600)' : 'var(--gray-400)', fontSize: 11, fontWeight: 600 }}>
                         {hasBoundary ? '있음' : '없음'}
                       </span>
@@ -1949,6 +1953,7 @@ export function DesktopTerritory({
               )}
             </tbody>
           </table>
+          </div>
           ) : buildingSubTab === '건물 목록' ? (
           <>
           {duplicateAddressGroups.length > 0 && (

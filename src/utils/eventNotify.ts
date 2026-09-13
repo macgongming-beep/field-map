@@ -43,18 +43,28 @@ export function isNotifiableDate(eventDate: string, today: string): boolean {
 }
 
 /**
- * 그 일정 변경으로 알림을 받을 사람 수 (신청자 + 인도자, 중복 제거).
+ * 그 일정 변경으로 알림을 받을 사람 수
+ * (일반 신청자 + 전시대 신청자 + 인도자, 중복 제거).
  * 정확한 수는 서버가 정하지만, 물어볼지 말지 판단하고 문구에 쓸 정도면 된다.
  */
 export function countEventNotifyTargets(event: {
+  applicants?: string[]
   participants?: { userName: string }[] | string[]
+  cartApplicants?: Array<{ name: string }>
+  guests?: string[]
   leaders?: string[]
   leader?: string
-}): number {
+}, options: { exclude?: string } = {}): number {
   const names = new Set<string>()
-  for (const p of event.participants ?? []) {
-    names.add(typeof p === 'string' ? p : p.userName)
+  const guests = new Set(event.guests ?? [])
+  for (const name of event.applicants ?? []) {
+    if (!guests.has(name)) names.add(name)
   }
+  for (const p of event.participants ?? []) {
+    const name = typeof p === 'string' ? p : p.userName
+    if (!guests.has(name)) names.add(name)
+  }
+  for (const applicant of event.cartApplicants ?? []) names.add(applicant.name)
   for (const l of event.leaders ?? []) names.add(l)
   if (event.leader) {
     for (const l of event.leader.split(',')) {
@@ -62,6 +72,7 @@ export function countEventNotifyTargets(event: {
       if (n) names.add(n)
     }
   }
+  if (options.exclude) names.delete(options.exclude)
   names.delete('')
   return names.size
 }
@@ -73,13 +84,25 @@ export function countEventNotifyTargets(event: {
  * **첫 일정에 아무도 없을 때 묻지도 않고 조용히 고쳐진다** —
  * 실제로는 뒤 회차 사람들에게 알림이 갈 수 있는데도.
  */
-export function countEventNotifyTargetsMany(events: Parameters<typeof countEventNotifyTargets>[0][]): number {
+export function countEventNotifyTargetsMany(
+  events: Parameters<typeof countEventNotifyTargets>[0][],
+  options: { exclude?: string } = {},
+): number {
   const names = new Set<string>()
   for (const e of events) {
-    for (const p of e.participants ?? []) names.add(typeof p === 'string' ? p : p.userName)
+    const guests = new Set(e.guests ?? [])
+    for (const name of e.applicants ?? []) {
+      if (!guests.has(name)) names.add(name)
+    }
+    for (const p of e.participants ?? []) {
+      const name = typeof p === 'string' ? p : p.userName
+      if (!guests.has(name)) names.add(name)
+    }
+    for (const applicant of e.cartApplicants ?? []) names.add(applicant.name)
     for (const l of e.leaders ?? []) names.add(l)
     if (e.leader) for (const l of e.leader.split(',')) { const n = l.trim(); if (n) names.add(n) }
   }
+  if (options.exclude) names.delete(options.exclude)
   names.delete('')
   return names.size
 }

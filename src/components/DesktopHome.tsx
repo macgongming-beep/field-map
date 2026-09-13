@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { CalendarEvent, ReturnVisit, ReturnVisitLog, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot } from '../types'
+import type { CalendarEvent, Notice, ReturnVisit, ReturnVisitLog, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot } from '../types'
 import type { AppLanguage } from '../i18n'
 import { SpecialPeriodBanner } from './SpecialPeriodBanner'
 import { AdminMobileHome } from './admin/AdminMobileHome'
@@ -13,6 +13,7 @@ export function DesktopHome({
   currentVisitor,
   role,
   specialPeriods,
+  notices: _notices = [],
   onOpenSettings,
   // Other required props by DesktopApp are ignored since we no longer use them
   serviceSessions: _ss,
@@ -45,6 +46,7 @@ export function DesktopHome({
   onEndServiceSession: (sessionId: number) => void
   onOpenTerritory: () => void
   specialPeriods?: SpecialPeriod[]
+  notices?: Notice[]
   onOpenSettings?: () => void
   globalSettings?: Record<string, string>
 }) {
@@ -63,11 +65,12 @@ export function DesktopHome({
     return todayEvents.map((event) => {
       const isLeader = event.leaders.includes(currentVisitor)
       const isApplicant = event.applicants.includes(currentVisitor)
+      const isCartApplicant = event.cartApplicants?.some((applicant) => applicant.name === currentVisitor) ?? false
       const isAssigned = event.cardAssignments.some((a) => a.userName === currentVisitor)
         || (event.assigned ?? []).includes(currentVisitor)
       const kind: 'lead' | 'join' | 'avail' = isLeader
         ? 'lead'
-        : (isApplicant || isAssigned) ? 'join' : 'avail'
+        : (isApplicant || isCartApplicant || isAssigned) ? 'join' : 'avail'
       return { event, kind }
     })
   }, [todayEvents, currentVisitor])
@@ -86,7 +89,7 @@ export function DesktopHome({
             <SpecialPeriodBanner specialPeriods={specialPeriods} variant="compact" onClick={onOpenSettings} />
           </div>
         )}
-        
+
         {role === 'admin' ? (
           <AdminMobileHome
             language={language}

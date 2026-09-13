@@ -74,7 +74,7 @@ function parseEnv(text) {
 
 /**
  * 테스트 환경을 읽고 검사한다. 운영이면 프로세스를 죽인다.
- * @returns {{ url: string, anonKey: string, ref: string, allowWrites: boolean }}
+ * @returns {{ url: string, anonKey: string, ref: string, allowWrites: boolean, loginId: string, loginPin: string }}
  */
 export function loadTestEnv() {
   const file = join(root, '.env.test.local')
@@ -93,9 +93,17 @@ export function loadTestEnv() {
   const url = env.VITE_SUPABASE_URL
   const ref = projectRefOf(url)
   const prod = productionRef() ?? KNOWN_PRODUCTION_REFS[0]
+  const loginId = env.TEST_LOGIN_ID
+  const loginPin = env.TEST_LOGIN_PIN
 
   if (!url || !ref) {
     console.error('✗ .env.test.local 의 VITE_SUPABASE_URL 이 비었거나 형식이 이상하다.')
+    process.exit(1)
+  }
+
+  if (!loginId || !loginPin) {
+    console.error('✗ .env.test.local 의 TEST_LOGIN_ID / TEST_LOGIN_PIN 이 비었습니다.')
+    console.error('  외부에 공개되는 테스트 개발자 비밀번호를 코드에 기본값으로 두지 않습니다.')
     process.exit(1)
   }
 
@@ -142,5 +150,7 @@ export function loadTestEnv() {
     anonKey: env.VITE_SUPABASE_ANON_KEY ?? '',
     ref,
     allowWrites: wantsWrites && registered,
+    loginId,
+    loginPin,
   }
 }

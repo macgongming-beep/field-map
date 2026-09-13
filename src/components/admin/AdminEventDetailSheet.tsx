@@ -16,10 +16,11 @@ import type { Building, CalendarEvent, EventInformalAssignment, EventRestaurantA
 import { buildSharedAssignmentTeams } from './sharedAssignmentTeams'
 import { confirmDialog } from '../../lib/confirm'
 import { t, translateKoreanAddress, type AppLanguage } from '../../i18n'
-import { CommentSection, type MentionUser } from '../CommentSection'
+import type { MentionUser } from '../CommentSection'
 import { ParticipantAddContent } from '../calendar/ParticipantAddContent'
 import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
 import { msg } from '../../lib/msg'
+import { CartApplicantSection } from '../calendar/CartApplicantSection'
 
 type Props = {
   /** 비공식 봉사 배정 — 구역이 없어도 맡은 일이 있으면 보여 준다 */
@@ -41,6 +42,9 @@ type Props = {
   onEdit?: () => void
   onApply?: () => void
   onCancelApply?: () => void
+  onApplyToCart?: () => void
+  onManageCartApplicant?: (userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
+  onSetCartTeamLead?: (userId: number | null) => Promise<boolean> | boolean
   onAddParticipant?: (userName: string, role?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   onRemoveParticipant?: (userName: string) => void
   onOpenAssignment?: () => void
@@ -161,14 +165,17 @@ export function AdminEventDetailSheet({
   cards = [],
   role,
   currentVisitor,
-  currentUserId,
-  mentionUsers = [],
+  currentUserId: _currentUserId,
+  mentionUsers: _mentionUsers = [],
   participantUsers = [],
   onClose,
   onDelete,
   onEdit,
   onApply,
   onCancelApply,
+  onApplyToCart,
+  onManageCartApplicant,
+  onSetCartTeamLead,
   onAddParticipant,
   onRemoveParticipant,
   onOpenAssignment,
@@ -508,7 +515,7 @@ export function AdminEventDetailSheet({
                     onClick={() => setIsAddParticipantModalOpen(true)}
                     style={{
                       padding: '4px 10px',
-                      borderRadius: 99,
+                      borderRadius: 7,
                       border: '1px solid var(--line-muted)',
                       background: 'var(--surface)',
                       fontSize: 12,
@@ -529,7 +536,7 @@ export function AdminEventDetailSheet({
                     onClick={() => setIsRemoveParticipantMode((v) => !v)}
                     style={{
                       padding: '4px 10px',
-                      borderRadius: 99,
+                      borderRadius: 7,
                       border: '1px solid var(--line-muted)',
                       background: isRemoveParticipantMode ? 'var(--danger-50, #FEF2F2)' : 'var(--surface)',
                       fontSize: 12,
@@ -583,7 +590,7 @@ export function AdminEventDetailSheet({
                       height: 22,
                       minHeight: 22,
                       padding: '0 8px',
-                      borderRadius: 99,
+                      borderRadius: 6,
                       border: 'none',
                       background: 'var(--danger-50, #FEF2F2)',
                       color: 'var(--status-danger)',
@@ -632,9 +639,9 @@ export function AdminEventDetailSheet({
               </svg>
             </span>
             <span style={{ flex: 1, textAlign: 'left' }}>
-              {t(language, 'assignment.teamBuildAndAssign')}
+              {t(language, 'assignment.regularTeamBuildAndAssign')}
               <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--muted)', marginTop: 1 }}>
-                {t(language, 'assignment.teamBuildHelp')}
+                {t(language, 'assignment.regularTeamBuildHelp')}
               </span>
             </span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted-2, #94a3b8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
@@ -643,38 +650,24 @@ export function AdminEventDetailSheet({
 
         <SharedAssignmentTeams event={event} cards={cards} language={language} translatePlaceNames={translatePlaceNames} informalAssets={informalAssets} eventInformalAssignments={eventInformalAssignments} buildings={buildings} eventRestaurantAssignments={eventRestaurantAssignments} />
 
-        <CommentSection
-          compact
-          language={language}
-          currentUserId={currentUserId}
+        <CartApplicantSection
+          canManage={canManageParticipants}
           currentVisitor={currentVisitor}
-          role={role}
-          targetId={event.id}
-          targetType="calendar_event"
-          users={mentionUsers}
-          headerRight={
-            <button
-              type="button"
-              onClick={openChat}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 13,
-                fontWeight: 500,
-                color: 'var(--muted)',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                minHeight: 0,
-                padding: '4px 2px',
-              }}
-            >
-              <ChatIcon />
-              {t(language ?? 'ko', 'calendar.openChat')}
-            </button>
-          }
+          event={event}
+          hideApplicantNames={hideParticipants}
+          language={language}
+          onApply={onApplyToCart}
+          onManage={onManageCartApplicant}
+          onSetTeamLead={onSetCartTeamLead}
+          users={participantUsers}
         />
+
+        <div className="event-chat-action">
+          <button type="button" onClick={openChat}>
+            <ChatIcon />
+            {t(language ?? 'ko', 'calendar.openChat')}
+          </button>
+        </div>
 
       {isAddParticipantModalOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

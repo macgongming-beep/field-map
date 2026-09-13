@@ -24,7 +24,7 @@ const login = async (id, pin) => {
 }
 
 try {
-  const adminToken = await login('test-admin', '1234')
+  const adminToken = await login(env.loginId, env.loginPin)
   const client = (token) => createClient(env.url, env.anonKey, { global: { headers: { 'x-session-token': token } } })
   for (const role of ['user', 'leader']) {
     const id = `${marker}_${role}`
@@ -235,7 +235,7 @@ try {
   check(!keepChinese.error && chineseAfterFalse.data?.is_chinese === true,
     '이미 켠 중국어 여부는 false 요청으로 끄지 않는다')
 } finally {
-  const adminToken = await login('test-admin', '1234').catch(() => null)
+  const adminToken = await login(env.loginId, env.loginPin).catch(() => null)
   if (adminToken) {
     const admin = createClient(env.url, env.anonKey, { global: { headers: { 'x-session-token': adminToken } } })
     if (madeRequest) await admin.from('restaurant_requests').delete().eq('id', madeRequest)

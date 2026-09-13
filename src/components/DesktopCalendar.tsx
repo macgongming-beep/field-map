@@ -8,7 +8,7 @@ import { findActivePeriod } from '../utils/specialPeriod'
 import type { Building, CalendarEvent, CardBoundary, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, InformalGroup, Role, SpecialPeriod, TerritoryCard, VisitHistory } from '../types'
 import { PERIOD_COLORS } from '../types'
 import { ChatRoom } from './ChatRoom'
-import { CommentSection, type MentionUser } from './CommentSection'
+import type { MentionUser } from './CommentSection'
 import { savePlacePresets, normalizePlacePresets, resolvePlacePresets, parsePlacePresetsValue, PLACE_PRESET_SETTING_KEY } from '../lib/placePresets'
 import type { PlacePreset } from '../lib/placePresets'
 import { saveTimePresets, normalizeTimePresets, resolveTimePresets, parseTimePresetsValue, TIME_PRESET_SETTING_KEY, addMinutesToTime } from '../lib/timePresets'
@@ -17,10 +17,13 @@ import { PlacePresetEditor, TimePresetEditor } from './admin/AdminMobileCalendar
 import { ExportEventsModal } from './calendar/ExportEventsModal'
 import { ImportEventsModal } from './calendar/ImportEventsModal'
 import { msg } from '../lib/msg'
+import { t } from '../i18n'
 import { AssignmentEditor } from './assignment/AssignmentEditor'
 import { buildSharedAssignmentTeams } from './admin/sharedAssignmentTeams'
 import { ParticipantAddContent } from './calendar/ParticipantAddContent'
 import type { EventParticipantUser } from '../utils/eventParticipantUsers'
+import { CartApplicantSection } from './calendar/CartApplicantSection'
+import { CART_APPLICATIONS_ENABLED } from '../config/features'
 
 
 function getCalendarDays(year: number, month: number): (number | null)[] {
@@ -58,7 +61,7 @@ function eventTimeClass(time: string) {
 
 // TimePreset / addMinutesToTime / 기본 프리셋은 ../lib/timePresets 로 이동 (모바일 공용)
 
-type EventInput = { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean }
+type EventInput = { time: string; endTime?: string; title: string; place: string; mapLink?: string; leader: string; memo: string; hasMeeting: boolean; allowApplications: boolean; allowCartApplications?: boolean; cartCapacity?: number | null }
 type EditDraft = EventInput
 
 type ScopeModal =
@@ -74,6 +77,7 @@ export function DesktopCalendar({
   eventInformalAssignments = [],
   eventRestaurantAssignments = [],
   currentVisitor,
+  language = 'ko',
   currentUserId,
   leaderNames = [],
   cards,
@@ -83,6 +87,9 @@ export function DesktopCalendar({
   participantUsers = [],
   mentionUsers = [],
   onApplyToEvent,
+  onApplyToCartEvent,
+  onManageCartApplication,
+  onSetCartTeamLeader,
   onAssignCardToEventParticipant: _onAssignCardToEventParticipant,
   onAssignCardsToEventParticipantsBulk,
   onAssignInformalToUser,
@@ -112,6 +119,7 @@ export function DesktopCalendar({
   eventInformalAssignments?: EventInformalAssignment[]
   eventRestaurantAssignments?: EventRestaurantAssignment[]
   currentVisitor: string
+  language?: import('../i18n').AppLanguage
   currentUserId?: number | null
   leaderNames?: string[]
   cards: TerritoryCard[]
@@ -121,6 +129,9 @@ export function DesktopCalendar({
   participantUsers?: EventParticipantUser[]
   mentionUsers?: MentionUser[]
   onApplyToEvent: (eventId: number) => void
+  onApplyToCartEvent: (eventId: number) => void
+  onManageCartApplication: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
+  onSetCartTeamLeader: (eventId: number, userId: number | null) => Promise<boolean> | boolean
   onAssignCardToEventParticipant: (eventId: number, userName: string, cardId: number | null) => void
   onAssignCardsToEventParticipantsBulk?: (
     eventId: number,
@@ -203,6 +214,8 @@ export function DesktopCalendar({
   const [newMemo, setNewMemo] = useState('')
   const [newHasMeeting, setNewHasMeeting] = useState(false)
   const [newAllowApplications, setNewAllowApplications] = useState(true)
+  const [newAllowCartApplications, setNewAllowCartApplications] = useState(false)
+  const [newCartCapacity, setNewCartCapacity] = useState(2)
   const [isRepeat, setIsRepeat] = useState(false)
   const [repeatEnd, setRepeatEnd] = useState('')
   const [editingEventId, setEditingEventId] = useState<number | null>(null)
@@ -222,7 +235,9 @@ export function DesktopCalendar({
     const notify = await askNotifyOnEventEdit({
       before: ev,
       after: { ...draft, date: ev.date },
-      recipientCount: affected ? countEventNotifyTargetsMany(affected) : countEventNotifyTargets(ev),
+      recipientCount: affected
+        ? countEventNotifyTargetsMany(affected, { exclude: currentVisitor })
+        : countEventNotifyTargets(ev, { exclude: currentVisitor }),
       seriesCount: affected?.length,
       affectedDates: affected?.map((e) => e.date),
     })
@@ -248,6 +263,7 @@ export function DesktopCalendar({
   // Compute daily stats from all events of the day
   const dailyApplicationEvents = allEventsForDay.filter((event) => event.allowApplications)
   const allApplicants = dailyApplicationEvents.reduce((t, e) => t + e.applicants.length, 0)
+  const allCartApplicants = allEventsForDay.reduce((total, event) => total + (event.cartApplicants?.length ?? 0), 0)
   const allAssigned = dailyApplicationEvents.reduce((t, e) => t + e.assigned.length, 0)
 
   const prevMonth = () => {
@@ -310,13 +326,13 @@ export function DesktopCalendar({
 
   const resetCreateForm = () => {
     setNewDate(selectedDateStr); setNewTitle('传道'); setNewTime('10:00'); setNewEndTime('12:00'); setNewPlace('')
-    setNewMapLink(''); setNewLeaders([]); setNewMemo(''); setNewHasMeeting(false); setNewAllowApplications(true)
+    setNewMapLink(''); setNewLeaders([]); setNewMemo(''); setNewHasMeeting(false); setNewAllowApplications(true); setNewAllowCartApplications(false); setNewCartCapacity(2)
     setIsRepeat(false); setRepeatEnd('')
   }
 
   const handleCreate = () => {
     if (!newTitle.trim()) return
-    const input: EventInput = { time: newTime, endTime: newEndTime || undefined, title: newTitle, place: newPlace, mapLink: newMapLink || undefined, leader: newLeaders.join(', '), memo: newMemo, hasMeeting: newHasMeeting, allowApplications: newAllowApplications }
+    const input: EventInput = { time: newTime, endTime: newEndTime || undefined, title: newTitle, place: newPlace, mapLink: newMapLink || undefined, leader: newLeaders.join(', '), memo: newMemo, hasMeeting: newHasMeeting, allowApplications: newAllowApplications, allowCartApplications: newAllowCartApplications, cartCapacity: newAllowCartApplications ? newCartCapacity : null }
     if (isRepeat) {
       // 반복 켰는데 종료일 없음 → 조용히 단일 생성되던 문제 방지
       if (!repeatEnd) { showToast(msg('반복 종료일을 선택해 주세요'), 'error'); return }
@@ -353,6 +369,9 @@ export function DesktopCalendar({
               <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 12, color: '#78350f', lineHeight: 1.8 }}>
                 <li>· 채팅방 (메시지 전체)</li>
                 <li>· 신청자 {deleteConfirmEvent.applicants.length}명</li>
+                {(deleteConfirmEvent.cartApplicants?.length ?? 0) > 0 && (
+                  <li>· 전시대 신청자 {deleteConfirmEvent.cartApplicants?.length ?? 0}명</li>
+                )}
                 <li>· 봉사자 카드 배정 {deleteConfirmEvent.cardAssignments.length}건</li>
                 <li>· 일정에 달린 댓글</li>
               </ul>
@@ -452,7 +471,7 @@ export function DesktopCalendar({
                     </div>
                   )}
                   {/* 시간 프리셋 */}
-                  <div style={{ marginTop: 12 }}>
+                  <div className="cal-time-section">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div className="cal-preset-label">자주 쓰는 시간</div>
                       <button type="button" className="cal-preset-edit-btn"
@@ -593,6 +612,27 @@ export function DesktopCalendar({
                       aria-pressed={newAllowApplications}
                     />
                   </label>
+                  {CART_APPLICATIONS_ENABLED && <>
+                    <div className="cal-toggle-divider" />
+                    <label className="cal-toggle-row">
+                      <div>
+                        <span className="cal-toggle-label">전시대 신청 받기</span>
+                        <span className="cal-toggle-desc">승인된 봉사자만 신청할 수 있습니다.</span>
+                      </div>
+                      <button
+                        type="button"
+                        className={`cal-toggle-switch${newAllowCartApplications ? ' on' : ''}`}
+                        onClick={() => setNewAllowCartApplications((value) => !value)}
+                        aria-pressed={newAllowCartApplications}
+                      />
+                    </label>
+                    {newAllowCartApplications && (
+                      <label className="cal-cart-capacity-row">
+                        <span>전시대 정원</span>
+                        <input min={1} onChange={(event) => setNewCartCapacity(Math.max(1, Number(event.target.value) || 1))} type="number" value={newCartCapacity} />
+                      </label>
+                    )}
+                  </>}
                 </div>
               </div>
             </div>
@@ -717,7 +757,9 @@ export function DesktopCalendar({
         <aside className="detail-pane" aria-label={`${selectedDay}일 일정 상세`}>
           <div className="detail-header">
             <p>{month}월 {selectedDay}일 일정</p>
-            {dailyApplicationEvents.length > 0 && <strong>신청 {allApplicants}명 · 배정 {allAssigned}명</strong>}
+            {(dailyApplicationEvents.length > 0 || allCartApplicants > 0) && (
+              <strong>신청 {allApplicants}명{allCartApplicants > 0 ? ` · 전시대 ${allCartApplicants}명` : ''} · 배정 {allAssigned}명</strong>
+            )}
           </div>
 
           <div className="detail-body">
@@ -745,6 +787,7 @@ export function DesktopCalendar({
                   role === 'leader' ||
                   event.applicants.includes(currentVisitor) ||
                   event.assigned.includes(currentVisitor) ||
+                  event.cartApplicants?.some((applicant) => applicant.name === currentVisitor) ||
                   event.leaders.includes(currentVisitor)
                 const isEditing = editingEventId === event.id
 
@@ -793,6 +836,7 @@ export function DesktopCalendar({
                     eventRestaurantAssignments={eventRestaurantAssignments}
                     key={event.id}
                     event={event}
+                    language={language}
                     cards={cards}
                     role={role}
                     globalSettings={globalSettings}
@@ -803,11 +847,13 @@ export function DesktopCalendar({
                     isApplied={isApplied}
                     currentUserId={currentUserId}
                     currentVisitor={currentVisitor}
-                    mentionUsers={mentionUsers}
                     participantUsers={participantUsers}
                     addParticipantEventId={addParticipantEventId}
                     onAddParticipant={onAddParticipant}
                     onApply={() => onApplyToEvent(event.id)}
+                    onApplyToCart={() => onApplyToCartEvent(event.id)}
+                    onManageCartApplicant={(userId, action) => onManageCartApplication(event.id, userId, action)}
+                    onSetCartTeamLead={(userId) => onSetCartTeamLeader(event.id, userId)}
                     onRemoveParticipant={onRemoveParticipant}
                     onOpenChat={() => setChatEvent(event)}
                     onOpenAssignment={
@@ -817,7 +863,7 @@ export function DesktopCalendar({
                     }
                     onEdit={() => {
                       setEditingEventId(event.id)
-                      setEditDraft({ time: event.time, endTime: event.endTime ?? '', title: event.title, place: event.place, mapLink: event.mapLink ?? '', leader: event.leader, memo: event.memo, hasMeeting: event.hasMeeting, allowApplications: event.allowApplications })
+                      setEditDraft({ time: event.time, endTime: event.endTime ?? '', title: event.title, place: event.place, mapLink: event.mapLink ?? '', leader: event.leader, memo: event.memo, hasMeeting: event.hasMeeting, allowApplications: event.allowApplications, allowCartApplications: event.allowCartApplications ?? false, cartCapacity: event.cartCapacity ?? 2 })
                     }}
                     onDelete={() => {
                       if (event.seriesId) {
@@ -955,6 +1001,7 @@ function SharedAssignmentTeams({ event, cards, informalAssets = [], eventInforma
 
 function EventDetailCard({
   event,
+  language,
   cards,
   buildings = [],
   informalAssets = [],
@@ -967,13 +1014,15 @@ function EventDetailCard({
   canManageParticipants,
   canAccessChat,
   isApplied,
-  currentUserId,
+  currentUserId: _currentUserId,
   currentVisitor,
-  mentionUsers,
   participantUsers,
   addParticipantEventId,
   onAddParticipant,
   onApply,
+  onApplyToCart,
+  onManageCartApplicant,
+  onSetCartTeamLead,
   onRemoveParticipant,
   onOpenChat,
   onOpenAssignment,
@@ -986,6 +1035,7 @@ function EventDetailCard({
   eventInformalAssignments?: EventInformalAssignment[]
   eventRestaurantAssignments?: EventRestaurantAssignment[]
   event: CalendarEvent
+  language: import('../i18n').AppLanguage
   cards: TerritoryCard[]
   buildings?: Building[]
   role: import('../types').Role
@@ -997,11 +1047,13 @@ function EventDetailCard({
   isApplied: boolean
   currentUserId?: number | null
   currentVisitor: string
-  mentionUsers: import('./CommentSection').MentionUser[]
   participantUsers: EventParticipantUser[]
   addParticipantEventId: number | null
   onAddParticipant?: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   onApply: () => void
+  onApplyToCart: () => void
+  onManageCartApplicant: (userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
+  onSetCartTeamLead: (userId: number | null) => Promise<boolean> | boolean
   onRemoveParticipant: (eventId: number, userName: string) => void
   onOpenChat: () => void
   onOpenAssignment?: () => void
@@ -1201,7 +1253,7 @@ function EventDetailCard({
 
       {onOpenAssignment && (
         <button className="cal-assignment-open-btn" type="button" onClick={onOpenAssignment}>
-          <span>팀 구성 및 배정</span>
+          <span>{t(language, 'assignment.regularTeamBuildAndAssign')}</span>
           <span aria-hidden>›</span>
         </button>
       )}
@@ -1215,42 +1267,25 @@ function EventDetailCard({
         eventRestaurantAssignments={eventRestaurantAssignments}
       />
 
-      {/* 댓글 + 채팅 열기 — 모바일 방식: CommentSection headerRight 로 통합 */}
-      <div className="event-collab-grid">
-        <CommentSection
-          compact
-          currentUserId={currentUserId}
-          currentVisitor={currentVisitor}
-          role={role}
-          targetId={event.id}
-          targetType="calendar_event"
-          users={mentionUsers}
-          headerRight={
-            <button
-              type="button"
-              onClick={canAccessChat ? onOpenChat : undefined}
-              disabled={!canAccessChat}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                fontSize: 12,
-                fontWeight: 500,
-                color: canAccessChat ? 'var(--gray-500)' : 'var(--gray-300)',
-                background: 'transparent',
-                border: 'none',
-                cursor: canAccessChat ? 'pointer' : 'default',
-                minHeight: 0,
-                padding: '3px 2px',
-              }}
-            >
-              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-              </svg>
-              채팅 열기
-            </button>
-          }
-        />
+      <CartApplicantSection
+        canManage={canManageParticipants}
+        currentVisitor={currentVisitor}
+        event={event}
+        hideApplicantNames={globalSettings?.hide_participants_from_users === 'true' && role === 'user'}
+        language={language}
+        onApply={onApplyToCart}
+        onManage={onManageCartApplicant}
+        onSetTeamLead={onSetCartTeamLead}
+        users={participantUsers}
+      />
+
+      <div className="event-chat-action">
+        <button type="button" onClick={canAccessChat ? onOpenChat : undefined} disabled={!canAccessChat}>
+          <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+          </svg>
+          채팅 열기
+        </button>
       </div>
     </article>
   )
@@ -1289,6 +1324,11 @@ function EditCard({
       .filter((e) => e.title === event.title && new Date(e.date).getDay() === eventWeekday && !e.seriesId)
       .map((e) => e.id)
   }, [event, events, eventWeekday])
+  const minimumCartCapacity = event.seriesId
+    ? Math.max(1, ...events
+      .filter((item) => item.seriesId === event.seriesId && item.date >= event.date)
+      .map((item) => item.cartApplicants?.length ?? 0))
+    : Math.max(1, event.cartApplicants?.length ?? 0)
 
   return (
     <article className="detail-card">
@@ -1407,6 +1447,27 @@ function EditCard({
                 aria-pressed={draft.allowApplications}
               />
             </label>
+            {CART_APPLICATIONS_ENABLED && <>
+              <div className="cal-toggle-divider" />
+              <label className="cal-toggle-row">
+                <div>
+                  <span className="cal-toggle-label">전시대 신청 받기</span>
+                  <span className="cal-toggle-desc">승인된 봉사자만 신청할 수 있습니다.</span>
+                </div>
+                <button
+                  type="button"
+                  className={`cal-toggle-switch${draft.allowCartApplications ? ' on' : ''}`}
+                  onClick={() => setDraft({ ...draft, allowCartApplications: !draft.allowCartApplications, cartCapacity: draft.cartCapacity ?? 2 })}
+                  aria-pressed={draft.allowCartApplications}
+                />
+              </label>
+              {draft.allowCartApplications && (
+                <label className="cal-cart-capacity-row">
+                  <span>전시대 정원</span>
+                  <input min={minimumCartCapacity} onChange={(changeEvent) => setDraft({ ...draft, cartCapacity: Math.max(minimumCartCapacity, Number(changeEvent.target.value) || minimumCartCapacity) })} type="number" value={draft.cartCapacity ?? 2} />
+                </label>
+              )}
+            </>}
           </div>
         </div>
       </div>

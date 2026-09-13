@@ -84,7 +84,7 @@ async function openAssignment(overrides: Record<string, unknown> = {}) {
       <DesktopCalendar {...(calendarProps(overrides) as never)} />
     </MemoryRouter>,
   )
-  await user.click(screen.getByRole('button', { name: '팀 구성 및 배정' }))
+  await user.click(screen.getByRole('button', { name: '일반 봉사 팀 구성 & 배정' }))
   return screen.getByTestId('assignment-editor')
 }
 

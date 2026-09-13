@@ -44,7 +44,7 @@ let developerToken = null
 let groupId = null
 
 try {
-  developerToken = (await login('test-admin', '1234'))?.token ?? null
+  developerToken = (await login(env.loginId, env.loginPin))?.token ?? null
   if (!developerToken) throw new Error('테스트 개발자로 로그인하지 못했습니다')
 
   const actors = []

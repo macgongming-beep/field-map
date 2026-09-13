@@ -4,6 +4,7 @@ import { confirmDialog } from '../../lib/confirm'
 import { pushBackHandler } from '../../lib/backStack'
 import { showToast } from '../../lib/toast'
 import { findActivePeriod } from '../../utils/specialPeriod'
+import { CART_APPLICATIONS_ENABLED } from '../../config/features'
 //
 // 구조:
 //   - 월 카드 (헤더 + nav + grid)
@@ -52,6 +53,8 @@ type EventInput = {
   memo: string
   hasMeeting: boolean
   allowApplications: boolean
+  allowCartApplications?: boolean
+  cartCapacity?: number | null
   mapLink?: string
 }
 
@@ -95,6 +98,9 @@ type Props = {
   onUpdateEvent?: (id: number, input: EventInput, notify?: boolean) => void | Promise<boolean>
   onUpdateEventSeries?: (seriesId: string, fromDate: string, input: EventInput, notify?: boolean) => void | Promise<boolean>
   onApplyToEvent?: (eventId: number) => void
+  onApplyToCartEvent?: (eventId: number) => void
+  onManageCartApplication?: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
+  onSetCartTeamLeader?: (eventId: number, userId: number | null) => Promise<boolean> | boolean
   onAddParticipantToEvent?: (eventId: number, userName: string, role?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
   onRemoveParticipantFromEvent?: (eventId: number, userName: string) => void
   specialPeriods?: SpecialPeriod[]
@@ -198,6 +204,9 @@ export function AdminMobileCalendar({
   onUpdateEvent,
   onUpdateEventSeries,
   onApplyToEvent,
+  onApplyToCartEvent,
+  onManageCartApplication,
+  onSetCartTeamLeader,
   onAddParticipantToEvent,
   onRemoveParticipantFromEvent,
   specialPeriods = [],
@@ -523,6 +532,7 @@ export function AdminMobileCalendar({
         <EventAddSheet language={language}
           defaultDate={selectedDateStr}
           editingEvent={editingEvent}
+          seriesEvents={editingEvent?.seriesId ? events.filter((event) => event.seriesId === editingEvent.seriesId) : []}
           leaderNames={leaderNames}
           globalSettings={globalSettings}
           onUpsertGlobalSetting={onUpsertGlobalSetting}
@@ -544,7 +554,7 @@ export function AdminMobileCalendar({
                   const notify = await askNotifyOnEventEdit({
                     before: editingEvent,
                     after: { ...editInput, date: editingEvent.date },
-                    recipientCount: countEventNotifyTargets(editingEvent),
+                    recipientCount: countEventNotifyTargets(editingEvent, { exclude: currentVisitor }),
                   })
                   onUpdateEvent(editingEvent.id, editInput, notify)
                 })()
@@ -590,6 +600,9 @@ export function AdminMobileCalendar({
           }}
           onApply={onApplyToEvent ? () => onApplyToEvent(detailEvent.id) : undefined}
           onCancelApply={onApplyToEvent ? () => onApplyToEvent(detailEvent.id) : undefined}
+          onApplyToCart={onApplyToCartEvent ? () => onApplyToCartEvent(detailEvent.id) : undefined}
+          onManageCartApplicant={onManageCartApplication ? (userId, action) => onManageCartApplication(detailEvent.id, userId, action) : undefined}
+          onSetCartTeamLead={onSetCartTeamLeader ? (userId) => onSetCartTeamLeader(detailEvent.id, userId) : undefined}
           onOpenAssignment={
             onAssignCardsToEventParticipantsBulk && (role === 'admin' || role === 'developer' || role === 'leader')
               // 상세를 닫지 않는다. 닫아버리면 배정에서 뒤로 갈 때
@@ -665,6 +678,7 @@ export function AdminMobileCalendar({
 
       {scopeAction && (
         <SeriesScopeSheet language={language}
+          currentVisitor={currentVisitor}
           seriesEvents={events.filter((e) => e.seriesId && e.seriesId === scopeAction.event.seriesId && e.date >= scopeAction.event.date)}
           action={scopeAction}
           onClose={() => setScopeAction(null)}
@@ -698,6 +712,7 @@ function SectionHead({ title, right }: { title: React.ReactNode; right?: React.R
 }
 
 function SeriesScopeSheet({ language,
+  currentVisitor,
   seriesEvents,
   action,
   onClose,
@@ -707,6 +722,7 @@ function SeriesScopeSheet({ language,
   onUpdateEventSeries,
 }: {
   language: AppLanguage
+  currentVisitor: string
   seriesEvents: CalendarEvent[]
   action: { kind: 'edit'; event: CalendarEvent; input: EventInput } | { kind: 'delete'; event: CalendarEvent }
   onClose: () => void
@@ -725,7 +741,7 @@ function SeriesScopeSheet({ language,
         const notify = await askNotifyOnEventEdit({
           before: action.event,
           after: { ...action.input, date: action.event.date },
-          recipientCount: countEventNotifyTargets(action.event),
+          recipientCount: countEventNotifyTargets(action.event, { exclude: currentVisitor }),
         })
         const ok = await onUpdateEvent?.(action.event.id, action.input, notify)
         if (ok !== false) onClose()
@@ -743,7 +759,7 @@ function SeriesScopeSheet({ language,
           before: action.event,
           after: { ...action.input, date: action.event.date },
           // 회차마다 신청자가 다르다 — 바뀌는 일정 전부의 합집합을 센다
-          recipientCount: countEventNotifyTargetsMany(seriesEvents),
+          recipientCount: countEventNotifyTargetsMany(seriesEvents, { exclude: currentVisitor }),
           seriesCount: seriesEvents.length,
           affectedDates: seriesEvents.map((e) => e.date),
         })
@@ -895,8 +911,10 @@ function DayEventCard({ language, event, role, globalSettings, onClick }: { even
 
   const hideParticipants = globalSettings.hide_participants_from_users === 'true' && role === 'user'
   if (!hideParticipants && event.applicants && event.applicants.length > 0) {
-
     meta.push(t(language, 'home.appliedLabel') + ` ${event.applicants.length}`)
+  }
+  if (CART_APPLICATIONS_ENABLED && !hideParticipants && (event.allowCartApplications || (event.cartApplicants?.length ?? 0) > 0)) {
+    meta.push(`${t(language, 'calendar.cartService')} ${event.cartApplicants?.length ?? 0}/${event.cartCapacity ?? 0}`)
   }
   return (
     <button
@@ -969,6 +987,7 @@ function DayEventCard({ language, event, role, globalSettings, onClick }: { even
 function EventAddSheet({ language,
   defaultDate,
   editingEvent,
+  seriesEvents = [],
   leaderNames,
   globalSettings = {},
   onUpsertGlobalSetting,
@@ -977,6 +996,7 @@ function EventAddSheet({ language,
 }: {
   defaultDate: string
   editingEvent?: CalendarEvent | null
+  seriesEvents?: CalendarEvent[]
   leaderNames: string[]
   globalSettings?: Record<string, string>
   onUpsertGlobalSetting?: (key: string, value: string) => Promise<boolean>
@@ -997,12 +1017,19 @@ function EventAddSheet({ language,
   const leader = leaders.join(', ')
   const [hasMeeting, setHasMeeting] = useState(editingEvent?.hasMeeting ?? false)
   const [allowApplications, setAllowApplications] = useState(editingEvent?.allowApplications ?? true)
+  const [allowCartApplications, setAllowCartApplications] = useState(editingEvent?.allowCartApplications ?? false)
+  const [cartCapacity, setCartCapacity] = useState(editingEvent?.cartCapacity ?? 2)
   const [repeat, setRepeat] = useState(false)
   const [repeatEnd, setRepeatEnd] = useState('')
   const [timePresets, setTimePresets] = useState<TimePreset[]>(() => resolveTimePresets(globalSettings[TIME_PRESET_SETTING_KEY]))
   const [timeSettingsOpen, setTimeSettingsOpen] = useState(false)
   const [placePresets, setPlacePresets] = useState<PlacePreset[]>(() => resolvePlacePresets(globalSettings[PLACE_PRESET_SETTING_KEY]))
   const [placeSettingsOpen, setPlaceSettingsOpen] = useState(false)
+  const minimumCartCapacity = editingEvent?.seriesId
+    ? Math.max(1, ...seriesEvents
+      .filter((event) => event.date >= editingEvent.date)
+      .map((event) => event.cartApplicants?.length ?? 0))
+    : Math.max(1, editingEvent?.cartApplicants?.length ?? 0)
   const timePresetSaveVersionRef = useRef(0)
   const placePresetSaveVersionRef = useRef(0)
   // 다른 기기에서 바뀐 서버 프리셋이 fetch 되면 반영 (편집 중 아닐 때)
@@ -1345,6 +1372,25 @@ function EventAddSheet({ language,
               label={t(language, 'calendar.allowApplications')}
               onChange={setAllowApplications}
             />
+            {CART_APPLICATIONS_ENABLED && <>
+              <SettingToggle
+                checked={allowCartApplications}
+                description={t(language, 'calendar.allowCartApplicationsDesc')}
+                label={t(language, 'calendar.allowCartApplications')}
+                onChange={setAllowCartApplications}
+              />
+              {allowCartApplications && (
+                <label className="mobile-cart-capacity-field">
+                  <span>{t(language, 'calendar.cartCapacity')}</span>
+                  <input
+                    min={minimumCartCapacity}
+                    onChange={(event) => setCartCapacity(Math.max(minimumCartCapacity, Number(event.target.value) || minimumCartCapacity))}
+                    type="number"
+                    value={cartCapacity}
+                  />
+                </label>
+              )}
+            </>}
           </Field>
         </div>
 
@@ -1352,7 +1398,7 @@ function EventAddSheet({ language,
         <button
           type="button"
           disabled={!canSubmit}
-          onClick={() => onSubmit({ date, time, endTime: endTime || undefined, title: title.trim(), memo: memo.trim(), place: place.trim(), mapLink: mapLink.trim() || undefined, leader, hasMeeting, allowApplications, repeat: !isEditing && repeat, repeatEnd })}
+          onClick={() => onSubmit({ date, time, endTime: endTime || undefined, title: title.trim(), memo: memo.trim(), place: place.trim(), mapLink: mapLink.trim() || undefined, leader, hasMeeting, allowApplications, allowCartApplications, cartCapacity: allowCartApplications ? cartCapacity : null, repeat: !isEditing && repeat, repeatEnd })}
           style={{
             marginTop: 14,
             height: 46,

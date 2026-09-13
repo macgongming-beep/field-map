@@ -4,6 +4,7 @@ export type EventParticipantUser = {
   role?: string
   approvalStatus?: 'pending' | 'approved' | 'blocked'
   isActive?: boolean
+  cartServiceApproved?: boolean
 }
 
 export function normalizeEventParticipantName(name: string): string {

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Component } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { getOverlayRoot } from '../lib/overlayRoot'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -179,9 +179,19 @@ export function AppHeaderActionButtons({
   const [openNotifications, setOpenNotifications] = useState(false)
   const [openChat, setOpenChat] = useState(false)
   const [headerChatTarget, setHeaderChatTarget] = useState<HeaderChatTarget>(null)
-  const { unreadCount, notifications: notifList, markRead: notifMarkRead, markAllRead: notifMarkAllRead, clearReadNotifications: notifClearRead } = useNotifications(userId ?? null)
+  const { notifications: notifList, markRead: notifMarkRead, markAllRead: notifMarkAllRead, clearReadNotifications: notifClearRead } = useNotifications(userId ?? null)
   const { totalUnread, markChatReadLocally } = useUserChats(userId ?? null, userName)
-  const resolvedNotificationCount = notificationCount ?? unreadCount
+  // 공지와 댓글 화면은 닫았지만 과거 알림 행은 복구 가능하도록 보존한다.
+  // 표시 목록과 벨 배지에서 함께 제외해야 눌러도 갈 곳 없는 숫자가 남지 않는다.
+  const visibleNotifications = useMemo(
+    () => notifList.filter((notification) => notification.type !== 'notice' && notification.type !== 'comment'),
+    [notifList],
+  )
+  const visibleUnreadCount = useMemo(
+    () => visibleNotifications.filter((notification) => !notification.isRead).length,
+    [visibleNotifications],
+  )
+  const resolvedNotificationCount = notificationCount ?? visibleUnreadCount
   const resolvedChatCount = chatCount ?? totalUnread
 
   const handleOpenNotifications = () => {
@@ -284,7 +294,7 @@ export function AppHeaderActionButtons({
               userId={userId ?? null}
               userName={userName}
               onClose={() => setOpenNotifications(false)}
-              notifications={notifList}
+              notifications={visibleNotifications}
               markRead={notifMarkRead}
               markAllRead={notifMarkAllRead}
               clearReadNotifications={notifClearRead}

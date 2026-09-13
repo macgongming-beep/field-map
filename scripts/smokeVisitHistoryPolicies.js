@@ -27,7 +27,7 @@ const psql = (sql) => execFileSync(process.env.PSQL_BIN ?? 'psql', ['-X', '-v', 
   stdio: 'pipe', env: { ...process.env, PGPASSWORD: dbPassword, PGCONNECT_TIMEOUT: '10' },
 })
 try {
-  adminToken = (await login('test-admin', '1234'))?.token
+  adminToken = (await login(env.loginId, env.loginPin))?.token
   if (!adminToken) throw new Error('테스트 개발자로 로그인하지 못했습니다')
   const actors = {}
   for (const role of ['user', 'leader']) {

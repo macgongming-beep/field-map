@@ -18,7 +18,7 @@ const check = (ok, label, detail = '') => {
   if (!ok) failures += 1
 }
 const login = async () => {
-  const { data, error } = await db.rpc('auth_login', { p_login_id: 'test-admin', p_pin: '1234' })
+  const { data, error } = await db.rpc('auth_login', { p_login_id: env.loginId, p_pin: env.loginPin })
   if (error) throw error
   return data?.[0]?.token
 }

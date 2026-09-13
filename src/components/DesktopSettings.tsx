@@ -78,13 +78,6 @@ export function DesktopSettings({
 
         <div style={{ display: 'grid', gap: 4, marginBottom: 24 }}>
           <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--gray-500)', marginBottom: 8, paddingLeft: 16, textTransform: 'uppercase', letterSpacing: 0.5 }}>소식 & 알림</h3>
-          {isAdminLike(actualRole) && (
-            <SidebarLink
-              to="/settings/notices"
-              icon={<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>}
-              label="공지사항"
-            />
-          )}
           <SidebarLink
             to="/settings/notification"
             icon={<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>}
