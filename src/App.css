@@ -12906,7 +12906,7 @@ button:focus-visible {
   .cart-summary-count { color: var(--muted); font-size: 11.5px; font-weight: 600; }
   .cart-summary-toggle svg { flex: 0 0 auto; transition: transform .15s ease; }
   .cart-summary-toggle svg.expanded { transform: rotate(180deg); }
-  .cart-applicants-toolbar { display: flex; justify-content: flex-end; }
+  .cart-applicants-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
   .cart-compact-action,
   .cart-row-action,
   .cart-row-remove {
@@ -32266,6 +32266,12 @@ button > svg {
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+  }
+  .cart-applicants-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
   }
   .cart-summary-toggle { min-height: 32px; }
   .cart-summary-title { font-size: 13.5px; }

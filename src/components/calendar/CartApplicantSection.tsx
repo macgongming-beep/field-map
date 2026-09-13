@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
 import type { CalendarEvent } from '../../types'
-import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
+import {
+  eventParticipantNameKey,
+  isSelectableEventParticipant,
+  type EventParticipantUser,
+} from '../../utils/eventParticipantUsers'
 import { t, type AppLanguage } from '../../i18n'
 import { confirmDialog } from '../../lib/confirm'
 import { CART_APPLICATIONS_ENABLED } from '../../config/features'
@@ -33,9 +37,11 @@ export function CartApplicantSection({
   const [query, setQuery] = useState('')
   const [menuUserId, setMenuUserId] = useState<number | null>(null)
   const cartApplicants = useMemo(() => event.cartApplicants ?? [], [event.cartApplicants])
-  const currentApplied = cartApplicants.some((applicant) => applicant.name === currentVisitor)
+  const currentVisitorKey = eventParticipantNameKey(currentVisitor)
+  const currentApplied = cartApplicants.some((applicant) => eventParticipantNameKey(applicant.name) === currentVisitorKey)
   const full = event.cartCapacity != null && cartApplicants.length >= event.cartCapacity
-  const currentUserApproved = users.find((user) => user.name === currentVisitor)?.cartServiceApproved === true
+  const currentUser = users.find((user) => eventParticipantNameKey(user.name) === currentVisitorKey)
+  const currentUserApproved = currentUser?.cartServiceApproved === true && isSelectableEventParticipant(currentUser)
   const existingIds = useMemo(() => new Set(cartApplicants.map((item) => item.userId)), [cartApplicants])
   const normalNames = useMemo(() => new Set(event.applicants), [event.applicants])
   const candidates = useMemo(() => users
@@ -73,10 +79,15 @@ export function CartApplicantSection({
             )}
           </button>
 
-          {event.allowCartApplications && onApply && (
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="cart-applicants-toolbar">
+          {event.allowCartApplications && onApply && (currentUserApproved || currentApplied) && (
             <button
               className={`cart-apply-button${currentApplied ? ' applied' : ''}`}
-              disabled={full && currentUserApproved && !currentApplied}
+              disabled={full && !currentApplied}
               onClick={onApply}
               type="button"
             >
@@ -91,17 +102,14 @@ export function CartApplicantSection({
           {canManage && onManage && (
             <button
               className="cart-compact-action"
-              onClick={() => {
-                if (!adding) setExpanded(true)
-                setAdding((value) => !value)
-              }}
+              onClick={() => setAdding((value) => !value)}
               type="button"
             >
               {adding ? t(language, 'common.cancel') : t(language, 'calendar.addPeople')}
             </button>
           )}
         </div>
-      </div>
+      )}
 
       {expanded && adding && canManage && onManage && (
         <div className="cart-applicant-picker">
