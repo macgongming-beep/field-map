@@ -120,6 +120,16 @@ describe('PC 일정 배정 권한', () => {
     expect(screen.queryByText('+3')).toBeNull()
   })
 
+  test('봉사 일정 상세에는 댓글 기능을 유지한다', () => {
+    render(
+      <MemoryRouter>
+        <DesktopCalendar {...(calendarProps() as never)} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByTestId('comments')).toBeTruthy()
+  })
+
   test('일반 사용자와 인도자에게 일정 추가 진입점을 노출하지 않는다', () => {
     const { rerender } = render(
       <MemoryRouter>

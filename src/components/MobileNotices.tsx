@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import { confirmDialog } from '../lib/confirm'
 import type { Notice, Role } from '../types'
 import { t, type AppLanguage } from '../i18n'
-import { CommentSection, type MentionUser } from './CommentSection'
 import { msg } from '../lib/msg'
 
 const PRIORITY_COLOR: Record<Notice['priority'], { bg: string; color: string }> = {
@@ -21,10 +20,8 @@ function translatePriority(priority: Notice['priority'], language: AppLanguage):
 export function MobileNotices({
   language = 'ko',
   currentVisitor,
-  currentUserId,
   notices,
   role,
-  mentionUsers = [],
   noticesEnabled = true,
   variant = 'mobile',
   onToggleNotices,
@@ -33,10 +30,8 @@ export function MobileNotices({
 }: {
   language?: AppLanguage
   currentVisitor: string
-  currentUserId?: number | null
   notices: Notice[]
   role: Role
-  mentionUsers?: MentionUser[]
   noticesEnabled?: boolean
   variant?: 'mobile' | 'desktop'
   onToggleNotices?: (enabled: boolean) => Promise<boolean>
@@ -175,16 +170,6 @@ export function MobileNotices({
               </button>
             )}
           </div>
-          <CommentSection
-            compact
-            language={language}
-            currentUserId={currentUserId}
-            currentVisitor={currentVisitor}
-            role={role}
-            targetId={notice.id}
-            targetType="notice"
-            users={mentionUsers}
-          />
         </div>
       ))}
     </div>

@@ -3826,10 +3826,10 @@ button:focus-visible {
 
 .participant-icon-button {
   display: inline-grid;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 34px;
-  min-height: 34px;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
   padding: 0;
   place-items: center;
   border: 1px solid var(--line);

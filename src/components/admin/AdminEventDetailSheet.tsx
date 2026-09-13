@@ -16,7 +16,7 @@ import type { Building, CalendarEvent, EventInformalAssignment, EventRestaurantA
 import { buildSharedAssignmentTeams } from './sharedAssignmentTeams'
 import { confirmDialog } from '../../lib/confirm'
 import { t, translateKoreanAddress, type AppLanguage } from '../../i18n'
-import type { MentionUser } from '../CommentSection'
+import { CommentSection, type MentionUser } from '../CommentSection'
 import { ParticipantAddContent } from '../calendar/ParticipantAddContent'
 import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
 import { msg } from '../../lib/msg'
@@ -165,8 +165,8 @@ export function AdminEventDetailSheet({
   cards = [],
   role,
   currentVisitor,
-  currentUserId: _currentUserId,
-  mentionUsers: _mentionUsers = [],
+  currentUserId,
+  mentionUsers = [],
   participantUsers = [],
   onClose,
   onDelete,
@@ -648,12 +648,38 @@ export function AdminEventDetailSheet({
           users={participantUsers}
         />
 
-        <div className="event-chat-action">
-          <button type="button" onClick={openChat}>
-            <ChatIcon />
-            {t(language ?? 'ko', 'calendar.openChat')}
-          </button>
-        </div>
+        <CommentSection
+          compact
+          language={language}
+          currentUserId={currentUserId}
+          currentVisitor={currentVisitor}
+          role={role}
+          targetId={event.id}
+          targetType="calendar_event"
+          users={mentionUsers}
+          headerRight={
+            <button
+              type="button"
+              onClick={openChat}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 13,
+                fontWeight: 500,
+                color: 'var(--muted)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                minHeight: 0,
+                padding: '4px 2px',
+              }}
+            >
+              <ChatIcon />
+              {t(language ?? 'ko', 'calendar.openChat')}
+            </button>
+          }
+        />
 
       {isAddParticipantModalOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

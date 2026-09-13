@@ -72,6 +72,22 @@ export function CartApplicantSection({
               </svg>
             )}
           </button>
+
+          {event.allowCartApplications && onApply && (
+            <button
+              className={`cart-apply-button${currentApplied ? ' applied' : ''}`}
+              disabled={full && currentUserApproved && !currentApplied}
+              onClick={onApply}
+              type="button"
+            >
+              {currentApplied
+                ? t(language, 'calendar.cancelCartApplication')
+                : full
+                  ? t(language, 'calendar.cartFull')
+                  : t(language, 'calendar.applyCart')}
+            </button>
+          )}
+
           {canManage && onManage && (
             <button
               className="cart-compact-action"
@@ -85,21 +101,6 @@ export function CartApplicantSection({
             </button>
           )}
         </div>
-
-        {event.allowCartApplications && onApply && (
-          <button
-            className={`cart-apply-button${currentApplied ? ' applied' : ''}`}
-            disabled={full && currentUserApproved && !currentApplied}
-            onClick={onApply}
-            type="button"
-          >
-            {currentApplied
-              ? t(language, 'calendar.cancelCartApplication')
-              : full
-                ? t(language, 'calendar.cartFull')
-                : t(language, 'calendar.applyCart')}
-          </button>
-        )}
       </div>
 
       {expanded && adding && canManage && onManage && (

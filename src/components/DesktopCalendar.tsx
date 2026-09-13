@@ -8,7 +8,7 @@ import { findActivePeriod } from '../utils/specialPeriod'
 import type { Building, CalendarEvent, CardBoundary, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, InformalGroup, Role, SpecialPeriod, TerritoryCard, VisitHistory } from '../types'
 import { PERIOD_COLORS } from '../types'
 import { ChatRoom } from './ChatRoom'
-import type { MentionUser } from './CommentSection'
+import { CommentSection, type MentionUser } from './CommentSection'
 import { savePlacePresets, normalizePlacePresets, resolvePlacePresets, parsePlacePresetsValue, PLACE_PRESET_SETTING_KEY } from '../lib/placePresets'
 import type { PlacePreset } from '../lib/placePresets'
 import { saveTimePresets, normalizeTimePresets, resolveTimePresets, parseTimePresetsValue, TIME_PRESET_SETTING_KEY, addMinutesToTime } from '../lib/timePresets'
@@ -847,6 +847,7 @@ export function DesktopCalendar({
                     isApplied={isApplied}
                     currentUserId={currentUserId}
                     currentVisitor={currentVisitor}
+                    mentionUsers={mentionUsers}
                     participantUsers={participantUsers}
                     addParticipantEventId={addParticipantEventId}
                     onAddParticipant={onAddParticipant}
@@ -1012,8 +1013,9 @@ function EventDetailCard({
   canManageParticipants,
   canAccessChat,
   isApplied,
-  currentUserId: _currentUserId,
+  currentUserId,
   currentVisitor,
+  mentionUsers,
   participantUsers,
   addParticipantEventId,
   onAddParticipant,
@@ -1045,6 +1047,7 @@ function EventDetailCard({
   isApplied: boolean
   currentUserId?: number | null
   currentVisitor: string
+  mentionUsers: MentionUser[]
   participantUsers: EventParticipantUser[]
   addParticipantEventId: number | null
   onAddParticipant?: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
@@ -1279,13 +1282,41 @@ function EventDetailCard({
         users={participantUsers}
       />
 
-      <div className="event-chat-action">
-        <button type="button" onClick={canAccessChat ? onOpenChat : undefined} disabled={!canAccessChat}>
-          <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-          </svg>
-          채팅 열기
-        </button>
+      <div className="event-collab-grid">
+        <CommentSection
+          compact
+          currentUserId={currentUserId}
+          currentVisitor={currentVisitor}
+          role={role}
+          targetId={event.id}
+          targetType="calendar_event"
+          users={mentionUsers}
+          headerRight={
+            <button
+              type="button"
+              onClick={canAccessChat ? onOpenChat : undefined}
+              disabled={!canAccessChat}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 12,
+                fontWeight: 500,
+                color: canAccessChat ? 'var(--gray-500)' : 'var(--gray-300)',
+                background: 'transparent',
+                border: 'none',
+                cursor: canAccessChat ? 'pointer' : 'default',
+                minHeight: 0,
+                padding: '3px 2px',
+              }}
+            >
+              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              </svg>
+              {t(language, 'calendar.openChat')}
+            </button>
+          }
+        />
       </div>
     </article>
   )
