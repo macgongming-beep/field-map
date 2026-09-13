@@ -244,7 +244,7 @@ export function makeCalendarMutations(deps: {
     if (!isApplied && event?.cartApplicants?.some((applicant) => applicant.name === currentVisitor)) {
       const ok = await confirmDialog({
         title: msg('신청 종류 변경'),
-        message: msg('전시대 신청을 취소하고 일반 봉사로 변경할까요?'),
+        message: msg('전시대 신청을 취소하고 봉사로 변경할까요?'),
         confirmLabel: msg('변경'),
       })
       if (!ok) return
@@ -260,7 +260,7 @@ export function makeCalendarMutations(deps: {
     }
     await fetchAll()
     const state = (result.data as { state?: string }).state
-    showToast(state === 'cancelled' ? msg('신청이 취소됐습니다') : state === 'switched' ? msg('일반 봉사 신청으로 변경됐습니다') : msg('일정에 신청됐습니다'))
+    showToast(state === 'cancelled' ? msg('신청이 취소됐습니다') : state === 'switched' ? msg('봉사 신청으로 변경됐습니다') : msg('일정에 신청됐습니다'))
   }
 
   const applyToCartEvent = async (eventId: number) => {
@@ -272,7 +272,7 @@ export function makeCalendarMutations(deps: {
     if (!isApplied && event.applicants.includes(currentVisitor)) {
       const ok = await confirmDialog({
         title: msg('신청 종류 변경'),
-        message: msg('일반 봉사 신청을 취소하고 전시대 봉사로 변경할까요?'),
+        message: msg('봉사 신청을 취소하고 전시대 봉사로 변경할까요?'),
         confirmLabel: msg('변경'),
       })
       if (!ok) return
@@ -325,7 +325,7 @@ export function makeCalendarMutations(deps: {
     showToast(action === 'add'
       ? msg('전시대 신청자를 추가했습니다')
       : action === 'service'
-        ? msg('일반 봉사 신청으로 변경됐습니다')
+        ? msg('봉사 신청으로 변경됐습니다')
         : msg('전시대 신청자를 제외했습니다'))
     return true
   }
@@ -427,7 +427,7 @@ export function makeCalendarMutations(deps: {
     if (cartApplicant) {
       const ok = await confirmDialog({
         title: msg('신청 종류 변경'),
-        message: msg('전시대 신청을 취소하고 일반 봉사로 변경할까요?'),
+        message: msg('전시대 신청을 취소하고 봉사로 변경할까요?'),
         confirmLabel: msg('변경'),
       })
       if (!ok) return false

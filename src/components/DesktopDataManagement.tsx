@@ -256,12 +256,12 @@ export function DesktopDataManagement({ isDeveloper = false }: { isDeveloper?: b
         <section className="desk-card ds-card">
           <h2 className="desk-card__title" style={{ marginBottom: 12 }}>봉사자 참가 권한 설정</h2>
           <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.6 }}>
-            일반 봉사자에게 일정의 참가자 목록과 참가 인원을 숨길 수 있습니다. (인도자/관리자는 항상 볼 수 있습니다)
+            봉사자에게 일정의 참가자 목록과 참가 인원을 숨길 수 있습니다. (인도자/관리자는 항상 볼 수 있습니다)
           </p>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, cursor: 'pointer' }}>
             <input type="checkbox" checked={hideParticipants} onChange={(e) => setHideParticipants(e.target.checked)}
               style={{ width: 15, height: 15, accentColor: 'var(--ink)' }} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-800)' }}>일반 봉사자에게 참가자 목록 및 인원 숨기기</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--gray-800)' }}>봉사자에게 참가자 목록 및 인원 숨기기</span>
           </label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="ds-btn ds-btn-primary" onClick={saveResetSettings} disabled={resetSaving} type="button" style={{ opacity: resetSaving ? 0.6 : 1 }}>

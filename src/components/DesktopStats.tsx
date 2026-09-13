@@ -464,7 +464,7 @@ export function DesktopStats({
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[
             { key: 'all' as ScopeFilter, label: '전체' },
-            { key: 'regular' as ScopeFilter, label: '일반 봉사' },
+            { key: 'regular' as ScopeFilter, label: '봉사' },
             ...specialPeriods.map(p => ({ key: p.id as ScopeFilter, label: p.label })),
           ].map(({ key, label }) => (
             <button key={String(key)} onClick={() => setScope(key)} type="button" style={chipBtn(scope === key)}>
