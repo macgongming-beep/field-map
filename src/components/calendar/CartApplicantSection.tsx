@@ -34,6 +34,7 @@ export function CartApplicantSection({
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [removing, setRemoving] = useState(false)
   const [query, setQuery] = useState('')
   const [menuUserId, setMenuUserId] = useState<number | null>(null)
   const cartApplicants = useMemo(() => event.cartApplicants ?? [], [event.cartApplicants])
@@ -51,6 +52,8 @@ export function CartApplicantSection({
 
   if (!CART_APPLICATIONS_ENABLED || (!event.allowCartApplications && cartApplicants.length === 0)) return null
   const canRevealApplicants = !hideApplicantNames || canManage
+  const canUseSelfAction = Boolean(event.allowCartApplications && onApply && (currentUserApproved || currentApplied))
+  const canOpenSection = canRevealApplicants || canUseSelfAction
 
   return (
     <section className="cart-applicants-section">
@@ -58,12 +61,13 @@ export function CartApplicantSection({
         <div className="cart-summary-group">
           <button
             aria-label={`${t(language, 'calendar.cartService')}${hideApplicantNames ? '' : ` ${cartApplicants.length}/${event.cartCapacity ?? 0}`}`}
-            aria-expanded={canRevealApplicants ? expanded : undefined}
+            aria-expanded={canOpenSection ? expanded : undefined}
             className="cart-summary-toggle"
-            disabled={!canRevealApplicants}
+            disabled={!canOpenSection}
             onClick={() => {
               if (expanded) {
                 setAdding(false)
+                setRemoving(false)
                 setMenuUserId(null)
               }
               setExpanded((value) => !value)
@@ -72,19 +76,50 @@ export function CartApplicantSection({
           >
             <span className="cart-summary-title">{t(language, 'calendar.cartService')}</span>
             {!hideApplicantNames && <span className="cart-summary-count">{cartApplicants.length}/{event.cartCapacity ?? 0}</span>}
-            {canRevealApplicants && (
+            {canOpenSection && (
               <svg className={expanded ? 'expanded' : ''} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="m6 9 6 6 6-6" />
               </svg>
             )}
           </button>
-
         </div>
+
+        {canManage && onManage && (
+          <div className="cart-head-actions">
+            <button
+              aria-label={adding ? t(language, 'common.cancel') : t(language, 'calendar.addPeople')}
+              aria-pressed={adding}
+              className={`cart-head-action${adding ? ' is-active' : ''}`}
+              onClick={() => {
+                setExpanded(true)
+                setRemoving(false)
+                setAdding((value) => !value)
+              }}
+              type="button"
+            >
+              +
+            </button>
+            <button
+              aria-label={removing ? t(language, 'calendar.closeRemoveMode') : t(language, 'calendar.removeShort')}
+              aria-pressed={removing}
+              className={`cart-head-action${removing ? ' is-active' : ''}`}
+              disabled={cartApplicants.length === 0}
+              onClick={() => {
+                setExpanded(true)
+                setAdding(false)
+                setRemoving((value) => !value)
+              }}
+              type="button"
+            >
+              −
+            </button>
+          </div>
+        )}
       </div>
 
       {expanded && (
         <div className="cart-applicants-toolbar">
-          {event.allowCartApplications && onApply && (currentUserApproved || currentApplied) && (
+          {canUseSelfAction && (
             <button
               className={`cart-apply-button${currentApplied ? ' applied' : ''}`}
               disabled={full && !currentApplied}
@@ -99,15 +134,6 @@ export function CartApplicantSection({
             </button>
           )}
 
-          {canManage && onManage && (
-            <button
-              className="cart-compact-action"
-              onClick={() => setAdding((value) => !value)}
-              type="button"
-            >
-              {adding ? t(language, 'common.cancel') : t(language, 'calendar.addPeople')}
-            </button>
-          )}
         </div>
       )}
 
@@ -152,7 +178,23 @@ export function CartApplicantSection({
               <span className="cart-applicant-avatar">{applicant.name.slice(0, 1)}</span>
               <strong>{applicant.name}</strong>
               {applicant.isTeamLead && <span className="cart-team-lead-label">{t(language, 'calendar.cartTeamLead')}</span>}
-              {canManage && (onSetTeamLead || onManage) && (
+              {removing && canManage && onManage ? (
+                <button
+                  aria-label={t(language, 'calendar.removeCartApplicant', { name: applicant.name })}
+                  className="cart-applicant-remove-button"
+                  onClick={async () => {
+                    const ok = await confirmDialog({
+                      message: t(language, 'calendar.removeCartApplicantConfirm', { name: applicant.name }),
+                      confirmLabel: t(language, 'calendar.remove'),
+                      danger: true,
+                    })
+                    if (ok) await onManage(applicant.userId, 'remove')
+                  }}
+                  type="button"
+                >
+                  ×
+                </button>
+              ) : canManage && (onSetTeamLead || onManage) && (
                 <button
                   aria-expanded={menuUserId === applicant.userId}
                   aria-label={`${applicant.name} ${t(language, 'common.more')}`}

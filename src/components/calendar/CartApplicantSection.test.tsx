@@ -68,4 +68,30 @@ describe('전시대 신청 영역', () => {
 
     expect(screen.queryByRole('button', { name: '전시대 봉사 신청' })).toBeNull()
   })
+
+  test('관리자는 요약 줄의 더하기와 빼기로 인원 관리 모드를 연다', () => {
+    render(
+      <CartApplicantSection
+        canManage
+        currentVisitor="관리자"
+        event={{
+          ...event,
+          cartApplicants: [{ userId: 8, name: '신청자', isTeamLead: false }],
+        }}
+        language="ko"
+        onManage={vi.fn()}
+        users={[
+          { id: 7, name: '관리자', approvalStatus: 'approved', isActive: true, cartServiceApproved: true },
+          { id: 8, name: '신청자', approvalStatus: 'approved', isActive: true, cartServiceApproved: true },
+        ]}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '인원 추가' }))
+    expect(screen.getByRole('searchbox', { name: '전시대 신청자 검색' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '- 제외' }))
+    expect(screen.queryByRole('searchbox', { name: '전시대 신청자 검색' })).toBeNull()
+    expect(screen.getByRole('button', { name: '신청자 전시대 신청자 제외' })).toBeTruthy()
+  })
 })
