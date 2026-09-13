@@ -511,44 +511,30 @@ export function AdminEventDetailSheet({
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, position: 'relative' }}>
                 {onAddParticipant && (
                   <button
+                    aria-label={t(language, 'calendar.addSelf')}
+                    className="participant-icon-button"
+                    title={t(language, 'calendar.addSelf')}
                     type="button"
                     onClick={() => setIsAddParticipantModalOpen(true)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 7,
-                      border: '1px solid var(--line-muted)',
-                      background: 'var(--surface)',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--text)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4
-                    }}
                   >
-                    {t(language, 'calendar.addSelf')}
+                    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" aria-hidden>
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
                   </button>
                 )}
                 {onRemoveParticipant && applicants.length > 0 && (
                   <button
+                    aria-label={isRemoveParticipantMode ? t(language, 'calendar.closeRemoveMode') : t(language, 'calendar.removeShort')}
+                    aria-pressed={isRemoveParticipantMode}
+                    className={`participant-icon-button participant-icon-button--remove${isRemoveParticipantMode ? ' is-active' : ''}`}
+                    title={isRemoveParticipantMode ? t(language, 'calendar.closeRemoveMode') : t(language, 'calendar.removeShort')}
                     type="button"
                     onClick={() => setIsRemoveParticipantMode((v) => !v)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 7,
-                      border: '1px solid var(--line-muted)',
-                      background: isRemoveParticipantMode ? 'var(--danger-50, #FEF2F2)' : 'var(--surface)',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: isRemoveParticipantMode ? 'var(--status-danger)' : 'var(--text)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4
-                    }}
                   >
-                    {isRemoveParticipantMode ? t(language, 'calendar.closeRemoveMode') : t(language, 'calendar.removeShort')}
+                    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" aria-hidden>
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
                   </button>
                 )}
               </div>
