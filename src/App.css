@@ -3430,12 +3430,7 @@ button:focus-visible {
   align-items: center;
   flex-wrap: nowrap;
   gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.mobile-users-command-row::-webkit-scrollbar {
-  display: none;
+  overflow: visible;
 }
 
 .mobile-users-more-menu {
