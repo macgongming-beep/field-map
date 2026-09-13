@@ -502,7 +502,14 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
           </label>
         </div>
         <div className="mobile-users-command-row">
-          <button className="mobile-users-add-toggle" onClick={() => setShowAddForm((value) => !value)} type="button">
+          <button
+            className="mobile-users-add-toggle"
+            onClick={() => {
+              setCartApprovalMode(false)
+              setShowAddForm((value) => !value)
+            }}
+            type="button"
+          >
             <span aria-hidden="true">＋</span>{msg('사용자 추가')}
           </button>
           <button
@@ -510,27 +517,24 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
             onClick={() => { setSelectMode((v) => !v); setCartApprovalMode(false); setCheckedIds(new Set()) }}
             type="button"
           >
-            {selectMode ? msg('선택 취소') : msg('집단 일괄 지정')}
+            {selectMode ? msg('선택 취소') : msg('선택')}
           </button>
-          <button className="mobile-users-add-toggle" onClick={() => setGroupEditOpen((v) => !v)} type="button">
-            {msg('집단 편집')}
-          </button>
-          {CART_APPLICATIONS_ENABLED && <button
-            className={`mobile-users-add-toggle${cartApprovalMode ? ' active' : ''}`}
-            onClick={() => { setCartApprovalMode((value) => !value); setSelectMode(false); setCheckedIds(new Set()) }}
-            type="button"
-          >
-            {cartApprovalMode ? msg('승인 관리 닫기') : msg('전시대 승인')}
-          </button>}
+          <details className="mobile-users-more-menu">
+            <summary aria-label={msg('사용자 관리 더보기')} title={msg('사용자 관리 더보기')}>•••</summary>
+            <div className="mobile-users-more-popover">
+              <button
+                onClick={(event) => {
+                  setGroupEditOpen((value) => !value)
+                  event.currentTarget.closest('details')?.removeAttribute('open')
+                }}
+                type="button"
+              >
+                {msg('집단 편집')}
+              </button>
+            </div>
+          </details>
         </div>
       </section>
-
-      {CART_APPLICATIONS_ENABLED && cartApprovalMode && (
-        <section className="mobile-user-manage-card mobile-users-mode-note">
-          <strong>{msg('전시대 봉사 승인 관리')}</strong>
-          <span>{msg('오른쪽 버튼으로 신청 가능 여부를 정합니다.')}</span>
-        </section>
-      )}
 
       {/* 집단 이름 편집 */}
       {groupEditOpen && (
@@ -616,29 +620,27 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
 
       {/* 선택 모드: 일괄 집단 지정 바 */}
       {selectMode && (
-        <section className="mobile-user-manage-card">
-          <h2>{msg('집단 일괄 지정')}</h2>
-          <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '0 0 10px' }}>
-            아래 목록에서 사용자를 선택한 뒤 집단을 지정하세요. (선택 {checkedIds.size}명)
-          </p>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <select
-              aria-label={msg('지정할 집단')}
-              value={bulkGroup}
-              onChange={(e) => setBulkGroup(e.target.value)}
-              style={{ flex: 1, minWidth: 120, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--surface)', color: 'var(--ink)' }}
-            >
-              <option value="">{msg('집단 선택…')}</option>
-              {groups.map((g) => <option key={g} value={g}>{g}</option>)}
-              <option value="__none__">{msg('미지정으로 해제')}</option>
-            </select>
-            <button
-              disabled={checkedIds.size === 0 || !bulkGroup}
-              onClick={() => void applyBulkGroup()}
-              type="button"
-              style={{ minHeight: 0, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', opacity: checkedIds.size === 0 || !bulkGroup ? 0.5 : 1 }}
-            >{checkedIds.size}명 지정</button>
-          </div>
+        <section className="mobile-users-selection-bar">
+          <strong>{checkedIds.size}명 {msg('선택')}</strong>
+          <select
+            aria-label={msg('지정할 집단')}
+            value={bulkGroup}
+            onChange={(e) => setBulkGroup(e.target.value)}
+          >
+            <option value="">{msg('집단 선택…')}</option>
+            {groups.map((g) => <option key={g} value={g}>{g}</option>)}
+            <option value="__none__">{msg('미지정으로 해제')}</option>
+          </select>
+          <button
+            disabled={checkedIds.size === 0 || !bulkGroup}
+            onClick={() => void applyBulkGroup()}
+            type="button"
+          >{msg('집단 지정')}</button>
+          <button
+            className="mobile-users-selection-cancel"
+            onClick={() => { setSelectMode(false); setCheckedIds(new Set()) }}
+            type="button"
+          >{msg('취소')}</button>
         </section>
       )}
 
@@ -694,7 +696,28 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
 
       <section className="mobile-users-list" aria-label={msg('사용자 목록')}>
         <div className="mobile-users-list-head">
-          <strong>{msg('사용자 목록')}</strong>
+          <div className="mobile-users-view-tabs" role="tablist" aria-label={msg('사용자 관리')}>
+            <button
+              aria-selected={!cartApprovalMode}
+              className={!cartApprovalMode ? 'active' : ''}
+              onClick={() => { setCartApprovalMode(false); setSelectMode(false); setCheckedIds(new Set()) }}
+              role="tab"
+              type="button"
+            >
+              {msg('사용자 목록')}
+            </button>
+            {CART_APPLICATIONS_ENABLED && (
+              <button
+                aria-selected={cartApprovalMode}
+                className={cartApprovalMode ? 'active' : ''}
+                onClick={() => { setCartApprovalMode(true); setSelectMode(false); setCheckedIds(new Set()); setSelectedUserId(null) }}
+                role="tab"
+                type="button"
+              >
+                {msg('전시대 승인')}
+              </button>
+            )}
+          </div>
           <span>{filteredUsers.length}명</span>
         </div>
         {filteredUsers.length === 0 ? (
@@ -702,7 +725,7 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
         ) : (
           filteredUsers.map((item) => (
             <div
-              className="mobile-users-list-card"
+              className={`mobile-users-list-card${cartApprovalMode ? ' is-cart-approval' : ''}`}
               key={item.id}
               onClick={() => (selectMode ? toggleChecked(item.id) : cartApprovalMode ? undefined : setSelectedUserId(item.id))}
               onKeyDown={(event) => {
@@ -711,8 +734,8 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
                 if (selectMode) toggleChecked(item.id)
                 else if (!cartApprovalMode) setSelectedUserId(item.id)
               }}
-              role="button"
-              tabIndex={0}
+              role={cartApprovalMode ? undefined : 'button'}
+              tabIndex={cartApprovalMode ? undefined : 0}
             >
               {selectMode ? (
                 <input
@@ -728,13 +751,15 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
               <span className="mobile-users-row-main">
                 <strong>{item.name}{currentUser?.id === item.id ? <small> ({msg('나')})</small> : null}</strong>
                 <small>
-                  {item.loginId} · {formatLastLogin(item.lastLoginAt)}
+                  {cartApprovalMode ? `${displayRole(item.role)} · ` : ''}{item.loginId} · {formatLastLogin(item.lastLoginAt)}
                   {item.groupName ? ` · ${item.groupName}` : ''}
                 </small>
               </span>
-              <span className={`mobile-user-role-badge ${roleClass(item.role)}`}>
-                {displayRole(item.role)}
-              </span>
+              {!cartApprovalMode && (
+                <span className={`mobile-user-role-badge ${roleClass(item.role)}`}>
+                  {displayRole(item.role)}
+                </span>
+              )}
               {CART_APPLICATIONS_ENABLED && cartApprovalMode ? (
                 <button
                   aria-label={`${item.name} ${msg('전시대 승인')}`}
@@ -746,7 +771,8 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
                   }}
                   type="button"
                 >
-                  {item.cartServiceApproved ? msg('승인됨') : msg('미승인')}
+                  <span className="mobile-user-approval-switch" aria-hidden="true"><i /></span>
+                  <span>{item.cartServiceApproved ? msg('승인됨') : msg('미승인')}</span>
                 </button>
               ) : !selectMode && <span className="mobile-users-chevron" aria-hidden="true">›</span>}
             </div>

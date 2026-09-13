@@ -61,6 +61,8 @@ export const messagesEn: Record<string, string> = {
   '아이디 · 닉네임 저장': 'Save ID and nickname',
   '0000으로 초기화': 'Reset to 0000',
   '집단 편집': 'Edit groups',
+  '집단 지정': 'Assign group',
+  '사용자 관리 더보기': 'More user management options',
   '집단 이름을 누르면 수정할 수 있고, ×로 삭제합니다. 이름을 바꾸면 소속된 사용자도 함께 옮겨집니다. 삭제해도 사용자 정보는 유지되며 해당 집단은 미지정으로 표시됩니다.': 'Tap a group name to edit it, or use × to delete it. Renaming moves its users with it. Deleting a group keeps user data and marks those users as unassigned.',
   '아직 집단이 없습니다. 아래에 이름을 넣어 만드세요. 집단을 쓰지 않는다면 비워 둬도 됩니다.': 'No groups yet. Enter a name below to create one, or leave this empty if groups are not used.',
   '오늘': 'Today',
