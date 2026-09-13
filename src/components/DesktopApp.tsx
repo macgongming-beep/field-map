@@ -166,6 +166,7 @@ export function DesktopApp({
   onApproveRestaurantRequest,
   onRejectRestaurantRequest,
   language,
+  onChangeLanguage,
   currentUser,
   onChangePin,
   onUpdateMyProfile,
@@ -175,6 +176,7 @@ export function DesktopApp({
   onPlaceDeleted,
 }: {
   language: AppLanguage
+  onChangeLanguage: (language: AppLanguage) => void
   buildings: Building[]
   calendarEvents: CalendarEvent[]
   cardBoundaries: CardBoundary[]
@@ -879,6 +881,7 @@ export function DesktopApp({
             <DesktopProfileSettings
               user={currentUser}
               language={language}
+              onChangeLanguage={onChangeLanguage}
               onChangePin={onChangePin}
               onUpdateProfile={onUpdateMyProfile}
               onFetchLoginLogs={onFetchMyLoginLogs}

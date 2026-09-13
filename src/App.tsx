@@ -355,6 +355,7 @@ function App() {
         {isDesktop ? (
           <DesktopApp
             language={language}
+            onChangeLanguage={handleChangeLanguage}
             leaderNames={leaderNames}
             buildings={buildings}
             calendarEvents={calendarEvents}

@@ -5,17 +5,19 @@ import type { Role } from '../types'
 import { roleLabels } from '../types'
 import { alertDialog } from '../lib/confirm'
 import { supabase } from '../lib/supabase'
-import { t, type AppLanguage } from '../i18n'
+import { languageLabels, t, type AppLanguage } from '../i18n'
 
 export function DesktopProfileSettings({
   user,
   language = 'ko',
+  onChangeLanguage,
   onChangePin,
   onUpdateProfile,
   onFetchLoginLogs,
 }: {
   user: AuthUser
   language?: AppLanguage
+  onChangeLanguage: (language: AppLanguage) => void
   onChangePin: (newPin: string) => Promise<boolean>
   onUpdateProfile: (input: { name: string; phone?: string | null }) => Promise<boolean>
   onFetchLoginLogs?: (limit?: number) => Promise<LoginLogRecord[]>
@@ -100,6 +102,26 @@ export function DesktopProfileSettings({
         <section className="desk-card ds-card" style={{ display: 'grid', gap: 12 }}>
           <h2 className="desk-card__title">{t(language, 'settings.fontScale')}</h2>
           <FontScalePicker userId={user.id} language={language} />
+        </section>
+
+        <section className="desk-card ds-card desktop-language-settings">
+          <div>
+            <h2 className="desk-card__title">{t(language, 'settings.language')}</h2>
+            <p>{t(language, 'settings.languageHelp')}</p>
+          </div>
+          <div className="desktop-language-grid" aria-label={t(language, 'settings.language')}>
+            {(['ko', 'zh', 'en'] as AppLanguage[]).map((item) => (
+              <button
+                aria-pressed={language === item}
+                className={language === item ? 'active' : ''}
+                key={item}
+                onClick={() => onChangeLanguage(item)}
+                type="button"
+              >
+                {languageLabels[item]}
+              </button>
+            ))}
+          </div>
         </section>
 
         <section className="desk-card ds-card" style={{ display: 'grid', gap: 16 }}>

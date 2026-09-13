@@ -4587,6 +4587,46 @@ button:focus-visible {
   font-weight: 700;
 }
 
+.desktop-language-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+}
+
+.desktop-language-settings p {
+  margin: 5px 0 0;
+  color: var(--gray-500);
+  font-size: 12px;
+}
+
+.desktop-language-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
+  padding: 4px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--gray-50);
+}
+
+.desktop-language-grid button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gray-600);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.desktop-language-grid button.active {
+  background: var(--bg-card);
+  color: var(--gray-900);
+  box-shadow: var(--shadow-xs);
+}
+
 .desk-card__title-dot {
   width: 4px;
   height: 16px;
