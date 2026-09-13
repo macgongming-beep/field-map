@@ -1,11 +1,27 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'VITE_')
+  const isDemo = (process.env.VITE_DEMO_MODE ?? env.VITE_DEMO_MODE) === 'true'
+  const appTitle = isDemo ? 'Field Map - DEMO' : 'Field Map - YONGIN'
+  const appDescription = isDemo
+    ? 'Field Map 데모 버전입니다. 자유롭게 기능을 둘러보세요.'
+    : 'Field Map 용인 회중 구역 관리 앱입니다.'
+
+  return {
   plugins: [
     react(),
+    {
+      name: 'field-map-build-metadata',
+      transformIndexHtml(html) {
+        return html
+          .replaceAll('__FIELD_MAP_TITLE__', appTitle)
+          .replaceAll('__FIELD_MAP_DESCRIPTION__', appDescription)
+      },
+    },
     VitePWA({
       registerType: 'prompt',
       strategies: 'injectManifest',
@@ -14,9 +30,9 @@ export default defineConfig({
       injectRegister: false, // src/lib/pwa.ts에서 직접 등록
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Field Map',
+        name: isDemo ? 'Field Map DEMO' : 'Field Map',
         short_name: 'Field Map',
-        description: 'Yongin Chinese Territory Field Map',
+        description: appDescription,
         theme_color: '#1A1A1A',
         background_color: '#ffffff',
         display: 'standalone',
@@ -67,4 +83,5 @@ export default defineConfig({
       },
     },
   },
+  }
 })
