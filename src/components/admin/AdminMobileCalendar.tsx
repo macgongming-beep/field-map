@@ -646,7 +646,6 @@ export function AdminMobileCalendar({
         const canEdit = role === 'admin' || role === 'developer' || assignEvent.leaders.includes(currentVisitor)
         return (
           <AssignmentEditor
-            onAddGuest={onAddParticipantToEvent ? (eventId, name) => onAddParticipantToEvent(eventId, name, '게스트') : undefined}
             event={assignEvent}
             cards={myCards}
             buildings={buildings}
@@ -654,7 +653,6 @@ export function AdminMobileCalendar({
             cardBoundaries={cardBoundaries}
             currentVisitor={currentVisitor}
             canEdit={canEdit}
-            registeredUsers={participantUsers}
             allCards={cards}
             informalAssets={informalAssets}
             informalGroups={informalGroups}

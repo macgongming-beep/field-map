@@ -12,13 +12,6 @@ import { teamHex } from './teamColors'
 import { confirmDialog } from '../../lib/confirm'
 import { matchesName } from '../../utils/koreanSearch'
 import { msg } from '../../lib/msg'
-import { showToast } from '../../lib/toast'
-import {
-  eventParticipantNameKey,
-  matchesRegisteredUserName,
-  normalizeEventParticipantName,
-  type EventParticipantUser,
-} from '../../utils/eventParticipantUsers'
 
 type Props = {
   /** 이 화면이 다루는 일정. 다른 일정 배정이 섞이지 않게 여기서도 거른다 */
@@ -26,9 +19,6 @@ type Props = {
   participants: string[]              // 일정 신청자 ∪ 배정자
   /** 앱 계정이 없는 손님 이름. participants 안에 들어 있고 여기에도 있으면 게스트다 */
   guests?: string[]
-  /** 게스트 추가 — 없으면 추가 칸을 숨긴다 */
-  onAddGuest?: (name: string) => boolean | void | Promise<boolean | void>
-  registeredUsers?: EventParticipantUser[]
   teams: DraftTeam[]
   cards: TerritoryCard[]
   canEdit: boolean
@@ -41,7 +31,7 @@ type Props = {
   buildings?: Building[]
 }
 
-export function TeamBuildScreen({ eventId, participants, guests = [], onAddGuest, registeredUsers = [], teams, cards, canEdit, dispatch, onOpenTeamZones, informalAssets = [], eventInformalAssignments = [], eventRestaurantAssignments = [], buildings = []}: Props) {
+export function TeamBuildScreen({ eventId, participants, guests = [], teams, cards, canEdit, dispatch, onOpenTeamZones, informalAssets = [], eventInformalAssignments = [], eventRestaurantAssignments = [], buildings = []}: Props) {
 
   // ⚠ **여기서도 일정으로 거른다.** 부모가 걸러서 주지만, 그걸 믿고 이름만 보다가
   //   다른 일정의 비공식·식당 배정이 오늘 팀에 붙어 보인 적이 있다.
@@ -85,30 +75,7 @@ export function TeamBuildScreen({ eventId, participants, guests = [], onAddGuest
   }
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
-  const [guestInput, setGuestInput] = useState('')
-  const [addingGuest, setAddingGuest] = useState(false)
   const guestSet = useMemo(() => new Set(guests), [guests])
-
-  /** 손님을 명단에 넣는다. 같은 이름이 이미 있으면 막는다 — 누가 누군지 헷갈린다 */
-  const submitGuest = async () => {
-    const name = normalizeEventParticipantName(guestInput)
-    if (!name || addingGuest || !onAddGuest) return
-    if (participants.some((participant) => eventParticipantNameKey(participant) === eventParticipantNameKey(name))) {
-      showToast(msg('이미 있는 이름입니다.'), 'info')
-      return
-    }
-    if (matchesRegisteredUserName(registeredUsers, name)) {
-      showToast(msg('등록된 계정과 같은 이름입니다. 계정을 활성화해서 추가해 주세요.'), 'info')
-      return
-    }
-    setAddingGuest(true)
-    try {
-      const result = await onAddGuest(name)
-      if (result !== false) setGuestInput('')
-    } finally {
-      setAddingGuest(false)
-    }
-  }
 
   const assignedSet = useMemo(
     () => new Set(teams.flatMap((t) => t.members)),
@@ -210,22 +177,6 @@ export function TeamBuildScreen({ eventId, participants, guests = [], onAddGuest
             )
           })}
         </div>
-        {canEdit && onAddGuest && (
-          <div className="asg-guest-add">
-            {/* 앱 계정이 없는 손님. 이름만 적어 명단에 넣는다 */}
-            <input
-              className="asg-guest-input"
-              value={guestInput}
-              onChange={(e) => setGuestInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') void submitGuest() }}
-              placeholder={msg('손님 이름 추가')}
-              aria-label={msg('손님 이름 추가')}
-            />
-            <button className="asg-guest-btn" type="button" disabled={!guestInput.trim() || addingGuest} onClick={() => void submitGuest()}>
-              {addingGuest ? msg('추가 중…') : msg('추가')}
-            </button>
-          </div>
-        )}
         <p className="asg-build-hint">{msg('사람을 골라 묶으면 팀이 됩니다. 묶은 뒤 팀의 › 를 눌러 구역을 배정하세요.')}</p>
       </section>
 

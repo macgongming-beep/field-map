@@ -934,7 +934,6 @@ export function DesktopCalendar({
             cardBoundaries={cardBoundaries}
             currentVisitor={currentVisitor}
             canEdit={canEditAssignment}
-            registeredUsers={participantUsers}
             informalAssets={informalAssets}
             informalGroups={informalGroups}
             eventInformalAssignments={eventInformalAssignments}
@@ -943,7 +942,6 @@ export function DesktopCalendar({
             onRemoveInformalAssignment={onRemoveInformalAssignment}
             onAssignRestaurantToUser={onAssignRestaurantToUser}
             onRemoveRestaurantAssignment={onRemoveRestaurantAssignment}
-            onAddGuest={onAddParticipant ? (eventId, name) => onAddParticipant(eventId, name, '게스트') : undefined}
             onClose={() => setAssignEventId(null)}
             onShare={(eventId, assignments, options) => onAssignCardsToEventParticipantsBulk(eventId, assignments, {
               status: 'shared',
