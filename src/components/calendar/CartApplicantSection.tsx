@@ -89,7 +89,7 @@ export function CartApplicantSection({
             <button
               aria-label={adding ? t(language, 'common.cancel') : t(language, 'calendar.addPeople')}
               aria-pressed={adding}
-              className="participant-icon-button"
+              className={`participant-icon-button${adding ? ' is-active' : ''}`}
               onClick={() => {
                 setExpanded(true)
                 setRemoving(false)

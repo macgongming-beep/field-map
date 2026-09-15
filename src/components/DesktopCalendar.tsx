@@ -1174,7 +1174,7 @@ function EventDetailCard({
                     <button
                       aria-label={t(language, 'calendar.addSelf')}
                       aria-pressed={addParticipantEventId === event.id}
-                      className="participant-icon-button"
+                      className={`participant-icon-button${addParticipantEventId === event.id ? ' is-active' : ''}`}
                       title={t(language, 'calendar.addSelf')}
                       type="button"
                       onClick={() => {

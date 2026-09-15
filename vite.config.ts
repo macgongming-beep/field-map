@@ -5,8 +5,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
-  const isDemo = (process.env.VITE_DEMO_MODE ?? env.VITE_DEMO_MODE) === 'true'
+  const isDemo = (process.env.VITE_DEMO_MODE || env.VITE_DEMO_MODE) === 'true'
   const appTitle = isDemo ? 'Field Map - DEMO' : 'Field Map - YONGIN'
+  const installName = isDemo ? 'Field Map DEMO' : 'Field Map'
+  const appUrl = isDemo
+    ? 'https://chinese-territory-app-demo.vercel.app/'
+    : 'https://chinese-territory-app.vercel.app/'
   const appDescription = isDemo
     ? 'Field Map 데모 버전입니다. 자유롭게 기능을 둘러보세요.'
     : 'Field Map 용인 회중 구역 관리 앱입니다.'
@@ -20,6 +24,7 @@ export default defineConfig(({ mode }) => {
         return html
           .replaceAll('__FIELD_MAP_TITLE__', appTitle)
           .replaceAll('__FIELD_MAP_DESCRIPTION__', appDescription)
+          .replaceAll('__FIELD_MAP_URL__', appUrl)
       },
     },
     VitePWA({
@@ -30,8 +35,8 @@ export default defineConfig(({ mode }) => {
       injectRegister: false, // src/lib/pwa.ts에서 직접 등록
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: isDemo ? 'Field Map DEMO' : 'Field Map',
-        short_name: 'Field Map',
+        name: installName,
+        short_name: installName,
         description: appDescription,
         theme_color: '#1A1A1A',
         background_color: '#ffffff',

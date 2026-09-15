@@ -87,11 +87,28 @@ describe('전시대 신청 영역', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '인원 추가' }))
+    const addButton = screen.getByRole('button', { name: '인원 추가' })
+    fireEvent.click(addButton)
+    expect(addButton.classList.contains('is-active')).toBe(true)
     expect(screen.getByRole('searchbox', { name: '전시대 신청자 검색' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: '- 제외' }))
     expect(screen.queryByRole('searchbox', { name: '전시대 신청자 검색' })).toBeNull()
     expect(screen.getByRole('button', { name: '신청자 전시대 신청자 제외' })).toBeTruthy()
+  })
+
+  test('신청자가 없으면 제외 버튼을 비활성화한다', () => {
+    render(
+      <CartApplicantSection
+        canManage
+        currentVisitor="관리자"
+        event={event}
+        language="ko"
+        onManage={vi.fn()}
+        users={[{ id: 7, name: '관리자', approvalStatus: 'approved', isActive: true, cartServiceApproved: true }]}
+      />,
+    )
+
+    expect((screen.getByRole('button', { name: '- 제외' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
