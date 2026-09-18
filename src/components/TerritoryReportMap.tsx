@@ -31,22 +31,26 @@ export function TerritoryReportMap({ regions, boundaries }: {
       logoControlOptions: { position: naver.maps.Position.BOTTOM_LEFT },
     })
     const bounds = new naver.maps.LatLngBounds()
-    boundaries.forEach((boundary, index) => {
+    const regionColors = new Map(regions.map((region, index) => [
+      region.region,
+      REGION_COLORS[index % REGION_COLORS.length],
+    ]))
+    boundaries.forEach((boundary) => {
       const path = boundary.points.map(point => {
         const position = new naver.maps.LatLng(point.lat, point.lng)
         bounds.extend(position)
         return position
       })
       if (path.length < 3) return
-      const color = REGION_COLORS[index % REGION_COLORS.length]
+      const color = regionColors.get(boundary.region) ?? REGION_COLORS[0]
       new naver.maps.Polygon({
         map,
         paths: path,
         fillColor: color,
-        fillOpacity: 0.1,
+        fillOpacity: 0.035,
         strokeColor: color,
-        strokeOpacity: 0.78,
-        strokeWeight: 2,
+        strokeOpacity: 0.72,
+        strokeWeight: 1.25,
       })
     })
     visible.forEach(region => {
@@ -63,7 +67,7 @@ export function TerritoryReportMap({ regions, boundaries }: {
     })
     if (visible.length > 1) map.fitBounds(bounds, { top: 48, right: 48, bottom: 48, left: 48 })
     return () => map.destroy()
-  }, [boundaries, points])
+  }, [boundaries, points, regions])
 
   const hasPoints = points.some(r => r.centerLat != null && r.centerLng != null)
   return (

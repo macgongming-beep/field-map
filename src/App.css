@@ -32777,6 +32777,13 @@ button > svg {
   @page { size: A4 portrait; margin: 12mm; }
   .no-print { display: none !important; }
   .print-only { display: block !important; }
+  html,
+  body,
+  #root { width: 100% !important; min-width: 0 !important; background: #fff !important; }
+  .desktop-sidebar,
+  .mobile-shell-host { display: none !important; }
+  .desktop-shell,
+  .desktop-main { display: block !important; width: 100% !important; min-height: 0 !important; overflow: visible !important; background: #fff !important; }
   .territory-report-page,
   .shared-report-page { padding: 0; background: #fff; }
   .territory-report-view { width: 100%; border: 0; padding: 0; }

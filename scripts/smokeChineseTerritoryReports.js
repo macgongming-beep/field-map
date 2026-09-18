@@ -46,6 +46,14 @@ const sampleBoundary = [{
   region: '테스트구',
   points: [{ lat: 37.3, lng: 127.1 }, { lat: 37.31, lng: 127.1 }, { lat: 37.3, lng: 127.11 }],
 }]
+const manyBoundaries = Array.from({ length: 21 }, (_, index) => ({
+  region: '테스트구',
+  points: [
+    { lat: 37.3 + index * 0.0001, lng: 127.1 },
+    { lat: 37.30005 + index * 0.0001, lng: 127.10005 },
+    { lat: 37.3 + index * 0.0001, lng: 127.1001 },
+  ],
+}))
 const create = (pin, includeAreaDetails = false) => rpc('create_chinese_territory_report_share_v2_tx', {
   p_token: token,
   p_period_start: '2026-03-01',
@@ -110,10 +118,19 @@ try {
   check('암호를 끄면 링크만으로 보고서를 연다', openResult.ok === true)
   check('선택한 동별 상세 설정을 공유 스냅샷에 고정한다',
     openResult.snapshot?.includeAreaDetails === true && openResult.snapshot?.areas?.length > 0)
-  check('구 단위 합성 경계를 공유 스냅샷에 고정한다',
+  check('구역 카드 경계를 공유 스냅샷에 고정한다',
     openResult.snapshot?.regionBoundaries?.[0]?.region === '테스트구')
   check('구별 최근 180일 방문 세대를 집계한다',
     openResult.snapshot?.regions?.every(row => Number.isInteger(row.managed180d)))
+  const cardBoundaryPreview = await rpc('preview_chinese_territory_report_v2_tx', {
+    p_token: token,
+    p_period_start: '2026-03-01',
+    p_period_end: '2026-09-01',
+    p_note: 'card boundaries',
+    p_include_area_details: false,
+    p_region_boundaries: manyBoundaries,
+  })
+  check('구별 카드 경계선을 20개 넘게 전달할 수 있다', cardBoundaryPreview?.regionBoundaries?.length === 21)
   const majorityArea = openResult.snapshot?.areas?.find(row =>
     row.region === fixtureMarker && row.area === fixtureMarker)
   check('건물 3곳 중 한 곳이 중국어 세대 과반이면 중심 좌표를 공개하지 않는다',

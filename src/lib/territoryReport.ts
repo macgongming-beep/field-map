@@ -1,7 +1,6 @@
 import { supabase } from './supabase'
 import { getAuthToken } from './authToken'
-import { mergeCardBoundaryPoints } from '../utils/boundaryMerge'
-import type { CardBoundary, GeoPoint } from '../types'
+import type { GeoPoint } from '../types'
 import type { ChineseTerritoryReportSnapshot, TerritoryReportRegionBoundary, TerritoryReportShare } from '../types/territoryReport'
 
 function requireToken() {
@@ -36,25 +35,17 @@ async function loadReportRegionBoundaries() {
     ])
     if (cardsResult.error || boundariesResult.error) return []
     const regionByCard = new Map((cardsResult.data ?? []).map(card => [card.id, card.region || '미분류']))
-    const grouped = new Map<string, CardBoundary[]>()
-    for (const row of boundariesResult.data ?? []) {
+    return (boundariesResult.data ?? []).flatMap(row => {
       const region = regionByCard.get(row.card_id)
       const points = toPoints(row.points)
-      if (!region || points.length < 3) continue
-      const list = grouped.get(region) ?? []
-      list.push({ cardId: row.card_id, points })
-      grouped.set(region, list)
-    }
-    return Array.from(grouped, ([region, boundaries]) => {
-      const merged = mergeCardBoundaryPoints(boundaries)
-      return merged ? {
+      return region && points.length >= 3 ? [{
         region,
-        points: merged.points.map(point => ({
+        points: points.map(point => ({
           lat: Number(point.lat.toFixed(5)),
           lng: Number(point.lng.toFixed(5)),
         })),
-      } : null
-    }).filter((row): row is TerritoryReportRegionBoundary => row !== null)
+      }] : []
+    })
   })()
   return regionBoundariesPromise
 }
