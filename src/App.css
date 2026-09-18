@@ -32788,7 +32788,6 @@ button > svg {
   .shared-report-page { padding: 0; background: #fff; }
   .territory-report-view { width: 100%; border: 0; padding: 0; }
   .territory-report-map { height: 250px; }
-  .territory-report-map-shell { display: none !important; }
   .territory-report-section { break-inside: avoid; }
   .page-break-before { break-before: page; }
   .territory-report-table-wrap { overflow: visible; }
