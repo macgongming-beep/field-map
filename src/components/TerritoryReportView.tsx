@@ -9,6 +9,7 @@ export function TerritoryReportView({ snapshot, shared = false }: {
   snapshot: ChineseTerritoryReportSnapshot
   shared?: boolean
 }) {
+  const hasManaged180d = snapshot.regions.every(row => row.managed180d != null)
   const s = snapshot.summary
   const monthlyVisits = snapshot.monthlyVisits ?? []
   const cardRegions = snapshot.cardRegions ?? []
@@ -58,7 +59,7 @@ export function TerritoryReportView({ snapshot, shared = false }: {
         <TerritoryReportMap regions={snapshot.regions} boundaries={snapshot.regionBoundaries ?? []} />
         <div className="territory-report-table-wrap">
           <table>
-            <thead><tr><th>지역</th><th>전체</th><th>주택</th><th>식당·상가</th><th>최근 180일 방문 세대</th></tr></thead>
+            <thead><tr><th>지역</th><th>전체</th><th>주택</th><th>식당·상가</th><th>{hasManaged180d ? '최근 180일 방문 세대' : '최근 30일 방문 세대'}</th></tr></thead>
             <tbody>{snapshot.regions.map(row => (
               <tr key={row.region}>
                 <td>{row.region}</td><td>{fmt(row.total)}</td><td>{fmt(row.residential)}</td>
