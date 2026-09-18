@@ -14345,6 +14345,7 @@ button:focus-visible {
   .unit-flag-chip.forbidden { background: var(--danger-100); color: var(--danger-700); }
   .unit-flag-chip.regular   { background: var(--success-100); color: var(--success-700); }
   .unit-flag-chip.chinese   { background: var(--warning-100); color: var(--warning-700); }
+  .unit-flag-chip.needs-review { background: #fff0ec; color: #a13f2f; }
 
   /* 단일+일괄 추가 래퍼 */
   .unit-add-section {
@@ -32589,29 +32590,53 @@ button > svg {
   gap: 14px;
 }
 .territory-report-toolbar > div:nth-child(2) { flex: 1; }
-.territory-report-toolbar h1 { margin: 0 0 4px; font-size: 24px; }
+.territory-report-toolbar h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: 0; }
 .territory-report-toolbar p { margin: 0; color: #6f746f; font-size: 13px; }
 .territory-report-toolbar-actions { display: flex; gap: 8px; }
+.territory-report-action,
+.territory-report-refresh {
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #cfd2cc;
+  border-radius: 6px;
+  padding: 0 13px;
+  background: #fff;
+  color: #242724;
+  font-size: 12.5px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.territory-report-action svg,
+.territory-report-refresh svg { width: 17px; height: 17px; flex: 0 0 auto; }
+.territory-report-action.is-primary { border-color: #202320; background: #202320; color: #fff; }
+.territory-report-action:disabled,
+.territory-report-refresh:disabled { opacity: .45; cursor: default; }
 .territory-report-controls,
 .territory-report-share-panel {
   width: min(1120px, 100%);
   margin: 0 auto 18px;
-  background: #fff;
-  border: 1px solid #dedfdb;
-  border-radius: 8px;
-  padding: 16px;
+  background: #eef0ec;
+  border: 0;
+  border-radius: 6px;
+  padding: 14px;
 }
-.territory-report-controls { display: grid; grid-template-columns: 155px 155px minmax(260px, 1fr) auto; align-items: end; gap: 12px; }
+.territory-report-controls { display: grid; grid-template-columns: 330px minmax(280px, 1fr) auto; align-items: start; gap: 14px; }
+.territory-report-period-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .territory-report-controls label,
 .territory-report-share-form label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; color: #575c57; }
 .territory-report-controls input,
 .territory-report-share-form input,
 .territory-report-share-form select,
 .territory-report-created-link input {
-  height: 42px; border: 1px solid #d5d7d2; border-radius: 6px; padding: 0 12px;
+  height: 40px; border: 1px solid #cfd2cc; border-radius: 6px; padding: 0 11px;
   background: #fff; color: #1b1d1b; font: inherit;
 }
 .territory-report-note-input small { color: #a34b3d; font-size: 10px; font-weight: 500; line-height: 1.35; }
+.territory-report-refresh { align-self: start; margin-top: 21px; background: #fff; }
 .territory-report-share-form { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
 .territory-report-share-form h2 { width: 100%; margin: 0; font-size: 18px; }
 .territory-report-share-form > p { width: 100%; margin: 0; color: #727772; font-size: 12px; }
@@ -32630,8 +32655,8 @@ button > svg {
   width: min(1120px, 100%);
   margin: 0 auto;
   background: #fff;
-  border: 1px solid #dedfdb;
-  padding: 44px;
+  border: 0;
+  padding: 36px 40px 44px;
 }
 .territory-report-heading { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #202320; padding-bottom: 22px; }
 .territory-report-eyebrow { margin: 0 0 8px !important; color: #377064 !important; font-size: 12px !important; font-weight: 800; }
@@ -32639,24 +32664,21 @@ button > svg {
 .territory-report-heading p { margin: 0; color: #777b76; font-size: 13px; }
 .territory-report-generated { color: #747974; font-size: 12px; align-self: end; }
 .territory-report-note { margin: 22px 0; padding: 14px 16px; background: #f3f5f2; border-left: 3px solid #587d73; line-height: 1.6; font-size: 14px; }
-.territory-report-kpis { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #dedfdb; margin: 24px 0 34px; }
-.territory-report-kpis > div { padding: 18px 20px; border-right: 1px solid #dedfdb; }
+.territory-report-kpis { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid #dedfdb; margin: 24px 0 32px; }
+.territory-report-kpis > div { padding: 15px 18px; border-right: 1px solid #dedfdb; }
 .territory-report-kpis > div:last-child { border: 0; }
 .territory-report-kpis span { display: block; color: #707570; font-size: 12px; margin-bottom: 7px; }
 .territory-report-kpis strong { font-size: 26px; }
-.territory-report-section { margin-top: 34px; }
+.territory-report-section { margin-top: 30px; }
 .territory-report-section-title { display: flex; align-items: end; justify-content: space-between; margin-bottom: 14px; }
 .territory-report-section h2 { margin: 0; font-size: 18px; }
 .territory-report-section-title p { margin: 5px 0 0; color: #777b76; font-size: 12px; }
-.territory-report-map { width: 100%; height: 340px; border: 1px solid #dcded9; }
+.territory-report-map { width: 100%; height: 300px; border: 1px solid #dcded9; }
 .territory-report-map-shell { position: relative; }
-.territory-report-map-level { position: absolute; z-index: 2; top: 12px; right: 12px; display: flex; padding: 3px; background: #fff; border: 1px solid #d5d7d2; box-shadow: 0 2px 7px #0001; }
-.territory-report-map-level button { height: 32px; padding: 0 13px; border: 0; background: #fff; color: #696e69; font-weight: 700; }
-.territory-report-map-level button.is-active { background: #1b1d1b; color: #fff; }
 .territory-report-map-empty { height: 180px; display: grid; place-items: center; background: #f4f5f2; color: #777; }
-.territory-report-map-marker { min-width: 100px; padding: 7px 10px; background: #fff; border: 1px solid #476c62; box-shadow: 0 2px 8px #0002; text-align: center; }
-.territory-report-map-marker b { display: block; font-size: 12px; }
-.territory-report-map-marker span { color: #476c62; font-size: 11px; }
+.territory-report-map-marker { min-width: 82px; display: flex; align-items: baseline; justify-content: center; gap: 6px; padding: 6px 9px; background: #fff; border: 1px solid #476c62; border-radius: 4px; box-shadow: 0 2px 7px #0002; text-align: center; white-space: nowrap; }
+.territory-report-map-marker b { font-size: 11px; }
+.territory-report-map-marker span { color: #476c62; font-size: 10px; }
 .territory-report-table-wrap { overflow-x: auto; margin-top: 16px; }
 .territory-report-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .territory-report-table-wrap th { text-align: right; color: #646964; background: #f3f5f2; }
@@ -32667,11 +32689,11 @@ button > svg {
 .territory-report-table-wrap th,
 .territory-report-table-wrap td { padding: 10px 12px; border-bottom: 1px solid #e4e5e1; text-align: right; white-space: nowrap; }
 .territory-report-recency { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.territory-report-recency > div { padding: 14px; background: #f3f5f2; }
+.territory-report-recency > div { padding: 12px 14px; border: 1px solid #e2e4df; background: #fff; }
 .territory-report-recency span { display: block; color: #707570; font-size: 11px; }
 .territory-report-recency b { display: block; margin-top: 5px; font-size: 18px; }
 .territory-report-recency-note { margin: 8px 0 0; color: #777b76; font-size: 10px; }
-.territory-report-monthly { margin-top: 22px; border: 1px solid #dedfdb; padding: 18px; }
+.territory-report-monthly { margin-top: 22px; border-top: 1px solid #dedfdb; padding: 18px 0 0; }
 .territory-report-monthly h3 { margin: 0 0 18px; font-size: 14px; }
 .territory-report-monthly-chart { display: flex; align-items: end; gap: 10px; height: 180px; }
 .territory-report-monthly-column { flex: 1; min-width: 34px; height: 100%; display: grid; grid-template-rows: 20px 1fr 18px 16px; text-align: center; font-style: normal; }
@@ -32692,7 +32714,6 @@ button > svg {
 .territory-report-area-filter { display: flex; align-items: center; gap: 8px; color: #666b66; font-size: 11px; font-weight: 700; }
 .territory-report-area-filter select { height: 36px; min-width: 130px; border: 1px solid #d4d6d1; background: #fff; border-radius: 6px; padding: 0 30px 0 10px; color: #222522; }
 .print-only { display: none; }
-.territory-report-warning { color: #a44735; font-size: 12px; padding: 12px; background: #fff4f0; }
 
 .shared-report-topbar { padding-top: 18px; }
 .shared-report-topbar strong { flex: 1; }
@@ -32714,8 +32735,9 @@ button > svg {
   .territory-report-page { padding: 18px 12px 48px; }
   .territory-report-toolbar { align-items: flex-start; flex-wrap: wrap; }
   .territory-report-toolbar-actions { width: 100%; justify-content: flex-end; }
-  .territory-report-controls { grid-template-columns: 1fr 1fr; }
-  .territory-report-note-input { grid-column: 1 / -1; }
+  .territory-report-controls { grid-template-columns: 1fr; }
+  .territory-report-period-fields { grid-template-columns: 1fr 1fr; }
+  .territory-report-refresh { width: 100%; margin-top: 0; }
   .territory-report-view { padding: 24px 16px; }
   .territory-report-heading { display: block; }
   .territory-report-generated { margin-top: 12px; }

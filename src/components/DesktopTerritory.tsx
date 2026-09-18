@@ -264,7 +264,7 @@ export function DesktopTerritory({
   // 기본값은 '중국어' 로 두어 이 화면을 쓰던 방식이 그대로 유지되게 한다.
   // PointSortKey / BuildingSortKey 는 utils/territoryTableSort 한 곳에서만 정한다
   const [pointSort, setPointSort] = useSessionState<{ key: PointSortKey; dir: 'asc' | 'desc' }>('dt.pointSort', { key: '카드', dir: 'asc' })
-  type PointKindFilter = '전체' | '중국어' | '정기방문' | '식당'
+  type PointKindFilter = '전체' | '중국어' | '정기방문' | '식당' | '점검 필요'
   const [pointKindFilter, setPointKindFilter] = useSessionState<PointKindFilter>('dt.pointKindFilter', '중국어')
   const [buildingRegularFilter, setBuildingRegularFilter] = useSessionState<'전체' | '있음' | '없음'>('dt.buildingRegularFilter', '전체')
   const [buildingMemoFilter, setBuildingMemoFilter] = useSessionState<'전체' | '있음' | '없음'>('dt.buildingMemoFilter', '전체')
@@ -1732,7 +1732,7 @@ export function DesktopTerritory({
             <div className="tbl-filter-layer" style={{ gap: 12 }}>
               <span className="tbl-filter-label">구분</span>
               <div className="tbl-mini-seg">
-                {(['전체', '중국어', '정기방문', '식당'] as const).map((f) => (
+                {(['전체', '중국어', '정기방문', '식당', '점검 필요'] as const).map((f) => (
                   <button key={f} className={pointKindFilter === f ? 'active' : ''} onClick={() => setPointKindFilter(f)} type="button">{f}</button>
                 ))}
               </div>
@@ -2102,6 +2102,7 @@ export function DesktopTerritory({
                                     {unit.isForbidden && <span className="unit-flag-chip forbidden">방문금지</span>}
                                     {unit.isRegularVisit && <span className="unit-flag-chip regular">정기</span>}
                                     {unit.isChinese && <span className="unit-flag-chip chinese">中</span>}
+                                    {unit.isChinese && unit.status === '대상외' && <span className="unit-flag-chip needs-review">점검 필요</span>}
                                     {unit.isRestaurant && <span className="unit-flag-chip restaurant">식당</span>}
                                   </div>
                                   <span className="unit-memo">{unit.memo || '-'}</span>
@@ -2177,6 +2178,7 @@ export function DesktopTerritory({
                     {/* 구분 칩 — 전체 보기에서 어떤 세대인지 알 수 있게 */}
                     {unit.isRestaurant && <span className="unit-flag-chip restaurant">식당</span>}
                     {unit.isChinese && !unit.isRestaurant && <span className="unit-flag-chip chinese">中</span>}
+                    {unit.isChinese && unit.status === '대상외' && <span className="unit-flag-chip needs-review">점검 필요</span>}
                   </strong>
 	                  {unit.isRegularVisit ? (
 	                    <input

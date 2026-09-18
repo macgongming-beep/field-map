@@ -14,7 +14,7 @@ export type PointRow = {
 }
 
 export type PointFilters = {
-  /** '전체' | '중국어' | '정기방문' | '식당' */
+  /** '전체' | '중국어' | '정기방문' | '식당' | '점검 필요' */
   kind: string
   /** '전체' 또는 세대 상태값 */
   status: string
@@ -28,6 +28,7 @@ export function matchesPointKind(unit: Unit, kind: string): boolean {
   if (kind === '중국어') return !!unit.isChinese
   if (kind === '정기방문') return !!unit.isRegularVisit
   if (kind === '식당') return !!unit.isRestaurant
+  if (kind === '점검 필요') return !!unit.isChinese && unit.status === '대상외'
   return true
 }
 

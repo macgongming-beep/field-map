@@ -55,7 +55,7 @@ export function TerritoryReportView({ snapshot, shared = false }: {
         <div className="territory-report-section-title">
           <div><h2>지역별 분포</h2><p>정확한 주소나 개별 위치는 표시하지 않습니다.</p></div>
         </div>
-        <TerritoryReportMap regions={snapshot.regions} areas={snapshot.areas} />
+        <TerritoryReportMap regions={snapshot.regions} />
         <div className="territory-report-table-wrap">
           <table>
             <thead><tr><th>지역</th><th>전체</th><th>주택</th><th>식당·상가</th><th>최근 30일 방문 세대</th></tr></thead>
@@ -127,9 +127,6 @@ export function TerritoryReportView({ snapshot, shared = false }: {
           <ul>{cardRegions.map(row => <li key={row.region}><span>{row.region}</span><b>{fmt(row.count)}</b></li>)}</ul>
         </div>
       </section>
-      {s.consistencyWarnings > 0 && !shared && (
-        <p className="territory-report-warning">점검 필요: 중국어 세대로 표시됐지만 상태가 대상외인 자료 {fmt(s.consistencyWarnings)}건</p>
-      )}
     </article>
   )
 }

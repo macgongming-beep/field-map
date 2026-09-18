@@ -16,6 +16,8 @@ describe('matchesPointKind', () => {
     expect(matchesPointKind(unit(1, { isChinese: true }), '중국어')).toBe(true)
     expect(matchesPointKind(unit(1), '중국어')).toBe(false)
     expect(matchesPointKind(unit(1, { isRestaurant: true }), '식당')).toBe(true)
+    expect(matchesPointKind(unit(1, { isChinese: true, status: '대상외' }), '점검 필요')).toBe(true)
+    expect(matchesPointKind(unit(1, { isChinese: true, status: '만남' }), '점검 필요')).toBe(false)
     expect(matchesPointKind(unit(1), '전체')).toBe(true)
   })
 })

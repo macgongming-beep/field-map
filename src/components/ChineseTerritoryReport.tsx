@@ -10,6 +10,15 @@ import {
 import type { ChineseTerritoryReportSnapshot, TerritoryReportShare } from '../types/territoryReport'
 import { TerritoryReportView } from './TerritoryReportView'
 
+function ReportIcon({ name }: { name: 'print' | 'share' | 'refresh' }) {
+  const paths = {
+    print: <><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/></>,
+    share: <><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4"/><path d="m8.6 13.5 6.8 4"/></>,
+    refresh: <><path d="M20 11a8 8 0 1 0 2 5"/><path d="M20 4v7h-7"/></>,
+  }
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
+}
+
 const localDate = (date: Date) => {
   const offset = date.getTimezoneOffset() * 60_000
   return new Date(date.getTime() - offset).toISOString().slice(0, 10)
@@ -81,19 +90,21 @@ export function ChineseTerritoryReport() {
         <button className="icon-button" type="button" onClick={() => navigate('/stats')} aria-label="통계로 돌아가기">‹</button>
         <div><h1>구역 관리 보고서</h1><p>순회 방문 보고와 내부 관리에 사용할 집계 자료입니다.</p></div>
         <div className="territory-report-toolbar-actions">
-          <button type="button" className="secondary-button" onClick={() => window.print()} disabled={!snapshot}>PDF 인쇄</button>
-          <button type="button" className="primary-button" onClick={() => setShareOpen(v => !v)}>공유 링크</button>
+          <button type="button" className="territory-report-action" onClick={() => window.print()} disabled={!snapshot}><ReportIcon name="print" />PDF 인쇄</button>
+          <button type="button" className="territory-report-action is-primary" onClick={() => setShareOpen(v => !v)}><ReportIcon name="share" />공유 링크</button>
         </div>
       </div>
 
       <section className="territory-report-controls no-print">
-        <label>시작일<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
-        <label>종료일<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
+        <div className="territory-report-period-fields">
+          <label>시작일<input type="date" value={start} onChange={e => setStart(e.target.value)} /></label>
+          <label>종료일<input type="date" value={end} onChange={e => setEnd(e.target.value)} /></label>
+        </div>
         <label className="territory-report-note-input">보고서 설명
           <input value={note} maxLength={1000} onChange={e => setNote(e.target.value)} />
           <small>공유 링크에 그대로 공개됩니다. 이름, 연락처, 주소 등 개인정보를 입력하지 마세요.</small>
         </label>
-        <button type="button" className="secondary-button" onClick={() => void refresh()}>새로고침</button>
+        <button type="button" className="territory-report-refresh" onClick={() => void refresh()} disabled={loading}><ReportIcon name="refresh" />보고서 갱신</button>
       </section>
 
       {shareOpen && (
