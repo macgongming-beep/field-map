@@ -125,7 +125,7 @@ export function TerritoryReportView({ snapshot, shared = false }: {
         <div><span>중국어 세대 포함 카드</span><b>{fmt(s.targetCards)}</b></div>
         <div className="territory-report-card-regions">
           <span>구별 전체 카드</span>
-          <ul>{cardRegions.map(row => <li key={row.region}><span>{row.region}</span><b>{fmt(row.count)}</b></li>)}</ul>
+          <ul>{cardRegions.map(row => <li key={row.region}><span>{row.region}</span><b>{fmt(row.count)}개</b></li>)}</ul>
         </div>
       </section>
     </article>
