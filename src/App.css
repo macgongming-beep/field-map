@@ -32580,6 +32580,9 @@ button > svg {
   color: #1b1d1b;
 }
 
+.stats-report-button { height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 14px; border: 1px solid #cfd3cd; border-radius: 6px; background: #fff; color: #252825; font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.stats-report-button:hover { border-color: #8c928c; background: #f7f8f6; }
+.stats-report-button svg { width: 17px; height: 17px; flex: 0 0 auto; }
 .territory-report-page { padding: 28px 32px 64px; }
 .territory-report-toolbar,
 .shared-report-topbar {

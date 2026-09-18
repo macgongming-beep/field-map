@@ -459,7 +459,11 @@ export function DesktopStats({
           <h1 className="page-header-title">통계</h1>
         </div>
         {(actualRole === 'admin' || actualRole === 'developer') && (
-          <button type="button" className="secondary-button" onClick={() => navigate('/stats/chinese-report')}>
+          <button type="button" className="stats-report-button" onClick={() => navigate('/stats/chinese-report')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path d="M6 3h9l3 3v15H6z" />
+              <path d="M15 3v4h4M9 11h6M9 15h6" />
+            </svg>
             구역 관리 보고서
           </button>
         )}
