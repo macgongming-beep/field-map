@@ -42,13 +42,19 @@ const login = await rpc('auth_login', { p_login_id: env.loginId, p_pin: env.logi
 const token = (Array.isArray(login) ? login[0] : login)?.token
 if (!token) throw new Error('테스트 관리자로 로그인하지 못했습니다')
 
-const create = pin => rpc('create_chinese_territory_report_share_tx', {
+const sampleBoundary = [{
+  region: '테스트구',
+  points: [{ lat: 37.3, lng: 127.1 }, { lat: 37.31, lng: 127.1 }, { lat: 37.3, lng: 127.11 }],
+}]
+const create = (pin, includeAreaDetails = false) => rpc('create_chinese_territory_report_share_v2_tx', {
   p_token: token,
   p_period_start: '2026-03-01',
   p_period_end: '2026-09-01',
   p_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
   p_pin: pin,
   p_note: 'smoke',
+  p_include_area_details: includeAreaDetails,
+  p_region_boundaries: sampleBoundary,
 })
 
 const createdIds = []
@@ -98,10 +104,16 @@ try {
     throw new Error('과반 좌표 시험 세대 8개를 만들지 못했습니다')
   }
 
-  const openShare = await create(null)
+  const openShare = await create(null, true)
   createdIds.push(openShare.id)
   const openResult = await rpc('get_chinese_territory_report_share', { p_share_token: openShare.shareToken, p_pin: null })
   check('암호를 끄면 링크만으로 보고서를 연다', openResult.ok === true)
+  check('선택한 동별 상세 설정을 공유 스냅샷에 고정한다',
+    openResult.snapshot?.includeAreaDetails === true && openResult.snapshot?.areas?.length > 0)
+  check('구 단위 합성 경계를 공유 스냅샷에 고정한다',
+    openResult.snapshot?.regionBoundaries?.[0]?.region === '테스트구')
+  check('구별 최근 180일 방문 세대를 집계한다',
+    openResult.snapshot?.regions?.every(row => Number.isInteger(row.managed180d)))
   const majorityArea = openResult.snapshot?.areas?.find(row =>
     row.region === fixtureMarker && row.area === fixtureMarker)
   check('건물 3곳 중 한 곳이 중국어 세대 과반이면 중심 좌표를 공개하지 않는다',
@@ -115,6 +127,7 @@ try {
   check('틀린 암호는 거부한다', wrong.code === 'invalid_pin')
   const correct = await rpc('get_chinese_territory_report_share', { p_share_token: pinShare.shareToken, p_pin: '123456' })
   check('맞는 암호는 보고서를 연다', correct.ok === true && correct.snapshot?.summary)
+  check('동별 상세 기본값은 제외다', correct.snapshot?.includeAreaDetails === false && correct.snapshot?.areas?.length === 0)
 
   const serialized = JSON.stringify(correct.snapshot ?? {}).toLowerCase()
   check('공개 스냅샷에 개인정보 열쇠가 없다', !/(address|unit_number|visitor_name|phone|memo)/.test(serialized))
@@ -136,13 +149,15 @@ try {
   lockResult = await rpc('get_chinese_territory_report_share', { p_share_token: lockShare.shareToken, p_pin: '654321' })
   check('5회 잠금 뒤에는 맞는 암호도 거부한다', lockResult.code === 'locked' && Boolean(lockResult.lockedUntil))
 
-  const expiringShare = await rpc('create_chinese_territory_report_share_tx', {
+  const expiringShare = await rpc('create_chinese_territory_report_share_v2_tx', {
     p_token: token,
     p_period_start: '2026-03-01',
     p_period_end: '2026-09-01',
     p_expires_at: new Date(Date.now() + 1_500).toISOString(),
     p_pin: null,
     p_note: 'smoke expiry',
+    p_include_area_details: false,
+    p_region_boundaries: [],
   })
   createdIds.push(expiringShare.id)
   await new Promise(resolve => setTimeout(resolve, 1_800))
@@ -162,13 +177,15 @@ try {
     const roleToken = (Array.isArray(roleLogin) ? roleLogin[0] : roleLogin)?.token
     if (!roleToken) throw new Error(`${role} 시험 계정으로 로그인하지 못했습니다`)
 
-    const preview = await rpcResponse('preview_chinese_territory_report_tx', {
+    const preview = await rpcResponse('preview_chinese_territory_report_v2_tx', {
       p_token: roleToken, p_period_start: '2026-03-01', p_period_end: '2026-09-01', p_note: '',
+      p_include_area_details: false, p_region_boundaries: [],
     })
     const listing = await rpcResponse('list_chinese_territory_report_shares_tx', { p_token: roleToken })
-    const creating = await rpcResponse('create_chinese_territory_report_share_tx', {
+    const creating = await rpcResponse('create_chinese_territory_report_share_v2_tx', {
       p_token: roleToken, p_period_start: '2026-03-01', p_period_end: '2026-09-01',
       p_expires_at: new Date(Date.now() + 3_600_000).toISOString(), p_pin: null, p_note: '',
+      p_include_area_details: false, p_region_boundaries: [],
     })
     check(`${role}는 보고서 미리보기를 못 한다`, !preview.response.ok)
     check(`${role}는 공유 목록을 못 본다`, !listing.response.ok)

@@ -36,6 +36,7 @@ export function ChineseTerritoryReport() {
   const [end, setEnd] = useState(defaults.end)
   const [note, setNote] = useState('중국어 세대의 지역별 분포와 최근 관리 현황을 집계한 보고서입니다.')
   const [snapshot, setSnapshot] = useState<ChineseTerritoryReportSnapshot | null>(null)
+  const [includeAreaDetails, setIncludeAreaDetails] = useState(false)
   const [shares, setShares] = useState<TerritoryReportShare[]>([])
   const [loading, setLoading] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
@@ -51,13 +52,13 @@ export function ChineseTerritoryReport() {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      setSnapshot(await previewChineseTerritoryReport(start, end, note))
+      setSnapshot(await previewChineseTerritoryReport(start, end, note, includeAreaDetails))
     } catch (error) {
       showToast(error instanceof Error ? error.message : '보고서를 불러오지 못했습니다.', 'error')
     } finally {
       setLoading(false)
     }
-  }, [start, end, note])
+  }, [start, end, note, includeAreaDetails])
 
   useEffect(() => { void refresh(); void refreshShares() }, [refresh, refreshShares])
 
@@ -68,7 +69,9 @@ export function ChineseTerritoryReport() {
     }
     const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
     try {
-      const result = await createChineseTerritoryReportShare({ start, end, note, expiresAt, pin: usePin ? pin : undefined })
+      const result = await createChineseTerritoryReportShare({
+        start, end, note, expiresAt, pin: usePin ? pin : undefined, includeAreaDetails,
+      })
       const link = `${window.location.origin}/shared/territory-report/${result.shareToken}`
       setCreatedLink(link)
       await navigator.clipboard?.writeText(link)
@@ -104,13 +107,22 @@ export function ChineseTerritoryReport() {
           <input value={note} maxLength={1000} onChange={e => setNote(e.target.value)} />
           <small>공유 링크에 그대로 공개됩니다. 이름, 연락처, 주소 등 개인정보를 입력하지 마세요.</small>
         </label>
-        <button type="button" className="territory-report-refresh" onClick={() => void refresh()} disabled={loading}><ReportIcon name="refresh" />보고서 갱신</button>
+        <div className="territory-report-control-actions">
+          <label className="territory-report-detail-toggle">
+            <input type="checkbox" checked={includeAreaDetails} onChange={event => setIncludeAreaDetails(event.target.checked)} />
+            <span>동별 상세 포함</span>
+          </label>
+          <button type="button" className="territory-report-refresh" onClick={() => void refresh()} disabled={loading}><ReportIcon name="refresh" />보고서 갱신</button>
+        </div>
       </section>
 
       {shareOpen && (
         <section className="territory-report-share-panel no-print">
+          <div className="territory-report-share-heading">
+            <div><h2>외부 공유 링크</h2><p>현재 보고서 모양과 집계 숫자를 링크에 고정합니다.</p></div>
+            <button type="button" onClick={() => setShareOpen(false)} aria-label="공유 설정 닫기">×</button>
+          </div>
           <div className="territory-report-share-form">
-            <h2>외부 공유 링크 만들기</h2>
             <label>공개 기간
               <select value={expiresInDays} onChange={e => setExpiresInDays(Number(e.target.value))}>
                 <option value={3}>3일</option><option value={7}>7일</option>
@@ -118,12 +130,12 @@ export function ChineseTerritoryReport() {
               </select>
             </label>
             <label className="territory-report-pin-toggle">
-              <input type="checkbox" checked={usePin} onChange={e => setUsePin(e.target.checked)} /> 6자리 암호 사용
+              <input type="checkbox" checked={usePin} onChange={e => setUsePin(e.target.checked)} /> <span>6자리 암호</span>
             </label>
             {usePin && <label>암호<input inputMode="numeric" pattern="[0-9]*" maxLength={6} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="숫자 6자리" /></label>}
-            <button type="button" className="primary-button" onClick={() => void createShare()}>링크 만들기</button>
-            <p>링크에는 집계 숫자만 포함되며 주소, 세대 번호, 이름, 전화번호, 메모는 공개되지 않습니다.</p>
+            <button type="button" className="territory-report-share-create" onClick={() => void createShare()}><ReportIcon name="share" />링크 만들기</button>
           </div>
+          <p className="territory-report-share-privacy">주소, 세대 번호, 이름, 전화번호, 메모는 공개되지 않습니다.</p>
           {createdLink && (
             <div className="territory-report-created-link">
               <input readOnly value={createdLink} aria-label="생성된 공유 링크" />

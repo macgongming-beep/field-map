@@ -55,14 +55,14 @@ export function TerritoryReportView({ snapshot, shared = false }: {
         <div className="territory-report-section-title">
           <div><h2>지역별 분포</h2><p>정확한 주소나 개별 위치는 표시하지 않습니다.</p></div>
         </div>
-        <TerritoryReportMap regions={snapshot.regions} />
+        <TerritoryReportMap regions={snapshot.regions} boundaries={snapshot.regionBoundaries ?? []} />
         <div className="territory-report-table-wrap">
           <table>
-            <thead><tr><th>지역</th><th>전체</th><th>주택</th><th>식당·상가</th><th>최근 30일 방문 세대</th></tr></thead>
+            <thead><tr><th>지역</th><th>전체</th><th>주택</th><th>식당·상가</th><th>최근 180일 방문 세대</th></tr></thead>
             <tbody>{snapshot.regions.map(row => (
               <tr key={row.region}>
                 <td>{row.region}</td><td>{fmt(row.total)}</td><td>{fmt(row.residential)}</td>
-                <td>{fmt(row.business)}</td><td>{fmt(row.managed30d)}</td>
+                <td>{fmt(row.business)}</td><td>{fmt(row.managed180d ?? row.managed30d)}</td>
               </tr>
             ))}</tbody>
           </table>
@@ -95,7 +95,7 @@ export function TerritoryReportView({ snapshot, shared = false }: {
         </div>
       </section>
 
-      <section className="territory-report-section page-break-before">
+      {snapshot.includeAreaDetails && snapshot.areas.length > 0 && <section className="territory-report-section page-break-before">
         <div className="territory-report-section-title">
           <div><h2>동별 중국어 세대</h2><p>지역별 관리 규모와 최근 관리 상태를 비교합니다.</p></div>
           <label className="territory-report-area-filter no-print">구 선택
@@ -116,7 +116,7 @@ export function TerritoryReportView({ snapshot, shared = false }: {
             <tbody>{areaRows(snapshot.areas)}</tbody>
           </table>
         </div>
-      </section>
+      </section>}
 
       <section className="territory-report-section territory-report-coverage">
         <h2>구역 관리 체계</h2>

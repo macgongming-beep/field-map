@@ -16,9 +16,15 @@ export type TerritoryReportRegion = {
   residential: number
   business: number
   managed30d: number
+  managed180d?: number
   regularVisits: number
   centerLat: number | null
   centerLng: number | null
+}
+
+export type TerritoryReportRegionBoundary = {
+  region: string
+  points: Array<{ lat: number; lng: number }>
 }
 
 export type TerritoryReportArea = {
@@ -40,6 +46,7 @@ export type ChineseTerritoryReportSnapshot = {
   periodStart: string
   periodEnd: string
   note: string
+  includeAreaDetails?: boolean
   summary: TerritoryReportSummary
   management: {
     within30Days: number
@@ -53,6 +60,7 @@ export type ChineseTerritoryReportSnapshot = {
   cardRegions: Array<{ region: string; count: number }>
   regions: TerritoryReportRegion[]
   areas: TerritoryReportArea[]
+  regionBoundaries?: TerritoryReportRegionBoundary[]
 }
 
 export type TerritoryReportShare = {

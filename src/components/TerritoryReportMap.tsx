@@ -1,10 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 SDK는 공식 TS 타입이 없다. */
 import { useEffect, useMemo, useRef } from 'react'
-import type { TerritoryReportRegion } from '../types/territoryReport'
+import type { TerritoryReportRegion, TerritoryReportRegionBoundary } from '../types/territoryReport'
 
 declare const naver: any
 
-export function TerritoryReportMap({ regions }: { regions: TerritoryReportRegion[] }) {
+const REGION_COLORS = ['#306f63', '#3f6fa0', '#9a5f4b', '#6f7440', '#765f8f']
+
+export function TerritoryReportMap({ regions, boundaries }: {
+  regions: TerritoryReportRegion[]
+  boundaries: TerritoryReportRegionBoundary[]
+}) {
   const rootRef = useRef<HTMLDivElement>(null)
   const points = useMemo(() => regions.map(row => ({
     key: row.region,
@@ -26,6 +31,24 @@ export function TerritoryReportMap({ regions }: { regions: TerritoryReportRegion
       logoControlOptions: { position: naver.maps.Position.BOTTOM_LEFT },
     })
     const bounds = new naver.maps.LatLngBounds()
+    boundaries.forEach((boundary, index) => {
+      const path = boundary.points.map(point => {
+        const position = new naver.maps.LatLng(point.lat, point.lng)
+        bounds.extend(position)
+        return position
+      })
+      if (path.length < 3) return
+      const color = REGION_COLORS[index % REGION_COLORS.length]
+      new naver.maps.Polygon({
+        map,
+        paths: path,
+        fillColor: color,
+        fillOpacity: 0.1,
+        strokeColor: color,
+        strokeOpacity: 0.78,
+        strokeWeight: 2,
+      })
+    })
     visible.forEach(region => {
       const position = new naver.maps.LatLng(region.centerLat, region.centerLng)
       bounds.extend(position)
@@ -40,7 +63,7 @@ export function TerritoryReportMap({ regions }: { regions: TerritoryReportRegion
     })
     if (visible.length > 1) map.fitBounds(bounds, { top: 48, right: 48, bottom: 48, left: 48 })
     return () => map.destroy()
-  }, [points])
+  }, [boundaries, points])
 
   const hasPoints = points.some(r => r.centerLat != null && r.centerLng != null)
   return (

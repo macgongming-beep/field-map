@@ -32626,6 +32626,17 @@ button > svg {
 }
 .territory-report-controls { display: grid; grid-template-columns: 330px minmax(280px, 1fr) auto; align-items: start; gap: 14px; }
 .territory-report-period-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.territory-report-control-actions { display: grid; gap: 8px; }
+.territory-report-detail-toggle {
+  height: 28px;
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 7px !important;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.territory-report-detail-toggle input { width: 16px; height: 16px; accent-color: #202320; }
 .territory-report-controls label,
 .territory-report-share-form label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; color: #575c57; }
 .territory-report-controls input,
@@ -32636,12 +32647,18 @@ button > svg {
   background: #fff; color: #1b1d1b; font: inherit;
 }
 .territory-report-note-input small { color: #a34b3d; font-size: 10px; font-weight: 500; line-height: 1.35; }
-.territory-report-refresh { align-self: start; margin-top: 21px; background: #fff; }
-.territory-report-share-form { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
-.territory-report-share-form h2 { width: 100%; margin: 0; font-size: 18px; }
-.territory-report-share-form > p { width: 100%; margin: 0; color: #727772; font-size: 12px; }
-.territory-report-pin-toggle { display: flex !important; grid-template-columns: auto 1fr; align-items: center; height: 42px; }
+.territory-report-refresh { align-self: start; background: #fff; }
+.territory-report-share-panel { background: #fff; border: 1px solid #d9dcd6; padding: 18px; }
+.territory-report-share-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.territory-report-share-heading h2 { margin: 0 0 4px; font-size: 16px; }
+.territory-report-share-heading p { margin: 0; color: #747974; font-size: 11px; }
+.territory-report-share-heading > button { width: 30px; height: 30px; border: 0; border-radius: 5px; background: #f1f2ef; color: #747974; font-size: 20px; line-height: 1; cursor: pointer; }
+.territory-report-share-form { display: grid; grid-template-columns: 130px max-content 150px auto; align-items: end; gap: 10px; }
+.territory-report-pin-toggle { display: flex !important; grid-template-columns: none !important; align-items: center; gap: 7px !important; height: 40px; padding: 0 11px; border: 1px solid #d5d7d2; border-radius: 6px; background: #f7f8f6; white-space: nowrap; cursor: pointer; }
 .territory-report-pin-toggle input { width: 18px; height: 18px; }
+.territory-report-share-create { height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 6px; padding: 0 15px; background: #202320; color: #fff; font-weight: 750; white-space: nowrap; cursor: pointer; }
+.territory-report-share-create svg { width: 17px; height: 17px; }
+.territory-report-share-privacy { margin: 11px 0 0; color: #747974; font-size: 11px; }
 .territory-report-created-link { display: flex; gap: 8px; align-items: center; margin-top: 14px; }
 .territory-report-created-link input { flex: 1; }
 .territory-report-created-link button,
@@ -32737,7 +32754,10 @@ button > svg {
   .territory-report-toolbar-actions { width: 100%; justify-content: flex-end; }
   .territory-report-controls { grid-template-columns: 1fr; }
   .territory-report-period-fields { grid-template-columns: 1fr 1fr; }
-  .territory-report-refresh { width: 100%; margin-top: 0; }
+  .territory-report-control-actions { grid-template-columns: 1fr auto; align-items: center; }
+  .territory-report-refresh { width: auto; }
+  .territory-report-share-form { grid-template-columns: 1fr; }
+  .territory-report-share-create { width: 100%; }
   .territory-report-view { padding: 24px 16px; }
   .territory-report-heading { display: block; }
   .territory-report-generated { margin-top: 12px; }
