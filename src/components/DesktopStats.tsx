@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { Building, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot, VisitHistory } from '../types'
 import { toLocalDateString } from '../utils/dateUtils'
 
@@ -124,6 +125,7 @@ export function DesktopStats({
   specialPeriods: SpecialPeriod[]
   actualRole: Role
 }) {
+  const navigate = useNavigate()
   const isDeveloper = actualRole === 'developer'
   const [scope, setScope]               = useState<ScopeFilter>('all')
   const [trendMode, setTrendMode]       = useState<TrendMode>('monthly')
@@ -456,6 +458,11 @@ export function DesktopStats({
         <div className="page-header-text">
           <h1 className="page-header-title">통계</h1>
         </div>
+        {(actualRole === 'admin' || actualRole === 'developer') && (
+          <button type="button" className="secondary-button" onClick={() => navigate('/stats/chinese-report')}>
+            구역 관리 보고서
+          </button>
+        )}
       </header>
 
       {/* ── 분석 범위 ── */}

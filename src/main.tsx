@@ -1,8 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import App from './App.tsx'
+import { SharedTerritoryReport } from './components/SharedTerritoryReport'
 import { Analytics } from '@vercel/analytics/react'
 import { preloadNaverMapSDK } from './lib/preloadMap'
 import { initSentry } from './lib/sentry'
@@ -96,7 +97,10 @@ createRoot(document.getElementById('root')!).render(
       }}
     >
       <BrowserRouter>
-        <App />
+        <Routes>
+          <Route path="/shared/territory-report/:shareToken" element={<SharedTerritoryReport />} />
+          <Route path="*" element={<App />} />
+        </Routes>
         <Analytics />
       </BrowserRouter>
     </Sentry.ErrorBoundary>

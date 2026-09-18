@@ -6,6 +6,7 @@ import { DesktopHome } from './DesktopHome'
 
 import { DesktopSettings } from './DesktopSettings'
 import { DesktopStats } from './DesktopStats'
+import { ChineseTerritoryReport } from './ChineseTerritoryReport'
 import { DesktopTerritory } from './DesktopTerritory'
 import { DesktopMyService } from './DesktopMyService'
 import { DesktopMap } from './DesktopMap'
@@ -357,7 +358,11 @@ export function DesktopApp({
   // /zone?view=map 에서 지도 뷰 (인도자 구역 탭 내부 토글)
   const showZoneMapView = location.pathname === '/zone' && searchParams.get('view') === 'map'
 
-  const rawActivePage = location.pathname.startsWith('/settings') ? '설정' : pathToPage[location.pathname] || '홈'
+  const rawActivePage = location.pathname.startsWith('/settings')
+    ? '설정'
+    : location.pathname.startsWith('/stats')
+      ? '통계'
+      : pathToPage[location.pathname] || '홈'
   // 인도자가 /map에 있을 때 → '구역' 탭 활성화 (지도 탭 없음)
   const activePage: DesktopPage =
     rawActivePage === '지도' && viewMode === 'leader' ? '구역' : rawActivePage
@@ -866,6 +871,11 @@ export function DesktopApp({
             specialPeriods={specialPeriods}
             actualRole={actualRole}
           />
+        } />
+        <Route path="/stats/chinese-report" element={
+          actualRole === 'admin' || actualRole === 'developer'
+            ? <ChineseTerritoryReport />
+            : <Navigate to="/stats" replace />
         } />
         <Route path="/settings" element={
           <DesktopSettings
