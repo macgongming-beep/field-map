@@ -23,6 +23,8 @@ export type MergeGroup = {
 
 export type ConflictGroup = {
   primary: Building
+  /** 같은 주소로 묶였지만 호수가 겹쳐 합치지 않은 나머지 건물 */
+  absorbed: Building[]
   /** 양쪽에 다 있는 호수 번호. 이게 있으면 병합하지 않는다 */
   conflictingNumbers: string[]
 }
@@ -99,7 +101,7 @@ export function planDuplicateBuildingMerge(
     }
 
     if (conflicting.length > 0) {
-      conflicts.push({ primary, conflictingNumbers: [...new Set(conflicting)].sort() })
+      conflicts.push({ primary, absorbed, conflictingNumbers: [...new Set(conflicting)].sort() })
       continue
     }
     merge.push({ primary, absorbed, movingUnits })

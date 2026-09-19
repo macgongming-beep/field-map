@@ -2,7 +2,7 @@ import { t } from '../i18n'
 import { kindToFilters, filtersToKind, type BuildingKind } from '../utils/buildingKindFilter'
 import { canEditVisitor, visitorOptionsFrom } from '../utils/visitorPicker'
 import type { AppLanguage } from '../i18n'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { getRegionNames } from '../lib/regions'
 import { getAreaFilterOptions } from '../utils/areaOptions'
@@ -243,6 +243,7 @@ export function DesktopTerritory({
     return acc + units
   }, 0)
   const [buildingSubTab, setBuildingSubTab] = useSessionState<'건물 목록' | '세대 목록'>('dt.buildingSubTab', '건물 목록')
+  const [buildingAddressWidth, setBuildingAddressWidth] = useSessionState<number>('dt.buildingAddressWidth', 300)
   const [showCardModal, setShowCardModal] = useState(false)
   const [pendingBoundaryCard, setPendingBoundaryCard] = useState<{ id: number; name: string } | null>(null)
   const [regionFilter, setRegionFilter] = useSessionState<TerritoryRegion | '전체'>('dt.regionFilter', '전체')
@@ -300,6 +301,25 @@ export function DesktopTerritory({
   )
   const [bulkLeaderNames, setBulkLeaderNames] = useState<string[]>([])
   const [bulkAssigning, setBulkAssigning] = useState(false)
+
+  const beginAddressColumnResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = buildingAddressWidth
+    const onMove = (moveEvent: PointerEvent) => {
+      setBuildingAddressWidth(Math.min(560, Math.max(190, startWidth + moveEvent.clientX - startX)))
+    }
+    const onEnd = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
+      document.body.classList.remove('is-resizing-table-column')
+    }
+    document.body.classList.add('is-resizing-table-column')
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onEnd, { once: true })
+    window.addEventListener('pointercancel', onEnd, { once: true })
+  }
   const [pointVisitEditor, setPointVisitEditor] = useState<{
     mode: 'add' | 'edit'
     buildingId: number
@@ -712,7 +732,7 @@ export function DesktopTerritory({
   const mergePlan = planDuplicateBuildingMerge(filteredBuildings)
   const duplicateAddressGroups = [
     ...mergePlan.merge.map((g) => [g.primary, ...g.absorbed]),
-    ...mergePlan.conflicts.map((c) => [c.primary]),
+    ...mergePlan.conflicts.map((c) => [c.primary, ...c.absorbed]),
   ]
   const duplicateBuildingIds = new Set(duplicateAddressGroups.flatMap((g) => g.map((b) => b.id)))
   // 세대 목록. 뿌리는 건물의 **범위** 필터까지만이다 —
@@ -1976,7 +1996,12 @@ export function DesktopTerritory({
               </button>
             </div>
           )}
-          <div className="building-management-table" role="table" aria-label="건물 관리 목록">
+          <div
+            className="building-management-table"
+            role="table"
+            aria-label="건물 관리 목록"
+            style={{ '--building-address-width': `${buildingAddressWidth}px` } as CSSProperties}
+          >
             <div className="building-management-head" role="row">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 6 }}>
                 <input
@@ -1986,7 +2011,21 @@ export function DesktopTerritory({
                 />
               </div>
               <span>건물</span>
-              <span>주소</span>
+              <span className="building-address-head">
+                주소
+                <button
+                  aria-label="주소 열 너비 조절"
+                  className="building-column-resizer"
+                  onPointerDown={beginAddressColumnResize}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+                    event.preventDefault()
+                    setBuildingAddressWidth((width) => Math.min(560, Math.max(190, width + (event.key === 'ArrowRight' ? 24 : -24))))
+                  }}
+                  title="좌우로 드래그하여 주소 열 너비 조절"
+                  type="button"
+                />
+              </span>
               <span>카드</span>
               <span>유형</span>
               <span>세대</span>
@@ -2029,7 +2068,7 @@ export function DesktopTerritory({
                         </button>
                         {/* 건물관리는 주소 편집 화면이라 저장한 그대로 보여준다
                             (요약 표시는 수정 결과가 반영 안 된 것처럼 보임) */}
-                        <span title={building.address}>{building.address}</span>
+                        <span className="building-address-cell" title={building.address}>{building.address}</span>
                         <span>
                           {card?.name ?? '카드 없음'}
                           {recommendationBadge && (

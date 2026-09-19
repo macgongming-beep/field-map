@@ -21,7 +21,13 @@ export type MergeGroup = {
 type Props = {
   groups: MergeGroup[]
   /** 합치기 계획. 호수가 겹쳐 제외된 곳을 보여주는 데 쓴다 */
-  mergePlan: { conflicts: Array<{ primary: { id: number; cardId: number; address: string }; conflictingNumbers: string[] }> }
+  mergePlan: {
+    conflicts: Array<{
+      primary: { id: number; cardId: number; name: string; address: string; units: Array<{ number: string }> }
+      absorbed: Array<{ id: number; name: string; units: Array<{ number: string }> }>
+      conflictingNumbers: string[]
+    }>
+  }
   /** 카드 id → 이름 */
   cardName: (cardId: number) => string
   onClose: () => void
@@ -115,27 +121,36 @@ export function DuplicateBuildingMergeModal({
                 />
               </div>
             ))}
+            {mergePlan.conflicts.length > 0 && (
+              <section className="merge-conflict-section" aria-label="병합 보류 주소">
+                <div className="merge-conflict-section-head">
+                  <strong>병합 보류 {mergePlan.conflicts.length}곳</strong>
+                  <span>같은 주소 안에서 호수가 겹쳐 자동으로 합치지 않았습니다.</span>
+                </div>
+                {mergePlan.conflicts.map((conflict) => {
+                  const buildings = [conflict.primary, ...conflict.absorbed]
+                  return (
+                    <details className="merge-conflict-group" key={conflict.primary.id}>
+                      <summary>
+                        <span>{formatDisplayAddress(conflict.primary.address)}</span>
+                        <em>겹침 {conflict.conflictingNumbers.join(', ')}</em>
+                      </summary>
+                      <div className="merge-conflict-meta">{cardName(conflict.primary.cardId)} · 건물 {buildings.length}개</div>
+                      <div className="merge-conflict-buildings">
+                        {buildings.map((building) => (
+                          <div className="merge-conflict-building" key={building.id}>
+                            <strong>{building.name || '건물명 없음'}</strong>
+                            <span>{building.units.map((unit) => unit.number).join(', ') || '등록된 호수 없음'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )
+                })}
+              </section>
+            )}
           </div>
           <div className="merge-name-modal-footer">
-            {mergePlan.conflicts.length > 0 && (
-              <details style={{ marginRight: 'auto', fontSize: 12.5, color: 'var(--warn-600, #b45309)' }}>
-                <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
-                  호수가 겹치는 {mergePlan.conflicts.length}곳은 제외했습니다 (자세히)
-                </summary>
-                {/* 어느 호수가 겹치는지 알려 주지 않으면 사용자가 고칠 방법이 없다 */}
-                <div style={{ marginTop: 6, display: 'grid', gap: 4, maxHeight: 120, overflowY: 'auto' }}>
-                  {mergePlan.conflicts.map((c) => (
-                    <div key={c.primary.id} style={{ color: 'var(--ink-700)' }}>
-                      <b>{cardName(c.primary.cardId)}</b>{' · '}
-                      {formatDisplayAddress(c.primary.address)}{' — '}
-                      <span style={{ color: 'var(--warn-600, #b45309)', fontWeight: 700 }}>
-                        {c.conflictingNumbers.join(', ')}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            )}
             <button className="cal-cancel-btn" disabled={merging} onClick={() => { if (!merging) onClose() }} type="button">취소</button>
             <button
               className="dup-address-merge-btn"

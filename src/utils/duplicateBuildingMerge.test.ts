@@ -40,6 +40,7 @@ describe('planDuplicateBuildingMerge', () => {
     expect(plan.conflicts).toHaveLength(1)
     expect(plan.conflicts[0].conflictingNumbers).toEqual(['102호'])
     expect(plan.conflicts[0].primary.id).toBe(1)
+    expect(plan.conflicts[0].absorbed.map((building) => building.id)).toEqual([2])
   })
 
   test('겹치는 묶음만 빼고 나머지는 합친다', () => {

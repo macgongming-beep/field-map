@@ -13710,7 +13710,8 @@ button:focus-visible {
   }
 
   .building-management-table {
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     border: 1px solid #d8dde3;
     border-radius: var(--r-xl);
     background: #ffffff;
@@ -13720,12 +13721,13 @@ button:focus-visible {
   .building-management-head,
   .building-management-row {
     display: grid;
-    grid-template-columns: 34px minmax(130px, 1fr) minmax(190px, 1.3fr) minmax(140px, 0.85fr) 132px 56px 60px 110px;
+    grid-template-columns: 34px minmax(130px, 1fr) var(--building-address-width, 300px) minmax(140px, 0.85fr) 132px 56px 60px 110px;
     gap: 12px;
     align-items: center;
   }
 
   .building-management-head {
+    min-width: calc(var(--building-address-width, 300px) + 756px);
     min-height: 52px;
     padding: 0 20px;
     background: #eef2f7;
@@ -13735,11 +13737,57 @@ button:focus-visible {
   }
 
   .building-management-row {
+    min-width: calc(var(--building-address-width, 300px) + 756px);
     min-height: 64px;
     padding: 12px 20px;
     border-top: 1px solid #e6e9ee;
     color: #263241;
     font-size: 13px;
+  }
+
+  .building-address-head {
+    position: relative;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    overflow: visible;
+  }
+
+  .building-column-resizer {
+    position: absolute;
+    z-index: 2;
+    top: 8px;
+    right: -8px;
+    width: 15px;
+    height: 36px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .building-column-resizer::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    left: 7px;
+    width: 2px;
+    border-radius: 2px;
+    background: #b8c1cc;
+  }
+
+  .building-column-resizer:hover::after,
+  .building-column-resizer:focus-visible::after {
+    background: var(--brand-600);
+  }
+
+  body.is-resizing-table-column,
+  body.is-resizing-table-column * {
+    cursor: col-resize !important;
+    user-select: none !important;
   }
 
   /* 유형 칸의 식당 표시 — 좁은 칸이라 글자를 줄이고 줄바꿈을 막는다 */
@@ -14133,6 +14181,89 @@ button:focus-visible {
     padding: 12px 24px 20px;
     border-top: 1px solid #f1f5f9;
     margin-top: 4px;
+  }
+
+  .merge-conflict-section {
+    display: grid;
+    gap: 8px;
+    margin-top: 6px;
+    padding-top: 14px;
+    border-top: 1px solid #f1f5f9;
+  }
+
+  .merge-conflict-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    color: #92400e;
+  }
+
+  .merge-conflict-section-head strong {
+    font-size: 13px;
+  }
+
+  .merge-conflict-section-head span {
+    color: #78716c;
+    font-size: 11px;
+  }
+
+  .merge-conflict-group {
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    background: #fffaf0;
+  }
+
+  .merge-conflict-group summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .merge-conflict-group summary span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .merge-conflict-group summary em {
+    flex-shrink: 0;
+    color: #b45309;
+    font-style: normal;
+  }
+
+  .merge-conflict-meta {
+    padding: 0 12px 6px;
+    color: #78716c;
+    font-size: 11px;
+  }
+
+  .merge-conflict-buildings {
+    display: grid;
+    gap: 5px;
+    padding: 0 12px 12px;
+  }
+
+  .merge-conflict-building {
+    display: grid;
+    grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1.2fr);
+    gap: 10px;
+    padding: 7px 9px;
+    border-radius: 6px;
+    background: #ffffff;
+    font-size: 11px;
+  }
+
+  .merge-conflict-building strong,
+  .merge-conflict-building span {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   /* 건물 블록 (행 + 세대 패널 묶음) */
