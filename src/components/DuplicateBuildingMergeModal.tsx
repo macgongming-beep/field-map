@@ -6,7 +6,7 @@
 //
 // 상태 넷(groups·nameChoices·selected·merging)이 여기서만 쓰인다.
 import { useState } from 'react'
-import type { MergeResult } from '../utils/duplicateBuildingMerge'
+import type { DuplicateUnitPreview, MergeResult } from '../utils/duplicateBuildingMerge'
 import { formatDisplayAddress } from '../utils/mapUtils'
 
 export type MergeGroup = {
@@ -16,11 +16,12 @@ export type MergeGroup = {
   buildingCount: number
   unitCount: number
   names: string[]
+  duplicateUnits: DuplicateUnitPreview[]
 }
 
 type Props = {
   groups: MergeGroup[]
-  /** 합치기 계획. 호수가 겹쳐 제외된 곳을 보여주는 데 쓴다 */
+  /** 서버가 현재 담당 자료 때문에 보류한 곳을 보여주는 데 쓴다 */
   mergePlan: {
     conflicts: Array<{
       primary: { id: number; cardId: number; name: string; address: string; units: Array<{ number: string }> }
@@ -54,8 +55,8 @@ export function DuplicateBuildingMergeModal({
         <div className="cal-modal merge-name-modal" onClick={(e) => e.stopPropagation()}>
           <div className="cal-modal-head">
             <div className="cal-modal-title">
-              <h2>합칠 건물 이름 선택</h2>
-              <p className="merge-name-modal-sub">합칠 주소 그룹을 선택하고, 각 주소별로 남길 건물 이름을 선택해주세요.</p>
+              <h2>중복 주소와 기록 합치기</h2>
+              <p className="merge-name-modal-sub">최근 방문 기록의 세대를 남기고, 같은 호수의 방문 기록을 모두 합칩니다.</p>
             </div>
             <button className="cal-modal-close" disabled={merging} onClick={() => { if (!merging) onClose() }} type="button">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -112,6 +113,29 @@ export function DuplicateBuildingMergeModal({
                     </button>
                   ))}
                 </div>
+                {group.duplicateUnits.length > 0 && (
+                  <div className="merge-unit-preview-list" aria-label="중복 세대 통합 미리보기">
+                    {group.duplicateUnits.map((unit) => (
+                      <div className="merge-unit-preview" key={unit.normalizedNumber}>
+                        <div>
+                          <strong>{unit.displayNumber}</strong>
+                          <span>{unit.keptBuildingName}의 현재 정보 유지</span>
+                        </div>
+                        <div className="merge-unit-preview-tags">
+                          <em>{unit.usageType}</em>
+                          {unit.isChinese && <em>중국어</em>}
+                          {unit.isRestaurant && <em>식당</em>}
+                          <em>기록 {unit.visitCount}건 보존</em>
+                        </div>
+                        <span className="merge-unit-preview-latest">
+                          {unit.latestVisitedAt
+                            ? `최근 ${unit.latestVisitedAt.slice(0, 10)} · ${unit.latestResult}`
+                            : '방문 기록 없음 · 기준 건물 세대 유지'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <input
                   className="merge-name-custom-input"
                   disabled={!mergeSelectedPrimaryIds.has(group.primaryId)}
@@ -125,7 +149,7 @@ export function DuplicateBuildingMergeModal({
               <section className="merge-conflict-section" aria-label="병합 보류 주소">
                 <div className="merge-conflict-section-head">
                   <strong>병합 보류 {mergePlan.conflicts.length}곳</strong>
-                  <span>같은 주소 안에서 호수가 겹쳐 자동으로 합치지 않았습니다.</span>
+                  <span>현재 담당 자료가 달라 자동으로 합치지 않습니다.</span>
                 </div>
                 {mergePlan.conflicts.map((conflict) => {
                   const buildings = [conflict.primary, ...conflict.absorbed]
@@ -177,7 +201,7 @@ export function DuplicateBuildingMergeModal({
                 }
               }}
             >
-              선택한 주소 합치기
+              선택한 주소·기록 합치기
             </button>
           </div>
         </div>

@@ -3,14 +3,11 @@
 // **왜 순수 함수인가:** 여기가 "무엇을 지울지" 를 정하는 곳이다. DB 를 붙인 채로는
 // 확인할 수 없고, 잘못되면 방문 기록이 사라진다. 판단만 떼어내 테스트로 못 박는다.
 //
-// ⚠ 정책 (2026-08-24, 사용자가 정함)
-//   같은 호수 번호가 양쪽에 있으면 **그 주소 묶음은 통째로 병합하지 않는다.**
-//
-//   왜: 예전 코드는 겹치는 호수를 "이동 건너뛰기" 하고 원본 건물을 지웠다.
-//   units 는 visit_histories · regular_visits 에서 on delete cascade 로 물려 있어서,
-//   건너뛴 호수의 **방문 기록이 조용히 사라졌다.** 화면에는 '병합했습니다' 만 떴다.
-//   무엇을 남길지는 사람이 봐야 하는 판단이라, 자동으로 정하지 않는다.
-import type { Building } from '../types'
+// ⚠ 정책 (2026-09-20)
+//   같은 호수 번호가 양쪽에 있으면 최신 방문이 있는 세대를 남기고 기록을 통합한다.
+//   이 함수는 화면의 미리보기만 만든다. 실제 연결 자료 이동과 현재 담당 충돌 판정은
+//   DB 트랜잭션 merge_duplicate_buildings_tx 가 잠근 최신 자료로 다시 수행한다.
+import type { Building, UnitStatus, VisitHistory } from '../types'
 
 export type MergeGroup = {
   /** 남길 건물 (id 가 가장 작은 것) */
@@ -19,20 +16,103 @@ export type MergeGroup = {
   absorbed: Building[]
   /** 옮길 호수 수 */
   movingUnits: number
+  /** 기록까지 통합할 중복 호수 표기 */
+  duplicateUnitNumbers: string[]
 }
 
 export type ConflictGroup = {
   primary: Building
-  /** 같은 주소로 묶였지만 호수가 겹쳐 합치지 않은 나머지 건물 */
+  /** 서버가 현재 담당 자료 때문에 보류할 수 있는 나머지 건물 */
   absorbed: Building[]
-  /** 양쪽에 다 있는 호수 번호. 이게 있으면 병합하지 않는다 */
+  /** 확인이 필요한 같은 호수 번호 */
   conflictingNumbers: string[]
 }
 
 export type MergePlan = {
   merge: MergeGroup[]
-  /** 호수가 겹쳐 제외한 묶음. 화면이 사용자에게 알려야 한다 */
+  /** 서버의 최신 자료 판정에서만 채워질 수 있는 보류 묶음 */
   conflicts: ConflictGroup[]
+}
+
+export type DuplicateUnitPreview = {
+  normalizedNumber: string
+  displayNumber: string
+  keptBuildingName: string
+  latestVisitedAt: string | null
+  latestResult: UnitStatus | null
+  visitCount: number
+  isChinese: boolean
+  isRestaurant: boolean
+  usageType: '주택' | '상가'
+}
+
+function compareLatestHistory(a: VisitHistory | undefined, b: VisitHistory | undefined): number {
+  if (!a && !b) return 0
+  if (!a) return 1
+  if (!b) return -1
+  const visited = new Date(b.visitedAt).getTime() - new Date(a.visitedAt).getTime()
+  if (visited !== 0) return visited
+  const created = new Date(b.createdAt ?? b.visitedAt).getTime() - new Date(a.createdAt ?? a.visitedAt).getTime()
+  if (created !== 0) return created
+  return b.id - a.id
+}
+
+/**
+ * 서버가 실제로 남길 중복 세대와 같은 기준으로 확인 화면을 만든다.
+ * 방문 기록이 있으면 가장 최근 기록의 세대를, 없으면 기준 건물의 세대를 남긴다.
+ */
+export function buildDuplicateUnitPreviews(
+  group: MergeGroup,
+  visitHistories: VisitHistory[],
+): DuplicateUnitPreview[] {
+  const buildings = [group.primary, ...group.absorbed]
+  const historiesByUnit = new Map<number, VisitHistory[]>()
+  visitHistories.forEach((history) => {
+    const list = historiesByUnit.get(history.unitId)
+    if (list) list.push(history)
+    else historiesByUnit.set(history.unitId, [history])
+  })
+  historiesByUnit.forEach((list) => list.sort(compareLatestHistory))
+
+  const unitsByNumber = new Map<string, Array<{ building: Building; unit: Building['units'][number] }>>()
+  buildings.forEach((building) => {
+    building.units.forEach((unit) => {
+      const key = normalizeUnitNumber(unit.number)
+      const list = unitsByNumber.get(key)
+      if (list) list.push({ building, unit })
+      else unitsByNumber.set(key, [{ building, unit }])
+    })
+  })
+
+  return [...unitsByNumber.entries()]
+    .filter(([, candidates]) => candidates.length > 1)
+    .map(([normalizedNumber, candidates]) => {
+      const sorted = [...candidates].sort((a, b) => {
+        const byHistory = compareLatestHistory(
+          historiesByUnit.get(a.unit.id)?.[0],
+          historiesByUnit.get(b.unit.id)?.[0],
+        )
+        if (byHistory !== 0) return byHistory
+        const byPrimary = Number(b.building.id === group.primary.id) - Number(a.building.id === group.primary.id)
+        if (byPrimary !== 0) return byPrimary
+        return b.unit.id - a.unit.id
+      })
+      const kept = sorted[0]
+      const latest = historiesByUnit.get(kept.unit.id)?.[0]
+      const allHistories = candidates.flatMap(({ unit }) => historiesByUnit.get(unit.id) ?? [])
+      return {
+        normalizedNumber,
+        displayNumber: kept.unit.number,
+        keptBuildingName: kept.building.name || '건물명 없음',
+        latestVisitedAt: latest?.visitedAt ?? null,
+        latestResult: latest?.result ?? null,
+        visitCount: allHistories.length,
+        isChinese: Boolean(kept.unit.isChinese),
+        isRestaurant: Boolean(kept.unit.isRestaurant),
+        usageType: kept.unit.usageType ?? kept.building.type,
+      }
+    })
+    .sort((a, b) => a.normalizedNumber.localeCompare(b.normalizedNumber, 'ko', { numeric: true }))
 }
 
 /**
@@ -87,24 +167,24 @@ export function planDuplicateBuildingMerge(
     const [primary, ...absorbed] = sorted
     if (selected && !selected.has(primary.id)) continue
 
-    // 호수 번호가 하나라도 겹치면 손대지 않는다
-    // 101 과 101호 는 같은 호수다. 문자열 그대로 비교하면 겹침을 놓친다.
+    // 101 과 101호도 같은 호수다. 서버는 이 묶음의 방문 기록을 최신 세대로 통합한다.
     const seen = new Set(primary.units.map((u) => normalizeUnitNumber(u.number)))
-    const conflicting: string[] = []
+    const duplicateUnitNumbers: string[] = []
     let movingUnits = 0
     for (const dup of absorbed) {
       for (const unit of dup.units) {
         const key = normalizeUnitNumber(unit.number)
-        if (seen.has(key)) conflicting.push(unit.number)   // 알릴 때는 원래 표기로
+        if (seen.has(key)) duplicateUnitNumbers.push(unit.number)
         else { seen.add(key); movingUnits++ }
       }
     }
 
-    if (conflicting.length > 0) {
-      conflicts.push({ primary, absorbed, conflictingNumbers: [...new Set(conflicting)].sort() })
-      continue
-    }
-    merge.push({ primary, absorbed, movingUnits })
+    merge.push({
+      primary,
+      absorbed,
+      movingUnits,
+      duplicateUnitNumbers: [...new Set(duplicateUnitNumbers)].sort(),
+    })
   }
 
   return { merge, conflicts }
@@ -117,7 +197,10 @@ export function planDuplicateBuildingMerge(
 export type MergeResult = {
   ok: boolean
   mergedBuildings: number
+  mergedUnits?: number
   movedUnits: number
-  /** 호수가 겹쳐 건드리지 않은 묶음 */
-  conflicts: Array<{ primaryId: number; conflictingNumbers: string[] }>
+  movedVisitHistories?: number
+  auditIds?: number[]
+  /** 현재 담당 자료 때문에 자동 판단하지 않은 묶음 */
+  conflicts: Array<{ primaryId: number; conflictingNumbers: string[]; reason?: string }>
 }

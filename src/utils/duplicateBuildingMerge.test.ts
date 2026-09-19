@@ -1,9 +1,9 @@
 // 병합 계획. **여기가 "무엇을 지울지" 를 정한다.**
 // 틀리면 방문 기록이 cascade 로 사라지고 되돌릴 수 없다.
 import { describe, test, expect } from 'vitest'
-import { normalizeAddress, normalizeUnitNumber, planDuplicateBuildingMerge } from './duplicateBuildingMerge'
+import { buildDuplicateUnitPreviews, normalizeAddress, normalizeUnitNumber, planDuplicateBuildingMerge } from './duplicateBuildingMerge'
 import { testBuilding, testUnit } from '../test/territoryFixture'
-import type { Building } from '../types'
+import type { Building, VisitHistory } from '../types'
 
 /** 같은 주소를 쓰는 건물을 만든다 */
 const at = (id: number, address: string, units: string[], cardId = 1): Building => ({
@@ -29,37 +29,35 @@ describe('planDuplicateBuildingMerge', () => {
     expect(plan.merge[0].movingUnits).toBe(2)
   })
 
-  test('호수가 하나라도 겹치면 통째로 제외한다', () => {
-    // 예전 코드는 겹치는 호수를 건너뛰고 원본을 지웠다.
-    // 그러면 그 호수의 방문 기록이 cascade 로 사라진다.
+  test('호수가 겹치면 기록 통합 대상으로 표시한다', () => {
     const plan = planDuplicateBuildingMerge([
       at(1, '언동로 1', ['101호', '102호']),
       at(2, '언동로 1', ['102호', '103호']),
     ])
-    expect(plan.merge).toEqual([])
-    expect(plan.conflicts).toHaveLength(1)
-    expect(plan.conflicts[0].conflictingNumbers).toEqual(['102호'])
-    expect(plan.conflicts[0].primary.id).toBe(1)
-    expect(plan.conflicts[0].absorbed.map((building) => building.id)).toEqual([2])
+    expect(plan.conflicts).toEqual([])
+    expect(plan.merge).toHaveLength(1)
+    expect(plan.merge[0].duplicateUnitNumbers).toEqual(['102호'])
+    expect(plan.merge[0].primary.id).toBe(1)
   })
 
-  test('겹치는 묶음만 빼고 나머지는 합친다', () => {
+  test('겹치는 묶음과 일반 묶음을 모두 합치기 계획에 넣는다', () => {
     const plan = planDuplicateBuildingMerge([
       at(1, '가로 1', ['101호']), at(2, '가로 1', ['202호']),      // 안 겹침
       at(3, '나로 2', ['101호']), at(4, '나로 2', ['101호']),      // 겹침
     ])
-    expect(plan.merge.map((g) => g.primary.id)).toEqual([1])
-    expect(plan.conflicts.map((c) => c.primary.id)).toEqual([3])
+    expect(plan.merge.map((g) => g.primary.id)).toEqual([1, 3])
+    expect(plan.merge[1].duplicateUnitNumbers).toEqual(['101호'])
+    expect(plan.conflicts).toEqual([])
   })
 
-  test('셋 이상이어도 하나라도 겹치면 제외한다', () => {
+  test('셋 이상이어도 겹치는 호수를 기록 통합 대상으로 모은다', () => {
     const plan = planDuplicateBuildingMerge([
       at(1, '언동로 1', ['101호']),
       at(2, '언동로 1', ['201호']),
       at(3, '언동로 1', ['101호']),   // 1번과 겹친다
     ])
-    expect(plan.merge).toEqual([])
-    expect(plan.conflicts[0].conflictingNumbers).toEqual(['101호'])
+    expect(plan.merge).toHaveLength(1)
+    expect(plan.merge[0].duplicateUnitNumbers).toEqual(['101호'])
   })
 
   test('겹치는 호수를 여러 개면 모두 알려 준다 (중복 없이)', () => {
@@ -67,7 +65,7 @@ describe('planDuplicateBuildingMerge', () => {
       at(1, '언동로 1', ['101호', '102호']),
       at(2, '언동로 1', ['102호', '101호']),
     ])
-    expect(plan.conflicts[0].conflictingNumbers).toEqual(['101호', '102호'])
+    expect(plan.merge[0].duplicateUnitNumbers).toEqual(['101호', '102호'])
   })
 
   test('카드가 다르면 주소가 같아도 남남이다', () => {
@@ -132,16 +130,13 @@ describe('normalizeUnitNumber — 실제 데이터가 섞여 있다', () => {
 })
 
 describe('충돌 판정이 표기 차이에 속지 않는다', () => {
-  test("'101' 과 '101호' 가 겹치면 병합하지 않는다", () => {
-    // 이걸 놓치면 원본 건물이 삭제되면서 그 호수의 방문 기록이 cascade 로 사라진다
+  test("'101' 과 '101호' 가 겹치면 기록 통합 대상으로 잡는다", () => {
     const plan = planDuplicateBuildingMerge([
       at(1, '언동로 1', ['101']),
       at(2, '언동로 1', ['101호']),
     ])
-    expect(plan.merge).toEqual([])
-    expect(plan.conflicts).toHaveLength(1)
-    // 알릴 때는 사용자가 화면에서 보던 표기 그대로
-    expect(plan.conflicts[0].conflictingNumbers).toEqual(['101호'])
+    expect(plan.merge).toHaveLength(1)
+    expect(plan.merge[0].duplicateUnitNumbers).toEqual(['101호'])
   })
 
   test("'B02' 와 'B02호' 도 마찬가지", () => {
@@ -149,7 +144,7 @@ describe('충돌 판정이 표기 차이에 속지 않는다', () => {
       at(1, '언동로 1', ['B02']),
       at(2, '언동로 1', ['B02호']),
     ])
-    expect(plan.conflicts).toHaveLength(1)
+    expect(plan.merge[0].duplicateUnitNumbers).toEqual(['B02호'])
   })
 
   test('표기만 다른 게 아니면 정상 병합한다', () => {
@@ -159,5 +154,39 @@ describe('충돌 판정이 표기 차이에 속지 않는다', () => {
     ])
     expect(plan.merge).toHaveLength(1)
     expect(plan.merge[0].movingUnits).toBe(1)
+  })
+})
+
+describe('buildDuplicateUnitPreviews', () => {
+  test('최근 방문 세대의 현재 분류를 남기고 양쪽 기록 수를 합산한다', () => {
+    const oldBuilding = at(1, '언동로 1', ['201호'])
+    oldBuilding.units[0].isChinese = true
+    const recentBuilding = at(2, '언동로 1', ['201'])
+    recentBuilding.type = '상가'
+    recentBuilding.units[0].isRestaurant = true
+    recentBuilding.units[0].isChinese = false
+    const plan = planDuplicateBuildingMerge([oldBuilding, recentBuilding])
+    const histories: VisitHistory[] = [
+      { id: 1, buildingId: 1, unitId: oldBuilding.units[0].id, visitor: '가', result: '만남', visitedAt: '2026-07-18', timeSlot: '오전' },
+      { id: 2, buildingId: 2, unitId: recentBuilding.units[0].id, visitor: '나', result: '대상외', visitedAt: '2026-09-19', timeSlot: '오후' },
+    ]
+
+    const [preview] = buildDuplicateUnitPreviews(plan.merge[0], histories)
+    expect(preview.keptBuildingName).toBe('건물2')
+    expect(preview.latestResult).toBe('대상외')
+    expect(preview.visitCount).toBe(2)
+    expect(preview.isChinese).toBe(false)
+    expect(preview.isRestaurant).toBe(true)
+    expect(preview.usageType).toBe('상가')
+  })
+
+  test('방문 기록이 없으면 기준 건물 세대를 남긴다', () => {
+    const primary = at(1, '언동로 1', ['201호'])
+    const absorbed = at(2, '언동로 1', ['201'])
+    const plan = planDuplicateBuildingMerge([primary, absorbed])
+
+    const [preview] = buildDuplicateUnitPreviews(plan.merge[0], [])
+    expect(preview.keptBuildingName).toBe('건물1')
+    expect(preview.latestVisitedAt).toBeNull()
   })
 })

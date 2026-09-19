@@ -14174,6 +14174,62 @@ button:focus-visible {
     cursor: not-allowed;
   }
 
+  .merge-unit-preview-list {
+    display: grid;
+    gap: 6px;
+    padding-top: 2px;
+  }
+
+  .merge-unit-preview {
+    display: grid;
+    grid-template-columns: minmax(130px, 1fr) auto;
+    gap: 5px 10px;
+    padding: 9px 10px;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    background: #fffbeb;
+  }
+
+  .merge-unit-preview > div:first-child {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .merge-unit-preview strong {
+    color: #78350f;
+    font-size: 13px;
+  }
+
+  .merge-unit-preview span {
+    color: #78716c;
+    font-size: 11px;
+  }
+
+  .merge-unit-preview-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .merge-unit-preview-tags em {
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: #fff;
+    color: #92400e;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 700;
+  }
+
+  .merge-unit-preview .merge-unit-preview-latest {
+    grid-column: 1 / -1;
+    color: #92400e;
+    font-weight: 600;
+  }
+
   .merge-name-modal-footer {
     display: flex;
     justify-content: flex-end;

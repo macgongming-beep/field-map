@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { useAuth } from '../hooks/useAuth'
 import { getRegionNames } from '../lib/regions'
 import { getAreaFilterOptions } from '../utils/areaOptions'
-import { planDuplicateBuildingMerge } from '../utils/duplicateBuildingMerge'
+import { buildDuplicateUnitPreviews, planDuplicateBuildingMerge } from '../utils/duplicateBuildingMerge'
 import { getGeocodeCandidates } from '../utils/geocodeCandidates'
 import { chooseCardForBuilding } from '../utils/chooseCardForBuilding'
 import { visibleSelection, hasHiddenSelection } from '../utils/visibleSelection'
@@ -37,7 +37,7 @@ import { DuplicateBuildingMergeModal } from './DuplicateBuildingMergeModal'
 import { TerritoryDetailPane } from './TerritoryDetailPane'
 import { AddBuildingModal, type AddBuildingForm } from './AddBuildingModal'
 import { PointVisitEditor, type VisitDraft } from './PointVisitEditor'
-import type { MergeResult } from '../utils/duplicateBuildingMerge'
+import type { DuplicateUnitPreview, MergeResult } from '../utils/duplicateBuildingMerge'
 import { msg } from '../lib/msg'
 import { getRestaurantUnits } from '../utils/restaurants'
 import { placeDeletionCopy } from '../utils/placeDeletion'
@@ -281,7 +281,15 @@ export function DesktopTerritory({
   // (여기 두면 타이핑마다 이 거대 페이지 전체가 재렌더돼 입력이 끊김)
   const [showCsvModal, setShowCsvModal] = useState(false)
   // 중복 주소 합치기 이름 선택 모달
-  const [mergeModalGroups, setMergeModalGroups] = useState<Array<{ primaryId: number; address: string; cardName: string; buildingCount: number; unitCount: number; names: string[] }> | null>(null)
+  const [mergeModalGroups, setMergeModalGroups] = useState<Array<{
+    primaryId: number
+    address: string
+    cardName: string
+    buildingCount: number
+    unitCount: number
+    names: string[]
+    duplicateUnits: DuplicateUnitPreview[]
+  }> | null>(null)
   /** 병합 중에는 창을 닫지 않는다. 닫아도 작업은 계속돼 결과를 아무도 못 본다 */
   const [pendingChineseToggle, setPendingChineseToggle] = useState<{
     buildingId: number
@@ -1986,6 +1994,7 @@ export function DesktopTerritory({
                       buildingCount: sorted.length,
                       unitCount: sorted.reduce((sum, building) => sum + building.units.length, 0),
                       names: sorted.map((b) => b.name),
+                      duplicateUnits: buildDuplicateUnitPreviews(g, visitHistories),
                     }
                   })
                   setMergeModalGroups(groups)

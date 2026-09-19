@@ -37,4 +37,38 @@ describe('DuplicateBuildingMergeModal', () => {
     expect(screen.getByText('101, 201')).toBeTruthy()
     expect(screen.getByText('B01, 201')).toBeTruthy()
   })
+
+  it('같은 호수에서 남길 현재 정보와 보존할 기록 수를 보여준다', () => {
+    render(
+      <DuplicateBuildingMergeModal
+        groups={[{
+          primaryId: 1,
+          address: '중부대로1408번길 16',
+          cardName: '처인구 김량장동 003',
+          buildingCount: 2,
+          unitCount: 2,
+          names: ['옛 건물', '최근 건물'],
+          duplicateUnits: [{
+            normalizedNumber: '201',
+            displayNumber: '201호',
+            keptBuildingName: '최근 건물',
+            latestVisitedAt: '2026-09-19',
+            latestResult: '부재',
+            visitCount: 2,
+            isChinese: false,
+            isRestaurant: true,
+            usageType: '상가',
+          }],
+        }]}
+        mergePlan={{ conflicts: [] }}
+        cardName={() => '처인구 김량장동 003'}
+        onClose={vi.fn()}
+        onMerge={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('최근 건물의 현재 정보 유지')).toBeTruthy()
+    expect(screen.getByText('기록 2건 보존')).toBeTruthy()
+    expect(screen.getByText('최근 2026-09-19 · 부재')).toBeTruthy()
+  })
 })

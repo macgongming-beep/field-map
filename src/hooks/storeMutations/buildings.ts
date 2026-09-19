@@ -330,9 +330,9 @@ export function makeBuildingMutations(deps: {
    * ⚠ **RPC 가 없으면 옛 경로로 돌아가지 않는다.** 조용히 폴백하면 지금 상황이
    *   그대로 반복된다. 명확히 실패시킨다.
    *
-   * 호수가 겹치는 묶음은 건드리지 않고 conflicts 로 돌려준다 —
-   * units 가 visit_histories · regular_visits 에 cascade 로 물려 있어서,
-   * 겹치는 호수를 두고 원본을 지우면 방문 기록이 조용히 사라진다.
+   * 호수가 겹치면 가장 최근 방문 세대의 현재 정보를 남기고 이력을 통합한다.
+   * 서로 다른 정기방문 담당자·복수의 진행 중 재방문·일정 배정처럼 자동 판단할 수
+   * 없는 현재 업무만 conflicts 로 돌려준다.
    */
   const mergeDuplicateBuildings = async (
     scopeCardId?: number,
@@ -367,12 +367,12 @@ export function makeBuildingMutations(deps: {
     if (result.mergedBuildings === 0 && result.conflicts.length === 0) {
       showToast(msg('중복 주소 건물이 없습니다.'), 'info')
     } else if (result.mergedBuildings === 0) {
-      showToast(msg('호수 번호가 겹쳐 병합할 수 없는 주소가 {n}곳 있습니다. 직접 정리해 주세요.', { n: result.conflicts.length }), 'info')
+      showToast(msg('현재 담당 자료를 확인해야 하는 주소가 {n}곳 있습니다. 담당을 정리한 뒤 다시 시도해 주세요.', { n: result.conflicts.length }), 'info')
     } else {
       showToast(
         result.conflicts.length > 0
-          ? msg('중복 건물 {mergedBuildings}개 합병 완료 (호수 {movedUnits}개 이전).\n호수가 겹치는 {skipped}곳은 건드리지 않았습니다.', { mergedBuildings: result.mergedBuildings, movedUnits: result.movedUnits, skipped: result.conflicts.length })
-          : msg('중복 건물 {mergedBuildings}개 합병 완료 (호수 {movedUnits}개 이전)', { mergedBuildings: result.mergedBuildings, movedUnits: result.movedUnits }),
+          ? msg('중복 건물 {mergedBuildings}개 병합 완료 (중복 세대 {mergedUnits}개, 방문 기록 {histories}건 통합).\n현재 담당 자료가 있는 {skipped}곳은 건드리지 않았습니다.', { mergedBuildings: result.mergedBuildings, mergedUnits: result.mergedUnits ?? 0, histories: result.movedVisitHistories ?? 0, skipped: result.conflicts.length })
+          : msg('중복 건물 {mergedBuildings}개 병합 완료 (중복 세대 {mergedUnits}개, 방문 기록 {histories}건 통합)', { mergedBuildings: result.mergedBuildings, mergedUnits: result.mergedUnits ?? 0, histories: result.movedVisitHistories ?? 0 }),
       )
     }
     return result
