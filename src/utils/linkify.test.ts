@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { URL_PATTERN, splitTrailingPunctuation, toHref } from './linkify'
+import { PHONE_PATTERN, splitTrailingPunctuation, toHref, toPhoneHref, URL_PATTERN } from './linkify'
 
 // split 결과에서 홀수 인덱스가 URL — 컴포넌트와 동일한 방식으로 추출
 function extractUrls(text: string): string[] {
@@ -49,5 +49,20 @@ describe('toHref', () => {
   it('http(s) 주소는 그대로', () => {
     expect(toHref('https://naver.me/x')).toBe('https://naver.me/x')
     expect(toHref('http://a.co')).toBe('http://a.co')
+  })
+})
+
+describe('전화번호 링크', () => {
+  it('휴대전화와 지역번호를 찾고 날짜·시간은 무시한다', () => {
+    const text = '9/16 13:30, 휴대전화 010-1234-5678, 사무실 031 123 4567'
+    expect(text.split(PHONE_PATTERN).filter((_, i) => i % 2 === 1)).toEqual([
+      '010-1234-5678',
+      '031 123 4567',
+    ])
+  })
+
+  it('tel 링크에서는 공백과 구분자를 제거한다', () => {
+    expect(toPhoneHref('010-1234 5678')).toBe('tel:01012345678')
+    expect(toPhoneHref('+82 10-1234-5678')).toBe('tel:+821012345678')
   })
 })

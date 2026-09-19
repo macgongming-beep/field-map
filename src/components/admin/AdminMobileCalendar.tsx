@@ -1,7 +1,7 @@
 // 관리자 모바일 캘린더 — design_handoff 02 / 02b / 03 화면
 import { t, weekdayShortLabels } from '../../i18n'
 import { confirmDialog } from '../../lib/confirm'
-import { pushBackHandler } from '../../lib/backStack'
+import { pushBackHandler, requestBackHandler } from '../../lib/backStack'
 import { showToast } from '../../lib/toast'
 import { findActivePeriod } from '../../utils/specialPeriod'
 import { CART_APPLICATIONS_ENABLED } from '../../config/features'
@@ -16,8 +16,7 @@ import { CART_APPLICATIONS_ENABLED } from '../../config/features'
 // 헤더는 상위 MobileHome.tsx 의 AppHeader 가 그림.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useDeepLinkBack } from '../../hooks/useDeepLinkBack'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { askNotifyOnEventEdit } from '../../lib/askNotify'
 import { countEventNotifyTargets, countEventNotifyTargetsMany } from '../../utils/eventNotify'
 import type { Building, CalendarEvent, CardBoundary, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, InformalGroup, Role, SpecialPeriod, TerritoryCard, VisitHistory } from '../../types'
@@ -40,6 +39,7 @@ import { Card } from '../ui'
 import { AdminEventDetailSheet } from './AdminEventDetailSheet'
 import type { MentionUser } from '../CommentSection'
 import { msg } from '../../lib/msg'
+import { getCurrentAppPath, readEventDetailReturnTo } from '../../lib/eventDetailNavigation'
 
 // WEEKDAYS / WEEKDAY_LABELS defined inside component now via i18n
 // 시간 프리셋(TimePreset, 기본값, load/save 등)은 ../../lib/timePresets 로 이동 (PC 공용)
@@ -230,12 +230,17 @@ export function AdminMobileCalendar({
   const detailEvent = detailEventId !== null ? events.find((e) => e.id === detailEventId) ?? null : null
   const editingEvent = editingEventId !== null ? events.find((e) => e.id === editingEventId) ?? null : null
 
-  const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const navigate = useNavigate()
-  // 홈에서 일정을 누르면 /calendar?openEvent=X 로 **넘어와서** 상세를 연다.
-  // 그래서 상세만 닫으면 홈이 아니라 캘린더가 남았다.
-  // 딥링크로 열린 상세는 닫을 때 한 발짝 더 물러난다.
-  const { markDeepLink } = useDeepLinkBack(detailEventId, () => navigate(-1))
+  const [searchParams, setSearchParams] = useSearchParams()
+  const closeDetail = () => setDetailEventId(null)
+  const detailReturnToRef = useRef('/calendar')
+  const detailReturnsThroughHistoryRef = useRef(false)
+  const returnFromDetail = () => {
+    if (requestBackHandler()) return
+    setDetailEventId(null)
+    navigate(detailReturnToRef.current, { replace: true })
+  }
   // 알림/딥링크 진입: ?openChat=X → 그 일정 채팅 열기,
   //                  ?openEvent=X → 그 일정 상세 시트 열기
   useEffect(() => {
@@ -265,8 +270,10 @@ export function AdminMobileCalendar({
         },
       }))
     } else if (openEventId) {
+      const returnTo = readEventDetailReturnTo(location.state)
+      detailReturnToRef.current = returnTo ?? '/calendar'
+      detailReturnsThroughHistoryRef.current = returnTo !== null
       setDetailEventId(targetEvent.id)
-      markDeepLink()
     }
 
     const next = new URLSearchParams(searchParams)
@@ -276,21 +283,27 @@ export function AdminMobileCalendar({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, events])
 
-  // 풀스크린 오버레이(일정 상세 / 배정 에디터)가 열린 동안 OS·스와이프 뒤로가기를
-  // 가로채 "오버레이만 닫기" (홈으로 튕기지 않도록).
+  // 일정 상세는 어디서 열렸든 OS·스와이프 뒤로가기를 가로채 상세만 닫는다.
+  // 홈·알림 진입도 이전 기록이 앱 화면이라는 보장이 없다. 특히 iOS PWA를
+  // 알림으로 새로 열면 직전 기록이 Safari 빈 탭일 수 있으므로 항상 한 칸을 만든다.
   // 상세 → 배정 전환 때는 오버레이가 계속 열린 상태라 더미 히스토리를 그대로 재사용한다.
   // (각각 push/back 하면 서로 경쟁해 배정 화면이 즉시 닫히는 문제가 생김)
-  const overlayOpen = detailEventId !== null || assignEventId !== null
+  const overlayNeedsBackHandler = detailEventId !== null || assignEventId !== null
   const overlayIdsRef = useRef({ detailEventId, assignEventId })
   overlayIdsRef.current = { detailEventId, assignEventId }
   useEffect(() => {
-    if (!overlayOpen) return
+    if (!overlayNeedsBackHandler) return
     return pushBackHandler(() => {
       // 위에 떠 있는 것부터 닫는다 (배정 에디터 → 일정 상세)
       if (overlayIdsRef.current.assignEventId !== null) setAssignEventId(null)
-      else setDetailEventId(null)
+      else {
+        setDetailEventId(null)
+        // 홈·알림에서 왔다면 그 진입 기록이 바로 아래에 있으므로 한 칸 더
+        // 물러난다. 캘린더 안에서 연 상세나 외부 딥링크는 현재 캘린더에 남는다.
+        if (detailReturnsThroughHistoryRef.current) navigate(-1)
+      }
     })
-  }, [overlayOpen])
+  }, [navigate, overlayNeedsBackHandler])
 
   const cells = useMemo(() => buildCalendarDays(year, month), [year, month])
   const selectedDateStr = toDateStr(year, month, selectedDay)
@@ -521,7 +534,18 @@ export function AdminMobileCalendar({
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
             {selectedEvents.map((event) => (
-              <DayEventCard language={language} key={event.id} event={event} role={role} globalSettings={globalSettings} onClick={() => setDetailEventId(event.id)} />
+              <DayEventCard
+                language={language}
+                key={event.id}
+                event={event}
+                role={role}
+                globalSettings={globalSettings}
+                onClick={() => {
+                  detailReturnToRef.current = getCurrentAppPath(location)
+                  detailReturnsThroughHistoryRef.current = false
+                  setDetailEventId(event.id)
+                }}
+              />
             ))}
           </div>
         )}
@@ -594,10 +618,7 @@ export function AdminMobileCalendar({
           participantUsers={participantUsers}
           onAddParticipant={(userName, participantRole) => onAddParticipantToEvent?.(detailEvent.id, userName, participantRole)}
           onRemoveParticipant={(userName) => onRemoveParticipantFromEvent?.(detailEvent.id, userName)}
-          onClose={() => {
-            // setDetailEventId(null) → 위 useEffect cleanup 이 더미 히스토리 정리
-            setDetailEventId(null)
-          }}
+          onClose={returnFromDetail}
           onApply={onApplyToEvent ? () => onApplyToEvent(detailEvent.id) : undefined}
           onCancelApply={onApplyToEvent ? () => onApplyToEvent(detailEvent.id) : undefined}
           onApplyToCart={onApplyToCartEvent ? () => onApplyToCartEvent(detailEvent.id) : undefined}
@@ -615,7 +636,7 @@ export function AdminMobileCalendar({
             onUpdateEvent
               ? () => {
                   setEditingEventId(detailEvent.id)
-                  setDetailEventId(null)
+                  closeDetail()
                 }
               : undefined
           }
@@ -624,10 +645,10 @@ export function AdminMobileCalendar({
               ? async () => {
                   if (detailEvent.seriesId && onDeleteEventSeries) {
                     setScopeAction({ kind: 'delete', event: detailEvent })
-                    setDetailEventId(null)
+                    closeDetail()
                   } else if (await confirmDialog({ message: t(language, 'calendar.deleteConfirm'), danger: true, confirmLabel: msg('삭제') })) {
                     onDeleteEvent(detailEvent.id)
-                    setDetailEventId(null)
+                    closeDetail()
                   }
                 }
               : undefined

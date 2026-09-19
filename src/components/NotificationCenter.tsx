@@ -1,11 +1,12 @@
 import { t, type AppLanguage } from '../i18n'
 // 알림 센터 (헤더 🔔 클릭 시 슬라이드 다운)
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import type { AppNotification, NotificationType } from '../hooks/useNotifications'
 import { useUserChats } from '../hooks/useUserChats'
 import { normalizeAppLink } from '../utils/appNavigation'
 import { translateNotificationText } from '../lib/notificationText'
 import { msg } from '../lib/msg'
+import { eventDetailNavigationState } from '../lib/eventDetailNavigation'
 
 const TYPE_LABEL: Record<NotificationType, { icon: NotificationIconName; color: string; bg: string }> = {
   notice: { icon: 'notice', color: '#2563eb', bg: '#eff4fe' },
@@ -196,6 +197,7 @@ export function NotificationCenter({
   clearReadNotifications?: () => Promise<void>
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { chats: userChats } = useUserChats(userId, userName ?? null, { realtime: false })
 
   const chatInfoMap = new Map<number, { title: string; participantCount: number; eventDate: string; eventTime: string | null }>()
@@ -240,7 +242,11 @@ export function NotificationCenter({
 
     onClose()
     const targetLink = resolveNotificationLink(n)
-    if (targetLink) navigate(targetLink)
+    if (targetLink) {
+      navigate(targetLink, targetLink.includes('openEvent=')
+        ? { state: eventDetailNavigationState(location) }
+        : undefined)
+    }
   }
 
   async function handleClickChatGroup(group: ChatGroup) {

@@ -12689,7 +12689,20 @@ button:focus-visible {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
     margin-top: 2px;
+  }
+
+  .event-hero-leader-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .event-hero-leader-person.is-callable {
+    color: var(--primary-600, #1e5bd0);
   }
   .event-hero-leader-avatar {
     width: 22px;

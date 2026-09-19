@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import type { CalendarEvent, Notice, ReturnVisit, ReturnVisitLog, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot } from '../types'
 import type { AppLanguage } from '../i18n'
 import { SpecialPeriodBanner } from './SpecialPeriodBanner'
 import { AdminMobileHome } from './admin/AdminMobileHome'
 import { UserMobileHome } from './UserMobileHome'
+import { eventDetailNavigationState } from '../lib/eventDetailNavigation'
 
 export function DesktopHome({
   language,
@@ -51,6 +52,7 @@ export function DesktopHome({
   globalSettings?: Record<string, string>
 }) {
   const navigate = useNavigate()
+  const location = useLocation()
   
   const today = useMemo(() => {
     const d = new Date()
@@ -100,7 +102,9 @@ export function DesktopHome({
             inProgressCount={inProgressCards.length}
             unassignedCount={cards.filter((c) => c.status === '미배정').length}
                         onOpenZone={() => navigate('/zone')}
-            onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`)}
+            onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`, {
+              state: eventDetailNavigationState(location),
+            })}
           />
         ) : (
           <UserMobileHome
@@ -108,7 +112,9 @@ export function DesktopHome({
             myTodayEvents={myTodayEvents}
             leaderCards={leaderCards}
             role={role}
-            onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`)}
+            onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`, {
+              state: eventDetailNavigationState(location),
+            })}
             onOpenZone={() => navigate('/zone')}
             globalSettings={globalSettings}
           />

@@ -18,9 +18,10 @@ import { confirmDialog } from '../../lib/confirm'
 import { t, translateKoreanAddress, type AppLanguage } from '../../i18n'
 import { CommentSection, type MentionUser } from '../CommentSection'
 import { ParticipantAddContent } from '../calendar/ParticipantAddContent'
-import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
+import { eventParticipantNameKey, type EventParticipantUser } from '../../utils/eventParticipantUsers'
 import { msg } from '../../lib/msg'
 import { CartApplicantSection } from '../calendar/CartApplicantSection'
+import { toPhoneHref } from '../../utils/linkify'
 
 type Props = {
   /** 비공식 봉사 배정 — 구역이 없어도 맡은 일이 있으면 보여 준다 */
@@ -195,7 +196,15 @@ export function AdminEventDetailSheet({
   const canEditEvent = role === 'admin' || role === 'developer' || isLeaderOfThisEvent
   const canDeleteEvent = role === 'admin' || role === 'developer'
   const canManageParticipants = canEditEvent
-  
+  const leaders = event.leaders.length > 0
+    ? event.leaders
+    : event.leader.split(',').map((name) => name.trim()).filter(Boolean)
+  const phoneByName = new Map(
+    participantUsers
+      .filter((user) => user.phone?.trim())
+      .map((user) => [eventParticipantNameKey(user.name), user.phone!.trim()]),
+  )
+
   const [isAddParticipantModalOpen, setIsAddParticipantModalOpen] = useState(false)
   const [isRemoveParticipantMode, setIsRemoveParticipantMode] = useState(false)
 
@@ -259,6 +268,7 @@ export function AdminEventDetailSheet({
           <button
             type="button"
             onClick={onClose}
+            aria-label={msg('뒤로')}
             style={{
               width: 36,
               height: 36,
@@ -386,10 +396,31 @@ export function AdminEventDetailSheet({
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
             {event.title}
           </h1>
-          {event.leader && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-              <Avatar name={event.leader} size={24} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{event.leader}</span>
+          {leaders.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+              {leaders.map((leader) => {
+                const phone = phoneByName.get(eventParticipantNameKey(leader))
+                const content = (
+                  <>
+                    <Avatar name={leader} size={24} />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{leader}</span>
+                  </>
+                )
+                return phone ? (
+                  <a
+                    key={leader}
+                    href={toPhoneHref(phone)}
+                    aria-label={`${leader}에게 전화`}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--primary-600, #1E5BD0)', textDecoration: 'none' }}
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <span key={leader} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--ink)' }}>
+                    {content}
+                  </span>
+                )
+              })}
               <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t(language, 'calendar.leader')}</span>
             </div>
           )}

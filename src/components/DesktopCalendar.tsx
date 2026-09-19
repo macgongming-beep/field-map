@@ -21,9 +21,10 @@ import { t } from '../i18n'
 import { AssignmentEditor } from './assignment/AssignmentEditor'
 import { buildSharedAssignmentTeams } from './admin/sharedAssignmentTeams'
 import { ParticipantAddContent } from './calendar/ParticipantAddContent'
-import type { EventParticipantUser } from '../utils/eventParticipantUsers'
+import { eventParticipantNameKey, type EventParticipantUser } from '../utils/eventParticipantUsers'
 import { CartApplicantSection } from './calendar/CartApplicantSection'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
+import { toPhoneHref } from '../utils/linkify'
 
 
 function getCalendarDays(year: number, month: number): (number | null)[] {
@@ -1100,10 +1101,26 @@ function EventDetailCard({
           {event.hasMeeting && <span className="event-hero-meeting-pill">봉사 모임</span>}
         </div>
         <h2 className="event-hero-title">{event.title}</h2>
-        {event.leader && (
+        {(event.leaders.length > 0 || event.leader) && (
           <div className="event-hero-leader">
-            <span className="event-hero-leader-avatar">{event.leader.slice(0, 1)}</span>
-            <span className="event-hero-leader-name">{event.leader}</span>
+            {(event.leaders.length > 0 ? event.leaders : event.leader.split(',').map((name) => name.trim()).filter(Boolean)).map((leader) => {
+              const phone = participantUsers.find(
+                (user) => eventParticipantNameKey(user.name) === eventParticipantNameKey(leader),
+              )?.phone?.trim()
+              const content = (
+                <>
+                  <span className="event-hero-leader-avatar">{leader.slice(0, 1)}</span>
+                  <span className="event-hero-leader-name">{leader}</span>
+                </>
+              )
+              return phone ? (
+                <a className="event-hero-leader-person is-callable" href={toPhoneHref(phone)} key={leader} aria-label={`${leader}에게 전화`}>
+                  {content}
+                </a>
+              ) : (
+                <span className="event-hero-leader-person" key={leader}>{content}</span>
+              )
+            })}
             <span className="event-hero-leader-label">인도자</span>
           </div>
         )}

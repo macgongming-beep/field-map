@@ -265,7 +265,7 @@ export function DesktopApp({
   onDeleteUnit: (buildingId: number, unitId: number) => void
   onRemoveParticipantFromEvent: (eventId: number, userName: string) => void
   onAddParticipantToEvent: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
-  allUsers: Array<{ id: number; name: string; role: string; approvalStatus?: 'pending' | 'approved' | 'blocked'; isActive?: boolean; cartServiceApproved?: boolean }>
+  allUsers: Array<{ id: number; name: string; phone?: string | null; role: string; approvalStatus?: 'pending' | 'approved' | 'blocked'; isActive?: boolean; cartServiceApproved?: boolean }>
   returnVisits?: ReturnVisit[]
   returnVisitLogs?: ReturnVisitLog[]
   onAddReturnVisitLog: (returnVisitId: number, result: '만남' | '부재' | null, memo: string) => Promise<void>

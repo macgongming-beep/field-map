@@ -1,6 +1,7 @@
 export type EventParticipantUser = {
   id: number
   name: string
+  phone?: string | null
   role?: string
   approvalStatus?: 'pending' | 'approved' | 'blocked'
   isActive?: boolean

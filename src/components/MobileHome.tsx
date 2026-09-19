@@ -34,6 +34,7 @@ import { msg } from '../lib/msg'
 import { useAdminAttentionCounts } from '../hooks/useAdminAttentionCounts'
 import { confirmDialog, alertDialog } from '../lib/confirm'
 import { resetDemoEnvironment } from '../lib/demoEnvironment'
+import { eventDetailNavigationState } from '../lib/eventDetailNavigation'
 
 type MobileTab = '홈' | '캘린더' | '활동' | '구역' | '지도' | '배정' | '설정'
 
@@ -820,7 +821,9 @@ export function MobileHome({
                     
                     
                     
-                    onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`)}
+                    onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`, {
+                      state: eventDetailNavigationState(location),
+                    })}
                   />
                 ) : (
                   <UserMobileHome
@@ -835,7 +838,9 @@ export function MobileHome({
                     role={role}
                     
                     
-                    onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`)}
+                    onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`, {
+                      state: eventDetailNavigationState(location),
+                    })}
                     onOpenZone={() => navigate('/zone')}
                     globalSettings={globalSettings}
                   />

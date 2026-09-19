@@ -8,21 +8,28 @@
 // 사용법:
 //   useEffect(() => (open ? pushBackHandler(() => close()) : undefined), [open])
 
-type Entry = { handler: () => void; poppedByGesture: boolean }
+const HISTORY_KEY = '__fieldMapBackStackId'
+
+type Entry = { id: number; handler: () => void; poppedByHistory: boolean }
 
 const stack: Entry[] = []
 let listening = false
-// 코드로 호출한 history.back() 이 만든 popstate 는 무시 (사용자 제스처가 아님)
-let suppressUntil = 0
+let nextEntryId = 1
+// 코드로 정리한 더미 기록에서 발생하는 popstate만 정확히 한 번 무시한다.
+// 시간 창으로 무시하면 그 사이 사용자가 한 진짜 스와이프까지 먹어 버린다.
+let ignoredProgrammaticPops = 0
 
 function onPop() {
-  if (Date.now() < suppressUntil) {
-    suppressUntil = 0
+  if (ignoredProgrammaticPops > 0) {
+    ignoredProgrammaticPops -= 1
     return
   }
   const top = stack[stack.length - 1]
   if (!top) return
-  top.poppedByGesture = true
+  // 현재도 최상단 더미 기록이면 실제로 뒤로 이동한 것이 아니다.
+  if (window.history.state?.[HISTORY_KEY] === top.id) return
+  top.poppedByHistory = true
+  stack.pop()
   top.handler()
 }
 
@@ -32,9 +39,9 @@ function onPop() {
  * 제스처가 아닌 코드로 닫힌 경우엔 쌓아둔 더미 히스토리도 정리한다.
  */
 export function pushBackHandler(handler: () => void): () => void {
-  const entry: Entry = { handler, poppedByGesture: false }
+  const entry: Entry = { id: nextEntryId++, handler, poppedByHistory: false }
   stack.push(entry)
-  window.history.pushState({ backStackDepth: stack.length }, '')
+  window.history.pushState({ ...window.history.state, [HISTORY_KEY]: entry.id }, '')
 
   if (!listening) {
     window.addEventListener('popstate', onPop)
@@ -44,9 +51,18 @@ export function pushBackHandler(handler: () => void): () => void {
   return () => {
     const index = stack.indexOf(entry)
     if (index >= 0) stack.splice(index, 1)
-    if (!entry.poppedByGesture) {
-      suppressUntil = Date.now() + 400
+    // 다른 라우트 이동이 먼저 기록을 치운 경우에는 추가로 뒤로 가지 않는다.
+    if (!entry.poppedByHistory && window.history.state?.[HISTORY_KEY] === entry.id) {
+      ignoredProgrammaticPops += 1
       window.history.back()
     }
   }
+}
+
+/** 현재 최상단 오버레이가 만든 히스토리 한 칸을 뒤로 보낸다. */
+export function requestBackHandler(): boolean {
+  const top = stack[stack.length - 1]
+  if (!top || window.history.state?.[HISTORY_KEY] !== top.id) return false
+  window.history.back()
+  return true
 }
