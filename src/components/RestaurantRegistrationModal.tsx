@@ -2,9 +2,8 @@ import { useRef, useState } from 'react'
 import type { Building, CardBoundary } from '../types'
 import { RESTAURANT_INITIAL_STATES, type RegisterRestaurant, type RestaurantInitialState } from '../types/restaurantRegistration'
 import { msg } from '../lib/msg'
-import { normalizeCardSearch } from '../utils/cardSearch'
 import { searchPlacesForCongregation } from '../lib/placeSearch'
-import { classifyRestaurantPlaces, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
+import { classifyRestaurantPlaces, findExistingBuildingsByAddress, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
 import { showToast } from '../lib/toast'
 import './RestaurantRegistrationModal.css'
 
@@ -17,9 +16,9 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
 }) {
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
-  const [existing, setExisting] = useState(false)
   const [buildingId, setBuildingId] = useState<number | null>(null)
-  const [search, setSearch] = useState('')
+  const [candidateBuildingIds, setCandidateBuildingIds] = useState<number[]>([])
+  const [manualAddressOpen, setManualAddressOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
   const [isChinese, setIsChinese] = useState(true)
@@ -32,15 +31,17 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
   const [selectedLng, setSelectedLng] = useState<number | null>(null)
   const submitting = useRef(false)
   const selected = buildings.find(b => b.id === buildingId)
-  const resolvedAddress = existing ? selected?.address ?? '' : address.trim()
-  const q = normalizeCardSearch(search)
-  const matches = buildings.filter(b => normalizeCardSearch(
-    `${b.name} ${b.address} ${b.units.map(u => u.number).join(' ')}`,
-  ).includes(q)).slice(0, 50)
-  const addressQuery = normalizeCardSearch(address)
-  const addressMatches = addressQuery.length >= 3
-    ? buildings.filter(b => normalizeCardSearch(`${b.name} ${b.address}`).includes(addressQuery)).slice(0, 8)
+  const manualAddressMatches = manualAddressOpen && address.trim().length >= 3
+    ? findExistingBuildingsByAddress(address, buildings)
     : []
+  const candidateBuildings = candidateBuildingIds.length > 0
+    ? candidateBuildingIds
+      .map((id) => buildings.find((building) => building.id === id))
+      .filter((building): building is Building => Boolean(building))
+    : manualAddressMatches
+  const autoBuilding = selected ?? (candidateBuildings.length === 1 ? candidateBuildings[0] : null)
+  const needsBuildingChoice = !selected && candidateBuildings.length > 1
+  const resolvedAddress = autoBuilding?.address ?? address.trim()
   const regularVisitorOptions = [...new Set([regularVisitor, ...visitorNames].map((value) => value.trim()).filter(Boolean))]
 
   async function runPlaceSearch(query: string) {
@@ -66,21 +67,23 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
     setSelectedLat(place.lat)
     setSelectedLng(place.lng)
     setVerifiedAddress(true)
+    setManualAddressOpen(false)
     setPlaceResults(null)
     if (place.buildingId != null) {
-      const building = buildings.find((item) => item.id === place.buildingId)
-      setExisting(true)
       setBuildingId(place.buildingId)
-      setSearch(building?.address ?? place.address)
-    } else {
-      setExisting(false)
+      setCandidateBuildingIds([])
+    } else if (place.buildingIds.length > 1) {
       setBuildingId(null)
+      setCandidateBuildingIds(place.buildingIds)
+    } else {
+      setBuildingId(null)
+      setCandidateBuildingIds([])
     }
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (submitting.current || !name.trim() || !resolvedAddress || (existing && !selected) || (initialState === '정기방문' && !regularVisitor.trim())) return
+    if (submitting.current || !name.trim() || !resolvedAddress || needsBuildingChoice || (initialState === '정기방문' && !regularVisitor.trim())) return
     submitting.current = true
     setSaving(true)
     setFailed(false)
@@ -88,11 +91,11 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
       if (await onRegister({
         name: name.trim(),
         address: resolvedAddress,
-        existingBuildingId: existing ? selected!.id : null,
+        existingBuildingId: autoBuilding?.id ?? null,
         isChinese,
         initialState,
         regularVisitor: initialState === '정기방문' ? regularVisitor.trim() : null,
-        ...(!existing && selectedLat != null && selectedLng != null ? { lat: selectedLat, lng: selectedLng } : {}),
+        ...(!autoBuilding && selectedLat != null && selectedLng != null ? { lat: selectedLat, lng: selectedLng } : {}),
       })) onClose()
       else setFailed(true)
     } catch { setFailed(true) } finally {
@@ -114,48 +117,68 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
             <div className="restaurant-registration-place-results" aria-label={msg('장소 검색 결과')}>
               {placeResults.length === 0 ? <p>{msg('검색 결과가 없습니다.')}</p> : placeResults.map((place) => (
                 <button key={`${place.name}-${place.address}-${place.lat}-${place.lng}`} type="button" disabled={place.status === 'registered'} onClick={() => pickPlace(place)}>
-                  <span className="restaurant-registration-place-title"><strong>{place.name}</strong><span className={`restaurant-registration-badge is-${place.status}`}>{msg(place.status === 'registered' ? '이미 등록됨' : place.status === 'existing-building' ? '기존 건물에 추가' : '새 건물')}</span></span>
+                  <span className="restaurant-registration-place-title"><strong>{place.name}</strong><span className={`restaurant-registration-badge is-${place.status}`}>{msg(place.status === 'registered' ? '이미 등록됨' : place.status === 'existing-building' ? '기존 건물에 추가' : place.status === 'ambiguous-building' ? '건물 확인 필요' : '새 건물')}</span></span>
                   <small>{place.address || msg('주소 정보 없음')}{place.category ? ` · ${place.category}` : ''}</small>
                   <span className={`restaurant-registration-scope is-${place.scope}`}>{msg(place.scope === 'card' ? '구역 안' : place.scope === 'unassigned' ? '미배정 지역' : '봉사 범위 밖')}</span>
                 </button>
               ))}
             </div>
           )}
-          {verifiedAddress ? (
+          {verifiedAddress && !needsBuildingChoice ? (
             <div className="restaurant-registration-auto-choice">
-              <span>{existing && selected ? msg('기존 건물을 자동으로 찾았습니다.') : msg('새 건물로 등록합니다.')}</span>
-              <strong>{existing && selected ? `${selected.name} · ${selected.address}` : address}</strong>
-              <button type="button" onClick={() => setVerifiedAddress(false)}>{msg('직접 변경')}</button>
+              <span>{autoBuilding ? msg('기존 건물을 자동으로 찾았습니다.') : msg('새 건물로 등록합니다.')}</span>
+              <strong>{autoBuilding ? `${autoBuilding.name} · ${autoBuilding.address}` : address}</strong>
+              <button type="button" onClick={() => {
+                setVerifiedAddress(false)
+                setManualAddressOpen(true)
+                setBuildingId(null)
+                setCandidateBuildingIds([])
+              }}>{msg('주소 다시 선택')}</button>
             </div>
-          ) : (
-            <div className="restaurant-registration-modes">
-              <label><input type="radio" name="restaurant-building-mode" checked={!existing} onChange={() => setExisting(false)} />{msg('새 건물')}</label>
-              <label><input type="radio" name="restaurant-building-mode" checked={existing} onChange={() => setExisting(true)} />{msg('기존 건물')}</label>
+          ) : null}
+          {needsBuildingChoice && (
+            <div className="restaurant-registration-address-matches is-required">
+              <strong>{msg('같은 주소의 건물이 여러 개입니다.')}</strong>
+              <p>{msg('식당이 들어 있는 건물을 선택해주세요.')}</p>
+              {candidateBuildings.map(building => (
+                <button key={building.id} type="button" onClick={() => {
+                  setBuildingId(building.id)
+                  setCandidateBuildingIds([])
+                }}>
+                  <span>{building.name}</span>
+                  <small>{building.address}</small>
+                  <small>{building.units.filter((unit) => unit.isRestaurant).map((unit) => unit.number).join(', ') || msg('등록된 식당 없음')}</small>
+                </button>
+              ))}
             </div>
           )}
-          {!verifiedAddress && (existing ? <>
-            <label>{msg('건물 검색')}<input value={search} onChange={e => setSearch(e.target.value)} /></label>
-            <label>{msg('기존 건물')}<select required value={buildingId ?? ''} onChange={e => setBuildingId(e.target.value ? Number(e.target.value) : null)}>
-              <option value="">{msg('건물 선택')}</option>
-              {selected && !matches.some(b => b.id === selected.id) && <option value={selected.id}>{selected.name} · {selected.address}</option>}
-              {matches.map(b => <option key={b.id} value={b.id}>{b.name} · {b.address}</option>)}
-            </select></label>
-          </> : <>
+          {!verifiedAddress && !manualAddressOpen && (
+            <button className="restaurant-registration-manual-address" type="button" onClick={() => setManualAddressOpen(true)}>
+              {msg('검색 결과에 없나요? 주소 직접 입력')}
+            </button>
+          )}
+          {!verifiedAddress && manualAddressOpen && <>
             <label>{msg('주소')}<span className="restaurant-registration-search-row"><input required maxLength={500} value={address} onChange={e => { setAddress(e.target.value); setVerifiedAddress(false); setSelectedLat(null); setSelectedLng(null); setPlaceResults(null) }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void runPlaceSearch(address) } }} /><button type="button" onClick={() => void runPlaceSearch(address)} disabled={!address.trim() || searchingPlace}>{msg('주소 확인')}</button></span></label>
             <p className={`restaurant-registration-verification ${verifiedAddress ? 'is-verified' : ''}`}>{verifiedAddress ? msg('네이버에서 위치를 확인했습니다.') : msg('검색 결과를 선택하면 실제 주소와 위치를 확인할 수 있습니다.')}</p>
-            {addressMatches.length > 0 && (
+            {manualAddressMatches.length === 1 && (
+              <div className="restaurant-registration-auto-choice">
+                <span>{msg('기존 건물을 자동으로 찾았습니다.')}</span>
+                <strong>{manualAddressMatches[0].name} · {manualAddressMatches[0].address}</strong>
+              </div>
+            )}
+            {manualAddressMatches.length > 1 && (
               <div className="restaurant-registration-address-matches">
-                <strong>{msg('이 주소의 기존 건물')}</strong>
-                {addressMatches.map(building => (
+                <strong>{msg('같은 주소의 건물이 여러 개입니다.')}</strong>
+                {manualAddressMatches.map(building => (
                   <button key={building.id} type="button" onClick={() => {
-                    setExisting(true); setBuildingId(building.id); setSearch(building.address); setVerifiedAddress(true)
+                    setBuildingId(building.id); setVerifiedAddress(true); setManualAddressOpen(false)
                   }}>
                     <span>{building.name}</span><small>{building.address}</small>
                   </button>
                 ))}
               </div>
             )}
-          </>)}
+          </>}
           <label>{msg('현재 상태')}<select aria-label={msg('현재 상태')} value={initialState} onChange={e => setInitialState(e.target.value as RestaurantInitialState)}>
             {RESTAURANT_INITIAL_STATES.map(state => <option key={state} value={state}>{msg(state)}</option>)}
           </select></label>
@@ -169,7 +192,7 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
           )}
           <label className="restaurant-registration-check"><input type="checkbox" checked={isChinese} onChange={e => setIsChinese(e.target.checked)} />{msg('중국어를 사용하는 식당')}</label>
           {failed && <p role="alert">{msg('식당을 등록하지 못했습니다.')}</p>}
-          <button type="submit" className="restaurant-registration-submit" disabled={!name.trim() || !resolvedAddress || (existing && !selected) || (initialState === '정기방문' && !regularVisitor.trim())}>{saving ? msg('등록 중...') : msg('등록')}</button>
+          <button type="submit" className="restaurant-registration-submit" disabled={!name.trim() || !resolvedAddress || needsBuildingChoice || (initialState === '정기방문' && !regularVisitor.trim())}>{saving ? msg('등록 중...') : msg('등록')}</button>
         </fieldset>
       </form>
     </div>

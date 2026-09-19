@@ -34,4 +34,19 @@ describe('classifyRestaurantPlaces', () => {
     expect(results).toHaveLength(1)
     expect(results[0]).toMatchObject({ status: 'new', scope: 'outside' })
   })
+
+  it('같은 주소 건물이 여러 개면 새 건물로 오판하지 않고 확인 대상으로 둔다', () => {
+    const duplicated = [
+      buildings[0],
+      { ...buildings[0], id: 2, name: '우정원 별관', units: [] },
+    ] as Building[]
+    const [result] = classifyRestaurantPlaces([
+      { name: '새식당', address: '용인시 우정원길 1', category: '중식', lat: 37.2, lng: 127.2 },
+    ], duplicated, boundaries)
+    expect(result).toMatchObject({
+      status: 'ambiguous-building',
+      buildingId: null,
+      buildingIds: [1, 2],
+    })
+  })
 })

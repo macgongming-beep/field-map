@@ -22,6 +22,7 @@ describe('RestaurantRegistrationModal', () => {
     const onClose = vi.fn()
     render(<RestaurantRegistrationModal buildings={buildings} onRegister={onRegister} onClose={onClose} />)
     fireEvent.change(screen.getByLabelText('식당 이름'), { target: { value: '새 식당' } })
+    fireEvent.click(screen.getByRole('button', { name: '검색 결과에 없나요? 주소 직접 입력' }))
     fireEvent.change(screen.getByLabelText('주소'), { target: { value: '용인시 새길 2' } })
     fireEvent.click(screen.getByRole('button', { name: '등록' }))
     await waitFor(() => expect(onRegister).toHaveBeenCalledWith({
@@ -31,13 +32,13 @@ describe('RestaurantRegistrationModal', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('식당 이름까지 검색해 기존 상가를 고른다', async () => {
+  it('직접 입력한 주소에 기존 건물이 하나면 자동으로 세대를 추가한다', async () => {
     const onRegister = vi.fn().mockResolvedValue(true)
     render(<RestaurantRegistrationModal buildings={buildings} onRegister={onRegister} onClose={vi.fn()} />)
     fireEvent.change(screen.getByLabelText('식당 이름'), { target: { value: '두번째 식당' } })
-    fireEvent.click(screen.getByLabelText('기존 건물'))
-    fireEvent.change(screen.getByLabelText('건물 검색'), { target: { value: '기존식당' } })
-    fireEvent.change(screen.getByLabelText('기존 건물', { selector: 'select' }), { target: { value: '7' } })
+    fireEvent.click(screen.getByRole('button', { name: '검색 결과에 없나요? 주소 직접 입력' }))
+    fireEvent.change(screen.getByLabelText('주소'), { target: { value: '용인시 우정원길 1' } })
+    expect(screen.getByText('기존 건물을 자동으로 찾았습니다.')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '등록' }))
     await waitFor(() => expect(onRegister).toHaveBeenCalledWith({
       name: '두번째 식당', address: '용인시 우정원길 1', existingBuildingId: 7,
@@ -49,6 +50,7 @@ describe('RestaurantRegistrationModal', () => {
     const onRegister = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
     render(<RestaurantRegistrationModal buildings={[]} onRegister={onRegister} onClose={vi.fn()} />)
     fireEvent.change(screen.getByLabelText('식당 이름'), { target: { value: '다시 식당' } })
+    fireEvent.click(screen.getByRole('button', { name: '검색 결과에 없나요? 주소 직접 입력' }))
     fireEvent.change(screen.getByLabelText('주소'), { target: { value: '용인시 다시길 3' } })
     fireEvent.click(screen.getByRole('button', { name: '등록' }))
     await screen.findByRole('alert')
@@ -62,6 +64,7 @@ describe('RestaurantRegistrationModal', () => {
     const onRegister = vi.fn().mockResolvedValue(true)
     render(<RestaurantRegistrationModal buildings={[]} onRegister={onRegister} onClose={vi.fn()} />)
     fireEvent.change(screen.getByLabelText('식당 이름'), { target: { value: '정기 식당' } })
+    fireEvent.click(screen.getByRole('button', { name: '검색 결과에 없나요? 주소 직접 입력' }))
     fireEvent.change(screen.getByLabelText('주소'), { target: { value: '용인시 새길 4' } })
     fireEvent.change(screen.getByLabelText('현재 상태'), { target: { value: '정기방문' } })
     fireEvent.click(screen.getByLabelText('중국어를 사용하는 식당'))
@@ -71,10 +74,11 @@ describe('RestaurantRegistrationModal', () => {
     })))
   })
 
-  it('주소로 찾은 기존 건물을 선택한다', () => {
+  it('새 건물·기존 건물 라디오 없이 주소로 기존 건물을 자동 연결한다', () => {
     render(<RestaurantRegistrationModal buildings={buildings} onRegister={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.queryByRole('radio')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '검색 결과에 없나요? 주소 직접 입력' }))
     fireEvent.change(screen.getByLabelText('주소'), { target: { value: '우정원길 1' } })
-    fireEvent.click(screen.getByRole('button', { name: /우정원/ }))
     expect(screen.getByText('기존 건물을 자동으로 찾았습니다.')).toBeTruthy()
     expect(screen.getByText('우정원 · 용인시 우정원길 1')).toBeTruthy()
   })
@@ -96,6 +100,27 @@ describe('RestaurantRegistrationModal', () => {
     await waitFor(() => expect(onRegister).toHaveBeenCalledWith(expect.objectContaining({
       name: '새 식당', address: '용인시 새길 8', lat: 37.3, lng: 127.3,
     })))
+  })
+
+  it('같은 주소의 건물이 여러 개면 선택 전까지 등록을 막는다', async () => {
+    const duplicated = [
+      buildings[0],
+      { ...buildings[0], id: 8, name: '우정원 별관', units: [] },
+    ] as Building[]
+    searchPlacesForCongregation.mockResolvedValue({ ok: true, places: [
+      { name: '새 식당', address: '용인시 우정원길 1', category: '중식', lat: 37.2, lng: 127.2 },
+    ] })
+    const onRegister = vi.fn().mockResolvedValue(true)
+    render(<RestaurantRegistrationModal buildings={duplicated} onRegister={onRegister} onClose={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('식당 이름'), { target: { value: '새 식당' } })
+    fireEvent.click(screen.getByRole('button', { name: '네이버 검색' }))
+    fireEvent.click(await screen.findByRole('button', { name: /새 식당/ }))
+
+    expect(screen.getByText('같은 주소의 건물이 여러 개입니다.')).toBeTruthy()
+    expect((screen.getByRole('button', { name: '등록' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: /우정원 별관/ }))
+    fireEvent.click(screen.getByRole('button', { name: '등록' }))
+    await waitFor(() => expect(onRegister).toHaveBeenCalledWith(expect.objectContaining({ existingBuildingId: 8 })))
   })
 
   it('정기방문 담당자는 승인된 사용자 목록에서 대신 지정할 수 있다', () => {

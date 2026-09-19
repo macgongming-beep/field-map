@@ -4,11 +4,12 @@ import { normalizeCardSearch } from './cardSearch'
 import { findCardForCoordinates, isValidMapCoordinate } from './mapUtils'
 import { shortAddress } from './shortAddress'
 
-export type RestaurantPlaceStatus = 'registered' | 'existing-building' | 'new'
+export type RestaurantPlaceStatus = 'registered' | 'existing-building' | 'ambiguous-building' | 'new'
 export type RestaurantPlaceScope = 'card' | 'unassigned' | 'outside'
 
 export type ClassifiedRestaurantPlace = PlaceCandidate & {
   buildingId: number | null
+  buildingIds: number[]
   status: RestaurantPlaceStatus
   scope: RestaurantPlaceScope
 }
@@ -22,14 +23,17 @@ function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number):
   return 6371000 * 2 * Math.asin(Math.min(1, Math.sqrt(value)))
 }
 
-function findExistingBuilding(place: PlaceCandidate, buildings: Building[]): Building | null {
-  const key = normalizeCardSearch(shortAddress(place.address))
-  const matches = buildings.filter((building) => {
-    if (normalizeCardSearch(shortAddress(building.address)) !== key) return false
+export function findExistingBuildingsByAddress(address: string, buildings: Building[]): Building[] {
+  const key = normalizeCardSearch(shortAddress(address))
+  if (!key) return []
+  return buildings.filter((building) => normalizeCardSearch(shortAddress(building.address)) === key)
+}
+
+function findExistingBuildings(place: PlaceCandidate, buildings: Building[]): Building[] {
+  return findExistingBuildingsByAddress(place.address, buildings).filter((building) => {
     if (!isValidMapCoordinate(building.lat, building.lng)) return true
     return distanceMeters(building.lat, building.lng, place.lat, place.lng) <= 200
   })
-  return matches.length === 1 ? matches[0] : null
 }
 
 function getScope(place: PlaceCandidate, buildings: Building[], boundaries: CardBoundary[]): RestaurantPlaceScope {
@@ -50,19 +54,28 @@ export function classifyRestaurantPlaces(
   boundaries: CardBoundary[],
 ): ClassifiedRestaurantPlace[] {
   return places.map((place) => {
-    const building = findExistingBuilding(place, buildings)
+    const matches = findExistingBuildings(place, buildings)
     const name = normalizeCardSearch(place.name)
-    const registered = building?.units.some((unit) => unit.isRestaurant && normalizeCardSearch(unit.number) === name) ?? false
-    const status: RestaurantPlaceStatus = registered ? 'registered' : building ? 'existing-building' : 'new'
+    const registeredBuilding = matches.find((building) => (
+      building.units.some((unit) => unit.isRestaurant && normalizeCardSearch(unit.number) === name)
+    ))
+    const status: RestaurantPlaceStatus = registeredBuilding
+      ? 'registered'
+      : matches.length === 1
+        ? 'existing-building'
+        : matches.length > 1
+          ? 'ambiguous-building'
+          : 'new'
     return {
       ...place,
-      buildingId: building?.id ?? null,
+      buildingId: registeredBuilding?.id ?? (matches.length === 1 ? matches[0].id : null),
+      buildingIds: matches.map((building) => building.id),
       status,
       scope: getScope(place, buildings, boundaries),
     }
   }).sort((a, b) => {
     const scopeRank = { card: 0, unassigned: 1, outside: 2 }
-    const statusRank = { registered: 0, 'existing-building': 1, new: 2 }
+    const statusRank = { registered: 0, 'existing-building': 1, 'ambiguous-building': 2, new: 3 }
     return scopeRank[a.scope] - scopeRank[b.scope] || statusRank[a.status] - statusRank[b.status]
   })
 }
