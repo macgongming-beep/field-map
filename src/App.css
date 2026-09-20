@@ -6437,19 +6437,21 @@ button:focus-visible {
 }
 
 .mobile-map-search-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 64px;
+  display: flex;
   gap: 8px;
   width: 100%;
 }
 
 .mobile-map-search-row input {
+  flex: 1 1 0;
+  width: 0;
   min-width: 0;
   box-sizing: border-box;
 }
 
 .mobile-map-search-submit {
   display: inline-flex;
+  flex: 0 0 64px;
   width: 64px;
   min-height: 42px;
   align-items: center;
