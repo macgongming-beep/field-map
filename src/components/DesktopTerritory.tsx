@@ -77,7 +77,60 @@ function getTodayDateInputValue() {
 }
 
 type CardStatusFilter = TerritoryCard['status'] | '전체' | '완료·제외'
-type BuildingPageSize = 25 | 50 | 100 | '전체'
+type PageSize = 25 | 50 | 100 | '전체'
+
+function getPageNumbers(current: number, total: number) {
+  return Array.from(new Set([
+    1,
+    current - 2,
+    current - 1,
+    current,
+    current + 1,
+    current + 2,
+    total,
+  ])).filter((page) => page >= 1 && page <= total).sort((a, b) => a - b)
+}
+
+function ListPagination({
+  label,
+  page,
+  pageCount,
+  start,
+  shown,
+  total,
+  onChange,
+}: {
+  label: string
+  page: number
+  pageCount: number
+  start: number
+  shown: number
+  total: number
+  onChange: (page: number) => void
+}) {
+  if (pageCount <= 1) return null
+  const pages = getPageNumbers(page, pageCount)
+  return (
+    <nav className="building-pagination" aria-label={label}>
+      <span className="building-pagination-summary">{start + 1}-{start + shown} / {total}</span>
+      <div className="building-pagination-buttons">
+        <button aria-label="이전 페이지" disabled={page === 1} onClick={() => onChange(page - 1)} type="button">‹</button>
+        {pages.map((pageNumber, index) => (
+          <span className="building-pagination-item" key={pageNumber}>
+            {index > 0 && pageNumber - pages[index - 1] > 1 && <span className="building-pagination-gap">…</span>}
+            <button
+              aria-current={pageNumber === page ? 'page' : undefined}
+              className={pageNumber === page ? 'active' : ''}
+              onClick={() => onChange(pageNumber)}
+              type="button"
+            >{pageNumber}</button>
+          </span>
+        ))}
+        <button aria-label="다음 페이지" disabled={page === pageCount} onClick={() => onChange(page + 1)} type="button">›</button>
+      </div>
+    </nav>
+  )
+}
 
 export function DesktopTerritory({
   language,
@@ -245,8 +298,12 @@ export function DesktopTerritory({
   }, 0)
   const [buildingSubTab, setBuildingSubTab] = useSessionState<'건물 목록' | '세대 목록'>('dt.buildingSubTab', '건물 목록')
   const [buildingAddressWidth, setBuildingAddressWidth] = useSessionState<number>('dt.buildingAddressWidth', 300)
-  const [buildingPageSize, setBuildingPageSize] = useSessionState<BuildingPageSize>('dt.buildingPageSize', 50)
+  const [cardPageSize, setCardPageSize] = useSessionState<PageSize>('dt.cardPageSize', 50)
+  const [buildingPageSize, setBuildingPageSize] = useSessionState<PageSize>('dt.buildingPageSize', 50)
+  const [pointPageSize, setPointPageSize] = useSessionState<PageSize>('dt.pointPageSize', 50)
+  const [cardPage, setCardPage] = useState(1)
   const [buildingPage, setBuildingPage] = useState(1)
+  const [pointPage, setPointPage] = useState(1)
   const [showCardModal, setShowCardModal] = useState(false)
   const [pendingBoundaryCard, setPendingBoundaryCard] = useState<{ id: number; name: string } | null>(null)
   const [regionFilter, setRegionFilter] = useSessionState<TerritoryRegion | '전체'>('dt.regionFilter', '전체')
@@ -511,6 +568,14 @@ export function DesktopTerritory({
   const renderedCards = cardStatusFilter === '완료·제외' || doneExcludedOpen
     ? filteredCards
     : filteredCards.filter((card) => !isDoneExcludedCard(card))
+  const cardPageCount = cardPageSize === '전체'
+    ? 1
+    : Math.max(1, Math.ceil(renderedCards.length / cardPageSize))
+  const currentCardPage = Math.min(cardPage, cardPageCount)
+  const cardPageStart = cardPageSize === '전체' ? 0 : (currentCardPage - 1) * cardPageSize
+  const pagedCards = cardPageSize === '전체'
+    ? renderedCards
+    : renderedCards.slice(cardPageStart, cardPageStart + cardPageSize)
   // ⚠ 일괄 작업과 표시는 **보이는 것만** 쓴다.
   //   예전에는 전체선택이 보이는 것만 더하고 뺐는데 삭제는 고른 것 전부를 지워,
   //   확인창의 개수 안에 화면에 없는 카드가 섞였다 (카드를 지우면 건물이 딸려 죽는다).
@@ -529,6 +594,15 @@ export function DesktopTerritory({
       setCheckedCardIds(new Set(visibleCheckedCardIds))
     }
   }, [checkedCardIds, renderedCards, visibleCheckedCardIds])
+
+  useEffect(() => {
+    setCardPage(1)
+  }, [regionFilter, areaFilter, assignmentFilter, leaderFilter,
+    regularVisitFilter, cardStatusFilter, doneExcludedOpen])
+
+  useEffect(() => {
+    setCardPage((page) => Math.min(page, cardPageCount))
+  }, [cardPageCount])
 
   const selectedMergeCards = renderedCards.filter((card) => checkedCardIds.has(card.id))
 
@@ -722,16 +796,6 @@ export function DesktopTerritory({
   const pagedBuildings = buildingPageSize === '전체'
     ? sortedBuildings
     : sortedBuildings.slice(buildingPageStart, buildingPageStart + buildingPageSize)
-  const buildingPageNumbers = Array.from(new Set([
-    1,
-    currentBuildingPage - 2,
-    currentBuildingPage - 1,
-    currentBuildingPage,
-    currentBuildingPage + 1,
-    currentBuildingPage + 2,
-    buildingPageCount,
-  ])).filter((page) => page >= 1 && page <= buildingPageCount).sort((a, b) => a - b)
-
   useEffect(() => {
     setBuildingPage(1)
   }, [regionFilter, areaFilter, buildingCardFilter, buildingTypeFilter,
@@ -791,6 +855,30 @@ export function DesktopTerritory({
       sort: pointSort,
       cardName: (id) => cardMap.get(id)?.name ?? '',
     }))
+  const pointPageCount = pointPageSize === '전체'
+    ? 1
+    : Math.max(1, Math.ceil(sortedPointRows.length / pointPageSize))
+  const currentPointPage = Math.min(pointPage, pointPageCount)
+  const pointPageStart = pointPageSize === '전체' ? 0 : (currentPointPage - 1) * pointPageSize
+  const pagedPointRows = pointPageSize === '전체'
+    ? sortedPointRows
+    : sortedPointRows.slice(pointPageStart, pointPageStart + pointPageSize)
+
+  useEffect(() => {
+    setPointPage(1)
+  }, [regionFilter, areaFilter, buildingTypeFilter, pointKindFilter,
+    pointStatusFilter, pointRegularFilter, pointMemoFilter, pointSort])
+
+  useEffect(() => {
+    setPointPage((page) => Math.min(page, pointPageCount))
+  }, [pointPageCount])
+
+  useEffect(() => {
+    if (!selectedPointDetail) return
+    const remainsOnPage = pagedPointRows.some(({ building, unit }) =>
+      building.id === selectedPointDetail.buildingId && unit.id === selectedPointDetail.unitId)
+    if (!remainsOnPage) setSelectedPointDetail(null)
+  }, [pagedPointRows, selectedPointDetail])
 
   const selectedPointDetailData = useMemo(() => {
     if (!selectedPointDetail) return null
@@ -1047,9 +1135,9 @@ export function DesktopTerritory({
     })
   }
 
-  const toggleAllFilteredCards = () => {
+  const toggleAllPagedCards = () => {
     setCheckedCardIds((current) => {
-      const visibleIds = renderedCards.map((card) => card.id)
+      const visibleIds = pagedCards.map((card) => card.id)
       const allVisibleChecked = visibleIds.length > 0 && visibleIds.every((id) => current.has(id))
       const next = new Set(current)
       visibleIds.forEach((id) => {
@@ -1058,6 +1146,10 @@ export function DesktopTerritory({
       })
       return next
     })
+  }
+
+  const selectAllRenderedCards = () => {
+    setCheckedCardIds(new Set(renderedCards.map((card) => card.id)))
   }
 
   const toggleAllPagedBuildings = () => {
@@ -1534,6 +1626,15 @@ export function DesktopTerritory({
           <div className="territory-selection-bar">
             <strong>{visibleCheckedCardIds.length}개 카드 선택</strong>
             <div className="territory-selection-actions">
+              {visibleCheckedCardIds.length < renderedCards.length ? (
+                <button className="tbl-ghost-btn sm" onClick={selectAllRenderedCards} type="button">
+                  목록 {renderedCards.length}개 전체 선택
+                </button>
+              ) : (
+                <button className="tbl-ghost-btn sm" onClick={() => setCheckedCardIds(new Set())} type="button">
+                  전체 선택 해제
+                </button>
+              )}
               <details className="territory-multi-select">
                 <summary>{bulkLeaderNames.length > 0 ? `인도자 선택 ${bulkLeaderNames.length}` : '인도자 선택'}</summary>
                 <div className="territory-multi-select-menu">
@@ -1897,49 +1998,86 @@ export function DesktopTerritory({
               {regionFilter === '전체' ? '전체 지역' : regionFilter}
               {' · '}{areaFilter === '전체' ? '전체 동' : areaFilter}
               {' · 표시 '}
-              {activeTab === '카드 관리' ? `${filteredCards.length}개 카드` : buildingSubTab === '건물 목록'
-                ? sortedBuildings.length === 0
-                  ? '0개 건물'
-                  : `${buildingPageStart + 1}-${buildingPageStart + pagedBuildings.length} / ${filteredBuildings.length}개 건물`
-                : `${pointRows.length}개 세대`}
+              {activeTab === '카드 관리'
+                ? renderedCards.length === 0
+                  ? '0개 카드'
+                  : `${cardPageStart + 1}-${cardPageStart + pagedCards.length} / ${renderedCards.length}개 카드`
+                : buildingSubTab === '건물 목록'
+                  ? sortedBuildings.length === 0
+                    ? '0개 건물'
+                    : `${buildingPageStart + 1}-${buildingPageStart + pagedBuildings.length} / ${filteredBuildings.length}개 건물`
+                  : sortedPointRows.length === 0
+                    ? '0개 세대'
+                    : `${pointPageStart + 1}-${pointPageStart + pagedPointRows.length} / ${pointRows.length}개 세대`}
             </span>
-            {activeTab === '건물 관리' && (
-              <div className="building-list-tools">
-                {buildingSubTab === '건물 목록' && (
-                  <label className="building-page-size">
-                    <span>페이지당</span>
-                    <select
-                      aria-label="페이지당 건물 수"
-                      value={buildingPageSize}
-                      onChange={(event) => {
-                        const value = event.target.value
-                        setBuildingPageSize(value === '전체' ? '전체' : Number(value) as BuildingPageSize)
-                        setBuildingPage(1)
-                      }}
-                    >
-                      <option value={25}>25개</option>
-                      <option value={50}>50개</option>
-                      <option value={100}>100개</option>
-                      <option value="전체">전체</option>
-                    </select>
-                  </label>
+            <div className="building-list-tools">
+              <label className="building-page-size">
+                <span>페이지당</span>
+                {activeTab === '카드 관리' ? (
+                  <select
+                    aria-label="페이지당 카드 수"
+                    value={cardPageSize}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setCardPageSize(value === '전체' ? '전체' : Number(value) as PageSize)
+                      setCardPage(1)
+                    }}
+                  >
+                    <option value={25}>25개</option>
+                    <option value={50}>50개</option>
+                    <option value={100}>100개</option>
+                    <option value="전체">전체</option>
+                  </select>
+                ) : buildingSubTab === '건물 목록' ? (
+                  <select
+                    aria-label="페이지당 건물 수"
+                    value={buildingPageSize}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setBuildingPageSize(value === '전체' ? '전체' : Number(value) as PageSize)
+                      setBuildingPage(1)
+                    }}
+                  >
+                    <option value={25}>25개</option>
+                    <option value={50}>50개</option>
+                    <option value={100}>100개</option>
+                    <option value="전체">전체</option>
+                  </select>
+                ) : (
+                  <select
+                    aria-label="페이지당 세대 수"
+                    value={pointPageSize}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setPointPageSize(value === '전체' ? '전체' : Number(value) as PageSize)
+                      setPointPage(1)
+                    }}
+                  >
+                    <option value={25}>25개</option>
+                    <option value={50}>50개</option>
+                    <option value={100}>100개</option>
+                    <option value="전체">전체</option>
+                  </select>
                 )}
+              </label>
+              {activeTab === '건물 관리' && (
                 <button className="tbl-ghost-btn sm" onClick={downloadFilteredBuildingCsv} type="button">
                   엑셀 내보내기
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* ── 카드 관리 테이블 ── */}
           {activeTab === '카드 관리' ? (
+          <>
           <div className="territory-card-table-scroll">
           <table className={`tbl tbl--territory-cards${detailPaneOpen ? ' is-detail-open' : ''}`}>
             <thead>
               <tr>
                 {isAdmin && (
                   <th style={{ width: 52, paddingLeft: 18 }}>
-                    <input type="checkbox" checked={renderedCards.length > 0 && renderedCards.every((c) => checkedCardIds.has(c.id))} onChange={toggleAllFilteredCards} />
+                    <input aria-label="현재 페이지 카드 전체 선택" type="checkbox" checked={pagedCards.length > 0 && pagedCards.every((c) => checkedCardIds.has(c.id))} onChange={toggleAllPagedCards} />
                   </th>
                 )}
                 <th className="territory-card-name-cell">카드</th>
@@ -1953,7 +2091,7 @@ export function DesktopTerritory({
               </tr>
             </thead>
             <tbody>
-              {renderedCards.map((card) => {
+              {pagedCards.map((card) => {
                 const cardBuildings = buildingsByCardId.get(card.id) ?? []
                 const operationalState = getTerritoryCardOperationalState(card)
                 const chinesePointCount = cardBuildings.reduce((sum, b) => sum + b.units.filter((u) => u.isChinese).length, 0)
@@ -2054,6 +2192,16 @@ export function DesktopTerritory({
             </tbody>
           </table>
           </div>
+          <ListPagination
+            label="카드 목록 페이지"
+            page={currentCardPage}
+            pageCount={cardPageSize === '전체' ? 1 : cardPageCount}
+            start={cardPageStart}
+            shown={pagedCards.length}
+            total={renderedCards.length}
+            onChange={setCardPage}
+          />
+          </>
           ) : buildingSubTab === '건물 목록' ? (
           <>
           {duplicateAddressGroups.length > 0 && (
@@ -2283,40 +2431,18 @@ export function DesktopTerritory({
               </div>
             )}
           </div>
-          {buildingPageCount > 1 && buildingPageSize !== '전체' && (
-            <nav className="building-pagination" aria-label="건물 목록 페이지">
-              <span className="building-pagination-summary">
-                {buildingPageStart + 1}-{buildingPageStart + pagedBuildings.length} / {filteredBuildings.length}
-              </span>
-              <div className="building-pagination-buttons">
-                <button
-                  aria-label="이전 페이지"
-                  disabled={currentBuildingPage === 1}
-                  onClick={() => setBuildingPage((page) => Math.max(1, page - 1))}
-                  type="button"
-                >‹</button>
-                {buildingPageNumbers.map((page, index) => (
-                  <span className="building-pagination-item" key={page}>
-                    {index > 0 && page - buildingPageNumbers[index - 1] > 1 && <span className="building-pagination-gap">…</span>}
-                    <button
-                      aria-current={page === currentBuildingPage ? 'page' : undefined}
-                      className={page === currentBuildingPage ? 'active' : ''}
-                      onClick={() => setBuildingPage(page)}
-                      type="button"
-                    >{page}</button>
-                  </span>
-                ))}
-                <button
-                  aria-label="다음 페이지"
-                  disabled={currentBuildingPage === buildingPageCount}
-                  onClick={() => setBuildingPage((page) => Math.min(buildingPageCount, page + 1))}
-                  type="button"
-                >›</button>
-              </div>
-            </nav>
-          )}
+          <ListPagination
+            label="건물 목록 페이지"
+            page={currentBuildingPage}
+            pageCount={buildingPageSize === '전체' ? 1 : buildingPageCount}
+            start={buildingPageStart}
+            shown={pagedBuildings.length}
+            total={filteredBuildings.length}
+            onChange={setBuildingPage}
+          />
           </>
         ) : (
+          <>
           <div className="point-management-table" ref={pointTableRef} role="table" aria-label="세대 목록">
             <div className="point-management-head" role="row">
               <span>카드</span>
@@ -2327,7 +2453,7 @@ export function DesktopTerritory({
               <span>메모</span>
               <span>지도</span>
             </div>
-            {sortedPointRows.map(({ building, unit, latestHistory }) => {
+            {pagedPointRows.map(({ building, unit, latestHistory }) => {
               const card = cardMap.get(building.cardId)
               return (
                 <div
@@ -2418,6 +2544,16 @@ export function DesktopTerritory({
               </div>
             )}
           </div>
+          <ListPagination
+            label="세대 목록 페이지"
+            page={currentPointPage}
+            pageCount={pointPageSize === '전체' ? 1 : pointPageCount}
+            start={pointPageStart}
+            shown={pagedPointRows.length}
+            total={pointRows.length}
+            onChange={setPointPage}
+          />
+          </>
         )}
         </div>{/* /desk-card */}
         </>)}

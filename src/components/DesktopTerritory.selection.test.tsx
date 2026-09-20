@@ -9,7 +9,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { DesktopTerritory } from './DesktopTerritory'
-import { territoryProps, testBuilding, testCard } from '../test/territoryFixture'
+import { territoryProps, testBuilding, testCard, testUnit } from '../test/territoryFixture'
 
 vi.mock('../lib/confirm', () => ({
   confirmDialog: vi.fn(async () => true),
@@ -124,5 +124,48 @@ describe('PC 건물 목록 페이지', () => {
     await user.click(screen.getByRole('button', { name: '검색 결과 55개 전체 선택' }))
     expect(screen.getByText('55개 건물 선택')).toBeTruthy()
     expect(screen.getByRole('button', { name: '전체 선택 해제' })).toBeTruthy()
+  })
+})
+
+describe('PC 카드와 세대 목록 페이지', () => {
+  test('카드도 기본 50개씩 보여 주고 현재 페이지만 선택한다', async () => {
+    const user = userEvent.setup()
+    const cards = Array.from({ length: 55 }, (_, index) =>
+      testCard(index + 1, `테스트구 한동 ${index + 1}`, { buildings: 1, units: 1 }),
+    )
+    open({ cards })
+
+    const table = screen.getByRole('table')
+    expect(within(table).getAllByRole('row')).toHaveLength(51)
+    expect(screen.getByText('1-50 / 55')).toBeTruthy()
+
+    await user.click(screen.getByRole('checkbox', { name: '현재 페이지 카드 전체 선택' }))
+    expect(screen.getByText('50개 카드 선택')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '목록 55개 전체 선택' })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: '2' }))
+    expect(within(table).getAllByRole('row')).toHaveLength(6)
+    expect(screen.getByText('51-55 / 55')).toBeTruthy()
+  })
+
+  test('세대도 기본 50개씩 보여 주고 전체 보기를 제공한다', async () => {
+    const user = userEvent.setup()
+    const units = Array.from({ length: 55 }, (_, index) =>
+      testUnit(index + 1, `${index + 1}호`, { isChinese: true }),
+    )
+    open({
+      cards: [testCard(1, '수지구 죽전동 1', { buildings: 1, units: 55 })],
+      buildings: [testBuilding(1, 1, '죽전빌딩', units)],
+    })
+
+    await user.click(screen.getByRole('button', { name: '건물 관리' }))
+    await user.click(screen.getByRole('button', { name: '세대 목록' }))
+    const table = screen.getByRole('table', { name: '세대 목록' })
+    expect(within(table).getAllByRole('row')).toHaveLength(51)
+    expect(screen.getByText('1-50 / 55')).toBeTruthy()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '페이지당 세대 수' }), '전체')
+    expect(within(table).getAllByRole('row')).toHaveLength(56)
+    expect(screen.queryByRole('navigation', { name: '세대 목록 페이지' })).toBeNull()
   })
 })
