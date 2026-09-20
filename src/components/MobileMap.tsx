@@ -1172,10 +1172,15 @@ export function MobileMap({
     const naver = (window as any).naver
     const map = (window as any).__mobileMapInstance
     if (naver?.maps && map) {
-      map.setCenter?.(new naver.maps.LatLng(addLat, addLng))
-      if (typeof map.getZoom === 'function' && typeof map.setZoom === 'function' && map.getZoom() < 18) {
-        map.setZoom(18)
+      const focusPreviewPin = () => {
+        naver.maps.Event?.trigger?.(map, 'resize')
+        map.setCenter?.(new naver.maps.LatLng(addLat, addLng))
+        if (typeof map.getZoom === 'function' && typeof map.setZoom === 'function' && map.getZoom() < 18) {
+          map.setZoom(18)
+        }
       }
+      focusPreviewPin()
+      window.requestAnimationFrame?.(focusPreviewPin)
     }
   }
 
@@ -1937,7 +1942,7 @@ export function MobileMap({
           </div>
 
           {(addingBuildingMode || editingPinMode || adjustingNewBuildingPin) && (
-            <div className={`mobile-map-mode-banner${editingPinMode || adjustingNewBuildingPin ? ' edit-pin' : ''}`}>
+            <div className={`mobile-map-mode-banner${editingPinMode || adjustingNewBuildingPin ? ' edit-pin' : ''}${adjustingNewBuildingPin ? ' pin-adjust' : ''}`}>
               <strong>{adjustingNewBuildingPin ? msg('새 건물 핀을 원하는 위치로 옮기세요') : editingPinMode ? t(language, 'map.editPin') : t(language, 'map.addBuilding')}</strong>
               {adjustingNewBuildingPin ? (
                 <span className="mobile-map-pin-adjust-actions">

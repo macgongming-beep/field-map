@@ -209,9 +209,11 @@ describe('모바일 지도 하단 시트', () => {
         Point: class Point { constructor(public x: number, public y: number) {} },
       },
     }
+    const setZoom = vi.fn()
     ;(window as any).__mobileMapInstance = {
       getZoom: () => 17,
       setCenter,
+      setZoom,
       panBy,
     }
     searchPlacesAndAddressesForCongregation.mockResolvedValue({
@@ -246,6 +248,9 @@ describe('모바일 지도 하단 시트', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /핀 위치 조정/ }))
     expect(screen.queryByRole('heading', { name: '건물 추가' })).not.toBeInTheDocument()
+    expect(screen.getByText('새 건물 핀을 원하는 위치로 옮기세요').closest('.mobile-map-mode-banner')).toHaveClass('pin-adjust')
+    expect(setCenter).toHaveBeenCalledWith(expect.objectContaining({ lat: 37.276, lng: 127.119 }))
+    expect(setZoom).toHaveBeenCalledWith(18)
     fireEvent.click(screen.getByRole('button', { name: 'move preview pin' }))
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
     expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
