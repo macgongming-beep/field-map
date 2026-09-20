@@ -246,6 +246,13 @@ export function MobileMap({
   const [mapToolbarSearchPush, setMapToolbarSearchPush] = useState(0)
 
   useEffect(() => {
+    if (showCardFinder) return
+    setCardSearch('')
+    setAddressSearchResults([])
+    setSelectedAddressCandidate(null)
+  }, [showCardFinder])
+
+  useEffect(() => {
     if (!showCardFinder) {
       setMapToolbarSearchPush(0)
       return
@@ -1705,8 +1712,8 @@ export function MobileMap({
                   className={isViewingActiveCard ? 'active' : ''}
                   onClick={() => {
                     setSelectedCardId(activeSessionCard.id)
+                    setShowMapActionMenu(false)
                     setShowCardFinder(false)
-                    setCardSearch('')
                   }}
                   type="button"
                 >
@@ -1715,7 +1722,10 @@ export function MobileMap({
               )}
               <button
                 className={showCardFinder ? 'active' : ''}
-                onClick={() => setShowCardFinder((open) => !open)}
+                onClick={() => {
+                  setShowMapActionMenu(false)
+                  setShowCardFinder((open) => !open)
+                }}
                 type="button"
               >
                 {t(language, 'map.otherCard')}
@@ -1724,8 +1734,8 @@ export function MobileMap({
                 className={!selectedCardId ? 'active' : ''}
                 onClick={() => {
                   setSelectedCardId(null)
+                  setShowMapActionMenu(false)
                   setShowCardFinder(false)
-                  setCardSearch('')
                 }}
                 type="button"
               >

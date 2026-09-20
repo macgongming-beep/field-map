@@ -177,6 +177,9 @@ describe('모바일 지도 하단 시트', () => {
     expect(mapContainer.style.getPropertyValue('--map-toolbar-search-push')).toBe('0px')
 
     fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
+      target: { value: '영덕빌라 101' },
+    })
     fireEvent.click(screen.getByRole('button', { name: /영덕빌라 · 101호/ }))
     const sheet = container.querySelector('.mobile-bottom-sheet') as HTMLElement
     await waitFor(() => {
@@ -198,6 +201,36 @@ describe('모바일 지도 하단 시트', () => {
     expect(screen.getByRole('button', { name: '건물 추가' })).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: 'map layer' }))
     expect(screen.queryByRole('button', { name: '건물 추가' })).not.toBeInTheDocument()
+  })
+
+  test('검색창을 닫으면 선택한 외부 후보와 추가 버튼 상태를 초기화한다', async () => {
+    searchPlacesAndAddressesForCongregation.mockResolvedValue({
+      ok: true,
+      places: [{
+        name: '카멜리아힐',
+        address: '경기도 용인시 기흥구 언동로 213',
+        category: '카페,디저트',
+        lat: 37.275,
+        lng: 127.118,
+        source: 'place',
+      }],
+    })
+    render(<MemoryRouter><MobileMap {...(mapProps() as never)} /></MemoryRouter>)
+
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
+      target: { value: '카멜리아힐' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '검색' }))
+    const results = document.querySelector('.mobile-map-card-results') as HTMLElement
+    fireEvent.click(await within(results).findByRole('button', { name: /카멜리아힐/ }))
+    expect(within(results).getByRole('button', { name: '추가' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    expect(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색')).toHaveValue('')
+    expect(screen.queryByText('카멜리아힐')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '추가' })).not.toBeInTheDocument()
   })
 
   test('등록 자료에 없는 주소는 네이버 후보를 확인한 뒤 건물 추가로 이어진다', async () => {
