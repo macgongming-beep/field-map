@@ -194,14 +194,101 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
       target: { value: '언동로 213' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '네이버에서 주소 찾기' }))
+    fireEvent.click(screen.getByRole('button', { name: '검색' }))
 
     expect(await screen.findByText('경기도 용인시 기흥구 언동로 213')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: /언동로 213/ }))
     fireEvent.click(await screen.findByRole('button', { name: '이 주소에 건물 추가' }))
 
-    expect(screen.getByRole('heading', { name: '건물 추가' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: '장소 등록' })).toBeVisible()
     expect(screen.getByDisplayValue('경기도 용인시 기흥구 언동로 213')).toBeVisible()
+    expect(screen.getByDisplayValue('언동로 213')).toBeVisible()
+    expect(screen.getByPlaceholderText('예: 101호')).toBeVisible()
+    expect(screen.getByRole('button', { name: '건물과 세대 등록' })).toBeDisabled()
+  })
+
+  test('상호 검색 후 짧은 주소를 건물명으로, 상호를 상가 세대로 함께 등록한다', async () => {
+    searchPlacesAndAddressesForCongregation.mockResolvedValue({
+      ok: true,
+      places: [{
+        name: '카멜리아힐',
+        address: '경기도 용인시 기흥구 언동로 213',
+        category: '카페,디저트',
+        lat: 37.275,
+        lng: 127.118,
+        source: 'place',
+      }],
+    })
+    const onCreateBuilding = vi.fn(async () => true)
+    const onAddUnit = vi.fn(async () => [9102])
+    const props = territoryProps({ ...mapProps(), onCreateBuilding, onAddUnit })
+    const { rerender } = render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
+      target: { value: '카멜리아힐' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '검색' }))
+    fireEvent.click(await screen.findByRole('button', { name: /카멜리아힐/ }))
+    fireEvent.click(screen.getByRole('button', { name: '이 주소에 건물 추가' }))
+
+    const sheet = screen.getByRole('heading', { name: '장소 등록' }).closest('.mm-building-edit-sheet') as HTMLElement
+    expect(within(sheet).getByRole('button', { name: '상가' })).toHaveClass('active')
+    expect(within(sheet).getByDisplayValue('언동로 213')).toBeVisible()
+    expect(within(sheet).getByDisplayValue('카멜리아힐')).toBeVisible()
+    fireEvent.change(within(sheet).getByRole('combobox'), { target: { value: '1' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: '건물과 세대 등록' }))
+
+    await waitFor(() => expect(onCreateBuilding).toHaveBeenCalledWith(expect.objectContaining({
+      name: '언동로 213',
+      address: '경기도 용인시 기흥구 언동로 213',
+      type: '상가',
+    })))
+
+    const created = testBuilding(93, 1, '언동로 213', [])
+    created.address = '경기도 용인시 기흥구 언동로 213'
+    created.type = '상가'
+    created.lat = 37.275
+    created.lng = 127.118
+    rerender(<MemoryRouter><MobileMap {...({ ...props, buildings: [created] } as never)} /></MemoryRouter>)
+
+    await waitFor(() => expect(onAddUnit).toHaveBeenCalledWith(93, '카멜리아힐', '상가'))
+  })
+
+  test('상호 주소의 기존 건물이 있으면 새 건물 대신 상가 세대 추가로 연결한다', async () => {
+    const building = testBuilding(94, 1, '언동로 213')
+    building.address = '경기도 용인시 기흥구 언동로 213'
+    building.lat = 37.275
+    building.lng = 127.118
+    searchPlacesAndAddressesForCongregation.mockResolvedValue({
+      ok: true,
+      places: [{
+        name: '카멜리아힐',
+        address: building.address,
+        category: '카페,디저트',
+        lat: building.lat,
+        lng: building.lng,
+        source: 'place',
+      }],
+    })
+    const onCreateBuilding = vi.fn(async () => true)
+    const onAddUnit = vi.fn(async () => [9103])
+    const props = territoryProps({ ...mapProps(), buildings: [building], onCreateBuilding, onAddUnit })
+    const { container } = render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
+      target: { value: '카멜리아힐' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '검색' }))
+    fireEvent.click(await screen.findByRole('button', { name: /카멜리아힐/ }))
+
+    const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
+    const input = await within(scroll).findByDisplayValue('카멜리아힐')
+    expect(input).toBeVisible()
+    fireEvent.click(within(scroll).getByRole('button', { name: '추가' }))
+    await waitFor(() => expect(onAddUnit).toHaveBeenCalledWith(94, '카멜리아힐', '상가'))
+    expect(onCreateBuilding).not.toHaveBeenCalled()
   })
 
   test('지도에서 건물 가장자리를 눌러도 가까운 주소 대표 좌표로 새 핀을 보정한다', async () => {
@@ -354,13 +441,13 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
       target: { value: '언동로 216' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '네이버에서 주소 찾기' }))
+    fireEvent.click(screen.getByRole('button', { name: '검색' }))
     fireEvent.click(await screen.findByRole('button', { name: /언동로 216/ }))
     fireEvent.click(screen.getByRole('button', { name: '이 주소에 건물 추가' }))
     expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
 
     fireEvent.click(screen.getByRole('button', { name: /핀 위치 조정/ }))
-    expect(screen.queryByRole('heading', { name: '건물 추가' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '장소 등록' })).not.toBeInTheDocument()
     expect(screen.getByText('새 건물 핀을 원하는 위치로 옮기세요').closest('.mobile-map-mode-banner')).toHaveClass('pin-adjust')
     expect(setCenter).toHaveBeenCalledWith(expect.objectContaining({ lat: 37.276, lng: 127.119 }))
     expect(setZoom).toHaveBeenCalledWith(18)
@@ -375,7 +462,8 @@ describe('모바일 지도 하단 시트', () => {
     expect(screen.getByText('37.27700, 127.12000')).toBeVisible()
 
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '1' } })
-    fireEvent.click(screen.getByRole('button', { name: '추가' }))
+    fireEvent.change(screen.getByPlaceholderText('예: 101호'), { target: { value: '101호' } })
+    fireEvent.click(screen.getByRole('button', { name: '건물과 세대 등록' }))
 
     await waitFor(() => expect(onCreateBuilding).toHaveBeenCalledTimes(1))
     expect(onCreateBuilding).toHaveBeenCalledWith(expect.objectContaining({ lat: 37.277, lng: 127.12 }))
@@ -398,10 +486,6 @@ describe('모바일 지도 하단 시트', () => {
     const buildingButton = within(scroll).getByRole('button', { name: /언동로 216/ })
     expect(buildingButton).toBeVisible()
     expect(within(scroll).getByRole('button', { name: /언동로 218/ })).toBeVisible()
-    expect(within(scroll).getByText('첫 세대를 등록해 주세요')).toBeVisible()
-
-    fireEvent.change(within(scroll).getByPlaceholderText('101'), { target: { value: '101호' } })
-    fireEvent.click(within(scroll).getByRole('button', { name: '추가' }))
     await waitFor(() => expect(onAddUnit).toHaveBeenCalledWith(91, '101호', '주택'))
 
     const createdWithUnit = testBuilding(91, 1, '언동로 216')
@@ -414,11 +498,13 @@ describe('모바일 지도 하단 시트', () => {
     expect(within(scroll).getByText('101호')).toBeVisible()
     expect(within(scroll).queryByText('첫 세대를 등록해 주세요')).not.toBeInTheDocument()
 
+    const centerCallsBeforeRepeat = setCenter.mock.calls.length
+    const panCallsBeforeRepeat = panBy.mock.calls.length
     fireEvent.click(within(scroll).getByRole('button', { name: /언동로 216/ }))
     fireEvent.click(within(scroll).getByRole('button', { name: /언동로 216/ }))
-    expect(setCenter).toHaveBeenCalledTimes(3)
+    expect(setCenter).toHaveBeenCalledTimes(centerCallsBeforeRepeat + 2)
     expect(setCenter.mock.calls.every(([point]) => point.lat === 37.276 && point.lng === 127.119)).toBe(true)
-    expect(panBy).toHaveBeenCalledTimes(3)
+    expect(panBy).toHaveBeenCalledTimes(panCallsBeforeRepeat + 2)
   })
 
   test('주소 후보가 기존 건물과 일치하면 새 건물 추가 대신 기존 건물을 연다', async () => {
@@ -447,7 +533,7 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
       target: { value: '경기도 용인시 기흥구 언동로 213 1층' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '네이버에서 주소 찾기' }))
+    fireEvent.click(screen.getByRole('button', { name: '검색' }))
     fireEvent.click(await screen.findByRole('button', { name: /언동로 213/ }))
 
     expect(screen.queryByRole('button', { name: '이 주소에 건물 추가' })).not.toBeInTheDocument()

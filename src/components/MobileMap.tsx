@@ -34,12 +34,31 @@ import { searchPlacesAndAddressesForCongregation } from '../lib/placeSearch'
 import { geocodeFirstMatch } from '../lib/naverGeocode'
 import { classifyRestaurantPlaces, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
 import { getGeocodeCandidates } from '../utils/geocodeCandidates'
+import { shortAddress as roadAddress } from '../utils/shortAddress'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
 type BuildingTypeFilter = '전체' | Building['type']
 
 const BUILDING_PIN_AUTO_ADJUST_MAX_METERS = 200
+const RESIDENTIAL_PLACE_CATEGORY = /(아파트|주택|빌라|연립|다가구|다세대|오피스텔|타운하우스|기숙사)/
+
+function candidateBuildingType(candidate: ClassifiedRestaurantPlace): Building['type'] {
+  if (candidate.source === 'address') return '주택'
+  return RESIDENTIAL_PLACE_CATEGORY.test(candidate.category) ? '주택' : '상가'
+}
+
+function candidateBuildingName(candidate: ClassifiedRestaurantPlace, type: Building['type']): string {
+  const addressName = roadAddress(candidate.address) || shortenAddress(candidate.address)
+  if (type === '주택' && candidate.source === 'place' && RESIDENTIAL_PLACE_CATEGORY.test(candidate.category)) {
+    return candidate.name || addressName
+  }
+  return addressName
+}
+
+function candidateFirstUnitName(candidate: ClassifiedRestaurantPlace, type: Building['type']): string {
+  return type === '상가' && candidate.source === 'place' ? candidate.name : ''
+}
 
 function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const earthRadius = 6_371_000
@@ -241,6 +260,29 @@ export function MobileMap({
   const [addressSearchResults, setAddressSearchResults] = useState<ClassifiedRestaurantPlace[]>([])
   const [addressSearching, setAddressSearching] = useState(false)
   const [selectedAddressCandidate, setSelectedAddressCandidate] = useState<ClassifiedRestaurantPlace | null>(null)
+  const searchPanelRef = useRef<HTMLDivElement | null>(null)
+  const [mapToolbarSearchPush, setMapToolbarSearchPush] = useState(0)
+
+  useEffect(() => {
+    if (!showCardFinder) {
+      setMapToolbarSearchPush(0)
+      return
+    }
+    const panel = searchPanelRef.current
+    if (!panel) {
+      setMapToolbarSearchPush(68)
+      return
+    }
+    const update = () => {
+      const height = panel.getBoundingClientRect().height
+      setMapToolbarSearchPush(height > 0 ? Math.min(240, Math.max(68, Math.ceil(height - 56))) : 68)
+    }
+    update()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(update)
+    observer.observe(panel)
+    return () => observer.disconnect()
+  }, [showCardFinder, cardSearch, addressSearching, addressSearchResults, selectedAddressCandidate])
 
   // 필터
   const [strategyFilter] = useState<StrategyFilter>('전체')
@@ -512,10 +554,13 @@ export function MobileMap({
   const [addName, setAddName] = useState('')
   const [addAddress, setAddAddress] = useState('')
   const [addType, setAddType] = useState<Building['type']>('주택')
+  const [addFirstUnitName, setAddFirstUnitName] = useState('')
+  const [addSearchCandidate, setAddSearchCandidate] = useState<ClassifiedRestaurantPlace | null>(null)
   const [addCardId, setAddCardId] = useState(cards[0]?.id ?? 1)
   const [pendingCreatedBuilding, setPendingCreatedBuilding] = useState<{
     cardId: number
     address: string
+    firstUnit?: { name: string; type: Building['type'] }
   } | null>(null)
   const [geocoding, setGeocoding] = useState(false)
   const [addingBuildingMode, setAddingBuildingMode] = useState(false)
@@ -1101,6 +1146,8 @@ export function MobileMap({
     addPinSnapshotRef.current = null
     setAddLat(null)
     setAddLng(null)
+    setAddFirstUnitName('')
+    setAddSearchCandidate(null)
     backdropTouched.current = false
     addingGuard.current = false
   }
@@ -1115,6 +1162,8 @@ export function MobileMap({
 
     setExpandedBuildingIds(new Set())
     setAddLat(lat); setAddLng(lng); setAddName(t(language, 'map.addBuilding')); setAddAddress(''); setAddType('주택')
+    setAddFirstUnitName('')
+    setAddSearchCandidate(null)
     setAddCardManuallySelected(false)
     const matched = findCardForCoordinates(lat, lng, cardBoundaries)
     setAddCardId(matched ?? selectedCardId ?? 0)
@@ -1191,7 +1240,14 @@ export function MobileMap({
   }
 
   const handleConfirmAdd = async () => {
-    if (!addName.trim() || addLat == null || addLng == null || savingBuildingRef.current) return
+    const firstUnitName = addFirstUnitName.trim()
+    if (
+      !addName.trim()
+      || (addSearchCandidate && !firstUnitName)
+      || addLat == null
+      || addLng == null
+      || savingBuildingRef.current
+    ) return
     savingBuildingRef.current = true
     try {
       const created = await onCreateBuilding({
@@ -1203,7 +1259,11 @@ export function MobileMap({
         lng: addLng,
       })
       if (created) {
-        setPendingCreatedBuilding({ cardId: addCardId, address: addAddress.trim() })
+        setPendingCreatedBuilding({
+          cardId: addCardId,
+          address: addAddress.trim(),
+          firstUnit: addSearchCandidate ? { name: firstUnitName, type: addType } : undefined,
+        })
         closeAddModal()
       }
     } finally {
@@ -1326,7 +1386,10 @@ export function MobileMap({
 
   const selectMapSearchResult = (
     result: MapSearchResult,
-    options: { openFirstUnitForm?: boolean } = {},
+    options: {
+      openUnitForm?: { value: string; type: Building['type']; first?: boolean }
+      expandBuilding?: boolean
+    } = {},
   ) => {
     setShowCardFinder(false)
     setCardSearch('')
@@ -1388,12 +1451,19 @@ export function MobileMap({
         : building.units.find((item) => item.id === result.unitId) ?? null
       if (unit) {
         showUnitDetail(unit, building, visitHistoriesByUnitId.get(unit.id) ?? [])
-      } else if (options.openFirstUnitForm && building.units.length === 0) {
+      } else if (options.openUnitForm && (!options.openUnitForm.first || building.units.length === 0)) {
         setFullScreenUnit(null)
         setExpandedBuildingIds(new Set([building.id]))
-        setNewUnitUsageType(building.type)
-        setNewUnitNumber('')
+        setNewUnitUsageType(options.openUnitForm.type)
+        setNewUnitNumber(options.openUnitForm.value)
         setAddingUnitToBuildingId(building.id)
+        setSheetHeight(HALF_HEIGHT)
+        moveMobileMapToBuilding(building, HALF_HEIGHT)
+        scrollBuildingAfterSheetTransition(building.id)
+      } else if (options.expandBuilding) {
+        setFullScreenUnit(null)
+        setExpandedBuildingIds(new Set([building.id]))
+        setAddingUnitToBuildingId(null)
         setSheetHeight(HALF_HEIGHT)
         moveMobileMapToBuilding(building, HALF_HEIGHT)
         scrollBuildingAfterSheetTransition(building.id)
@@ -1415,15 +1485,31 @@ export function MobileMap({
     )
     if (!building) return
 
+    const pending = pendingCreatedBuilding
     setPendingCreatedBuilding(null)
-    selectMapSearchResult({
+    const result: MapSearchResult = {
       key: `building:${building.id}`,
       kind: 'building',
       title: building.name || building.address,
       subtitle: building.address,
       cardId: building.cardId,
       buildingId: building.id,
-    }, { openFirstUnitForm: building.units.length === 0 })
+    }
+    if (!pending.firstUnit) {
+      selectMapSearchResult(result, {
+        openUnitForm: building.units.length === 0
+          ? { value: '', type: building.type, first: true }
+          : undefined,
+      })
+      return
+    }
+
+    void onAddUnit(building.id, pending.firstUnit.name, pending.firstUnit.type).then((unitIds) => {
+      if (unitIds) selectMapSearchResult(result, { expandBuilding: true })
+      else selectMapSearchResult(result, {
+        openUnitForm: { value: pending.firstUnit?.name ?? '', type: pending.firstUnit?.type ?? building.type, first: true },
+      })
+    })
   // selectMapSearchResult intentionally uses the latest map and sheet state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildings, pendingCreatedBuilding])
@@ -1451,6 +1537,7 @@ export function MobileMap({
       if (candidate.buildingId != null) {
         const building = buildings.find((item) => item.id === candidate.buildingId)
         if (building) {
+          const type = candidateBuildingType(candidate)
           selectMapSearchResult({
             key: `building:${building.id}`,
             kind: 'building',
@@ -1458,7 +1545,9 @@ export function MobileMap({
             subtitle: building.address,
             cardId: building.cardId,
             buildingId: building.id,
-          })
+          }, candidate.status === 'existing-building' && candidate.source === 'place'
+            ? { openUnitForm: { value: candidateFirstUnitName(candidate, type), type } }
+            : undefined)
         }
       }
       return
@@ -1470,11 +1559,14 @@ export function MobileMap({
     addLocationLookupRef.current += 1
     addPinManuallyAdjustedRef.current = false
     const matchedCardId = findCardForCoordinates(candidate.lat, candidate.lng, cardBoundaries)
+    const type = candidateBuildingType(candidate)
     setAddLat(candidate.lat)
     setAddLng(candidate.lng)
-    setAddName(candidate.name || shortenAddress(candidate.address))
+    setAddName(candidateBuildingName(candidate, type))
     setAddAddress(candidate.address)
-    setAddType('주택')
+    setAddType(type)
+    setAddFirstUnitName(candidateFirstUnitName(candidate, type))
+    setAddSearchCandidate(candidate)
     setAddCardId(matchedCardId ?? 0)
     setAddCardManuallySelected(false)
     setShowCardFinder(false)
@@ -1484,6 +1576,13 @@ export function MobileMap({
     backdropTouched.current = false
     addingGuard.current = true
     setShowAddModal(true)
+  }
+
+  const changeAddBuildingType = (type: Building['type']) => {
+    setAddType(type)
+    if (!addSearchCandidate) return
+    setAddName(candidateBuildingName(addSearchCandidate, type))
+    setAddFirstUnitName(candidateFirstUnitName(addSearchCandidate, type))
   }
 
   const hasAreaChips = !isUserMap && !enteredDirectly && areas.length > 1
@@ -1618,23 +1717,32 @@ export function MobileMap({
             </div>
           )}
           {navLevel === 'map' && showCardFinder && (
-            <div className="mobile-map-card-finder">
-              <input
-                autoFocus
-                placeholder={t(language, 'map.searchAllPlaceholder')}
-                value={cardSearch}
-                onChange={(event) => {
-                  setCardSearch(event.target.value)
-                  setAddressSearchResults([])
-                  setSelectedAddressCandidate(null)
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter') return
-                  event.preventDefault()
-                  if (mapSearchResults[0]) selectMapSearchResult(mapSearchResults[0])
-                  else void searchAddressCandidates()
-                }}
-              />
+            <div className="mobile-map-card-finder" ref={searchPanelRef}>
+              <div className="mobile-map-search-row">
+                <input
+                  autoFocus
+                  placeholder={t(language, 'map.searchAllPlaceholder')}
+                  value={cardSearch}
+                  onChange={(event) => {
+                    setCardSearch(event.target.value)
+                    setAddressSearchResults([])
+                    setSelectedAddressCandidate(null)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return
+                    event.preventDefault()
+                    void searchAddressCandidates()
+                  }}
+                />
+                <button
+                  className="mobile-map-search-submit"
+                  disabled={!cardSearch.trim() || addressSearching}
+                  onClick={() => void searchAddressCandidates()}
+                  type="button"
+                >
+                  {addressSearching ? msg('검색 중...') : msg('검색')}
+                </button>
+              </div>
               {cardSearch && (
                 <div className="mobile-map-card-results">
                   {bareUnitSearch && (
@@ -1657,22 +1765,6 @@ export function MobileMap({
                       {result.subtitle && <small>{translateKoreanAddress(result.subtitle, language, translatePlaceNames)}</small>}
                     </button>
                   ))}
-                  {!bareUnitSearch && mapSearchResults.length === 0 && (
-                    <button
-                      aria-label={msg('네이버에서 주소 찾기')}
-                      className="mobile-map-address-search-action"
-                      disabled={addressSearching}
-                      onClick={() => void searchAddressCandidates()}
-                      type="button"
-                    >
-                      <span className="mobile-map-search-kind kind-address">{msg('주소')}</span>
-                      <strong>{addressSearching ? msg('검색 중...') : msg('네이버에서 주소 찾기')}</strong>
-                      <small>{msg('도로명 주소를 확인한 뒤 기존 건물과 대조합니다.')}</small>
-                    </button>
-                  )}
-                  {addressSearchResults.length === 0 && !addressSearching && selectedAddressCandidate === null && mapSearchResults.length === 0 && (
-                    <small className="mobile-map-address-empty">{msg('주소 후보를 선택해야 건물을 추가할 수 있습니다.')}</small>
-                  )}
                   {addressSearchResults.map((candidate, index) => candidate.status === 'ambiguous-building' ? (
                     <div className="mobile-map-address-ambiguous" key={`${candidate.address}:${index}`}>
                       <strong>{candidate.address}</strong>
@@ -1683,14 +1775,19 @@ export function MobileMap({
                         return (
                           <button
                             key={building.id}
-                            onClick={() => selectMapSearchResult({
-                              key: `building:${building.id}`,
-                              kind: 'building',
-                              title: building.name || building.address,
-                              subtitle: building.address,
-                              cardId: building.cardId,
-                              buildingId: building.id,
-                            })}
+                            onClick={() => {
+                              const type = candidateBuildingType(candidate)
+                              selectMapSearchResult({
+                                key: `building:${building.id}`,
+                                kind: 'building',
+                                title: building.name || building.address,
+                                subtitle: building.address,
+                                cardId: building.cardId,
+                                buildingId: building.id,
+                              }, candidate.source === 'place'
+                                ? { openUnitForm: { value: candidateFirstUnitName(candidate, type), type } }
+                                : undefined)
+                            }}
                             type="button"
                           >
                             <strong>{building.name || building.address}</strong>
@@ -1701,7 +1798,9 @@ export function MobileMap({
                     </div>
                   ) : (
                     <button key={`${candidate.address}:${index}`} onClick={() => chooseAddressCandidate(candidate)} type="button">
-                      <span className="mobile-map-search-kind kind-address">{msg('주소')}</span>
+                      <span className={`mobile-map-search-kind ${candidateBuildingType(candidate) === '상가' ? 'kind-restaurant' : 'kind-address'}`}>
+                        {candidate.source === 'address' ? msg('주소') : buildingTypeLabel(candidateBuildingType(candidate))}
+                      </span>
                       <strong>{candidate.name}</strong>
                       <small>{candidate.address}</small>
                     </button>
@@ -1820,7 +1919,7 @@ export function MobileMap({
             className="mobile-map-container"
             style={{
               position: 'relative',
-              '--map-toolbar-search-push': showCardFinder ? '68px' : '0px',
+              '--map-toolbar-search-push': `${mapToolbarSearchPush}px`,
             } as React.CSSProperties}
           >
             {virtualGeocoding && (
@@ -2572,9 +2671,26 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
               }}
             >
               <div className="mm-building-edit-sheet" onClick={e => e.stopPropagation()}>
-                <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 700 }}>{t(language, 'map.addBuilding')}</h3>
+                <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 700 }}>
+                  {addSearchCandidate ? msg('장소 등록') : t(language, 'map.addBuilding')}
+                </h3>
                 {addLat && <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#94a3b8' }}>{addLat.toFixed(5)}, {addLng?.toFixed(5)} {geocoding ? `· ${t(language, 'map.searchingAddress')}` : ''}</p>}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div>
+                    <label className="mm-add-place-label">{t(language, 'map.type')}</label>
+                    <div className="mm-add-place-type" role="group" aria-label={t(language, 'map.type')}>
+                      {(['주택', '상가'] as const).map((type) => (
+                        <button
+                          className={addType === type ? 'active' : ''}
+                          key={type}
+                          onClick={() => changeAddBuildingType(type)}
+                          type="button"
+                        >
+                          {buildingTypeLabel(type)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'zone.cardCount')}</label>
                     <select value={addCardId} onChange={e => { setAddCardId(Number(e.target.value)); setAddCardManuallySelected(true) }} style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px' }}>
@@ -2584,7 +2700,9 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                     {addCardId === 0 && <p style={{ margin: '5px 0 0', color: '#b45309', fontSize: '11px' }}>{msg('구역선으로 카드를 정하지 못했습니다. 실제 카드를 선택해 주세요.')}</p>}
                   </div>
                   <div>
-                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'map.buildingNameRequired')}</label>
+                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>
+                      {addSearchCandidate ? msg('건물명') : t(language, 'map.buildingNameRequired')}
+                    </label>
                     <input value={addName} onChange={e => setAddName(e.target.value)} placeholder={t(language, 'map.buildingNamePlaceholder')}
                       style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px', boxSizing: 'border-box' }} />
                   </div>
@@ -2596,13 +2714,20 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                       placeholder={[getCongregationProfile().provinceShort || getCongregationProfile().province, getCongregationProfile().defaultCity, '...'].filter(Boolean).join(' ')}
                       style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px', boxSizing: 'border-box' }} />
                   </div>
-                  <div>
-                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'map.type')}</label>
-                    <select value={addType} onChange={e => setAddType(e.target.value as Building['type'])} style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px' }}>
-                      <option value="주택">{buildingTypeLabel('주택')}</option>
-                      <option value="상가">{buildingTypeLabel('상가')}</option>
-                    </select>
-                  </div>
+                  {addSearchCandidate && (
+                    <div>
+                      <label className="mm-add-place-label">
+                        {addType === '상가' ? msg('상호명') : msg('첫 호수')}
+                      </label>
+                      <input
+                        autoFocus={addType === '주택'}
+                        value={addFirstUnitName}
+                        onChange={(event) => setAddFirstUnitName(event.target.value)}
+                        placeholder={addType === '상가' ? msg('예: 카멜리아힐') : msg('예: 101호')}
+                        style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  )}
                   <button className="mm-adjust-new-pin-btn" onClick={startNewBuildingPinAdjustment} type="button">
                     <span aria-hidden="true">⌖</span>
                     <span>
@@ -2613,7 +2738,23 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                 </div>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
                   <button onClick={closeAddModal} style={{ flex: 1, padding: '12px', borderRadius: 'var(--r-md)', border: '1px solid #e2e8f0', background: '#f8fafc', fontWeight: 700, cursor: 'pointer', fontSize: '15px' }}>{t(language, 'common.cancel')}</button>
-                  <button onClick={handleConfirmAdd} disabled={!addName.trim() || addCardId === 0} style={{ flex: 2, padding: '12px', borderRadius: 'var(--r-md)', border: 'none', background: addName.trim() && addCardId !== 0 ? 'var(--accent-700)' : '#e2e8f0', color: addName.trim() && addCardId !== 0 ? '#fff' : '#94a3b8', fontWeight: 700, cursor: addName.trim() && addCardId !== 0 ? 'pointer' : 'not-allowed', fontSize: '15px' }}>{t(language, 'common.add')}</button>
+                  <button
+                    onClick={handleConfirmAdd}
+                    disabled={!addName.trim() || addCardId === 0 || Boolean(addSearchCandidate && !addFirstUnitName.trim())}
+                    style={{
+                      flex: 2,
+                      padding: '12px',
+                      borderRadius: 'var(--r-md)',
+                      border: 'none',
+                      background: addName.trim() && addCardId !== 0 && (!addSearchCandidate || addFirstUnitName.trim()) ? 'var(--accent-700)' : '#e2e8f0',
+                      color: addName.trim() && addCardId !== 0 && (!addSearchCandidate || addFirstUnitName.trim()) ? '#fff' : '#94a3b8',
+                      fontWeight: 700,
+                      cursor: addName.trim() && addCardId !== 0 && (!addSearchCandidate || addFirstUnitName.trim()) ? 'pointer' : 'not-allowed',
+                      fontSize: '15px',
+                    }}
+                  >
+                    {addSearchCandidate ? msg('건물과 세대 등록') : t(language, 'common.add')}
+                  </button>
                 </div>
               </div>
             </div>
