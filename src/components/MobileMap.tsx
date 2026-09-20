@@ -29,6 +29,7 @@ import { OverlayPortal } from './OverlayPortal'
 import { getCongregationProfile } from '../lib/congregationProfile'
 import { getCurrentRestaurantAssignmentsForUnit } from '../utils/restaurantAssignments'
 import { buildingHasUsage, effectiveUnitUsage, scopeBuildingToUsage, unitsForUsage } from '../utils/unitUsage'
+import { getMobileMapPinPanOffset, getMobileMapSelectedSheetHeight } from '../utils/mobileMapViewport'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
@@ -542,6 +543,7 @@ export function MobileMap({
   // 바텀 시트 드래그 및 토글 상태
   const MIN_HEIGHT = 65
   const HALF_HEIGHT = window.innerHeight * 0.46
+  const SELECTED_BUILDING_HEIGHT = getMobileMapSelectedSheetHeight(window.innerHeight, regularVisitScope)
   const FULL_HEIGHT = window.innerHeight * 0.92
   const UNIT_NAV_HEIGHT = Math.max(210, Math.min(280, window.innerHeight * 0.3))
   const SHEET_TRANSITION_MS = 350
@@ -557,6 +559,7 @@ export function MobileMap({
   const dragMoved = useRef(false)
   const lastSheetTapAt = useRef(0)
   const buildingScrollTimerRef = useRef<number | null>(null)
+  const mapCenterTimerRef = useRef<number | null>(null)
 
   const scrollBuildingAfterSheetTransition = (buildingId: number) => {
     if (buildingScrollTimerRef.current !== null) {
@@ -625,6 +628,9 @@ export function MobileMap({
       document.body.classList.remove('mobile-map-scroll-lock')
       if (buildingScrollTimerRef.current !== null) {
         window.clearTimeout(buildingScrollTimerRef.current)
+      }
+      if (mapCenterTimerRef.current !== null) {
+        window.clearTimeout(mapCenterTimerRef.current)
       }
     }
   }, [])
@@ -700,18 +706,18 @@ export function MobileMap({
       building,
       unitHistories: visitHistories.filter((history) => history.unitId === focusedUnit.id),
     } : null)
-    setSheetHeight((height) => Math.max(height, HALF_HEIGHT))
+    setSheetHeight((height) => regularVisitScope ? SELECTED_BUILDING_HEIGHT : Math.max(height, HALF_HEIGHT))
     setCollapsedStatusGroups((prev) => {
       const next = new Set(prev)
       next.delete(getPinGroup(building))
       return next
     })
-    moveMobileMapToBuilding(building)
+    moveMobileMapToBuilding(building, SELECTED_BUILDING_HEIGHT)
     // 시트 높이 애니메이션과 목록 스크롤을 동시에 돌리면 긴 목록에서 프레임이 끊긴다.
     scrollBuildingAfterSheetTransition(focusedBuildingId)
   // moveMobileMapToBuilding intentionally reads the current map instance.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildings, focusedBuildingId, focusedUnitId, visitHistories])
+  }, [buildings, focusedBuildingId, focusedUnitId, visitHistories, SELECTED_BUILDING_HEIGHT])
 
   useEffect(() => {
     if (!isUserMap || focusedCardId != null || !activeServiceSession?.primaryCardId) return
@@ -963,6 +969,16 @@ export function MobileMap({
     }))
   }, [filteredBuildings, shouldUseAggregateMap])
 
+  const sheetBuildingGroups = useMemo(() => {
+    if (!regularVisitScope || selectedBuildingId == null) return buildingGroups
+    return buildingGroups
+      .map((group) => ({
+        ...group,
+        buildings: group.buildings.filter((building) => building.id === selectedBuildingId),
+      }))
+      .filter((group) => group.buildings.length > 0)
+  }, [buildingGroups, regularVisitScope, selectedBuildingId])
+
   const unitTotal = useMemo(() => filteredBuildings.reduce((t, b) => t + b.units.length, 0), [filteredBuildings])
   const visitedTotal = useMemo(() => filteredBuildings.reduce((t, b) => t + b.units.filter(u => u.status !== '미방문').length, 0), [filteredBuildings])
   const completionRate = unitTotal === 0 ? 0 : Math.round((visitedTotal / unitTotal) * 100)
@@ -1137,17 +1153,29 @@ export function MobileMap({
     if (saved) setEditingBuildingId(null)
   }
 
-  const moveMobileMapToBuilding = (building: Building) => {
+  const moveMobileMapToBuilding = (building: Building, visibleSheetHeight = sheetHeight) => {
     const naver = (window as any).naver
     const map = (window as any).__mobileMapInstance
     const lat = Number(building.lat)
     const lng = Number(building.lng)
     if (!naver?.maps || !map || !Number.isFinite(lat) || !Number.isFinite(lng)) return
     const latLng = new naver.maps.LatLng(lat, lng)
-    if (map.getZoom() >= 16) {
+    const centerInVisibleArea = () => {
       map.panTo(latLng)
+      const offset = getMobileMapPinPanOffset(visibleSheetHeight)
+      if (offset > 0 && typeof map.panBy === 'function') {
+        map.panBy(new naver.maps.Point(0, offset))
+      }
+    }
+    if (mapCenterTimerRef.current !== null) window.clearTimeout(mapCenterTimerRef.current)
+    if (map.getZoom() >= 16) {
+      centerInVisibleArea()
     } else {
       map.morph(latLng, 17)
+      mapCenterTimerRef.current = window.setTimeout(() => {
+        mapCenterTimerRef.current = null
+        centerInVisibleArea()
+      }, 360)
     }
   }
 
@@ -1212,8 +1240,8 @@ export function MobileMap({
         showUnitDetail(unit, building, visitHistoriesByUnitId.get(unit.id) ?? [])
       } else {
         setFullScreenUnit(null)
-        setSheetHeight(HALF_HEIGHT)
-        moveMobileMapToBuilding(building)
+        setSheetHeight(SELECTED_BUILDING_HEIGHT)
+        moveMobileMapToBuilding(building, SELECTED_BUILDING_HEIGHT)
         scrollBuildingAfterSheetTransition(building.id)
       }
     }, 80)
@@ -1532,12 +1560,15 @@ export function MobileMap({
                   if (b) {
                     const grp = getPinGroup(b)
                     setCollapsedStatusGroups((prev) => { const n = new Set(prev); n.delete(grp); return n })
+                    const targetHeight = regularVisitScope
+                      ? SELECTED_BUILDING_HEIGHT
+                      : Math.max(sheetHeight, HALF_HEIGHT)
+                    moveMobileMapToBuilding(b, targetHeight)
+                    setSheetHeight(targetHeight)
                   }
 
-                  // 포인트 클릭 시 바텀 시트 자동 대응 (최소 HALF 이상)
-                  if (sheetHeight < HALF_HEIGHT) {
-                    setSheetHeight(HALF_HEIGHT)
-                  }
+                  // 정기방문 지도는 선택한 세대만 보면 되므로 패널을 작게 유지한다.
+                  // 일반 지도는 기존 반 화면 높이를 유지한다.
 
                   // 시트가 다 올라온 뒤 위치만 맞춘다. 두 애니메이션을 겹치지 않는다.
                   scrollBuildingAfterSheetTransition(id)
@@ -1889,7 +1920,7 @@ export function MobileMap({
                 </div>
               )}
 
-              {mapAggregateMarkers.length === 0 && buildingGroups.map(({ status, buildings: groupedBuildings }) => {
+              {mapAggregateMarkers.length === 0 && sheetBuildingGroups.map(({ status, buildings: groupedBuildings }) => {
                 if (groupedBuildings.length === 0) return null
                 const isGroupCollapsed = collapsedStatusGroups.has(status)
                 return (
@@ -1925,7 +1956,13 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                               else n.add(building.id)
                               return n
                             })
-                            if (!wasExpanded) moveMobileMapToBuilding(building)
+                            if (!wasExpanded) {
+                              if (regularVisitScope) setSheetHeight(SELECTED_BUILDING_HEIGHT)
+                              moveMobileMapToBuilding(
+                                building,
+                                regularVisitScope ? SELECTED_BUILDING_HEIGHT : sheetHeight,
+                              )
+                            }
                           }}
                           type="button"
                         >

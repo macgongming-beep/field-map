@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- MapCanvas 전체 대신 집계 핀 선택 계약만 시험한다 */
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, test, vi } from 'vitest'
 import { testBuilding, testCard, territoryProps } from '../test/territoryFixture'
 import { MobileMap } from './MobileMap'
+import { getMobileMapPinPanOffset, getMobileMapSelectedSheetHeight } from '../utils/mobileMapViewport'
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 
@@ -26,6 +27,12 @@ vi.mock('./MapCanvas', () => ({
       ))}
       <output data-testid="highlighted-scope">{[...(props.highlightedCardIds ?? [])].sort((a, b) => a - b).join(',')}</output>
       {(props.aggregateMarkers ?? []).length === 0 && <output>건물 포인트 {props.buildings.length}개</output>}
+      {(props.buildings ?? []).map((building: { id: number; name: string }) => (
+        <button key={building.id} type="button" onClick={() => props.onSelectBuilding(building.id)}>
+          지도 건물 {building.name}
+        </button>
+      ))}
+      <output data-testid="map-bottom-padding">{props.bottomPadding}</output>
     </div>
   ),
 }))
@@ -85,6 +92,41 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.click(screen.getByRole('button', { name: '지도 집계 영덕동' }))
     expect(sheet.style.height).toBe('65px')
     now.mockRestore()
+  })
+
+  test('정기방문 핀을 누르면 선택 건물만 작은 시트에 보여 준다', async () => {
+    Element.prototype.scrollIntoView = vi.fn()
+    const first = testBuilding(1, 1, '영덕빌라')
+    const second = testBuilding(2, 2, '죽전빌라')
+    const props = territoryProps({
+      actualRole: 'admin',
+      currentVisitor: '관리자',
+      cards: [testCard(1, '기흥구 영덕동 1'), testCard(2, '수지구 죽전동 1')],
+      buildings: [first, second],
+      focusedCardIds: [],
+      regularVisitScope: true,
+      serviceSessions: [],
+      specialPeriods: [],
+      eventRestaurantAssignments: [],
+      calendarEvents: [],
+      onBack: vi.fn(),
+    })
+
+    const { container } = render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: '지도 건물 영덕빌라' }))
+
+    const sheet = container.querySelector('.mobile-bottom-sheet') as HTMLElement
+    const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
+    const expectedHeight = getMobileMapSelectedSheetHeight(window.innerHeight, true)
+    await waitFor(() => expect(sheet.style.height).toBe(`${expectedHeight}px`))
+    expect(within(scroll).getByText('영덕빌라')).toBeVisible()
+    expect(within(scroll).queryByText('죽전빌라')).not.toBeInTheDocument()
+    expect(screen.getByTestId('map-bottom-padding')).toHaveTextContent(String(expectedHeight + 20))
+  })
+
+  test('선택 핀을 헤더와 하단 시트 사이 중앙으로 옮긴다', () => {
+    expect(getMobileMapPinPanOffset(240, 90)).toBe(75)
+    expect(getMobileMapPinPanOffset(65, 90)).toBe(0)
   })
 
   test('관리자도 통합 검색을 열고 건물 문맥이 있는 호수만 찾는다', async () => {
