@@ -394,7 +394,7 @@ export function MobileHome({
   onQuickLogVisit: (buildingId: number, unitId: number, result: UnitStatus) => void
   onUpdateUnitFlags: (unitId: number, flags: Partial<Unit>) => void
   /** 식당 탭: 세대 단위 식당 해제 */
-  onRemoveRestaurantUnit?: (unitId: number, buildingId: number) => Promise<void>
+  onRemoveRestaurantUnit?: (unitId: number | null, buildingId: number, mode?: 'list' | 'place', deleteEmptyBuilding?: boolean) => Promise<void>
   onToggleInvitationLeft?: (buildingId: number, unitId: number) => void
   onLogout: () => void
   visitHistories: VisitHistory[]

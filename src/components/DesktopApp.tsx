@@ -327,7 +327,7 @@ export function DesktopApp({
   onAssignRestaurantToUser?: (input: { eventId: number; userName: string; buildingId: number; unitId?: number | null; assignedBy: string }) => Promise<boolean>
   onRemoveRestaurantAssignment?: (assignmentId: number) => Promise<void>
   onToggleBuildingRestaurant?: (buildingId: number, isRestaurant: boolean) => Promise<void>
-  onRemoveRestaurantUnit?: (unitId: number, buildingId: number) => Promise<void>
+  onRemoveRestaurantUnit?: (unitId: number | null, buildingId: number, mode?: 'list' | 'place', deleteEmptyBuilding?: boolean) => Promise<void>
   onBulkSetRestaurant?: (buildingIds: number[], nameUpdates?: { id: number; name: string }[]) => Promise<void>
   restaurantRequests?: import('../types').RestaurantRequest[]
   onRegisterRestaurant?: import('../types/restaurantRegistration').RegisterRestaurant

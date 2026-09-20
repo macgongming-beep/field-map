@@ -46,7 +46,7 @@ type Props = {
   cardBoundaries?: CardBoundary[]
   visitHistories?: VisitHistory[]
   /** 식당 탭: 세대 해제 / 대상외 해제 (PC 와 같은 기능) */
-  onRemoveRestaurantUnit?: (unitId: number, buildingId: number) => Promise<void>
+  onRemoveRestaurantUnit?: (unitId: number | null, buildingId: number, mode?: 'list' | 'place', deleteEmptyBuilding?: boolean) => Promise<void>
   onUpdateUnitFlags?: (unitId: number, flags: Partial<import('../../types').Unit>) => void
   currentVisitor: string
   visitorNames?: string[]

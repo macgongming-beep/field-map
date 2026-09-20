@@ -402,7 +402,59 @@ export function makeV2AssignmentMutations(deps: { fetchAll: () => Promise<void> 
   //   "식당 아님"이 구분되지 않아, 중국어를 안 쓴다고 표시하면 식당 목록에서
   //   통째로 사라졌다. 이제 식당 표시(is_restaurant)만 끈다.
   //   중국어를 쓰지 않는 식당은 방문 결과를 '대상외' 로 찍으면 된다.
-  const removeRestaurantUnit = async (unitId: number, buildingId: number) => {
+  const removeRestaurantUnit = async (
+    unitId: number | null,
+    buildingId: number,
+    mode: 'list' | 'place' = 'list',
+    deleteEmptyBuilding = false,
+  ) => {
+    if (mode === 'place') {
+      const token = getAuthToken()
+      if (!token) {
+        showToast(msg('다시 로그인해 주세요.'), 'error')
+        return
+      }
+      const deleteTarget = async (targetType: 'unit' | 'building', targetId: number) => {
+        const result = await supabase.rpc('delete_place_or_request_tx', {
+          p_token: token,
+          p_target_type: targetType,
+          p_target_id: targetId,
+          p_request_type: 'remove_place',
+          p_note: '식당 관리에서 관리자 직접 정리',
+        })
+        const action = result.data?.action
+        if (result.error || (action !== 'deleted' && action !== 'requested')) {
+          reportMutationError(msg('장소를 삭제하지 못했습니다.'), result.error ?? new Error('Missing delete result'))
+          return null
+        }
+        return action as 'deleted' | 'requested'
+      }
+
+      const unitAction = unitId == null ? 'deleted' : await deleteTarget('unit', unitId)
+      if (!unitAction) return
+      if (unitAction === 'requested') {
+        showToast(msg('연결된 자료가 있어 삭제 요청으로 접수했습니다'))
+        await fetchAll()
+        return
+      }
+
+      if (deleteEmptyBuilding) {
+        const buildingAction = await deleteTarget('building', buildingId)
+        if (!buildingAction) return
+        showToast(buildingAction === 'requested'
+          ? msg('세대는 삭제했고 빈 건물은 삭제 요청으로 접수했습니다')
+          : msg('식당 세대와 빈 건물을 삭제했습니다'))
+      } else {
+        showToast(msg('식당 세대를 삭제했습니다'))
+      }
+      await fetchAll()
+      return
+    }
+
+    if (unitId == null) {
+      showToast(msg('식당 세대를 찾을 수 없습니다.'), 'error')
+      return
+    }
     const unitResult = await supabase
       .from('units')
       .update({ is_restaurant: false })

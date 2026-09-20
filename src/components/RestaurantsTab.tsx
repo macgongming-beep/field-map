@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Building, CardBoundary, Unit, RestaurantRequest, Role, TerritoryCard, VisitHistory } from '../types'
 import { RestaurantRegistrationModal } from './RestaurantRegistrationModal'
 import type { RegisterRestaurant } from '../types/restaurantRegistration'
-import { confirmDialog } from '../lib/confirm'
 import { msg } from '../lib/msg'
 import { normalizeCardSearch } from '../utils/cardSearch'
 import { translateKoreanAddress, type AppLanguage } from '../i18n'
@@ -45,8 +44,12 @@ const restaurantCopy = {
     map: '지도',
     more: '더보기',
     removeFromList: '식당 목록 제거',
-    confirmRemove: (name: string) => `"${name}" 식당 목록에서 제거할까요?`,
-    remove: '제거',
+    removeTitle: '식당 정리',
+    removeHint: '식당 목록에서만 뺄지, 장소 자료까지 삭제할지 선택하세요.',
+    removeListHelp: '건물·세대·방문 기록을 그대로 둡니다.',
+    deletePlace: '장소 삭제',
+    deletePlaceHelp: '식당 세대를 삭제하고, 마지막 세대라면 빈 건물도 정리합니다.',
+    cancel: '취소',
     addNext: '다음 식당 추가하기',
     restaurantName: '식당 이름',
     address: '주소',
@@ -92,8 +95,12 @@ const restaurantCopy = {
     map: '地图',
     more: '更多',
     removeFromList: '从餐厅列表移除',
-    confirmRemove: (name: string) => `要从餐厅列表移除“${name}”吗？`,
-    remove: '移除',
+    removeTitle: '整理餐厅',
+    removeHint: '请选择只从餐厅列表移除，还是连同地点资料一起删除。',
+    removeListHelp: '保留建筑、住户和访问记录。',
+    deletePlace: '删除地点',
+    deletePlaceHelp: '删除餐厅住户；若为最后一个住户，也会清理空建筑。',
+    cancel: '取消',
     addNext: '继续添加餐厅',
     restaurantName: '餐厅名称',
     address: '地址',
@@ -139,8 +146,12 @@ const restaurantCopy = {
     map: 'Map',
     more: 'More',
     removeFromList: 'Remove from restaurant list',
-    confirmRemove: (name: string) => `Remove "${name}" from the restaurant list?`,
-    remove: 'Remove',
+    removeTitle: 'Clean up restaurant',
+    removeHint: 'Choose whether to remove only the restaurant label or delete the place data too.',
+    removeListHelp: 'Keeps the building, unit, and visit history.',
+    deletePlace: 'Delete place',
+    deletePlaceHelp: 'Deletes the restaurant unit and removes the empty building when it was the last unit.',
+    cancel: 'Cancel',
     addNext: 'Add another restaurant',
     restaurantName: 'Restaurant name',
     address: 'Address',
@@ -585,7 +596,7 @@ type Props = {
   restaurantRequests?: RestaurantRequest[]
   onRegisterRestaurant?: RegisterRestaurant
   onToggleRestaurantFlag?: (buildingId: number, isRestaurant: boolean) => Promise<void>
-  onRemoveRestaurantUnit?: (unitId: number, buildingId: number) => Promise<void>
+  onRemoveRestaurantUnit?: (unitId: number | null, buildingId: number, mode?: 'list' | 'place', deleteEmptyBuilding?: boolean) => Promise<void>
   onBulkSetRestaurant?: (buildingIds: number[], nameUpdates?: { id: number; name: string }[]) => Promise<void>
   onApproveRestaurantRequest?: (id: number, opts: { name: string; address: string; reviewer: string; existingBuildingId?: number | null; lat?: number; lng?: number }) => Promise<void>
   onRejectRestaurantRequest?: (id: number, reviewer: string) => Promise<void>
@@ -616,6 +627,7 @@ export function RestaurantsTab({
   const [releaseReason, setReleaseReason] = useState('')
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const [removingKey, setRemovingKey] = useState<string | null>(null)
+  const [removeTarget, setRemoveTarget] = useState<{ key: string; name: string; building: Building; unit: Unit | null } | null>(null)
 
   // 세대별 최근 방문일
   const lastVisitByUnit = useMemo(() => {
@@ -1100,20 +1112,9 @@ export function RestaurantsTab({
                               <div onClick={() => setOpenMenuId(null)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
                               <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 31, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.08)', minWidth: 140, padding: 4 }}>
                                 <button type="button"
-                                  onClick={async () => {
+                                  onClick={() => {
                                     setOpenMenuId(null)
-                                    if (!(await confirmDialog({ message: copy.confirmRemove(placeLabel(restaurantName)), danger: true, confirmLabel: copy.remove }))) return
-                                    setRemovingKey(key)
-                                    try {
-                                      if (rowUnit && onRemoveRestaurantUnit) {
-                                        const u = rowUnit
-                                        // 세대 단위 해제 (마지막이면 건물도 자동 해제)
-                                        await onRemoveRestaurantUnit(u.id, b.id)
-                                      } else if (onToggleRestaurantFlag) {
-                                        // 세대 없는 fallback → 건물 전체 해제
-                                        await onToggleRestaurantFlag(b.id, false)
-                                      }
-                                    } finally { setRemovingKey(null) }
+                                    setRemoveTarget({ key, name: placeLabel(restaurantName), building: b, unit: rowUnit ?? null })
                                   }}
                                   disabled={removingKey === key}
                                   style={{ width: '100%', textAlign: 'left', padding: '8px 10px', minHeight: 0, background: 'transparent', border: 'none', fontSize: 13, color: 'var(--status-danger)', cursor: 'pointer', borderRadius: 6 }}>
@@ -1159,6 +1160,53 @@ export function RestaurantsTab({
           onRegister={onRegisterRestaurant}
           onClose={() => setAddOpen(false)}
         />
+      )}
+
+      {removeTarget && (
+        <div className="v2-picker-backdrop" onClick={() => { if (!removingKey) setRemoveTarget(null) }}>
+          <div className="v2-picker-sheet restaurant-remove-picker" role="dialog" aria-modal="true" aria-labelledby="restaurant-remove-title" onClick={(event) => event.stopPropagation()}>
+            <div className="v2-picker-head">
+              <div>
+                <h2 id="restaurant-remove-title">{copy.removeTitle}</h2>
+                <p>{removeTarget.name}</p>
+              </div>
+              <button type="button" className="v2-picker-close" disabled={Boolean(removingKey)} onClick={() => setRemoveTarget(null)} aria-label={copy.cancel}>×</button>
+            </div>
+            <div className="restaurant-remove-actions">
+              <p>{copy.removeHint}</p>
+              <button type="button" disabled={Boolean(removingKey)} onClick={async () => {
+                setRemovingKey(removeTarget.key)
+                try {
+                  if (removeTarget.unit && onRemoveRestaurantUnit) {
+                    await onRemoveRestaurantUnit(removeTarget.unit.id, removeTarget.building.id, 'list')
+                  } else if (onToggleRestaurantFlag) {
+                    await onToggleRestaurantFlag(removeTarget.building.id, false)
+                  }
+                  setRemoveTarget(null)
+                } finally { setRemovingKey(null) }
+              }}>
+                <strong>{copy.removeFromList}</strong>
+                <span>{copy.removeListHelp}</span>
+              </button>
+              <button type="button" className="is-danger" disabled={Boolean(removingKey) || !onRemoveRestaurantUnit} onClick={async () => {
+                setRemovingKey(removeTarget.key)
+                try {
+                  await onRemoveRestaurantUnit?.(
+                    removeTarget.unit?.id ?? null,
+                    removeTarget.building.id,
+                    'place',
+                    removeTarget.building.units.length <= 1,
+                  )
+                  setRemoveTarget(null)
+                } finally { setRemovingKey(null) }
+              }}>
+                <strong>{removingKey ? copy.processing : copy.deletePlace}</strong>
+                <span>{copy.deletePlaceHelp}</span>
+              </button>
+              <button type="button" className="restaurant-remove-cancel" disabled={Boolean(removingKey)} onClick={() => setRemoveTarget(null)}>{copy.cancel}</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 대상외 해제 — 사유를 받아 세대 메모에 남긴다 (누가·언제·왜) */}

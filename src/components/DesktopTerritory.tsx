@@ -210,7 +210,7 @@ export function DesktopTerritory({
   onMoveAssetToGroup?: (assetId: number, groupId: number | null) => Promise<boolean>
   onMoveAssetsToGroup?: (assetIds: number[], groupId: number | null) => Promise<{ failed: number[] }>
   onToggleBuildingRestaurant?: (buildingId: number, isRestaurant: boolean) => Promise<void>
-  onRemoveRestaurantUnit?: (unitId: number, buildingId: number) => Promise<void>
+  onRemoveRestaurantUnit?: (unitId: number | null, buildingId: number, mode?: 'list' | 'place', deleteEmptyBuilding?: boolean) => Promise<void>
   onBulkSetRestaurant?: (buildingIds: number[], nameUpdates?: { id: number; name: string }[]) => Promise<void>
   restaurantRequests?: import('../types').RestaurantRequest[]
   onRegisterRestaurant?: import('../types/restaurantRegistration').RegisterRestaurant

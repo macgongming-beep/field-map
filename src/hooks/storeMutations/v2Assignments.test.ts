@@ -280,4 +280,35 @@ describe('비공식 그룹 쓰기 결과 계약', () => {
     expect(state.toast).not.toHaveBeenCalledWith('식당 목록에서 제거됐습니다.')
     expect(state.toast).toHaveBeenCalledWith(expect.stringContaining('권한이 없습니다.'), 'error')
   })
+
+  test('관리자 장소 삭제는 사유 입력 없이 식당 세대와 빈 건물을 순서대로 안전 삭제한다', async () => {
+    state.rpc
+      .mockResolvedValueOnce({ data: { action: 'deleted' }, error: null })
+      .mockResolvedValueOnce({ data: { action: 'deleted' }, error: null })
+    const fetchAll = vi.fn().mockResolvedValue(undefined)
+    const mutations = makeV2AssignmentMutations({ fetchAll })
+
+    await mutations.removeRestaurantUnit(17, 3, 'place', true)
+
+    expect(state.rpc).toHaveBeenNthCalledWith(1, 'delete_place_or_request_tx', expect.objectContaining({
+      p_target_type: 'unit', p_target_id: 17, p_note: '식당 관리에서 관리자 직접 정리',
+    }))
+    expect(state.rpc).toHaveBeenNthCalledWith(2, 'delete_place_or_request_tx', expect.objectContaining({
+      p_target_type: 'building', p_target_id: 3, p_note: '식당 관리에서 관리자 직접 정리',
+    }))
+    expect(state.toast).toHaveBeenCalledWith('식당 세대와 빈 건물을 삭제했습니다')
+    expect(fetchAll).toHaveBeenCalledOnce()
+  })
+
+  test('연결 자료가 있으면 장소 삭제 요청만 접수하고 빈 건물 삭제를 진행하지 않는다', async () => {
+    state.rpc.mockResolvedValueOnce({ data: { action: 'requested' }, error: null })
+    const fetchAll = vi.fn().mockResolvedValue(undefined)
+    const mutations = makeV2AssignmentMutations({ fetchAll })
+
+    await mutations.removeRestaurantUnit(17, 3, 'place', true)
+
+    expect(state.rpc).toHaveBeenCalledOnce()
+    expect(state.toast).toHaveBeenCalledWith('연결된 자료가 있어 삭제 요청으로 접수했습니다')
+    expect(fetchAll).toHaveBeenCalledOnce()
+  })
 })

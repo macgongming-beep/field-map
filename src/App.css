@@ -32977,6 +32977,19 @@ button > svg {
   .shared-report-page { padding: 0 10px 40px; }
 }
 
+.restaurant-remove-picker { max-width: 430px; overflow: hidden; }
+.restaurant-remove-picker .v2-picker-head > div { min-width: 0; }
+.restaurant-remove-picker .v2-picker-head h2 { margin: 0; font-size: 18px; }
+.restaurant-remove-picker .v2-picker-head p { margin: 4px 0 0; overflow: hidden; color: var(--muted); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.restaurant-remove-actions { display: grid; gap: 10px; padding: 18px 20px 20px; }
+.restaurant-remove-actions > p { margin: 0 0 2px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.restaurant-remove-actions > button { display: grid; gap: 3px; width: 100%; min-height: 58px; padding: 10px 12px; text-align: left; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.restaurant-remove-actions > button strong { font-size: 14px; }
+.restaurant-remove-actions > button span { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.restaurant-remove-actions > button.is-danger { border-color: var(--status-danger); color: var(--status-danger); }
+.restaurant-remove-actions > button:disabled { cursor: default; opacity: .5; }
+.restaurant-remove-actions > button.restaurant-remove-cancel { display: block; min-height: 40px; text-align: center; border: 0; background: transparent; color: var(--muted); font-size: 13px; }
+
 @media print {
   @page { size: A4 portrait; margin: 12mm; }
   .no-print { display: none !important; }
