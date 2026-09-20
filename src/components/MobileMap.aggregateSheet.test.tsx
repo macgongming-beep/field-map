@@ -10,11 +10,11 @@ import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight } from '../uti
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
-const geocodeQuery = vi.hoisted(() => vi.fn())
+const geocodeFirstMatch = vi.hoisted(() => vi.fn())
 
 vi.mock('../lib/confirm', () => ({ confirmDialog }))
 vi.mock('../lib/placeSearch', () => ({ searchPlacesAndAddressesForCongregation }))
-vi.mock('../lib/naverGeocode', () => ({ geocodeQuery }))
+vi.mock('../lib/naverGeocode', () => ({ geocodeFirstMatch }))
 vi.mock('./OverlayPortal', () => ({
   OverlayPortal: ({ children }: { children: ReactNode }) => children,
 }))
@@ -55,7 +55,7 @@ vi.mock('./MapCanvas', () => ({
 describe('모바일 지도 하단 시트', () => {
   beforeEach(() => {
     searchPlacesAndAddressesForCongregation.mockReset()
-    geocodeQuery.mockReset()
+    geocodeFirstMatch.mockReset()
     delete (window as any).__mobileMapInstance
     delete (window as any).naver
   })
@@ -205,7 +205,7 @@ describe('모바일 지도 하단 시트', () => {
   })
 
   test('지도에서 건물 가장자리를 눌러도 가까운 주소 대표 좌표로 새 핀을 보정한다', async () => {
-    geocodeQuery.mockResolvedValue({ lat: 37.2764, lng: 127.1194 })
+    geocodeFirstMatch.mockResolvedValue({ lat: 37.2764, lng: 127.1194 })
     ;(window as any).naver = {
       maps: {
         LatLng: class LatLng { constructor(public lat: number, public lng: number) {} },
@@ -219,7 +219,7 @@ describe('모바일 지도 하단 시트', () => {
                 region: {
                   area1: { name: '경기도' },
                   area2: { name: '용인시 기흥구' },
-                  area3: { name: '' },
+                  area3: { name: '중동' },
                 },
                 land: { name: '언동로', number1: '216' },
               }],
@@ -235,11 +235,14 @@ describe('모바일 지도 하단 시트', () => {
 
     expect(screen.getByRole('heading', { name: '건물 추가' })).toBeVisible()
     await waitFor(() => expect(screen.getByText('37.27640, 127.11940')).toBeVisible())
-    expect(geocodeQuery).toHaveBeenCalledWith('경기도 용인시 기흥구 언동로 216')
+    expect(geocodeFirstMatch).toHaveBeenCalledWith(expect.arrayContaining([
+      '경기도 용인시 기흥구 중동 언동로 216',
+      '경기도 용인시 기흥구 언동로 216',
+    ]))
   })
 
   test('주소 대표 좌표가 멀면 새 핀을 원래 누른 위치에 유지한다', async () => {
-    geocodeQuery.mockResolvedValue({ lat: 37.3, lng: 127.2 })
+    geocodeFirstMatch.mockResolvedValue({ lat: 37.3, lng: 127.2 })
     ;(window as any).naver = {
       maps: {
         LatLng: class LatLng { constructor(public lat: number, public lng: number) {} },
@@ -267,13 +270,13 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.click(screen.getByRole('button', { name: 'start add building' }))
     fireEvent.click(screen.getByRole('button', { name: 'tap map add' }))
 
-    await waitFor(() => expect(geocodeQuery).toHaveBeenCalled())
+    await waitFor(() => expect(geocodeFirstMatch).toHaveBeenCalled())
     expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
   })
 
   test('주소 좌표 응답 전에 조정 화면을 열어도 직접 끌기 전에는 자동 보정을 적용한다', async () => {
     let resolveGeocode: (value: { lat: number; lng: number }) => void = () => undefined
-    geocodeQuery.mockReturnValue(new Promise((resolve) => { resolveGeocode = resolve }))
+    geocodeFirstMatch.mockReturnValue(new Promise((resolve) => { resolveGeocode = resolve }))
     ;(window as any).naver = {
       maps: {
         LatLng: class LatLng { constructor(public lat: number, public lng: number) {} },

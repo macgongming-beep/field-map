@@ -31,8 +31,9 @@ import { getCurrentRestaurantAssignmentsForUnit } from '../utils/restaurantAssig
 import { buildingHasUsage, effectiveUnitUsage, scopeBuildingToUsage, unitsForUsage } from '../utils/unitUsage'
 import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight, getMobileMapSelectedSheetHeight } from '../utils/mobileMapViewport'
 import { searchPlacesAndAddressesForCongregation } from '../lib/placeSearch'
-import { geocodeQuery } from '../lib/naverGeocode'
+import { geocodeFirstMatch } from '../lib/naverGeocode'
 import { classifyRestaurantPlaces, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
+import { getGeocodeCandidates } from '../utils/geocodeCandidates'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
@@ -1152,14 +1153,22 @@ export function MobileMap({
                     setAddCardId(findCardForCoordinates(adjusted.lat, adjusted.lng, cardBoundaries) ?? selectedCardId ?? 0)
                     const map = (window as any).__mobileMapInstance
                     map?.setCenter?.(new naver.maps.LatLng(adjusted.lat, adjusted.lng))
+                    return true
                   }
+                  return false
                 }
-                if (landCenter) {
-                  applyAutomaticPinAdjustment(landCenter)
+                if (landCenter && applyAutomaticPinAdjustment(landCenter)) {
                   setGeocoding(false)
                 } else {
-                  void geocodeQuery(resolvedAddress).then((adjusted) => {
-                    applyAutomaticPinAdjustment(adjusted)
+                  void geocodeFirstMatch(getGeocodeCandidates(resolvedAddress)).then((adjusted) => {
+                    const applied = applyAutomaticPinAdjustment(adjusted)
+                    if (
+                      !applied
+                      && locationLookupId === addLocationLookupRef.current
+                      && !addPinManuallyAdjustedRef.current
+                    ) {
+                      showToast(msg('주소 기준 위치를 찾지 못했습니다. 핀 위치를 직접 확인해 주세요.'), 'info')
+                    }
                   }).finally(() => {
                     if (locationLookupId === addLocationLookupRef.current) setGeocoding(false)
                   })

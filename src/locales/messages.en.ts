@@ -130,6 +130,7 @@ export const messagesEn: Record<string, string> = {
   '새 건물 핀을 원하는 위치로 옮기세요': 'Move the new building pin to the correct location',
   '핀 위치 조정': 'Adjust pin location',
   '필요한 경우에만 지도에서 위치를 옮기세요': 'Move it on the map only when needed',
+  '주소 기준 위치를 찾지 못했습니다. 핀 위치를 직접 확인해 주세요.': 'Could not find a reliable address location. Please check the pin manually.',
   '기존 건물': 'Existing building',
   '건물 검색': 'Search buildings',
   '건물 선택': 'Select a building',
