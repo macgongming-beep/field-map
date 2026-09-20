@@ -9,7 +9,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { DesktopTerritory } from './DesktopTerritory'
-import { territoryProps, testCard } from '../test/territoryFixture'
+import { territoryProps, testBuilding, testCard } from '../test/territoryFixture'
 
 vi.mock('../lib/confirm', () => ({
   confirmDialog: vi.fn(async () => true),
@@ -48,5 +48,35 @@ describe('일괄 삭제는 보이는 카드만', () => {
       // 접혀 있는 2번이 섞이면 안 된다
       expect(ids).not.toContain(2)
     }
+  })
+})
+
+describe('PC 건물 행 삭제', () => {
+  test('관리자는 건물 행에서 바로 삭제하고 확인 뒤 해당 건물 하나만 넘긴다', async () => {
+    const user = userEvent.setup()
+    const onDeleteBuildings = vi.fn()
+    open({
+      cards: [testCard(1, '수지구 죽전동 1')],
+      buildings: [testBuilding(7, 1, '죽전빌딩')],
+      onDeleteBuildings,
+    })
+
+    await user.click(screen.getByRole('button', { name: '건물 관리' }))
+    await user.click(screen.getByRole('button', { name: '삭제' }))
+
+    expect(onDeleteBuildings).toHaveBeenCalledWith([7])
+  })
+
+  test('일반 사용자에게는 건물 행 삭제가 보이지 않는다', async () => {
+    const user = userEvent.setup()
+    open({
+      role: 'user',
+      cards: [testCard(1, '수지구 죽전동 1')],
+      buildings: [testBuilding(7, 1, '죽전빌딩')],
+    })
+
+    await user.click(screen.getByRole('button', { name: '건물 관리' }))
+
+    expect(screen.queryByRole('button', { name: '삭제' })).toBeNull()
   })
 })

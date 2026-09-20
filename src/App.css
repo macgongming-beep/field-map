@@ -13721,13 +13721,13 @@ button:focus-visible {
   .building-management-head,
   .building-management-row {
     display: grid;
-    grid-template-columns: 34px minmax(130px, 1fr) var(--building-address-width, 300px) minmax(140px, 0.85fr) 132px 56px 60px 110px;
+    grid-template-columns: 34px minmax(130px, 1fr) var(--building-address-width, 300px) minmax(140px, 0.85fr) 132px 56px 60px 158px;
     gap: 12px;
     align-items: center;
   }
 
   .building-management-head {
-    min-width: calc(var(--building-address-width, 300px) + 756px);
+    min-width: calc(var(--building-address-width, 300px) + 804px);
     min-height: 52px;
     padding: 0 20px;
     background: #eef2f7;
@@ -13737,7 +13737,7 @@ button:focus-visible {
   }
 
   .building-management-row {
-    min-width: calc(var(--building-address-width, 300px) + 756px);
+    min-width: calc(var(--building-address-width, 300px) + 804px);
     min-height: 64px;
     padding: 12px 20px;
     border-top: 1px solid #e6e9ee;
@@ -13901,6 +13901,11 @@ button:focus-visible {
 
   .building-row-actions button {
     padding: 0 8px;
+  }
+
+  .building-row-actions button.danger {
+    border-color: #f0c7c2;
+    color: var(--danger-600);
   }
 
   /* 중복 주소 배너 */

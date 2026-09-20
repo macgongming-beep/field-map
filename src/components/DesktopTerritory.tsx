@@ -1133,6 +1133,17 @@ export function DesktopTerritory({
     setCheckedBuildingIds(new Set())
   }
 
+  const handleDeleteBuilding = async (building: Building) => {
+    const copy = placeDeletionCopy(role, 'building')
+    const confirmed = await confirmDialog({
+      message: `${building.name}: ${copy.description}`,
+      danger: true,
+      confirmLabel: copy.confirmLabel,
+    })
+    if (!confirmed) return
+    onDeleteBuildings([building.id])
+  }
+
 
 
   const showPointDetailPane = activeTab === '건물 관리' && buildingSubTab === '세대 목록' && selectedPointDetailData
@@ -2102,6 +2113,11 @@ export function DesktopTerritory({
                         <span className="building-row-actions">
                           <button onClick={() => startBuildingEdit(building)} type="button">수정</button>
                           <button onClick={() => onOpenBuildingMap(building.id)} type="button">지도</button>
+                          {isAdmin && (
+                            <button className="danger" onClick={() => void handleDeleteBuilding(building)} type="button">
+                              삭제
+                            </button>
+                          )}
                         </span>
                       </>
                     )}
