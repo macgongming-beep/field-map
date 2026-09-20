@@ -609,6 +609,17 @@ export function MobileMap({
     informalAssets,
   }), [buildings, cardSearch, cards, informalAssets])
   const bareUnitSearch = isBareUnitSearch(cardSearch)
+  const visibleAddressSearchResults = useMemo(() => {
+    const visibleBuildingIds = new Set(
+      mapSearchResults.map((result) => result.buildingId).filter((id): id is number => id != null),
+    )
+    return addressSearchResults.filter((candidate) => !(
+      candidate.source === 'address'
+      && candidate.buildingId != null
+      && visibleBuildingIds.has(candidate.buildingId)
+    ))
+  }, [addressSearchResults, mapSearchResults])
+  const visibleSearchResultCount = mapSearchResults.length + visibleAddressSearchResults.length
 
   const requireRecordAccess = () => {
     if (canRecordVisits) return true
@@ -1748,10 +1759,10 @@ export function MobileMap({
                   {bareUnitSearch && (
                     <span>{t(language, 'map.searchUnitHint')}</span>
                   )}
-                  {!bareUnitSearch && mapSearchResults.length === 0 && (
+                  {!bareUnitSearch && visibleSearchResultCount === 0 && (
                     <span>{msg('등록된 건물이 없습니다.')}</span>
                   )}
-                  {mapSearchResults.length > 0 && <span>{t(language, 'map.searchResults')} {mapSearchResults.length}{t(language, 'calendar.countSuffix')}</span>}
+                  {visibleSearchResultCount > 0 && <span>{t(language, 'map.searchResults')} {visibleSearchResultCount}{t(language, 'calendar.countSuffix')}</span>}
                   {mapSearchResults.map((result) => (
                     <button
                       key={result.key}
@@ -1765,7 +1776,7 @@ export function MobileMap({
                       {result.subtitle && <small>{translateKoreanAddress(result.subtitle, language, translatePlaceNames)}</small>}
                     </button>
                   ))}
-                  {addressSearchResults.map((candidate, index) => candidate.status === 'ambiguous-building' ? (
+                  {visibleAddressSearchResults.map((candidate, index) => candidate.status === 'ambiguous-building' ? (
                     <div className="mobile-map-address-ambiguous" key={`${candidate.address}:${index}`}>
                       <strong>{candidate.address}</strong>
                       <small>{msg('같은 주소의 건물이 여러 개입니다. 기존 건물을 선택해 주세요.')}</small>
