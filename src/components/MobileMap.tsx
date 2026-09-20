@@ -34,31 +34,13 @@ import { searchPlacesAndAddressesForCongregation } from '../lib/placeSearch'
 import { geocodeFirstMatch } from '../lib/naverGeocode'
 import { classifyRestaurantPlaces, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
 import { getGeocodeCandidates } from '../utils/geocodeCandidates'
-import { shortAddress as roadAddress } from '../utils/shortAddress'
+import { candidateBuildingName, candidateBuildingType, candidateFirstUnitName } from '../utils/searchedPlaceDraft'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
 type BuildingTypeFilter = '전체' | Building['type']
 
 const BUILDING_PIN_AUTO_ADJUST_MAX_METERS = 200
-const RESIDENTIAL_PLACE_CATEGORY = /(아파트|주택|빌라|연립|다가구|다세대|오피스텔|타운하우스|기숙사)/
-
-function candidateBuildingType(candidate: ClassifiedRestaurantPlace): Building['type'] {
-  if (candidate.source === 'address') return '주택'
-  return RESIDENTIAL_PLACE_CATEGORY.test(candidate.category) ? '주택' : '상가'
-}
-
-function candidateBuildingName(candidate: ClassifiedRestaurantPlace, type: Building['type']): string {
-  const addressName = roadAddress(candidate.address) || shortenAddress(candidate.address)
-  if (type === '주택' && candidate.source === 'place' && RESIDENTIAL_PLACE_CATEGORY.test(candidate.category)) {
-    return candidate.name || addressName
-  }
-  return addressName
-}
-
-function candidateFirstUnitName(candidate: ClassifiedRestaurantPlace, type: Building['type']): string {
-  return type === '상가' && candidate.source === 'place' ? candidate.name : ''
-}
 
 function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const earthRadius = 6_371_000
@@ -554,6 +536,7 @@ export function MobileMap({
   const [addName, setAddName] = useState('')
   const [addAddress, setAddAddress] = useState('')
   const [addType, setAddType] = useState<Building['type']>('주택')
+  const [addTypeConfirmed, setAddTypeConfirmed] = useState(true)
   const [addFirstUnitName, setAddFirstUnitName] = useState('')
   const [addSearchCandidate, setAddSearchCandidate] = useState<ClassifiedRestaurantPlace | null>(null)
   const [addCardId, setAddCardId] = useState(cards[0]?.id ?? 1)
@@ -1157,6 +1140,7 @@ export function MobileMap({
     addPinSnapshotRef.current = null
     setAddLat(null)
     setAddLng(null)
+    setAddTypeConfirmed(true)
     setAddFirstUnitName('')
     setAddSearchCandidate(null)
     backdropTouched.current = false
@@ -1173,6 +1157,7 @@ export function MobileMap({
 
     setExpandedBuildingIds(new Set())
     setAddLat(lat); setAddLng(lng); setAddName(t(language, 'map.addBuilding')); setAddAddress(''); setAddType('주택')
+    setAddTypeConfirmed(true)
     setAddFirstUnitName('')
     setAddSearchCandidate(null)
     setAddCardManuallySelected(false)
@@ -1254,6 +1239,7 @@ export function MobileMap({
     const firstUnitName = addFirstUnitName.trim()
     if (
       !addName.trim()
+      || (addSearchCandidate && !addTypeConfirmed)
       || (addSearchCandidate && !firstUnitName)
       || addLat == null
       || addLng == null
@@ -1548,7 +1534,7 @@ export function MobileMap({
       if (candidate.buildingId != null) {
         const building = buildings.find((item) => item.id === candidate.buildingId)
         if (building) {
-          const type = candidateBuildingType(candidate)
+          const type = candidateBuildingType(candidate) ?? building.type
           selectMapSearchResult({
             key: `building:${building.id}`,
             kind: 'building',
@@ -1570,12 +1556,14 @@ export function MobileMap({
     addLocationLookupRef.current += 1
     addPinManuallyAdjustedRef.current = false
     const matchedCardId = findCardForCoordinates(candidate.lat, candidate.lng, cardBoundaries)
-    const type = candidateBuildingType(candidate)
+    const inferredType = candidateBuildingType(candidate)
+    const type = inferredType ?? '주택'
     setAddLat(candidate.lat)
     setAddLng(candidate.lng)
     setAddName(candidateBuildingName(candidate, type))
     setAddAddress(candidate.address)
     setAddType(type)
+    setAddTypeConfirmed(inferredType != null)
     setAddFirstUnitName(candidateFirstUnitName(candidate, type))
     setAddSearchCandidate(candidate)
     setAddCardId(matchedCardId ?? 0)
@@ -1591,9 +1579,7 @@ export function MobileMap({
 
   const changeAddBuildingType = (type: Building['type']) => {
     setAddType(type)
-    if (!addSearchCandidate) return
-    setAddName(candidateBuildingName(addSearchCandidate, type))
-    setAddFirstUnitName(candidateFirstUnitName(addSearchCandidate, type))
+    setAddTypeConfirmed(true)
   }
 
   const hasAreaChips = !isUserMap && !enteredDirectly && areas.length > 1
@@ -1787,7 +1773,7 @@ export function MobileMap({
                           <button
                             key={building.id}
                             onClick={() => {
-                              const type = candidateBuildingType(candidate)
+                              const type = candidateBuildingType(candidate) ?? building.type
                               selectMapSearchResult({
                                 key: `building:${building.id}`,
                                 kind: 'building',
@@ -1810,7 +1796,7 @@ export function MobileMap({
                   ) : (
                     <button key={`${candidate.address}:${index}`} onClick={() => chooseAddressCandidate(candidate)} type="button">
                       <span className={`mobile-map-search-kind ${candidateBuildingType(candidate) === '상가' ? 'kind-restaurant' : 'kind-address'}`}>
-                        {candidate.source === 'address' ? msg('주소') : buildingTypeLabel(candidateBuildingType(candidate))}
+                        {candidate.source === 'address' ? msg('주소') : buildingTypeLabel(candidateBuildingType(candidate) ?? '주택')}
                       </span>
                       <strong>{candidate.name}</strong>
                       <small>{candidate.address}</small>
@@ -2692,7 +2678,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                     <div className="mm-add-place-type" role="group" aria-label={t(language, 'map.type')}>
                       {(['주택', '상가'] as const).map((type) => (
                         <button
-                          className={addType === type ? 'active' : ''}
+                          className={addTypeConfirmed && addType === type ? 'active' : ''}
                           key={type}
                           onClick={() => changeAddBuildingType(type)}
                           type="button"
@@ -2701,6 +2687,9 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                         </button>
                       ))}
                     </div>
+                    {addSearchCandidate && !addTypeConfirmed && (
+                      <p className="mm-add-place-validation">{msg('주택 또는 상가를 선택해 주세요.')}</p>
+                    )}
                   </div>
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'zone.cardCount')}</label>
@@ -2737,6 +2726,11 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                         placeholder={addType === '상가' ? msg('예: 카멜리아힐') : msg('예: 101호')}
                         style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px', boxSizing: 'border-box' }}
                       />
+                      {!addFirstUnitName.trim() && (
+                        <p className="mm-add-place-validation">
+                          {addType === '상가' ? msg('상호명을 입력해 주세요.') : msg('첫 호수를 입력해 주세요.')}
+                        </p>
+                      )}
                     </div>
                   )}
                   <button className="mm-adjust-new-pin-btn" onClick={startNewBuildingPinAdjustment} type="button">
@@ -2751,16 +2745,16 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                   <button onClick={closeAddModal} style={{ flex: 1, padding: '12px', borderRadius: 'var(--r-md)', border: '1px solid #e2e8f0', background: '#f8fafc', fontWeight: 700, cursor: 'pointer', fontSize: '15px' }}>{t(language, 'common.cancel')}</button>
                   <button
                     onClick={handleConfirmAdd}
-                    disabled={!addName.trim() || addCardId === 0 || Boolean(addSearchCandidate && !addFirstUnitName.trim())}
+                    disabled={!addName.trim() || addCardId === 0 || Boolean(addSearchCandidate && (!addTypeConfirmed || !addFirstUnitName.trim()))}
                     style={{
                       flex: 2,
                       padding: '12px',
                       borderRadius: 'var(--r-md)',
                       border: 'none',
-                      background: addName.trim() && addCardId !== 0 && (!addSearchCandidate || addFirstUnitName.trim()) ? 'var(--accent-700)' : '#e2e8f0',
-                      color: addName.trim() && addCardId !== 0 && (!addSearchCandidate || addFirstUnitName.trim()) ? '#fff' : '#94a3b8',
+                      background: addName.trim() && addCardId !== 0 && (!addSearchCandidate || (addTypeConfirmed && addFirstUnitName.trim())) ? 'var(--accent-700)' : '#e2e8f0',
+                      color: addName.trim() && addCardId !== 0 && (!addSearchCandidate || (addTypeConfirmed && addFirstUnitName.trim())) ? '#fff' : '#94a3b8',
                       fontWeight: 700,
-                      cursor: addName.trim() && addCardId !== 0 && (!addSearchCandidate || addFirstUnitName.trim()) ? 'pointer' : 'not-allowed',
+                      cursor: addName.trim() && addCardId !== 0 && (!addSearchCandidate || (addTypeConfirmed && addFirstUnitName.trim())) ? 'pointer' : 'not-allowed',
                       fontSize: '15px',
                     }}
                   >

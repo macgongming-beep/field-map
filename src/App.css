@@ -32227,6 +32227,7 @@ button:focus-visible {
 .mm-add-place-type { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 3px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; background: var(--gray-100, #f1f5f9); }
 .mm-add-place-type button { min-height: 38px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-500); font-size: 14px; font-weight: 700; }
 .mm-add-place-type button.active { background: #ffffff; color: var(--ink-900); box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); }
+.mm-add-place-validation { margin: 5px 0 0; color: #b45309; font-size: 11px; font-weight: 650; }
 .mm-unit-add-row { display: flex; gap: 6px; align-items: center; }
 .mm-unit-add-options { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-width: 0; }
 .mm-unit-usage-toggle { display: inline-grid; grid-template-columns: repeat(2, minmax(48px, 1fr)); border: 1px solid var(--line, #e2e8f0); border-radius: 7px; overflow: hidden; flex-shrink: 0; }

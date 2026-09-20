@@ -200,10 +200,13 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.click(screen.getByRole('button', { name: /언동로 213/ }))
     fireEvent.click(await screen.findByRole('button', { name: '이 주소에 건물 추가' }))
 
-    expect(screen.getByRole('heading', { name: '장소 등록' })).toBeVisible()
+    const sheet = screen.getByRole('heading', { name: '장소 등록' }).closest('.mm-building-edit-sheet') as HTMLElement
     expect(screen.getByDisplayValue('경기도 용인시 기흥구 언동로 213')).toBeVisible()
     expect(screen.getByDisplayValue('언동로 213')).toBeVisible()
     expect(screen.getByPlaceholderText('예: 101호')).toBeVisible()
+    expect(within(sheet).getByRole('button', { name: '주택' })).not.toHaveClass('active')
+    expect(within(sheet).getByRole('button', { name: '상가' })).not.toHaveClass('active')
+    expect(within(sheet).getByText('주택 또는 상가를 선택해 주세요.')).toBeVisible()
     expect(screen.getByRole('button', { name: '건물과 세대 등록' })).toBeDisabled()
   })
 
@@ -236,11 +239,19 @@ describe('모바일 지도 하단 시트', () => {
     expect(within(sheet).getByRole('button', { name: '상가' })).toHaveClass('active')
     expect(within(sheet).getByDisplayValue('언동로 213')).toBeVisible()
     expect(within(sheet).getByDisplayValue('카멜리아힐')).toBeVisible()
+    fireEvent.change(within(sheet).getByDisplayValue('언동로 213'), { target: { value: '언동로 213 별관' } })
+    fireEvent.change(within(sheet).getByDisplayValue('카멜리아힐'), { target: { value: '카멜리아힐 2호점' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: '주택' }))
+    expect(within(sheet).getByDisplayValue('언동로 213 별관')).toBeVisible()
+    expect(within(sheet).getByDisplayValue('카멜리아힐 2호점')).toBeVisible()
+    fireEvent.click(within(sheet).getByRole('button', { name: '상가' }))
+    expect(within(sheet).getByDisplayValue('언동로 213 별관')).toBeVisible()
+    expect(within(sheet).getByDisplayValue('카멜리아힐 2호점')).toBeVisible()
     fireEvent.change(within(sheet).getByRole('combobox'), { target: { value: '1' } })
     fireEvent.click(within(sheet).getByRole('button', { name: '건물과 세대 등록' }))
 
     await waitFor(() => expect(onCreateBuilding).toHaveBeenCalledWith(expect.objectContaining({
-      name: '언동로 213',
+      name: '언동로 213 별관',
       address: '경기도 용인시 기흥구 언동로 213',
       type: '상가',
     })))
@@ -252,7 +263,7 @@ describe('모바일 지도 하단 시트', () => {
     created.lng = 127.118
     rerender(<MemoryRouter><MobileMap {...({ ...props, buildings: [created] } as never)} /></MemoryRouter>)
 
-    await waitFor(() => expect(onAddUnit).toHaveBeenCalledWith(93, '카멜리아힐', '상가'))
+    await waitFor(() => expect(onAddUnit).toHaveBeenCalledWith(93, '카멜리아힐 2호점', '상가'))
   })
 
   test('상호 주소의 기존 건물이 있으면 새 건물 대신 상가 세대 추가로 연결한다', async () => {
@@ -462,6 +473,8 @@ describe('모바일 지도 하단 시트', () => {
     expect(screen.getByText('37.27700, 127.12000')).toBeVisible()
 
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '1' } })
+    const placeSheet = screen.getByRole('heading', { name: '장소 등록' }).closest('.mm-building-edit-sheet') as HTMLElement
+    fireEvent.click(within(placeSheet).getByRole('button', { name: '주택' }))
     fireEvent.change(screen.getByPlaceholderText('예: 101호'), { target: { value: '101호' } })
     fireEvent.click(screen.getByRole('button', { name: '건물과 세대 등록' }))
 
