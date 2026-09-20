@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { testBuilding, testCard, territoryProps } from '../test/territoryFixture'
 import { MobileMap } from './MobileMap'
-import { getMobileMapPinPanOffset, getMobileMapSelectedSheetHeight } from '../utils/mobileMapViewport'
+import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight } from '../utils/mobileMapViewport'
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
@@ -122,7 +122,7 @@ describe('모바일 지도 하단 시트', () => {
 
     const sheet = container.querySelector('.mobile-bottom-sheet') as HTMLElement
     const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
-    const expectedHeight = getMobileMapSelectedSheetHeight(window.innerHeight, true)
+    const expectedHeight = getMobileMapSelectedPeekHeight(window.innerHeight)
     await waitFor(() => expect(sheet.style.height).toBe(`${expectedHeight}px`))
     expect(within(scroll).getByText('영덕빌라')).toBeVisible()
     expect(within(scroll).queryByText('죽전빌라')).not.toBeInTheDocument()
@@ -227,9 +227,14 @@ describe('모바일 지도 하단 시트', () => {
     const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
     await waitFor(() => {
       expect(screen.getByTestId('selected-building-id')).toHaveTextContent('91')
-      expect(Number.parseFloat(sheet.style.height)).toBeGreaterThan(65)
+      expect(sheet.style.height).toBe(`${getMobileMapSelectedPeekHeight(window.innerHeight)}px`)
     })
-    expect(within(scroll).getByText('언동로 216')).toBeVisible()
+    const buildingButton = within(scroll).getByRole('button', { name: /언동로 216/ })
+    expect(buildingButton).toBeVisible()
+
+    fireEvent.click(buildingButton)
+    await waitFor(() => expect(sheet.style.height).toBe(`${window.innerHeight * 0.46}px`))
+    expect(within(scroll).getByText('101호')).toBeVisible()
   })
 
   test('주소 후보가 기존 건물과 일치하면 새 건물 추가 대신 기존 건물을 연다', async () => {

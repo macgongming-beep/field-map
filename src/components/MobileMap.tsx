@@ -29,7 +29,7 @@ import { OverlayPortal } from './OverlayPortal'
 import { getCongregationProfile } from '../lib/congregationProfile'
 import { getCurrentRestaurantAssignmentsForUnit } from '../utils/restaurantAssignments'
 import { buildingHasUsage, effectiveUnitUsage, scopeBuildingToUsage, unitsForUsage } from '../utils/unitUsage'
-import { getMobileMapPinPanOffset, getMobileMapSelectedSheetHeight } from '../utils/mobileMapViewport'
+import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight, getMobileMapSelectedSheetHeight } from '../utils/mobileMapViewport'
 import { searchPlacesAndAddressesForCongregation } from '../lib/placeSearch'
 import { classifyRestaurantPlaces, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
 
@@ -554,6 +554,7 @@ export function MobileMap({
   const MIN_HEIGHT = 65
   const HALF_HEIGHT = window.innerHeight * 0.46
   const SELECTED_BUILDING_HEIGHT = getMobileMapSelectedSheetHeight(window.innerHeight, regularVisitScope)
+  const SELECTED_BUILDING_PEEK_HEIGHT = getMobileMapSelectedPeekHeight(window.innerHeight)
   const FULL_HEIGHT = window.innerHeight * 0.92
   const UNIT_NAV_HEIGHT = Math.max(210, Math.min(280, window.innerHeight * 0.3))
   const SHEET_TRANSITION_MS = 350
@@ -980,14 +981,14 @@ export function MobileMap({
   }, [filteredBuildings, shouldUseAggregateMap])
 
   const sheetBuildingGroups = useMemo(() => {
-    if (!regularVisitScope || selectedBuildingId == null) return buildingGroups
+    if (selectedBuildingId == null) return buildingGroups
     return buildingGroups
       .map((group) => ({
         ...group,
         buildings: group.buildings.filter((building) => building.id === selectedBuildingId),
       }))
       .filter((group) => group.buildings.length > 0)
-  }, [buildingGroups, regularVisitScope, selectedBuildingId])
+  }, [buildingGroups, selectedBuildingId])
 
   const unitTotal = useMemo(() => filteredBuildings.reduce((t, b) => t + b.units.length, 0), [filteredBuildings])
   const visitedTotal = useMemo(() => filteredBuildings.reduce((t, b) => t + b.units.filter(u => u.status !== '미방문').length, 0), [filteredBuildings])
@@ -1247,7 +1248,7 @@ export function MobileMap({
     // 카드 fit 효과가 먼저 끝난 다음 건물로 이동해야 구역 전체로 되돌아가지 않는다.
     window.setTimeout(() => {
       setSelectedBuildingId(building.id)
-      setExpandedBuildingIds(new Set([building.id]))
+      setExpandedBuildingIds(new Set())
       setCollapsedStatusGroups((previous) => {
         const next = new Set(previous)
         next.delete(getPinGroup(building))
@@ -1266,8 +1267,8 @@ export function MobileMap({
         showUnitDetail(unit, building, visitHistoriesByUnitId.get(unit.id) ?? [])
       } else {
         setFullScreenUnit(null)
-        setSheetHeight(SELECTED_BUILDING_HEIGHT)
-        moveMobileMapToBuilding(building, SELECTED_BUILDING_HEIGHT)
+        setSheetHeight(SELECTED_BUILDING_PEEK_HEIGHT)
+        moveMobileMapToBuilding(building, SELECTED_BUILDING_PEEK_HEIGHT)
         scrollBuildingAfterSheetTransition(building.id)
       }
     }, 80)
@@ -1726,9 +1727,9 @@ export function MobileMap({
                   setFullScreenUnit(null)
                   setSheetHeight(MIN_HEIGHT)
                 } else {
-                  // 새로운 포인트 클릭 시 선택 및 상세내역 펴기
+                  // 새 포인트는 건물 한 줄만 먼저 보여 준다. 상세는 건물명을 눌러 펼친다.
                   setSelectedBuildingId(id)
-                  setExpandedBuildingIds(new Set([id]))
+                  setExpandedBuildingIds(new Set())
                   setFullScreenUnit(null) // 다른 건물로 넘어갈 때도 호수 상세 내역 초기화
 
                   // 해당 건물 그룹이 접혀 있으면 자동으로 펼치기 (예: 방문완료 그룹)
@@ -1736,9 +1737,7 @@ export function MobileMap({
                   if (b) {
                     const grp = getPinGroup(b)
                     setCollapsedStatusGroups((prev) => { const n = new Set(prev); n.delete(grp); return n })
-                    const targetHeight = regularVisitScope
-                      ? SELECTED_BUILDING_HEIGHT
-                      : Math.max(sheetHeight, HALF_HEIGHT)
+                    const targetHeight = SELECTED_BUILDING_PEEK_HEIGHT
                     moveMobileMapToBuilding(b, targetHeight)
                     setSheetHeight(targetHeight)
                   }
@@ -2132,13 +2131,12 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                               else n.add(building.id)
                               return n
                             })
-                            if (!wasExpanded) {
-                              if (regularVisitScope) setSheetHeight(SELECTED_BUILDING_HEIGHT)
-                              moveMobileMapToBuilding(
-                                building,
-                                regularVisitScope ? SELECTED_BUILDING_HEIGHT : sheetHeight,
-                              )
-                            }
+                            const targetHeight = wasExpanded
+                              ? SELECTED_BUILDING_PEEK_HEIGHT
+                              : (regularVisitScope ? SELECTED_BUILDING_HEIGHT : HALF_HEIGHT)
+                            setSheetHeight(targetHeight)
+                            moveMobileMapToBuilding(building, targetHeight)
+                            if (!wasExpanded) scrollBuildingAfterSheetTransition(building.id)
                           }}
                           type="button"
                         >

@@ -3,6 +3,10 @@ export function getMobileMapSelectedSheetHeight(viewportHeight: number, regularV
   return Math.round(Math.max(190, Math.min(240, viewportHeight * 0.28)))
 }
 
+export function getMobileMapSelectedPeekHeight(viewportHeight: number): number {
+  return Math.round(Math.max(118, Math.min(150, viewportHeight * 0.16)))
+}
+
 export function getMobileMapPinPanOffset(sheetHeight: number, topInset = 90): number {
   return Math.max(0, Math.round((sheetHeight - topInset) / 2))
 }
