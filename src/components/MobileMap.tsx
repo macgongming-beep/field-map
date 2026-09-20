@@ -1324,7 +1324,10 @@ export function MobileMap({
     }
   }
 
-  const selectMapSearchResult = (result: MapSearchResult) => {
+  const selectMapSearchResult = (
+    result: MapSearchResult,
+    options: { openFirstUnitForm?: boolean } = {},
+  ) => {
     setShowCardFinder(false)
     setCardSearch('')
     setAddressSearchResults([])
@@ -1385,6 +1388,15 @@ export function MobileMap({
         : building.units.find((item) => item.id === result.unitId) ?? null
       if (unit) {
         showUnitDetail(unit, building, visitHistoriesByUnitId.get(unit.id) ?? [])
+      } else if (options.openFirstUnitForm && building.units.length === 0) {
+        setFullScreenUnit(null)
+        setExpandedBuildingIds(new Set([building.id]))
+        setNewUnitUsageType(building.type)
+        setNewUnitNumber('')
+        setAddingUnitToBuildingId(building.id)
+        setSheetHeight(HALF_HEIGHT)
+        moveMobileMapToBuilding(building, HALF_HEIGHT)
+        scrollBuildingAfterSheetTransition(building.id)
       } else {
         setFullScreenUnit(null)
         setSheetHeight(SELECTED_BUILDING_PEEK_HEIGHT)
@@ -1411,7 +1423,7 @@ export function MobileMap({
       subtitle: building.address,
       cardId: building.cardId,
       buildingId: building.id,
-    })
+    }, { openFirstUnitForm: building.units.length === 0 })
   // selectMapSearchResult intentionally uses the latest map and sheet state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildings, pendingCreatedBuilding])
@@ -2497,10 +2509,19 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                           const submitUnit = async () => {
                             const number = newUnitNumber.trim() || suggested
                             // 결과를 보고 나서 비운다 — 실패했는데 비우면 적은 호수가 사라진다
-                            if (await onAddUnit(building.id, number, newUnitUsageType)) setNewUnitNumber('')
+                            if (await onAddUnit(building.id, number, newUnitUsageType)) {
+                              setNewUnitNumber('')
+                              if (building.units.length === 0) setAddingUnitToBuildingId(null)
+                            }
                           }
                           return (
                           <div className="mm-unit-add-box">
+                            {building.units.length === 0 && (
+                              <div className="mm-first-unit-prompt">
+                                <strong>{msg('첫 세대를 등록해 주세요')}</strong>
+                                <span>{msg('호수, 세대명 또는 상호명을 입력하세요')}</span>
+                              </div>
+                            )}
                             <div className="mm-unit-add-row">
                               <input autoFocus placeholder={suggested} value={newUnitNumber} onChange={e => setNewUnitNumber(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') void submitUnit() }}

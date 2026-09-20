@@ -32192,6 +32192,9 @@ button:focus-visible {
 
 /* ━━━ 모바일 세대 추가 행 (블랙 톤) ━━━ */
 .mm-unit-add-box { padding: 8px 10px 10px; border-top: 1px dashed var(--line-2, #cbd5e1); }
+.mm-first-unit-prompt { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.mm-first-unit-prompt strong { color: var(--ink-900); font-size: 13px; }
+.mm-first-unit-prompt span { color: var(--gray-500); font-size: 11px; }
 .mm-unit-add-row { display: flex; gap: 6px; align-items: center; }
 .mm-unit-add-options { display: flex; align-items: center; gap: 8px; margin-top: 8px; min-width: 0; }
 .mm-unit-usage-toggle { display: inline-grid; grid-template-columns: repeat(2, minmax(48px, 1fr)); border: 1px solid var(--line, #e2e8f0); border-radius: 7px; overflow: hidden; flex-shrink: 0; }

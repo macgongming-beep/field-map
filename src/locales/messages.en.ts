@@ -126,6 +126,8 @@ export const messagesEn: Record<string, string> = {
   '식당 이름을 입력하세요': 'Enter the restaurant name',
   '주소를 확인했습니다. 식당 이름을 입력하면 등록할 수 있습니다.': 'Address confirmed. Enter the restaurant name to enable registration.',
   '상호명이나 도로명 주소를 입력하세요': 'Enter a business name or street address',
+  '첫 세대를 등록해 주세요': 'Register the first unit',
+  '호수, 세대명 또는 상호명을 입력하세요': 'Enter a unit number, unit name, or business name',
   '새 건물': 'New building',
   '새 건물 핀을 원하는 위치로 옮기세요': 'Move the new building pin to the correct location',
   '핀 위치 조정': 'Adjust pin location',

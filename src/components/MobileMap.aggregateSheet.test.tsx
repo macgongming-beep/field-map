@@ -340,11 +340,12 @@ describe('모바일 지도 하단 시트', () => {
       }],
     })
     const onCreateBuilding = vi.fn(async () => true)
+    const onAddUnit = vi.fn(async () => [9101])
     const other = testBuilding(92, 1, '언동로 218')
     other.address = '경기도 용인시 기흥구 언동로 218'
     other.lat = 37.277
     other.lng = 127.12
-    const props = territoryProps({ ...mapProps(), buildings: [other], onCreateBuilding })
+    const props = territoryProps({ ...mapProps(), buildings: [other], onCreateBuilding, onAddUnit })
     const { container, rerender } = render(
       <MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>,
     )
@@ -380,7 +381,7 @@ describe('모바일 지도 하단 시트', () => {
     expect(onCreateBuilding).toHaveBeenCalledWith(expect.objectContaining({ lat: 37.277, lng: 127.12 }))
     setCenter.mockClear()
     panBy.mockClear()
-    const created = testBuilding(91, 1, '언동로 216')
+    const created = testBuilding(91, 1, '언동로 216', [])
     created.address = '경기도 용인시 기흥구 언동로 216'
     created.lat = 37.276
     created.lng = 127.119
@@ -392,21 +393,32 @@ describe('모바일 지도 하단 시트', () => {
     const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
     await waitFor(() => {
       expect(screen.getByTestId('selected-building-id')).toHaveTextContent('91')
-      expect(sheet.style.height).toBe(`${getMobileMapSelectedPeekHeight(window.innerHeight)}px`)
+      expect(sheet.style.height).toBe(`${window.innerHeight * 0.46}px`)
     })
     const buildingButton = within(scroll).getByRole('button', { name: /언동로 216/ })
     expect(buildingButton).toBeVisible()
     expect(within(scroll).getByRole('button', { name: /언동로 218/ })).toBeVisible()
+    expect(within(scroll).getByText('첫 세대를 등록해 주세요')).toBeVisible()
 
-    fireEvent.click(buildingButton)
-    await waitFor(() => expect(sheet.style.height).toBe(`${window.innerHeight * 0.46}px`))
+    fireEvent.change(within(scroll).getByPlaceholderText('101'), { target: { value: '101호' } })
+    fireEvent.click(within(scroll).getByRole('button', { name: '추가' }))
+    await waitFor(() => expect(onAddUnit).toHaveBeenCalledWith(91, '101호', '주택'))
+
+    const createdWithUnit = testBuilding(91, 1, '언동로 216')
+    createdWithUnit.address = created.address
+    createdWithUnit.lat = created.lat
+    createdWithUnit.lng = created.lng
+    rerender(
+      <MemoryRouter><MobileMap {...({ ...props, buildings: [other, createdWithUnit] } as never)} /></MemoryRouter>,
+    )
     expect(within(scroll).getByText('101호')).toBeVisible()
+    expect(within(scroll).queryByText('첫 세대를 등록해 주세요')).not.toBeInTheDocument()
 
     fireEvent.click(within(scroll).getByRole('button', { name: /언동로 216/ }))
     fireEvent.click(within(scroll).getByRole('button', { name: /언동로 216/ }))
-    expect(setCenter).toHaveBeenCalledTimes(4)
+    expect(setCenter).toHaveBeenCalledTimes(3)
     expect(setCenter.mock.calls.every(([point]) => point.lat === 37.276 && point.lng === 127.119)).toBe(true)
-    expect(panBy).toHaveBeenCalledTimes(4)
+    expect(panBy).toHaveBeenCalledTimes(3)
   })
 
   test('주소 후보가 기존 건물과 일치하면 새 건물 추가 대신 기존 건물을 연다', async () => {
