@@ -34,6 +34,7 @@ vi.mock('./MapCanvas', () => ({
           지도 건물 {building.name}
         </button>
       ))}
+      <output data-testid="selected-building-id">{props.selectedBuildingId}</output>
       <output data-testid="map-bottom-padding">{props.bottomPadding}</output>
     </div>
   ),
@@ -182,6 +183,53 @@ describe('모바일 지도 하단 시트', () => {
 
     expect(screen.getByRole('heading', { name: '건물 추가' })).toBeVisible()
     expect(screen.getByDisplayValue('경기도 용인시 기흥구 언동로 213')).toBeVisible()
+  })
+
+  test('주소로 건물을 추가하면 갱신된 건물로 이동하고 하단 정보를 연다', async () => {
+    Element.prototype.scrollIntoView = vi.fn()
+    searchPlacesAndAddressesForCongregation.mockResolvedValue({
+      ok: true,
+      places: [{
+        name: '언동로 216',
+        address: '경기도 용인시 기흥구 언동로 216',
+        category: '주소',
+        lat: 37.276,
+        lng: 127.119,
+        source: 'address',
+      }],
+    })
+    const onCreateBuilding = vi.fn(async () => true)
+    const props = territoryProps({ ...mapProps(), buildings: [], onCreateBuilding })
+    const { container, rerender } = render(
+      <MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
+      target: { value: '언동로 216' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '네이버에서 주소 찾기' }))
+    fireEvent.click(await screen.findByRole('button', { name: /언동로 216/ }))
+    fireEvent.click(screen.getByRole('button', { name: '이 주소에 건물 추가' }))
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: '추가' }))
+
+    await waitFor(() => expect(onCreateBuilding).toHaveBeenCalledTimes(1))
+    const created = testBuilding(91, 1, '언동로 216')
+    created.address = '경기도 용인시 기흥구 언동로 216'
+    created.lat = 37.276
+    created.lng = 127.119
+    rerender(
+      <MemoryRouter><MobileMap {...({ ...props, buildings: [created] } as never)} /></MemoryRouter>,
+    )
+
+    const sheet = container.querySelector('.mobile-bottom-sheet') as HTMLElement
+    const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-building-id')).toHaveTextContent('91')
+      expect(Number.parseFloat(sheet.style.height)).toBeGreaterThan(65)
+    })
+    expect(within(scroll).getByText('언동로 216')).toBeVisible()
   })
 
   test('주소 후보가 기존 건물과 일치하면 새 건물 추가 대신 기존 건물을 연다', async () => {

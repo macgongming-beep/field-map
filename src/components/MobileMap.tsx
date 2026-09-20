@@ -492,6 +492,10 @@ export function MobileMap({
   const [addAddress, setAddAddress] = useState('')
   const [addType, setAddType] = useState<Building['type']>('주택')
   const [addCardId, setAddCardId] = useState(cards[0]?.id ?? 1)
+  const [pendingCreatedBuilding, setPendingCreatedBuilding] = useState<{
+    cardId: number
+    address: string
+  } | null>(null)
   const [geocoding, setGeocoding] = useState(false)
   const [addingBuildingMode, setAddingBuildingMode] = useState(false)
   const [showMapActionMenu, setShowMapActionMenu] = useState(false)
@@ -1121,7 +1125,10 @@ export function MobileMap({
         lat: addLat,
         lng: addLng,
       })
-      if (created) closeAddModal()
+      if (created) {
+        setPendingCreatedBuilding({ cardId: addCardId, address: addAddress.trim() })
+        closeAddModal()
+      }
     } finally {
       savingBuildingRef.current = false
     }
@@ -1265,6 +1272,28 @@ export function MobileMap({
       }
     }, 80)
   }
+
+  useEffect(() => {
+    if (!pendingCreatedBuilding) return
+    const normalizedAddress = pendingCreatedBuilding.address.replace(/\s+/g, '').toLowerCase()
+    const building = buildings.find((item) =>
+      item.cardId === pendingCreatedBuilding.cardId
+      && item.address.replace(/\s+/g, '').toLowerCase() === normalizedAddress
+    )
+    if (!building) return
+
+    setPendingCreatedBuilding(null)
+    selectMapSearchResult({
+      key: `building:${building.id}`,
+      kind: 'building',
+      title: building.name || building.address,
+      subtitle: building.address,
+      cardId: building.cardId,
+      buildingId: building.id,
+    })
+  // selectMapSearchResult intentionally uses the latest map and sheet state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildings, pendingCreatedBuilding])
 
   const searchAddressCandidates = async () => {
     const query = cardSearch.trim()
