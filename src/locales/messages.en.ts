@@ -110,6 +110,8 @@ export const messagesEn: Record<string, string> = {
   '식당 등록': 'Register restaurant',
   '식당 이름': 'Restaurant name',
   '식당 이름 또는 주소': 'Restaurant name or address',
+  '식당 이름을 입력하세요': 'Enter the restaurant name',
+  '주소를 확인했습니다. 식당 이름을 입력하면 등록할 수 있습니다.': 'Address confirmed. Enter the restaurant name to enable registration.',
   '상호명이나 도로명 주소를 입력하세요': 'Enter a business name or street address',
   '새 건물': 'New building',
   '기존 건물': 'Existing building',

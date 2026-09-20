@@ -20,8 +20,10 @@
 .restaurant-registration-submit:disabled { opacity: .45; }
 .restaurant-registration p { margin: 0; color: var(--status-danger); font-size: 13px; }
 .restaurant-registration-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.restaurant-registration-search-row.is-name-only { grid-template-columns: minmax(0, 1fr); }
 .restaurant-registration-search-row > button { min-width: 88px; border: 1px solid var(--ink); border-radius: 8px; padding: 0 12px; background: var(--ink); color: var(--surface); font: inherit; font-size: 13px; font-weight: 600; }
 .restaurant-registration-search-row > button:disabled { opacity: .45; }
+.restaurant-registration p.restaurant-registration-name-hint { margin-top: -10px; color: var(--status-info); font-size: 12px; line-height: 1.45; }
 .restaurant-registration-place-results { display: grid; grid-auto-rows: max-content; align-content: start; gap: 8px; height: min(300px, calc(38svh / var(--app-zoom, 1))); min-height: min(180px, calc(28svh / var(--app-zoom, 1))); overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
 .restaurant-registration-place-results > button { display: grid; grid-template-rows: auto auto auto; align-content: start; gap: 6px; width: 100%; height: auto; min-height: 94px; border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px; background: var(--surface); color: var(--ink); text-align: left; overflow: visible; }
 .restaurant-registration-place-results > button:disabled { opacity: .62; }

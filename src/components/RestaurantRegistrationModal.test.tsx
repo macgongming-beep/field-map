@@ -148,7 +148,13 @@ describe('RestaurantRegistrationModal', () => {
     fireEvent.click(await screen.findByRole('button', { name: /언동로 213/ }))
 
     expect((screen.getByLabelText('식당 이름') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('식당 이름') as HTMLInputElement).placeholder).toBe('식당 이름을 입력하세요')
+    expect(screen.getByText('주소를 확인했습니다. 식당 이름을 입력하면 등록할 수 있습니다.')).toBeTruthy()
     expect(screen.getByText('경기도 용인시 기흥구 언동로 213')).toBeTruthy()
     expect(screen.getByText('새 건물로 등록합니다.')).toBeTruthy()
+    expect((screen.getByRole('button', { name: '등록' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('식당 이름'), { target: { value: '테스트 식당' } })
+    expect(screen.queryByText('주소를 확인했습니다. 식당 이름을 입력하면 등록할 수 있습니다.')).toBeNull()
+    expect((screen.getByRole('button', { name: '등록' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })

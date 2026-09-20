@@ -112,7 +112,8 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
           <button type="button" className="v2-picker-close" disabled={saving} onClick={onClose} aria-label={msg('닫기')}>×</button>
         </div>
         <fieldset disabled={saving}>
-          <label>{msg(verifiedAddress ? '식당 이름' : '식당 이름 또는 주소')}<span className="restaurant-registration-search-row"><input aria-label={msg('식당 이름')} autoFocus required maxLength={200} placeholder={msg('상호명이나 도로명 주소를 입력하세요')} value={name} onChange={e => { setName(e.target.value); setPlaceResults(null) }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void runPlaceSearch(name) } }} /><button type="button" onClick={() => void runPlaceSearch(name)} disabled={!name.trim() || searchingPlace}>{searchingPlace ? msg('검색 중...') : msg('검색')}</button></span></label>
+          <label>{msg(verifiedAddress ? '식당 이름' : '식당 이름 또는 주소')}{verifiedAddress ? ' *' : ''}<span className={`restaurant-registration-search-row${verifiedAddress ? ' is-name-only' : ''}`}><input aria-label={msg('식당 이름')} autoFocus required maxLength={200} placeholder={msg(verifiedAddress ? '식당 이름을 입력하세요' : '상호명이나 도로명 주소를 입력하세요')} value={name} onChange={e => { setName(e.target.value); setPlaceResults(null) }} onKeyDown={e => { if (!verifiedAddress && e.key === 'Enter') { e.preventDefault(); void runPlaceSearch(name) } }} />{!verifiedAddress && <button type="button" onClick={() => void runPlaceSearch(name)} disabled={!name.trim() || searchingPlace}>{searchingPlace ? msg('검색 중...') : msg('검색')}</button>}</span></label>
+          {verifiedAddress && !name.trim() && <p className="restaurant-registration-name-hint" aria-live="polite">{msg('주소를 확인했습니다. 식당 이름을 입력하면 등록할 수 있습니다.')}</p>}
           {placeResults && (
             <div className="restaurant-registration-place-results" aria-label={msg('장소 검색 결과')}>
               {placeResults.length === 0 ? <p>{msg('검색 결과가 없습니다.')}</p> : placeResults.map((place) => (
