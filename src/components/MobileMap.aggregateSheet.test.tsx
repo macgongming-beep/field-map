@@ -10,9 +10,11 @@ import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight } from '../uti
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
+const geocodeQuery = vi.hoisted(() => vi.fn())
 
 vi.mock('../lib/confirm', () => ({ confirmDialog }))
 vi.mock('../lib/placeSearch', () => ({ searchPlacesAndAddressesForCongregation }))
+vi.mock('../lib/naverGeocode', () => ({ geocodeQuery }))
 vi.mock('./OverlayPortal', () => ({
   OverlayPortal: ({ children }: { children: ReactNode }) => children,
 }))
@@ -22,6 +24,8 @@ vi.mock('./MapCanvas', () => ({
     <div>
       <button type="button" onClick={() => props.onZoomChange?.(14)}>zoom middle</button>
       <button type="button" onClick={() => props.onZoomChange?.(16)}>zoom close</button>
+      <button type="button" onClick={() => props.onToggleAddingBuilding?.(true)}>start add building</button>
+      <button type="button" onClick={() => props.onMapClick?.(37.276, 127.119)}>tap map add</button>
       {(props.aggregateMarkers ?? []).map((marker: { id: string; label: string }) => (
         <button key={marker.id} type="button" onClick={() => props.onSelectAggregate(marker.id)}>
           지도 집계 {marker.label}
@@ -51,6 +55,7 @@ vi.mock('./MapCanvas', () => ({
 describe('모바일 지도 하단 시트', () => {
   beforeEach(() => {
     searchPlacesAndAddressesForCongregation.mockReset()
+    geocodeQuery.mockReset()
     delete (window as any).__mobileMapInstance
     delete (window as any).naver
   })
@@ -197,6 +202,73 @@ describe('모바일 지도 하단 시트', () => {
 
     expect(screen.getByRole('heading', { name: '건물 추가' })).toBeVisible()
     expect(screen.getByDisplayValue('경기도 용인시 기흥구 언동로 213')).toBeVisible()
+  })
+
+  test('지도에서 건물 가장자리를 눌러도 가까운 주소 대표 좌표로 새 핀을 보정한다', async () => {
+    geocodeQuery.mockResolvedValue({ lat: 37.2764, lng: 127.1194 })
+    ;(window as any).naver = {
+      maps: {
+        LatLng: class LatLng { constructor(public lat: number, public lng: number) {} },
+        Service: {
+          Status: { OK: 'OK' },
+          OrderType: { ADDR: 'addr', ROAD_ADDR: 'roadaddr' },
+          reverseGeocode: (_options: unknown, callback: (status: string, response: unknown) => void) => callback('OK', {
+            v2: {
+              results: [{
+                name: 'roadaddr',
+                region: {
+                  area1: { name: '경기도' },
+                  area2: { name: '용인시 기흥구' },
+                  area3: { name: '' },
+                },
+                land: { name: '언동로', number1: '216' },
+              }],
+            },
+          }),
+        },
+      },
+    }
+
+    render(<MemoryRouter><MobileMap {...(mapProps() as never)} /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: 'start add building' }))
+    fireEvent.click(screen.getByRole('button', { name: 'tap map add' }))
+
+    expect(screen.getByRole('heading', { name: '건물 추가' })).toBeVisible()
+    await waitFor(() => expect(screen.getByText('37.27640, 127.11940')).toBeVisible())
+    expect(geocodeQuery).toHaveBeenCalledWith('경기도 용인시 기흥구 언동로 216')
+  })
+
+  test('주소 대표 좌표가 멀면 새 핀을 원래 누른 위치에 유지한다', async () => {
+    geocodeQuery.mockResolvedValue({ lat: 37.3, lng: 127.2 })
+    ;(window as any).naver = {
+      maps: {
+        LatLng: class LatLng { constructor(public lat: number, public lng: number) {} },
+        Service: {
+          Status: { OK: 'OK' },
+          OrderType: { ADDR: 'addr', ROAD_ADDR: 'roadaddr' },
+          reverseGeocode: (_options: unknown, callback: (status: string, response: unknown) => void) => callback('OK', {
+            v2: {
+              results: [{
+                name: 'roadaddr',
+                region: {
+                  area1: { name: '경기도' },
+                  area2: { name: '용인시 기흥구' },
+                  area3: { name: '' },
+                },
+                land: { name: '언동로', number1: '216' },
+              }],
+            },
+          }),
+        },
+      },
+    }
+
+    render(<MemoryRouter><MobileMap {...(mapProps() as never)} /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: 'start add building' }))
+    fireEvent.click(screen.getByRole('button', { name: 'tap map add' }))
+
+    await waitFor(() => expect(geocodeQuery).toHaveBeenCalled())
+    expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
   })
 
   test('주소로 건물을 추가하면 갱신된 건물로 이동하고 하단 정보를 연다', async () => {

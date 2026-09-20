@@ -31,11 +31,26 @@ import { getCurrentRestaurantAssignmentsForUnit } from '../utils/restaurantAssig
 import { buildingHasUsage, effectiveUnitUsage, scopeBuildingToUsage, unitsForUsage } from '../utils/unitUsage'
 import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight, getMobileMapSelectedSheetHeight } from '../utils/mobileMapViewport'
 import { searchPlacesAndAddressesForCongregation } from '../lib/placeSearch'
+import { geocodeQuery } from '../lib/naverGeocode'
 import { classifyRestaurantPlaces, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
 type BuildingTypeFilter = '전체' | Building['type']
+
+const BUILDING_PIN_AUTO_ADJUST_MAX_METERS = 200
+
+function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const earthRadius = 6_371_000
+  const toRadians = (value: number) => value * Math.PI / 180
+  const deltaLat = toRadians(bLat - aLat)
+  const deltaLng = toRadians(bLng - aLng)
+  const lat1 = toRadians(aLat)
+  const lat2 = toRadians(bLat)
+  const h = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2
+  return earthRadius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
+}
 
 function shortenAddress(addr: string): string {
   const { province, provinceShort, defaultCity } = getCongregationProfile()
@@ -486,6 +501,8 @@ export function MobileMap({
   const addingGuard = useRef(false)
   const savingBuildingRef = useRef(false)
   const addPinSnapshotRef = useRef<{ lat: number; lng: number } | null>(null)
+  const addLocationLookupRef = useRef(0)
+  const addPinManuallyAdjustedRef = useRef(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [adjustingNewBuildingPin, setAdjustingNewBuildingPin] = useState(false)
   const [addCardManuallySelected, setAddCardManuallySelected] = useState(false)
@@ -1075,6 +1092,8 @@ export function MobileMap({
   }
 
   const closeAddModal = () => {
+    addLocationLookupRef.current += 1
+    addPinManuallyAdjustedRef.current = false
     setShowAddModal(false)
     setAdjustingNewBuildingPin(false)
     setAddCardManuallySelected(false)
@@ -1089,6 +1108,9 @@ export function MobileMap({
   const handleAddBuildingAt = (lat: number, lng: number) => {
     if (addingGuard.current) return
     addingGuard.current = true
+    const locationLookupId = addLocationLookupRef.current + 1
+    addLocationLookupRef.current = locationLookupId
+    addPinManuallyAdjustedRef.current = false
 
     setExpandedBuildingIds(new Set())
     setAddLat(lat); setAddLng(lng); setAddName(t(language, 'map.addBuilding')); setAddAddress(''); setAddType('주택')
@@ -1096,14 +1118,13 @@ export function MobileMap({
     const matched = findCardForCoordinates(lat, lng, cardBoundaries)
     setAddCardId(matched ?? selectedCardId ?? 0)
 
-    // 역지오코딩으로 주소/건물명만 자동 입력 (좌표는 탭 위치 그대로 유지)
+    // 먼저 탭 위치로 주소를 찾고, 같은 주소의 대표 좌표가 가까우면 핀을 건물 쪽으로 보정한다.
     const naver = (window as any).naver
     if (naver?.maps?.Service) {
       setGeocoding(true)
       naver.maps.Service.reverseGeocode(
         { coords: new naver.maps.LatLng(lat, lng), orders: [naver.maps.Service.OrderType.ADDR, naver.maps.Service.OrderType.ROAD_ADDR].join(',') },
         (status: any, response: any) => {
-          setGeocoding(false)
           if (status === naver.maps.Service.Status.OK) {
             const r = response.v2?.results?.find((x: any) => x.name === 'roadaddr') ?? response.v2?.results?.[0]
             if (r?.region) {
@@ -1112,7 +1133,26 @@ export function MobileMap({
                 r.land?.name ?? null,
                 r.land?.number1 ? r.land.number1 + (r.land?.number2 ? `-${r.land.number2}` : '') : null,
               ].filter(Boolean)
-              if (parts.length) setAddAddress(parts.join(' '))
+              const resolvedAddress = parts.join(' ')
+              if (resolvedAddress) {
+                setAddAddress(resolvedAddress)
+                void geocodeQuery(resolvedAddress).then((adjusted) => {
+                  if (
+                    adjusted
+                    && locationLookupId === addLocationLookupRef.current
+                    && !addPinManuallyAdjustedRef.current
+                    && distanceMeters(lat, lng, adjusted.lat, adjusted.lng) <= BUILDING_PIN_AUTO_ADJUST_MAX_METERS
+                  ) {
+                    setAddLat(adjusted.lat)
+                    setAddLng(adjusted.lng)
+                    setAddCardId(findCardForCoordinates(adjusted.lat, adjusted.lng, cardBoundaries) ?? selectedCardId ?? 0)
+                  }
+                }).finally(() => {
+                  if (locationLookupId === addLocationLookupRef.current) setGeocoding(false)
+                })
+              } else {
+                setGeocoding(false)
+              }
 
               const rawName = r.land?.addition0?.value || r.land?.addition1?.value
               const buildingName = rawName && !/^\d+$/.test(rawName) ? rawName : null
@@ -1122,8 +1162,10 @@ export function MobileMap({
                 const landParts = [r.land?.name, r.land?.number1 ? r.land.number1 + (r.land?.number2 ? `-${r.land.number2}` : '') : null].filter(Boolean)
                 if (landParts.length) setAddName(landParts.join(' '))
               }
+              return
             }
           }
+          setGeocoding(false)
         },
       )
     }
@@ -1164,6 +1206,7 @@ export function MobileMap({
 
   const startNewBuildingPinAdjustment = () => {
     if (addLat == null || addLng == null) return
+    addPinManuallyAdjustedRef.current = true
     addPinSnapshotRef.current = { lat: addLat, lng: addLng }
     setShowAddModal(false)
     setAdjustingNewBuildingPin(true)
@@ -1398,6 +1441,8 @@ export function MobileMap({
   }
 
   const openAddressCandidateAdd = (candidate: ClassifiedRestaurantPlace) => {
+    addLocationLookupRef.current += 1
+    addPinManuallyAdjustedRef.current = false
     const matchedCardId = findCardForCoordinates(candidate.lat, candidate.lng, cardBoundaries)
     setAddLat(candidate.lat)
     setAddLng(candidate.lng)
@@ -1842,6 +1887,7 @@ export function MobileMap({
               virtualPinLng={virtualPinLng}
               virtualPinLabel={pinLabelParam}
               onMovePreviewPin={(lat, lng) => {
+                addPinManuallyAdjustedRef.current = true
                 setAddLat(lat)
                 setAddLng(lng)
               }}
