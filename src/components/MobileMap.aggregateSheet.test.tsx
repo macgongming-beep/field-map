@@ -130,10 +130,14 @@ describe('모바일 지도 하단 시트', () => {
   })
 
   test('관리자도 통합 검색을 열고 건물 문맥이 있는 호수만 찾는다', async () => {
-    render(<MemoryRouter><MobileMap {...(mapProps() as never)} /></MemoryRouter>)
+    const { container } = render(<MemoryRouter><MobileMap {...(mapProps() as never)} /></MemoryRouter>)
+
+    const mapContainer = container.querySelector('.mobile-map-container') as HTMLElement
+    expect(mapContainer.style.getPropertyValue('--map-toolbar-search-push')).toBe('0px')
 
     fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
     const input = screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색')
+    expect(mapContainer.style.getPropertyValue('--map-toolbar-search-push')).toBe('68px')
 
     fireEvent.change(input, { target: { value: '101호' } })
     expect(screen.getByText('호수는 건물명이나 주소와 함께 입력하세요.')).toBeVisible()
@@ -142,6 +146,9 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.change(input, { target: { value: '영덕빌라 101' } })
     expect(await screen.findByText('영덕빌라 · 101호')).toBeVisible()
     expect(screen.getByText('세대')).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    expect(mapContainer.style.getPropertyValue('--map-toolbar-search-push')).toBe('0px')
   })
 
   test('모바일 건물 수정 시트에서 건물 유형을 바꾼다', async () => {

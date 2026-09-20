@@ -1510,7 +1510,13 @@ export function MobileMap({
           )}
 
           {/* 지도 */}
-          <div className="mobile-map-container" style={{ position: 'relative' }}>
+          <div
+            className="mobile-map-container"
+            style={{
+              position: 'relative',
+              '--map-toolbar-search-push': showCardFinder ? '68px' : '0px',
+            } as React.CSSProperties}
+          >
             {virtualGeocoding && (
               <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 50, background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 20, pointerEvents: 'none' }}>
                 {t(language, 'map.searchingAddress')}

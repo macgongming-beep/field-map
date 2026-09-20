@@ -1848,12 +1848,13 @@ function NaverMapCanvas({
       {/* Map Toolbar Overlay */}
       {!compact && <div className="map-toolbar-overlay" style={{
         position: 'absolute',
-        top: 'calc(100px - var(--map-chips-push, 0px))',
+        top: 'calc(100px - var(--map-chips-push, 0px) + var(--map-toolbar-search-push, 0px))',
         right: '12px',
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
-        zIndex: isMobile ? 40 : 1000
+        zIndex: isMobile ? 40 : 1000,
+        transition: 'top 180ms ease-out'
       }}>
         <button className="toolbar-btn" onClick={toggleSatellite} title="위성 지도로 변환" type="button" aria-label="위성 지도 전환">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
@@ -1940,7 +1941,7 @@ function NaverMapCanvas({
         }
         @media (max-width: 768px) {
           .map-toolbar-overlay {
-            top: calc(112px - var(--map-chips-push, 0px)) !important;
+            top: calc(112px - var(--map-chips-push, 0px) + var(--map-toolbar-search-push, 0px)) !important;
             right: 12px !important;
             z-index: 40 !important;
           }
