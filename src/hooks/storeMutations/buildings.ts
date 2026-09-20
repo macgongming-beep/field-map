@@ -3,7 +3,7 @@ import type { CsvBuildingImport } from '../../utils/csvBuildingImport'
 import { isValidMapCoordinate } from '../../utils/mapUtils'
 import { buildImportPayload } from '../../utils/importBuildingPayload'
 import { explainDbError } from '../../utils/dbError'
-import { getAuthToken } from '../../lib/authToken'
+import { getAuthToken, getStoredAuthSession } from '../../lib/authToken'
 import { promptDialog } from '../../lib/confirm'
 import type { MergeResult } from '../../utils/duplicateBuildingMerge'
 import { ensureAffectedRows, supabase, showToast, reportMutationError } from './shared'
@@ -24,6 +24,17 @@ export function makeBuildingMutations(deps: {
   removeUnit: (unitId: number) => void
 }) {
   const { fetchAll, buildings, cards, appendUnits, removeUnit } = deps
+
+  const canDeleteWithoutReasonPrompt = () => {
+    const stored = getStoredAuthSession()
+    if (!stored) return false
+    try {
+      const role = (JSON.parse(stored.raw) as { role?: string } | null)?.role
+      return role === 'leader' || role === 'admin' || role === 'developer'
+    } catch {
+      return false
+    }
+  }
 
   /** 성공하면 true, 실패하면 false. 이 계약이 화면까지 그대로 간다. */
   const createBuilding = async (input: {
@@ -240,12 +251,14 @@ export function makeBuildingMutations(deps: {
       showToast(msg('다시 로그인해 주세요.'), 'error')
       return null
     }
-    const reason = suppliedReason?.trim() || await promptDialog({
-      title: msg(targetType === 'building' ? '건물 삭제' : '세대 삭제'),
-      message: msg('삭제하거나 요청하는 이유를 입력해 주세요.'),
-      placeholder: msg('예: 중복 등록, 철거, 잘못 등록함'),
-      confirmLabel: msg('계속'),
-    })
+    const reason = suppliedReason?.trim() || (canDeleteWithoutReasonPrompt()
+      ? msg('관리자 직접 삭제')
+      : await promptDialog({
+        title: msg(targetType === 'building' ? '건물 삭제' : '세대 삭제'),
+        message: msg('삭제하거나 요청하는 이유를 입력해 주세요.'),
+        placeholder: msg('예: 중복 등록, 철거, 잘못 등록함'),
+        confirmLabel: msg('계속'),
+      }))
     if (!reason) return null
     const result = await supabase.rpc('delete_place_or_request_tx', {
       p_token: token,
@@ -293,12 +306,14 @@ export function makeBuildingMutations(deps: {
       showToast(msg('삭제할 건물이 없습니다.'), 'info')
       return
     }
-    const reason = (await promptDialog({
-      title: msg('건물 일괄 삭제'),
-      message: msg('{count}개 건물을 삭제하거나 삭제 요청으로 접수합니다. 이유를 입력해 주세요.', { count: ids.length }),
-      placeholder: msg('예: 중복 등록, 구역 밖 자료 정리'),
-      confirmLabel: msg('계속'),
-    }))?.trim()
+    const reason = canDeleteWithoutReasonPrompt()
+      ? msg('관리자 직접 일괄 삭제')
+      : (await promptDialog({
+        title: msg('건물 일괄 삭제'),
+        message: msg('{count}개 건물을 삭제하거나 삭제 요청으로 접수합니다. 이유를 입력해 주세요.', { count: ids.length }),
+        placeholder: msg('예: 중복 등록, 구역 밖 자료 정리'),
+        confirmLabel: msg('계속'),
+      }))?.trim()
     if (!reason) return
     const results = await Promise.all(ids.map((id) => deletePlace('building', id, reason)))
     const deleted = results.filter((result) => result?.action === 'deleted').length

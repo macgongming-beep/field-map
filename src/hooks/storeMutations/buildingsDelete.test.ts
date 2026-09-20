@@ -5,9 +5,13 @@ const mocks = vi.hoisted(() => ({
   toast: vi.fn(),
   error: vi.fn(),
   prompt: vi.fn(),
+  role: 'user',
 }))
 
-vi.mock('../../lib/authToken', () => ({ getAuthToken: () => '00000000-0000-0000-0000-000000000008' }))
+vi.mock('../../lib/authToken', () => ({
+  getAuthToken: () => '00000000-0000-0000-0000-000000000008',
+  getStoredAuthSession: () => ({ raw: JSON.stringify({ role: mocks.role }), persistent: true }),
+}))
 vi.mock('../../lib/confirm', () => ({ promptDialog: mocks.prompt }))
 vi.mock('./shared', () => ({
   supabase: { rpc: mocks.rpc },
@@ -21,6 +25,7 @@ beforeEach(() => {
   mocks.toast.mockReset()
   mocks.error.mockReset()
   mocks.prompt.mockReset().mockResolvedValue('테스트 삭제 사유')
+  mocks.role = 'user'
 })
 
 async function mutations() {
@@ -75,5 +80,26 @@ describe('건물·세대 안전 삭제', () => {
     await store.deleteBuildings([1, 2, 3])
     expect(mocks.prompt).toHaveBeenCalledTimes(1)
     expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+
+  it('관리자는 화면 확인 뒤 사유를 다시 묻지 않고 자동 감사 사유를 남긴다', async () => {
+    mocks.role = 'admin'
+    mocks.rpc.mockResolvedValue({ data: { ok: true, action: 'deleted' }, error: null })
+    const store = await mutations()
+    await store.deleteUnitFromBuilding(3, 7)
+    expect(mocks.prompt).not.toHaveBeenCalled()
+    expect(mocks.rpc).toHaveBeenCalledWith('delete_place_or_request_tx', expect.objectContaining({
+      p_target_type: 'unit', p_target_id: 7, p_note: '관리자 직접 삭제',
+    }))
+  })
+
+  it('관리자 일괄 삭제도 사유를 다시 묻지 않고 한 번에 처리한다', async () => {
+    mocks.role = 'leader'
+    mocks.rpc.mockResolvedValue({ data: { ok: true, action: 'deleted' }, error: null })
+    const store = await mutations()
+    await store.deleteBuildings([1, 2])
+    expect(mocks.prompt).not.toHaveBeenCalled()
+    expect(mocks.rpc).toHaveBeenCalledTimes(2)
+    for (const [, payload] of mocks.rpc.mock.calls) expect(payload.p_note).toBe('관리자 직접 일괄 삭제')
   })
 })

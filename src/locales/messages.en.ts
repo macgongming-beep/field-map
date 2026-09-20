@@ -857,6 +857,8 @@ export const messagesEn: Record<string, string> = {
   "식당 세대와 빈 건물을 삭제했습니다": "Deleted the restaurant unit and the empty building.",
   "식당 세대를 삭제했습니다": "Deleted the restaurant unit.",
   "식당 세대를 찾을 수 없습니다.": "Could not find the restaurant unit.",
+  "관리자 직접 삭제": "Direct deletion by manager",
+  "관리자 직접 일괄 삭제": "Direct bulk deletion by manager",
   "장소와 연결 자료를 삭제했습니다": "The place and its linked data were deleted.",
   "자료 수정 요청을 보내지 못했습니다.": "Could not send the data correction request.",
   "관리자에게 자료 수정 요청을 보냈습니다": "The data correction request was sent to an administrator.",
