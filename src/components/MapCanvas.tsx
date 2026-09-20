@@ -1866,7 +1866,7 @@ function NaverMapCanvas({
         </button>
         {!hideActionButton && (
           <button 
-            className={`toolbar-btn${addingBuilding || editingBuildingLocation ? ' active' : ''}`} 
+            className={`toolbar-btn map-action-trigger${addingBuilding || editingBuildingLocation ? ' active' : ''}`}
             onClick={() => {
               if (onOpenActionMenu) onOpenActionMenu()
               else onToggleAddingBuilding?.(!addingBuilding)

@@ -25,6 +25,8 @@ vi.mock('./MapCanvas', () => ({
       <button type="button" onClick={() => props.onZoomChange?.(14)}>zoom middle</button>
       <button type="button" onClick={() => props.onZoomChange?.(16)}>zoom close</button>
       <button type="button" onClick={() => props.onToggleAddingBuilding?.(true)}>start add building</button>
+      <button type="button" aria-label="map actions" className="map-action-trigger" onClick={() => props.onOpenActionMenu?.()}>map actions</button>
+      <button type="button">map layer</button>
       <button type="button" onClick={() => props.onMapClick?.(37.276, 127.119)}>tap map add</button>
       {(props.aggregateMarkers ?? []).map((marker: { id: string; label: string }) => (
         <button key={marker.id} type="button" onClick={() => props.onSelectAggregate(marker.id)}>
@@ -173,6 +175,29 @@ describe('모바일 지도 하단 시트', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
     expect(mapContainer.style.getPropertyValue('--map-toolbar-search-push')).toBe('0px')
+
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.click(screen.getByRole('button', { name: /영덕빌라 · 101호/ }))
+    const sheet = container.querySelector('.mobile-bottom-sheet') as HTMLElement
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-building-id')).toHaveTextContent('1')
+      expect(sheet.style.height).toBe(`${getMobileMapSelectedPeekHeight(window.innerHeight)}px`)
+    })
+    expect(container.querySelector('.bld-unit-detail')).not.toBeInTheDocument()
+  })
+
+  test('지도 작업 메뉴는 검색이나 다른 지도 버튼을 누르면 닫힌다', () => {
+    render(<MemoryRouter><MobileMap {...(mapProps() as never)} /></MemoryRouter>)
+
+    fireEvent.click(screen.getByRole('button', { name: 'map actions' }))
+    expect(screen.getByRole('button', { name: '건물 추가' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    expect(screen.queryByRole('button', { name: '건물 추가' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'map actions' }))
+    expect(screen.getByRole('button', { name: '건물 추가' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'map layer' }))
+    expect(screen.queryByRole('button', { name: '건물 추가' })).not.toBeInTheDocument()
   })
 
   test('등록 자료에 없는 주소는 네이버 후보를 확인한 뒤 건물 추가로 이어진다', async () => {
@@ -197,7 +222,11 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.click(screen.getByRole('button', { name: '검색' }))
 
     expect(await screen.findByText('경기도 용인시 기흥구 언동로 213')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: '언동로 213 추가' }))
+    const results = document.querySelector('.mobile-map-card-results') as HTMLElement
+    const candidateButton = within(results).getByRole('button', { name: /언동로 213/ })
+    fireEvent.click(candidateButton)
+    expect(candidateButton.closest('.mobile-map-search-result-row')).toHaveClass('selected')
+    fireEvent.click(within(results).getByRole('button', { name: '추가' }))
 
     const sheet = screen.getByRole('heading', { name: '장소 등록' }).closest('.mm-building-edit-sheet') as HTMLElement
     expect(screen.getByDisplayValue('경기도 용인시 기흥구 언동로 213')).toBeVisible()
@@ -231,7 +260,11 @@ describe('모바일 지도 하단 시트', () => {
       target: { value: '카멜리아힐' },
     })
     fireEvent.click(screen.getByRole('button', { name: '검색' }))
-    fireEvent.click(await screen.findByRole('button', { name: '카멜리아힐 추가' }))
+    const results = document.querySelector('.mobile-map-card-results') as HTMLElement
+    const candidateButton = await within(results).findByRole('button', { name: /카멜리아힐/ })
+    fireEvent.click(candidateButton)
+    expect(candidateButton.closest('.mobile-map-search-result-row')).toHaveClass('selected')
+    fireEvent.click(within(results).getByRole('button', { name: '추가' }))
 
     const sheet = screen.getByRole('heading', { name: '장소 등록' }).closest('.mm-building-edit-sheet') as HTMLElement
     expect(within(sheet).getByRole('button', { name: '상가' })).toHaveClass('active')
@@ -290,7 +323,10 @@ describe('모바일 지도 하단 시트', () => {
       target: { value: '카멜리아힐' },
     })
     fireEvent.click(screen.getByRole('button', { name: '검색' }))
-    fireEvent.click(await screen.findByRole('button', { name: '카멜리아힐 추가' }))
+    const results = document.querySelector('.mobile-map-card-results') as HTMLElement
+    const candidateButton = await within(results).findByRole('button', { name: /카멜리아힐/ })
+    fireEvent.click(candidateButton)
+    fireEvent.click(within(results).getByRole('button', { name: '추가' }))
 
     const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
     const input = await within(scroll).findByDisplayValue('카멜리아힐')
@@ -451,7 +487,9 @@ describe('모바일 지도 하단 시트', () => {
       target: { value: '언동로 216' },
     })
     fireEvent.click(screen.getByRole('button', { name: '검색' }))
-    fireEvent.click(await screen.findByRole('button', { name: '언동로 216 추가' }))
+    const results = document.querySelector('.mobile-map-card-results') as HTMLElement
+    fireEvent.click(await within(results).findByRole('button', { name: /언동로 216/ }))
+    fireEvent.click(within(results).getByRole('button', { name: '추가' }))
     expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
 
     fireEvent.click(screen.getByRole('button', { name: /핀 위치 조정/ }))

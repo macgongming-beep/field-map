@@ -241,6 +241,7 @@ export function MobileMap({
   const [cardSearch, setCardSearch] = useState('')
   const [addressSearchResults, setAddressSearchResults] = useState<ClassifiedRestaurantPlace[]>([])
   const [addressSearching, setAddressSearching] = useState(false)
+  const [selectedAddressCandidate, setSelectedAddressCandidate] = useState<ClassifiedRestaurantPlace | null>(null)
   const searchPanelRef = useRef<HTMLDivElement | null>(null)
   const [mapToolbarSearchPush, setMapToolbarSearchPush] = useState(0)
 
@@ -263,7 +264,7 @@ export function MobileMap({
     const observer = new ResizeObserver(update)
     observer.observe(panel)
     return () => observer.disconnect()
-  }, [showCardFinder, cardSearch, addressSearching, addressSearchResults])
+  }, [showCardFinder, cardSearch, addressSearching, addressSearchResults, selectedAddressCandidate])
 
   // 필터
   const [strategyFilter] = useState<StrategyFilter>('전체')
@@ -1390,6 +1391,7 @@ export function MobileMap({
     setShowCardFinder(false)
     setCardSearch('')
     setAddressSearchResults([])
+    setSelectedAddressCandidate(null)
 
     if (result.kind === 'informal' && result.informalId != null) {
       const next = new URLSearchParams()
@@ -1441,12 +1443,9 @@ export function MobileMap({
         return next
       })
 
-      const unit = result.unitId == null
-        ? null
-        : building.units.find((item) => item.id === result.unitId) ?? null
-      if (unit) {
-        showUnitDetail(unit, building, visitHistoriesByUnitId.get(unit.id) ?? [])
-      } else if (options.openUnitForm && (!options.openUnitForm.first || building.units.length === 0)) {
+      // 검색에서 세대를 골라도 전체 상세를 덮어 띄우지 않는다.
+      // 지도와 작은 건물 미리보기를 먼저 보여 주고, 상세는 사용자가 하단에서 연다.
+      if (options.openUnitForm && (!options.openUnitForm.first || building.units.length === 0)) {
         setFullScreenUnit(null)
         setExpandedBuildingIds(new Set([building.id]))
         setNewUnitUsageType(options.openUnitForm.type)
@@ -1513,6 +1512,7 @@ export function MobileMap({
     const query = cardSearch.trim()
     if (!query || addressSearching) return
     setAddressSearching(true)
+    setSelectedAddressCandidate(null)
     try {
       const result = await searchPlacesAndAddressesForCongregation(query)
       if (!result.ok) {
@@ -1526,7 +1526,10 @@ export function MobileMap({
     }
   }
 
-  const chooseAddressCandidate = (candidate: ClassifiedRestaurantPlace) => {
+  const focusAddressCandidateBuilding = (
+    candidate: ClassifiedRestaurantPlace,
+    options?: { addPlaceToExistingBuilding?: boolean },
+  ) => {
     if (candidate.status === 'existing-building' || candidate.status === 'registered') {
       if (candidate.buildingId != null) {
         const building = buildings.find((item) => item.id === candidate.buildingId)
@@ -1539,14 +1542,31 @@ export function MobileMap({
             subtitle: building.address,
             cardId: building.cardId,
             buildingId: building.id,
-          }, candidate.status === 'existing-building' && candidate.source === 'place'
+          }, options?.addPlaceToExistingBuilding && candidate.status === 'existing-building' && candidate.source === 'place'
             ? { openUnitForm: { value: candidateFirstUnitName(candidate, type), type } }
             : undefined)
         }
       }
+    }
+  }
+
+  const chooseAddressCandidate = (candidate: ClassifiedRestaurantPlace) => {
+    const canAdd = candidate.status === 'new'
+      || (candidate.status === 'existing-building' && candidate.source === 'place')
+    if (canAdd) {
+      setSelectedAddressCandidate(candidate)
       return
     }
-    openAddressCandidateAdd(candidate)
+    focusAddressCandidateBuilding(candidate)
+  }
+
+  const addSelectedAddressCandidate = () => {
+    if (!selectedAddressCandidate) return
+    if (selectedAddressCandidate.status === 'new') {
+      openAddressCandidateAdd(selectedAddressCandidate)
+      return
+    }
+    focusAddressCandidateBuilding(selectedAddressCandidate, { addPlaceToExistingBuilding: true })
   }
 
   const openAddressCandidateAdd = (candidate: ClassifiedRestaurantPlace) => {
@@ -1568,6 +1588,7 @@ export function MobileMap({
     setShowCardFinder(false)
     setCardSearch('')
     setAddressSearchResults([])
+    setSelectedAddressCandidate(null)
     backdropTouched.current = false
     addingGuard.current = true
     setShowAddModal(true)
@@ -1643,7 +1664,10 @@ export function MobileMap({
                 <button
                   type="button"
                   className="mobile-map-header-action"
-                  onClick={() => setShowCardFinder((open) => !open)}
+                  onClick={() => {
+                    setShowMapActionMenu(false)
+                    setShowCardFinder((open) => !open)
+                  }}
                   aria-label={t(language, 'map.searchAllLabel')}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden>
@@ -1719,6 +1743,7 @@ export function MobileMap({
                   onChange={(event) => {
                     setCardSearch(event.target.value)
                     setAddressSearchResults([])
+                    setSelectedAddressCandidate(null)
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter') return
@@ -1738,12 +1763,28 @@ export function MobileMap({
               {cardSearch && (
                 <div className="mobile-map-card-results">
                   {bareUnitSearch && (
-                    <span className="mobile-map-results-summary">{t(language, 'map.searchUnitHint')}</span>
+                    <div className="mobile-map-results-summary"><span>{t(language, 'map.searchUnitHint')}</span></div>
                   )}
                   {!bareUnitSearch && visibleSearchResultCount === 0 && (
-                    <span className="mobile-map-results-summary">{msg('등록된 건물이 없습니다.')}</span>
+                    <div className="mobile-map-results-summary"><span>{msg('등록된 건물이 없습니다.')}</span></div>
                   )}
-                  {visibleSearchResultCount > 0 && <span className="mobile-map-results-summary">{t(language, 'map.searchResults')} {visibleSearchResultCount}{t(language, 'calendar.countSuffix')}</span>}
+                  {visibleSearchResultCount > 0 && (
+                    <div className="mobile-map-results-summary">
+                      <span>{t(language, 'map.searchResults')} {visibleSearchResultCount}{t(language, 'calendar.countSuffix')}</span>
+                      {visibleAddressSearchResults.some((candidate) => candidate.status === 'new' || (candidate.status === 'existing-building' && candidate.source === 'place')) && (
+                        <button
+                          aria-label={t(language, 'common.add')}
+                          className="mobile-map-results-add"
+                          disabled={!selectedAddressCandidate}
+                          onClick={addSelectedAddressCandidate}
+                          title={t(language, 'common.add')}
+                          type="button"
+                        >
+                          <span aria-hidden="true">+</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {mapSearchResults.map((result) => (
                     <button
                       key={result.key}
@@ -1768,7 +1809,6 @@ export function MobileMap({
                           <button
                             key={building.id}
                             onClick={() => {
-                              const type = candidateBuildingType(candidate) ?? building.type
                               selectMapSearchResult({
                                 key: `building:${building.id}`,
                                 kind: 'building',
@@ -1776,9 +1816,7 @@ export function MobileMap({
                                 subtitle: building.address,
                                 cardId: building.cardId,
                                 buildingId: building.id,
-                              }, candidate.source === 'place'
-                                ? { openUnitForm: { value: candidateFirstUnitName(candidate, type), type } }
-                                : undefined)
+                              })
                             }}
                             type="button"
                           >
@@ -1789,7 +1827,10 @@ export function MobileMap({
                       })}
                     </div>
                   ) : (
-                    <div className="mobile-map-search-result-row" key={`${candidate.address}:${index}`}>
+                    <div
+                      className={`mobile-map-search-result-row${selectedAddressCandidate === candidate ? ' selected' : ''}`}
+                      key={`${candidate.address}:${index}`}
+                    >
                       <button className="mobile-map-search-result-main" onClick={() => chooseAddressCandidate(candidate)} type="button">
                         <span className={`mobile-map-search-kind ${candidateBuildingType(candidate) === '상가' ? 'kind-restaurant' : 'kind-address'}`}>
                           {candidate.source === 'address' ? msg('주소') : buildingTypeLabel(candidateBuildingType(candidate) ?? '주택')}
@@ -1797,17 +1838,6 @@ export function MobileMap({
                         <strong>{candidate.name}</strong>
                         <small>{candidate.address}</small>
                       </button>
-                      {(candidate.status === 'new' || (candidate.status === 'existing-building' && candidate.source === 'place')) && (
-                        <button
-                          aria-label={msg('{v1} 추가', { v1: candidate.name })}
-                          className="mobile-map-search-result-add"
-                          onClick={() => chooseAddressCandidate(candidate)}
-                          title={msg('{v1} 추가', { v1: candidate.name })}
-                          type="button"
-                        >
-                          <span aria-hidden="true">+</span>
-                        </button>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1911,6 +1941,12 @@ export function MobileMap({
           {/* 지도 */}
           <div
             className="mobile-map-container"
+            onClickCapture={(event) => {
+              if (!showMapActionMenu) return
+              const target = event.target as HTMLElement
+              if (target.closest('.mobile-map-action-popover') || target.closest('.map-action-trigger')) return
+              setShowMapActionMenu(false)
+            }}
             style={{
               position: 'relative',
               '--map-toolbar-search-push': `${mapToolbarSearchPush}px`,
@@ -2021,7 +2057,13 @@ export function MobileMap({
               bottomPadding={sheetHeight + 20}
               addingBuilding={addingBuildingMode}
               editingBuildingLocation={editingPinMode}
-              onOpenActionMenu={() => setShowMapActionMenu(prev => !prev)}
+              onOpenActionMenu={() => {
+                setShowCardFinder(false)
+                setCardSearch('')
+                setAddressSearchResults([])
+                setSelectedAddressCandidate(null)
+                setShowMapActionMenu(prev => !prev)
+              }}
               onToggleAddingBuilding={setAddingBuildingMode}
               drawingBoundary={drawingBoundaryMode}
               onToggleDrawingBoundary={setDrawingBoundaryMode}
