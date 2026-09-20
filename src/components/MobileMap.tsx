@@ -7,7 +7,7 @@ import type { MapAggregateMarker } from './MapCanvas'
 import type { Building, CalendarEvent, CardBoundary, EventRestaurantAssignment, InformalAsset, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot, Unit, UnitStatus, VisitHistory } from '../types'
 import type { AppLanguage } from '../i18n'
 import { t, translateKoreanAddress, currentLang } from '../i18n'
-import { findCardForCoordinates, normalizeMapCoordinates } from '../utils/mapUtils'
+import { findCardForCoordinates } from '../utils/mapUtils'
 import { getPinGroup, type PinGroup } from '../utils/buildingPin'
 import { showToast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirm'
@@ -1137,10 +1137,6 @@ export function MobileMap({
               const resolvedAddress = parts.join(' ')
               if (resolvedAddress) {
                 setAddAddress(resolvedAddress)
-                const landCenter = normalizeMapCoordinates(
-                  Number(r.land?.coords?.center?.y),
-                  Number(r.land?.coords?.center?.x),
-                )
                 const applyAutomaticPinAdjustment = (adjusted: { lat: number; lng: number } | null) => {
                   if (
                     adjusted
@@ -1157,22 +1153,18 @@ export function MobileMap({
                   }
                   return false
                 }
-                if (landCenter && applyAutomaticPinAdjustment(landCenter)) {
-                  setGeocoding(false)
-                } else {
-                  void geocodeFirstMatch(getGeocodeCandidates(resolvedAddress)).then((adjusted) => {
-                    const applied = applyAutomaticPinAdjustment(adjusted)
-                    if (
-                      !applied
-                      && locationLookupId === addLocationLookupRef.current
-                      && !addPinManuallyAdjustedRef.current
-                    ) {
-                      showToast(msg('주소 기준 위치를 찾지 못했습니다. 핀 위치를 직접 확인해 주세요.'), 'info')
-                    }
-                  }).finally(() => {
-                    if (locationLookupId === addLocationLookupRef.current) setGeocoding(false)
-                  })
-                }
+                void geocodeFirstMatch(getGeocodeCandidates(resolvedAddress)).then((adjusted) => {
+                  const applied = applyAutomaticPinAdjustment(adjusted)
+                  if (
+                    !applied
+                    && locationLookupId === addLocationLookupRef.current
+                    && !addPinManuallyAdjustedRef.current
+                  ) {
+                    showToast(msg('주소 기준 위치를 찾지 못했습니다. 핀 위치를 직접 확인해 주세요.'), 'info')
+                  }
+                }).finally(() => {
+                  if (locationLookupId === addLocationLookupRef.current) setGeocoding(false)
+                })
               } else {
                 setGeocoding(false)
               }
