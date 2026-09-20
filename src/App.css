@@ -6606,6 +6606,17 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+.mobile-map-pin-adjust-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mobile-map-pin-adjust-actions button.primary {
+  background: var(--primary-700);
+  color: #ffffff;
+}
+
 .mobile-map-container {
   flex: 1;
   min-height: 0;
@@ -24052,6 +24063,49 @@ button:focus-visible {
   border-radius: 18px 18px 0 0;
   background: var(--surface, #fff);
   box-sizing: border-box;
+}
+
+.mm-adjust-new-pin-btn {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  text-align: left;
+}
+
+.mm-adjust-new-pin-btn > span:first-child {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary-50);
+  color: var(--primary-700);
+  font-size: 20px;
+}
+
+.mm-adjust-new-pin-btn > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mm-adjust-new-pin-btn strong {
+  font-size: 13px;
+}
+
+.mm-adjust-new-pin-btn small {
+  overflow-wrap: anywhere;
+  color: var(--ink-500);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .mm-building-edit-fields {

@@ -34,6 +34,14 @@ vi.mock('./MapCanvas', () => ({
           지도 건물 {building.name}
         </button>
       ))}
+      {props.previewPinLat != null && props.previewPinLng != null && (
+        <button
+          type="button"
+          onClick={() => props.onMovePreviewPin?.(props.previewPinLat + 0.001, props.previewPinLng + 0.001)}
+        >
+          move preview pin
+        </button>
+      )}
       <output data-testid="selected-building-id">{props.selectedBuildingId}</output>
       <output data-testid="map-bottom-padding">{props.bottomPadding}</output>
     </div>
@@ -234,10 +242,27 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.click(screen.getByRole('button', { name: '네이버에서 주소 찾기' }))
     fireEvent.click(await screen.findByRole('button', { name: /언동로 216/ }))
     fireEvent.click(screen.getByRole('button', { name: '이 주소에 건물 추가' }))
+    expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: /핀 위치 조정/ }))
+    expect(screen.queryByRole('heading', { name: '건물 추가' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'move preview pin' }))
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+    expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: /핀 위치 조정/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'move preview pin' }))
+    const adjustmentBanner = screen.getByText('새 건물 핀을 원하는 위치로 옮기세요').closest('.mobile-map-mode-banner') as HTMLElement
+    fireEvent.click(within(adjustmentBanner).getByRole('button', { name: '완료' }))
+    expect(screen.getByText('37.27700, 127.12000')).toBeVisible()
+
     fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: '추가' }))
 
     await waitFor(() => expect(onCreateBuilding).toHaveBeenCalledTimes(1))
+    expect(onCreateBuilding).toHaveBeenCalledWith(expect.objectContaining({ lat: 37.277, lng: 127.12 }))
+    setCenter.mockClear()
+    panBy.mockClear()
     const created = testBuilding(91, 1, '언동로 216')
     created.address = '경기도 용인시 기흥구 언동로 216'
     created.lat = 37.276

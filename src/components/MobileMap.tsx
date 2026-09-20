@@ -485,7 +485,10 @@ export function MobileMap({
   const backdropTouched = useRef(false)
   const addingGuard = useRef(false)
   const savingBuildingRef = useRef(false)
+  const addPinSnapshotRef = useRef<{ lat: number; lng: number } | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [adjustingNewBuildingPin, setAdjustingNewBuildingPin] = useState(false)
+  const [addCardManuallySelected, setAddCardManuallySelected] = useState(false)
   const [addLat, setAddLat] = useState<number | null>(null)
   const [addLng, setAddLng] = useState<number | null>(null)
   const [addName, setAddName] = useState('')
@@ -1073,6 +1076,9 @@ export function MobileMap({
 
   const closeAddModal = () => {
     setShowAddModal(false)
+    setAdjustingNewBuildingPin(false)
+    setAddCardManuallySelected(false)
+    addPinSnapshotRef.current = null
     setAddLat(null)
     setAddLng(null)
     backdropTouched.current = false
@@ -1086,6 +1092,7 @@ export function MobileMap({
 
     setExpandedBuildingIds(new Set())
     setAddLat(lat); setAddLng(lng); setAddName(t(language, 'map.addBuilding')); setAddAddress(''); setAddType('주택')
+    setAddCardManuallySelected(false)
     const matched = findCardForCoordinates(lat, lng, cardBoundaries)
     setAddCardId(matched ?? selectedCardId ?? 0)
 
@@ -1153,6 +1160,43 @@ export function MobileMap({
     setAddingBuildingMode(true)
     setSheetHeight(MIN_HEIGHT)
     showToast(t(language, 'map.tapToAddBuilding'), 'info')
+  }
+
+  const startNewBuildingPinAdjustment = () => {
+    if (addLat == null || addLng == null) return
+    addPinSnapshotRef.current = { lat: addLat, lng: addLng }
+    setShowAddModal(false)
+    setAdjustingNewBuildingPin(true)
+    setSheetHeight(MIN_HEIGHT)
+
+    const naver = (window as any).naver
+    const map = (window as any).__mobileMapInstance
+    if (naver?.maps && map) {
+      map.setCenter?.(new naver.maps.LatLng(addLat, addLng))
+      if (typeof map.getZoom === 'function' && typeof map.setZoom === 'function' && map.getZoom() < 18) {
+        map.setZoom(18)
+      }
+    }
+  }
+
+  const finishNewBuildingPinAdjustment = () => {
+    if (!addCardManuallySelected && addLat != null && addLng != null) {
+      setAddCardId(findCardForCoordinates(addLat, addLng, cardBoundaries) ?? 0)
+    }
+    addPinSnapshotRef.current = null
+    setAdjustingNewBuildingPin(false)
+    setShowAddModal(true)
+  }
+
+  const cancelNewBuildingPinAdjustment = () => {
+    const snapshot = addPinSnapshotRef.current
+    if (snapshot) {
+      setAddLat(snapshot.lat)
+      setAddLng(snapshot.lng)
+    }
+    addPinSnapshotRef.current = null
+    setAdjustingNewBuildingPin(false)
+    setShowAddModal(true)
   }
 
   const toggleEditPinMode = () => {
@@ -1356,6 +1400,7 @@ export function MobileMap({
     setAddAddress(candidate.address)
     setAddType('주택')
     setAddCardId(matchedCardId ?? 0)
+    setAddCardManuallySelected(false)
     setShowCardFinder(false)
     setCardSearch('')
     setAddressSearchResults([])
@@ -1767,7 +1812,9 @@ export function MobileMap({
               selectedBuildingId={selectedBuildingId ?? 0}
               pickingPoint={addingChildKind !== null}
               onMapClick={(lat, lng) => {
-                if (addingChildKind !== null) {
+                if (adjustingNewBuildingPin) {
+                  return
+                } else if (addingChildKind !== null) {
                   // 한 번 찍으면 모드를 끈다 — 계속 켜져 있으면 지도를 누를
                   // 때마다 창이 떠서 다른 일을 못 한다
                   setChildDraft({ lat, lng, name: '', memo: '', kind: addingChildKind })
@@ -1889,18 +1936,25 @@ export function MobileMap({
             )}
           </div>
 
-          {(addingBuildingMode || editingPinMode) && (
-            <div className={`mobile-map-mode-banner${editingPinMode ? ' edit-pin' : ''}`}>
-              <strong>{editingPinMode ? t(language, 'map.editPin') : t(language, 'map.addBuilding')}</strong>
-              <button
-                onClick={() => {
-                  setAddingBuildingMode(false)
-                  setEditingPinMode(false)
-                }}
-                type="button"
-              >
-                {t(language, 'map.finish')}
-              </button>
+          {(addingBuildingMode || editingPinMode || adjustingNewBuildingPin) && (
+            <div className={`mobile-map-mode-banner${editingPinMode || adjustingNewBuildingPin ? ' edit-pin' : ''}`}>
+              <strong>{adjustingNewBuildingPin ? msg('새 건물 핀을 원하는 위치로 옮기세요') : editingPinMode ? t(language, 'map.editPin') : t(language, 'map.addBuilding')}</strong>
+              {adjustingNewBuildingPin ? (
+                <span className="mobile-map-pin-adjust-actions">
+                  <button onClick={cancelNewBuildingPinAdjustment} type="button">{t(language, 'common.cancel')}</button>
+                  <button className="primary" onClick={finishNewBuildingPinAdjustment} type="button">{msg('완료')}</button>
+                </span>
+              ) : (
+                <button
+                  onClick={() => {
+                    setAddingBuildingMode(false)
+                    setEditingPinMode(false)
+                  }}
+                  type="button"
+                >
+                  {t(language, 'map.finish')}
+                </button>
+              )}
             </div>
           )}
 
@@ -2437,7 +2491,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'zone.cardCount')}</label>
-                    <select value={addCardId} onChange={e => setAddCardId(Number(e.target.value))} style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px' }}>
+                    <select value={addCardId} onChange={e => { setAddCardId(Number(e.target.value)); setAddCardManuallySelected(true) }} style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px' }}>
                       {addCardId === 0 && <option value={0}>{msg('카드를 선택하세요')}</option>}
                       {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
@@ -2463,6 +2517,13 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                       <option value="상가">{buildingTypeLabel('상가')}</option>
                     </select>
                   </div>
+                  <button className="mm-adjust-new-pin-btn" onClick={startNewBuildingPinAdjustment} type="button">
+                    <span aria-hidden="true">⌖</span>
+                    <span>
+                      <strong>{msg('핀 위치 조정')}</strong>
+                      <small>{msg('필요한 경우에만 지도에서 위치를 옮기세요')}</small>
+                    </span>
+                  </button>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
                   <button onClick={closeAddModal} style={{ flex: 1, padding: '12px', borderRadius: 'var(--r-md)', border: '1px solid #e2e8f0', background: '#f8fafc', fontWeight: 700, cursor: 'pointer', fontSize: '15px' }}>{t(language, 'common.cancel')}</button>
