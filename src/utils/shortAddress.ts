@@ -13,3 +13,10 @@ export function shortAddress(address: string): string {
   const m = t.match(/([가-힣A-Za-z0-9]+(?:로|길)[0-9]*(?:번길)?\s*[0-9-]+)/)
   return m ? m[1].trim() : t
 }
+
+/** DB의 private.restaurant_address_key와 같은 도로명·건물번호 비교 키. */
+export function buildingAddressKey(address: string): string {
+  const trimmed = (address ?? '').trim()
+  const match = trimmed.match(/([가-힣A-Za-z0-9]+(?:로|길)[0-9]*(?:번길)?\s*[0-9]+(?:-[0-9]+)?)/)
+  return (match?.[1] ?? trimmed).toLowerCase().replace(/\s+/g, '')
+}

@@ -29,7 +29,8 @@ import { NotificationSettings } from './NotificationSettings'
 import { LocationPermissionSettings } from './LocationPermissionSettings'
 import { AppUpdateCard } from './AppUpdateCard'
 import { AppHeader } from './AppHeader'
-import { formatRelativeVisitDate, getLatestReturnVisitDate, getUserReturnVisits, normalizeVisitorName } from '../utils/returnVisits'
+import { findReturnVisitBuilding, findReturnVisitUnit, formatRelativeVisitDate, getLatestReturnVisitDate, getUserReturnVisits, normalizeVisitorName } from '../utils/returnVisits'
+import { isValidMapCoordinate } from '../utils/mapUtils'
 import { msg } from '../lib/msg'
 import { useAdminAttentionCounts } from '../hooks/useAdminAttentionCounts'
 import { confirmDialog, alertDialog } from '../lib/confirm'
@@ -583,24 +584,26 @@ export function MobileHome({
   const regularVisitBuildingIds = useMemo(() => {
     const ids = new Set<number>()
     myRegularVisits.forEach((rv) => {
-      // ⚠ Number.isFinite 는 타입을 좁혀 주지 않는다. buildingId 는 null 일 수 있다
-      //   (세대·건물에 안 이어진 정기방문). null 검사를 따로 한다.
-      if (rv.buildingId !== null && Number.isFinite(rv.buildingId)) ids.add(rv.buildingId)
+      const building = findReturnVisitBuilding(rv, buildings)
+      if (building) ids.add(building.id)
     })
     legacyRegularVisitBuildingIds.forEach((id) => ids.add(id))
     return ids
-  }, [legacyRegularVisitBuildingIds, myRegularVisits])
+  }, [buildings, legacyRegularVisitBuildingIds, myRegularVisits])
   const focusedRegularVisitBuildingId = useMemo(() => {
     if (!isRegularVisitMapScope) return null
-    const fromReturnVisit = focusedReturnVisitId
-      ? myRegularVisits.find((rv) => rv.id === focusedReturnVisitId)?.buildingId ?? null
+    const focusedReturnVisit = focusedReturnVisitId
+      ? myRegularVisits.find((rv) => rv.id === focusedReturnVisitId) ?? null
+      : null
+    const fromReturnVisit = focusedReturnVisit
+      ? findReturnVisitBuilding(focusedReturnVisit, buildings)?.id ?? null
       : null
     if (fromReturnVisit != null) return fromReturnVisit
     if (requestedRegularVisitBuildingId != null && regularVisitBuildingIds.has(requestedRegularVisitBuildingId)) {
       return requestedRegularVisitBuildingId
     }
     return null
-  }, [focusedReturnVisitId, isRegularVisitMapScope, myRegularVisits, regularVisitBuildingIds, requestedRegularVisitBuildingId])
+  }, [buildings, focusedReturnVisitId, isRegularVisitMapScope, myRegularVisits, regularVisitBuildingIds, requestedRegularVisitBuildingId])
   const regularVisitVisibleBuildingIds = useMemo(() => {
     const ids = new Set<number>()
     if (!isRegularVisitMapScope) return ids
@@ -619,6 +622,35 @@ export function MobileHome({
     })
     return ids
   }, [buildings, isRegularVisitMapScope, regularVisitVisibleBuildingIds])
+  const regularVisitVisibleUnitIds = useMemo(() => {
+    const idsByBuilding = new Map<number, Set<number>>()
+    if (!isRegularVisitMapScope) return idsByBuilding
+    const visits = focusedReturnVisitId
+      ? myRegularVisits.filter((visit) => visit.id === focusedReturnVisitId)
+      : myRegularVisits
+    visits.forEach((visit) => {
+      const building = findReturnVisitBuilding(visit, buildings)
+      if (!building || !regularVisitVisibleBuildingIds.has(building.id)) return
+      const unit = findReturnVisitUnit(visit, building)
+      if (!unit) return
+      const ids = idsByBuilding.get(building.id) ?? new Set<number>()
+      ids.add(unit.id)
+      idsByBuilding.set(building.id, ids)
+    })
+    if (!focusedReturnVisitId) {
+      const currentName = normalizeVisitorName(currentVisitor)
+      buildings.forEach((building) => {
+        if (!regularVisitVisibleBuildingIds.has(building.id)) return
+        building.units.forEach((unit) => {
+          if (!unit.isRegularVisit || normalizeVisitorName(unit.regularVisitor) !== currentName) return
+          const ids = idsByBuilding.get(building.id) ?? new Set<number>()
+          ids.add(unit.id)
+          idsByBuilding.set(building.id, ids)
+        })
+      })
+    }
+    return idsByBuilding
+  }, [buildings, currentVisitor, focusedReturnVisitId, isRegularVisitMapScope, myRegularVisits, regularVisitVisibleBuildingIds])
   // map 의 onBack 은 navigate(-1) 로 직전 URL(드릴 상태 포함) 정확 복귀.
   const userVisibleMapCardIds = useMemo(() => {
     const ids = new Set<number>()
@@ -662,10 +694,24 @@ export function MobileHome({
   )
   const mapBuildings = useMemo(
     () => {
-      if (isRegularVisitMapScope) return buildings.filter((building) => regularVisitVisibleBuildingIds.has(building.id))
+      if (isRegularVisitMapScope) {
+        return buildings
+          .filter((building) => regularVisitVisibleBuildingIds.has(building.id))
+          .map((building) => {
+            // 이 전용 범위의 완료·범례·핀 판정은 건물 전체가 아니라 현재 사용자의
+            // 정기방문 세대만 대상으로 한다. 연결 세대를 못 찾은 옛 자료도 파란
+            // 일반 핀으로 바뀌지 않도록 정기방문 성격은 별도로 유지한다.
+            const units = building.units.filter((unit) => regularVisitVisibleUnitIds.get(building.id)?.has(unit.id))
+            return {
+              ...building,
+              units,
+              mapPinToneOverride: units.length === 0 ? '정기방문' as const : undefined,
+            }
+          })
+      }
       return isUserMapScope ? buildings.filter((building) => userVisibleMapCardIds.has(building.cardId)) : buildings
     },
-    [buildings, isRegularVisitMapScope, isUserMapScope, regularVisitVisibleBuildingIds, userVisibleMapCardIds],
+    [buildings, isRegularVisitMapScope, isUserMapScope, regularVisitVisibleBuildingIds, regularVisitVisibleUnitIds, userVisibleMapCardIds],
   )
   const mapCardBoundaries = useMemo(
     () => {
@@ -991,7 +1037,15 @@ export function MobileHome({
                     if (returnVisitId) {
                       const rv = myRegularVisits.find((item) => item.id === returnVisitId)
                       params.set('returnVisitId', String(returnVisitId))
-                      if (rv?.buildingId) params.set('buildingId', String(rv.buildingId))
+                      if (rv) {
+                        const building = findReturnVisitBuilding(rv, buildings)
+                        if (building && isValidMapCoordinate(Number(building.lat), Number(building.lng))) {
+                          params.set('buildingId', String(building.id))
+                        } else if (rv.address.trim()) {
+                          params.set('addr', rv.address.trim())
+                          params.set('pinLabel', rv.nickname || rv.displayName)
+                        }
+                      }
                     }
                     navigate(`/map?${params.toString()}`)
                   }}

@@ -5,13 +5,13 @@ import { buildingHasUsage } from '../utils/unitUsage'
 import type { AppLanguage } from '../i18n'
 import { t, translateKoreanAddress, weekdayShortLabels } from '../i18n'
 import { getTerritoryCardOperationalState, sortTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
-import { getUserReturnVisits, normalizeVisitorName } from '../utils/returnVisits'
+import { findReturnVisitBuilding, getUserReturnVisits, normalizeVisitorName } from '../utils/returnVisits'
 import { RestaurantServiceSheet } from './RestaurantServiceSheet'
 import { msg } from '../lib/msg'
 import { showToast } from '../lib/toast'
 import { getAssignmentTeamMembers } from '../utils/assignmentTeamMembers'
 import { chooseCardForBuilding } from '../utils/chooseCardForBuilding'
-import { shortAddress } from '../utils/shortAddress'
+import { buildingAddressKey, shortAddress } from '../utils/shortAddress'
 import { EndReturnVisitDialog } from './EndReturnVisitDialog'
 import { searchPlacesForCongregation } from '../lib/placeSearch'
 import { canonicalUnitNumber } from '../utils/unitNumber'
@@ -72,11 +72,11 @@ function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: 
 function matchingBuildingsForAddress(address: string, candidate: AddressCandidate | null, buildings: Building[]) {
   if (address.length < 2) return []
   const q = address.toLowerCase()
-  const addressKey = shortAddress(address).replace(/\s/g, '').toLowerCase()
+  const addressKey = buildingAddressKey(address)
   const hasSelectedCoordinates = candidate?.lat != null && candidate?.lng != null
   return buildings.filter((building) => {
     if (building.address.toLowerCase().includes(q) || building.name.toLowerCase().includes(q)) return true
-    const buildingKey = shortAddress(building.address).replace(/\s/g, '').toLowerCase()
+    const buildingKey = buildingAddressKey(building.address)
     if (!hasSelectedCoordinates || buildingKey !== addressKey || !building.lat || !building.lng) return false
     return distanceMeters(
       { lat: candidate.lat as number, lng: candidate.lng as number },
@@ -1033,7 +1033,7 @@ export function MobileTerritory({
             ) : (
               <div className="rv-list">
                 {myReturnVisits.map((rv) => {
-                  const building = buildings.find((b) => b.id === rv.buildingId)
+                  const building = findReturnVisitBuilding(rv, buildings)
                   const label = rv.nickname || rv.displayName
                   const isMenuOpen = menuOpenId === rv.id
                   const isNicknameEdit = nicknameEditId === rv.id
@@ -1097,7 +1097,11 @@ export function MobileTerritory({
                           ) : rv.address ? (
                             <button
                               className="rv-btn rv-btn-map"
-                              onClick={(e) => { e.stopPropagation(); navigate(`/map?addr=${encodeURIComponent(rv.address)}&pinLabel=${encodeURIComponent(rv.nickname || rv.displayName)}`) }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (onOpenRegularVisitMap) onOpenRegularVisitMap(rv.id)
+                                else navigate(`/map?scope=regularVisits&addr=${encodeURIComponent(rv.address)}&pinLabel=${encodeURIComponent(rv.nickname || rv.displayName)}`)
+                              }}
                               type="button"
                             >{t(language, 'zone.map')}</button>
                           ) : null}

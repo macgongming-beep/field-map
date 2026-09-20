@@ -214,8 +214,10 @@ export type Building = {
    * ⚠ 시스템은 '등록된 세대' 만 안다. 등록이 둘뿐인데 둘 다 방문하면 100% 가 되어
    *   '완료' 로 보였고, 실제로는 호수가 더 있는데 아무도 안 갔다.
    *   이 표시가 없으면 **완료로 치지 않는다** (utils/buildingPin).
-   */
+  */
   unitsSurveyed?: boolean
+  /** 정기방문 전용 지도에서 연결 세대를 못 찾았을 때도 성격을 유지하는 화면 전용 값. */
+  mapPinToneOverride?: '정기방문'
   units: Unit[]
 }
 

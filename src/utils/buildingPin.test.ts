@@ -90,6 +90,11 @@ describe('세대를 다 파악했나', () => {
     expect(getBuildingPin(bld({ unitsSurveyed: true, units: [] })).filled).toBe(false)
     expect(getPinGroup(bld({ unitsSurveyed: true, units: [] }))).toBe('방문필요')
   })
+
+  test('정기방문 전용 지도에서 세대를 못 찾아도 금색 성격을 유지한다', () => {
+    expect(getBuildingPin(bld({ units: [], mapPinToneOverride: '정기방문' })))
+      .toEqual({ tone: '정기방문', filled: false, ring: '정기방문' })
+  })
 })
 
 describe('범례 분류 — 건물 하나는 정확히 한 곳에', () => {

@@ -82,7 +82,8 @@ export function getBuildingPin(building: Building): BuildingPin {
     return { tone: '방문금지', filled: true, ring: null }
   }
 
-  const tone: PinTone = building.units.some((u) => u.isRegularVisit) ? '정기방문' : '보통'
+  const tone: PinTone = building.mapPinToneOverride
+    ?? (building.units.some((u) => u.isRegularVisit) ? '정기방문' : '보통')
   // ⚠ 세대가 하나도 없으면 '다 갔다' 고 할 수 없다
   const allVisited = building.units.length > 0 && !hasUnvisitedUnit(building)
 

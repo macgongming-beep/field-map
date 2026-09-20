@@ -223,4 +223,14 @@ describe('연결된 정기방문 주소 계약', () => {
     openVisitMenu()
     expect(screen.getByRole('button', { name: '주소 수정' })).toBeVisible()
   })
+
+  test('건물 연결이 없어도 정기방문 전용 지도 콜백으로 주소 핀을 연다', () => {
+    const openMap = vi.fn()
+    renderIt({ returnVisits: [visit(null)], onOpenRegularVisitMap: openMap })
+
+    fireEvent.click(screen.getByRole('button', { name: /정기 방문 1/ }))
+    fireEvent.click(screen.getByRole('button', { name: '지도' }))
+
+    expect(openMap).toHaveBeenCalledWith(77)
+  })
 })
