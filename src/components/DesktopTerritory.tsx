@@ -77,6 +77,7 @@ function getTodayDateInputValue() {
 }
 
 type CardStatusFilter = TerritoryCard['status'] | '전체' | '완료·제외'
+type BuildingPageSize = 25 | 50 | 100 | '전체'
 
 export function DesktopTerritory({
   language,
@@ -244,6 +245,8 @@ export function DesktopTerritory({
   }, 0)
   const [buildingSubTab, setBuildingSubTab] = useSessionState<'건물 목록' | '세대 목록'>('dt.buildingSubTab', '건물 목록')
   const [buildingAddressWidth, setBuildingAddressWidth] = useSessionState<number>('dt.buildingAddressWidth', 300)
+  const [buildingPageSize, setBuildingPageSize] = useSessionState<BuildingPageSize>('dt.buildingPageSize', 50)
+  const [buildingPage, setBuildingPage] = useState(1)
   const [showCardModal, setShowCardModal] = useState(false)
   const [pendingBoundaryCard, setPendingBoundaryCard] = useState<{ id: number; name: string } | null>(null)
   const [regionFilter, setRegionFilter] = useSessionState<TerritoryRegion | '전체'>('dt.regionFilter', '전체')
@@ -711,6 +714,34 @@ export function DesktopTerritory({
       unassignedCardId: unassignedCardId ?? null,
     }))
 
+  const buildingPageCount = buildingPageSize === '전체'
+    ? 1
+    : Math.max(1, Math.ceil(sortedBuildings.length / buildingPageSize))
+  const currentBuildingPage = Math.min(buildingPage, buildingPageCount)
+  const buildingPageStart = buildingPageSize === '전체' ? 0 : (currentBuildingPage - 1) * buildingPageSize
+  const pagedBuildings = buildingPageSize === '전체'
+    ? sortedBuildings
+    : sortedBuildings.slice(buildingPageStart, buildingPageStart + buildingPageSize)
+  const buildingPageNumbers = Array.from(new Set([
+    1,
+    currentBuildingPage - 2,
+    currentBuildingPage - 1,
+    currentBuildingPage,
+    currentBuildingPage + 1,
+    currentBuildingPage + 2,
+    buildingPageCount,
+  ])).filter((page) => page >= 1 && page <= buildingPageCount).sort((a, b) => a - b)
+
+  useEffect(() => {
+    setBuildingPage(1)
+  }, [regionFilter, areaFilter, buildingCardFilter, buildingTypeFilter,
+    buildingRegularFilter, buildingMemoFilter, buildingRestaurantFilter,
+    buildingSurveyedFilter, buildingSort])
+
+  useEffect(() => {
+    setBuildingPage((page) => Math.min(page, buildingPageCount))
+  }, [buildingPageCount])
+
   // 미배정 필터의 추천 카드 배지 — 구역선 폴리곤 판정이라 렌더마다 돌면 무거움.
   // (건물/구역선이 바뀔 때만 계산 → 편집 중 타이핑 시 재계산 없음)
   const recommendationBadges = useMemo(() => {
@@ -1029,9 +1060,9 @@ export function DesktopTerritory({
     })
   }
 
-  const toggleAllFilteredBuildings = () => {
+  const toggleAllPagedBuildings = () => {
     setCheckedBuildingIds((current) => {
-      const visibleIds = filteredBuildings.map((building) => building.id)
+      const visibleIds = pagedBuildings.map((building) => building.id)
       const allVisibleChecked = visibleIds.length > 0 && visibleIds.every((id) => current.has(id))
       const next = new Set(current)
       visibleIds.forEach((id) => {
@@ -1040,6 +1071,10 @@ export function DesktopTerritory({
       })
       return next
     })
+  }
+
+  const selectAllFilteredBuildings = () => {
+    setCheckedBuildingIds(new Set(filteredBuildings.map((building) => building.id)))
   }
 
   const { exportBackup: exportCardBoundaries, importBackup: importCardBoundaries } =
@@ -1526,6 +1561,15 @@ export function DesktopTerritory({
           <div className="territory-selection-bar">
             <strong>{visibleCheckedBuildingIds.length}개 건물 선택</strong>
             <div className="territory-selection-actions">
+              {visibleCheckedBuildingIds.length < filteredBuildings.length ? (
+                <button className="tbl-ghost-btn sm" onClick={selectAllFilteredBuildings} type="button">
+                  검색 결과 {filteredBuildings.length}개 전체 선택
+                </button>
+              ) : (
+                <button className="tbl-ghost-btn sm" onClick={() => setCheckedBuildingIds(new Set())} type="button">
+                  전체 선택 해제
+                </button>
+              )}
               {buildingCardFilter === unassignedCardId && (
                 <button className="tbl-ghost-btn sm" disabled={reassigningChecked} onClick={handleReassignCheckedByBoundary} type="button">
                   {reassigningChecked ? '재배정 중...' : '카드 재배정'}
@@ -1853,12 +1897,37 @@ export function DesktopTerritory({
               {regionFilter === '전체' ? '전체 지역' : regionFilter}
               {' · '}{areaFilter === '전체' ? '전체 동' : areaFilter}
               {' · 표시 '}
-              {activeTab === '카드 관리' ? `${filteredCards.length}개 카드` : buildingSubTab === '건물 목록' ? `${filteredBuildings.length}개 건물` : `${pointRows.length}개 세대`}
+              {activeTab === '카드 관리' ? `${filteredCards.length}개 카드` : buildingSubTab === '건물 목록'
+                ? sortedBuildings.length === 0
+                  ? '0개 건물'
+                  : `${buildingPageStart + 1}-${buildingPageStart + pagedBuildings.length} / ${filteredBuildings.length}개 건물`
+                : `${pointRows.length}개 세대`}
             </span>
             {activeTab === '건물 관리' && (
-              <button className="tbl-ghost-btn sm" onClick={downloadFilteredBuildingCsv} type="button">
-                엑셀 내보내기
-              </button>
+              <div className="building-list-tools">
+                {buildingSubTab === '건물 목록' && (
+                  <label className="building-page-size">
+                    <span>페이지당</span>
+                    <select
+                      aria-label="페이지당 건물 수"
+                      value={buildingPageSize}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setBuildingPageSize(value === '전체' ? '전체' : Number(value) as BuildingPageSize)
+                        setBuildingPage(1)
+                      }}
+                    >
+                      <option value={25}>25개</option>
+                      <option value={50}>50개</option>
+                      <option value={100}>100개</option>
+                      <option value="전체">전체</option>
+                    </select>
+                  </label>
+                )}
+                <button className="tbl-ghost-btn sm" onClick={downloadFilteredBuildingCsv} type="button">
+                  엑셀 내보내기
+                </button>
+              </div>
             )}
           </div>
 
@@ -2029,8 +2098,9 @@ export function DesktopTerritory({
             <div className="building-management-head" role="row">
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 6 }}>
                 <input
-                  checked={filteredBuildings.length > 0 && filteredBuildings.every((building) => checkedBuildingIds.has(building.id))}
-                  onChange={toggleAllFilteredBuildings}
+                  aria-label="현재 페이지 건물 전체 선택"
+                  checked={pagedBuildings.length > 0 && pagedBuildings.every((building) => checkedBuildingIds.has(building.id))}
+                  onChange={toggleAllPagedBuildings}
                   type="checkbox"
                 />
               </div>
@@ -2056,7 +2126,7 @@ export function DesktopTerritory({
               <span>중국어</span>
               <span>작업</span>
             </div>
-            {sortedBuildings.map((building) => {
+            {pagedBuildings.map((building) => {
               const card = cardMap.get(building.cardId)
               const chineseCount = building.units.filter((unit) => unit.isChinese).length
               const isEditing = editingBuildingId === building.id
@@ -2213,6 +2283,38 @@ export function DesktopTerritory({
               </div>
             )}
           </div>
+          {filteredBuildings.length > 0 && buildingPageSize !== '전체' && (
+            <nav className="building-pagination" aria-label="건물 목록 페이지">
+              <span className="building-pagination-summary">
+                {buildingPageStart + 1}-{buildingPageStart + pagedBuildings.length} / {filteredBuildings.length}
+              </span>
+              <div className="building-pagination-buttons">
+                <button
+                  aria-label="이전 페이지"
+                  disabled={currentBuildingPage === 1}
+                  onClick={() => setBuildingPage((page) => Math.max(1, page - 1))}
+                  type="button"
+                >‹</button>
+                {buildingPageNumbers.map((page, index) => (
+                  <span className="building-pagination-item" key={page}>
+                    {index > 0 && page - buildingPageNumbers[index - 1] > 1 && <span className="building-pagination-gap">…</span>}
+                    <button
+                      aria-current={page === currentBuildingPage ? 'page' : undefined}
+                      className={page === currentBuildingPage ? 'active' : ''}
+                      onClick={() => setBuildingPage(page)}
+                      type="button"
+                    >{page}</button>
+                  </span>
+                ))}
+                <button
+                  aria-label="다음 페이지"
+                  disabled={currentBuildingPage === buildingPageCount}
+                  onClick={() => setBuildingPage((page) => Math.min(buildingPageCount, page + 1))}
+                  type="button"
+                >›</button>
+              </div>
+            </nav>
+          )}
           </>
         ) : (
           <div className="point-management-table" ref={pointTableRef} role="table" aria-label="세대 목록">

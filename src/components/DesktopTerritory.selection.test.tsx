@@ -5,7 +5,7 @@
 //   (완료·제외 카드를 접으면 화면에서 사라지지만 filteredCards 에는 남는다).
 //   그래서 조립해서 본다.
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { DesktopTerritory } from './DesktopTerritory'
@@ -22,7 +22,10 @@ const open = (overrides: Record<string, unknown> = {}) => {
   return props as { onDeleteCards: ReturnType<typeof vi.fn> }
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  window.sessionStorage.clear()
+})
 
 describe('일괄 삭제는 보이는 카드만', () => {
   test('완료·제외로 접힌 카드는 전체선택에 안 들어간다', async () => {
@@ -78,5 +81,48 @@ describe('PC 건물 행 삭제', () => {
     await user.click(screen.getByRole('button', { name: '건물 관리' }))
 
     expect(screen.queryByRole('button', { name: '삭제' })).toBeNull()
+  })
+})
+
+describe('PC 건물 목록 페이지', () => {
+  const buildings = Array.from({ length: 55 }, (_, index) =>
+    testBuilding(index + 1, 1, `건물 ${String(index + 1).padStart(2, '0')}`),
+  )
+
+  test('기본 50개씩 보여 주고 다음 페이지와 전체 보기를 제공한다', async () => {
+    const user = userEvent.setup()
+    open({
+      cards: [testCard(1, '수지구 죽전동 1')],
+      buildings,
+    })
+
+    await user.click(screen.getByRole('button', { name: '건물 관리' }))
+    const table = screen.getByRole('table', { name: '건물 관리 목록' })
+    expect(within(table).getAllByRole('row')).toHaveLength(51)
+    expect(screen.getByText('1-50 / 55')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: '2' }))
+    expect(within(table).getAllByRole('row')).toHaveLength(6)
+    expect(screen.getByText('51-55 / 55')).toBeTruthy()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '페이지당 건물 수' }), '전체')
+    expect(within(table).getAllByRole('row')).toHaveLength(56)
+    expect(screen.queryByRole('navigation', { name: '건물 목록 페이지' })).toBeNull()
+  })
+
+  test('헤더 선택은 현재 페이지만 선택하고 검색 결과 전체 선택은 따로 제공한다', async () => {
+    const user = userEvent.setup()
+    open({
+      cards: [testCard(1, '수지구 죽전동 1')],
+      buildings,
+    })
+
+    await user.click(screen.getByRole('button', { name: '건물 관리' }))
+    await user.click(screen.getByRole('checkbox', { name: '현재 페이지 건물 전체 선택' }))
+    expect(screen.getByText('50개 건물 선택')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: '검색 결과 55개 전체 선택' }))
+    expect(screen.getByText('55개 건물 선택')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '전체 선택 해제' })).toBeTruthy()
   })
 })
