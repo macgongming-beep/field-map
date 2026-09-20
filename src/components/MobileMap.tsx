@@ -7,7 +7,7 @@ import type { MapAggregateMarker } from './MapCanvas'
 import type { Building, CalendarEvent, CardBoundary, EventRestaurantAssignment, InformalAsset, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot, Unit, UnitStatus, VisitHistory } from '../types'
 import type { AppLanguage } from '../i18n'
 import { t, translateKoreanAddress, currentLang } from '../i18n'
-import { findCardForCoordinates } from '../utils/mapUtils'
+import { findCardForCoordinates, normalizeMapCoordinates } from '../utils/mapUtils'
 import { getPinGroup, type PinGroup } from '../utils/buildingPin'
 import { showToast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirm'
@@ -1136,7 +1136,11 @@ export function MobileMap({
               const resolvedAddress = parts.join(' ')
               if (resolvedAddress) {
                 setAddAddress(resolvedAddress)
-                void geocodeQuery(resolvedAddress).then((adjusted) => {
+                const landCenter = normalizeMapCoordinates(
+                  Number(r.land?.coords?.center?.y),
+                  Number(r.land?.coords?.center?.x),
+                )
+                const applyAutomaticPinAdjustment = (adjusted: { lat: number; lng: number } | null) => {
                   if (
                     adjusted
                     && locationLookupId === addLocationLookupRef.current
@@ -1146,10 +1150,20 @@ export function MobileMap({
                     setAddLat(adjusted.lat)
                     setAddLng(adjusted.lng)
                     setAddCardId(findCardForCoordinates(adjusted.lat, adjusted.lng, cardBoundaries) ?? selectedCardId ?? 0)
+                    const map = (window as any).__mobileMapInstance
+                    map?.setCenter?.(new naver.maps.LatLng(adjusted.lat, adjusted.lng))
                   }
-                }).finally(() => {
-                  if (locationLookupId === addLocationLookupRef.current) setGeocoding(false)
-                })
+                }
+                if (landCenter) {
+                  applyAutomaticPinAdjustment(landCenter)
+                  setGeocoding(false)
+                } else {
+                  void geocodeQuery(resolvedAddress).then((adjusted) => {
+                    applyAutomaticPinAdjustment(adjusted)
+                  }).finally(() => {
+                    if (locationLookupId === addLocationLookupRef.current) setGeocoding(false)
+                  })
+                }
               } else {
                 setGeocoding(false)
               }
@@ -1206,7 +1220,6 @@ export function MobileMap({
 
   const startNewBuildingPinAdjustment = () => {
     if (addLat == null || addLng == null) return
-    addPinManuallyAdjustedRef.current = true
     addPinSnapshotRef.current = { lat: addLat, lng: addLng }
     setShowAddModal(false)
     setAdjustingNewBuildingPin(true)

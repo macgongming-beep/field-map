@@ -271,6 +271,43 @@ describe('모바일 지도 하단 시트', () => {
     expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
   })
 
+  test('주소 좌표 응답 전에 조정 화면을 열어도 직접 끌기 전에는 자동 보정을 적용한다', async () => {
+    let resolveGeocode: (value: { lat: number; lng: number }) => void = () => undefined
+    geocodeQuery.mockReturnValue(new Promise((resolve) => { resolveGeocode = resolve }))
+    ;(window as any).naver = {
+      maps: {
+        LatLng: class LatLng { constructor(public lat: number, public lng: number) {} },
+        Service: {
+          Status: { OK: 'OK' },
+          OrderType: { ADDR: 'addr', ROAD_ADDR: 'roadaddr' },
+          reverseGeocode: (_options: unknown, callback: (status: string, response: unknown) => void) => callback('OK', {
+            v2: {
+              results: [{
+                name: 'roadaddr',
+                region: {
+                  area1: { name: '경기도' },
+                  area2: { name: '용인시 기흥구' },
+                  area3: { name: '' },
+                },
+                land: { name: '언동로', number1: '216' },
+              }],
+            },
+          }),
+        },
+      },
+    }
+    ;(window as any).__mobileMapInstance = { setCenter: vi.fn(), getZoom: () => 18, setZoom: vi.fn() }
+
+    render(<MemoryRouter><MobileMap {...(mapProps() as never)} /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: 'start add building' }))
+    fireEvent.click(screen.getByRole('button', { name: 'tap map add' }))
+    fireEvent.click(screen.getByRole('button', { name: /핀 위치 조정/ }))
+    resolveGeocode({ lat: 37.2764, lng: 127.1194 })
+
+    fireEvent.click(await screen.findByRole('button', { name: '완료', exact: true }))
+    expect(screen.getByText('37.27640, 127.11940')).toBeVisible()
+  })
+
   test('주소로 건물을 추가하면 갱신된 건물로 이동하고 하단 정보를 연다', async () => {
     Element.prototype.scrollIntoView = vi.fn()
     const setCenter = vi.fn()
