@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { geocodeQuery, geocodeFirstMatch, isNaverMapsReady } from './naverGeocode'
+import { geocodeAddressFirstMatch, geocodeAddressQuery, geocodeQuery, geocodeFirstMatch, isNaverMapsReady } from './naverGeocode'
 
 type GeocodeCb = (status: string, response: unknown) => void
 
@@ -82,5 +82,30 @@ describe('geocodeFirstMatch', () => {
   it('모두 실패 → null', async () => {
     installNaver((_opts, cb) => cb('ERROR', {}))
     expect(await geocodeFirstMatch(['a', 'b'])).toBeNull()
+  })
+})
+
+describe('geocodeAddressQuery', () => {
+  it('정식 도로명 주소와 좌표를 함께 반환한다', async () => {
+    installNaver((_opts, cb) => cb('OK', { v2: { addresses: [{
+      roadAddress: '경기도 용인시 기흥구 언동로 213',
+      jibunAddress: '경기도 용인시 기흥구 중동 1',
+      y: '37.2',
+      x: '127.2',
+    }] } }))
+    expect(await geocodeAddressQuery('언동로213')).toEqual([{
+      address: '경기도 용인시 기흥구 언동로 213', lat: 37.2, lng: 127.2,
+    }])
+  })
+
+  it('여러 표현 중 처음 성공한 주소 후보만 사용한다', async () => {
+    const calls: string[] = []
+    installNaver((opts, cb) => {
+      calls.push(opts.query)
+      if (opts.query === '용인시 언동로 213') cb('OK', { v2: { addresses: [{ roadAddress: '언동로 213', y: '37.2', x: '127.2' }] } })
+      else cb('ERROR', {})
+    })
+    expect(await geocodeAddressFirstMatch(['언동로213', '용인시 언동로 213'])).toHaveLength(1)
+    expect(calls).toEqual(['언동로213', '용인시 언동로 213'])
   })
 })

@@ -109,6 +109,8 @@ export const messagesEn: Record<string, string> = {
   '추가 신청': 'Request addition',
   '식당 등록': 'Register restaurant',
   '식당 이름': 'Restaurant name',
+  '식당 이름 또는 주소': 'Restaurant name or address',
+  '상호명이나 도로명 주소를 입력하세요': 'Enter a business name or street address',
   '새 건물': 'New building',
   '기존 건물': 'Existing building',
   '건물 검색': 'Search buildings',

@@ -1,6 +1,9 @@
 import { supabase } from './supabase'
 import { getAuthToken } from './authToken'
 import { getRegions } from './regions'
+import { geocodeAddressFirstMatch } from './naverGeocode'
+import { getGeocodeCandidates } from '../utils/geocodeCandidates'
+import { buildingAddressKey, shortAddress } from '../utils/shortAddress'
 
 export type PlaceCandidate = {
   name: string
@@ -8,6 +11,43 @@ export type PlaceCandidate = {
   category: string
   lat: number
   lng: number
+  source?: 'place' | 'address'
+}
+
+export function isAddressLikePlaceQuery(query: string): boolean {
+  const value = query.trim()
+  return /(로|길|동|읍|면)\s*\d|\d+(-\d+)?\s*$/.test(value)
+}
+
+/** 상호명 지역 검색과 주소 지오코딩을 한 입력에서 함께 수행한다. */
+export async function searchPlacesAndAddressesForCongregation(query: string): Promise<PlaceSearchResult> {
+  const q = query.trim()
+  if (!q) return { ok: true, places: [] }
+
+  const [placeResult, addressMatches] = await Promise.all([
+    searchPlacesForCongregation(q),
+    geocodeAddressFirstMatch(getGeocodeCandidates(q)),
+  ])
+  const places = placeResult.ok
+    ? placeResult.places.map((place) => ({ ...place, source: 'place' as const }))
+    : []
+  const placeAddressKeys = new Set(places.map((place) => buildingAddressKey(place.address)).filter(Boolean))
+  const addresses: PlaceCandidate[] = addressMatches
+    .filter((match) => !placeAddressKeys.has(buildingAddressKey(match.address)))
+    .map((match) => ({
+      name: shortAddress(match.address) || q,
+      address: match.address,
+      category: '주소',
+      lat: match.lat,
+      lng: match.lng,
+      source: 'address',
+    }))
+
+  const combined = isAddressLikePlaceQuery(q)
+    ? [...addresses, ...places]
+    : [...places, ...addresses]
+  if (combined.length > 0) return { ok: true, places: combined.slice(0, 8) }
+  return placeResult.ok ? { ok: true, places: [] } : placeResult
 }
 
 /**

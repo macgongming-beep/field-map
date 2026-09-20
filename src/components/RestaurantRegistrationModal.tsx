@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import type { Building, CardBoundary } from '../types'
 import { RESTAURANT_INITIAL_STATES, type RegisterRestaurant, type RestaurantInitialState } from '../types/restaurantRegistration'
 import { msg } from '../lib/msg'
-import { searchPlacesForCongregation } from '../lib/placeSearch'
+import { isAddressLikePlaceQuery, searchPlacesAndAddressesForCongregation } from '../lib/placeSearch'
 import { classifyRestaurantPlaces, findExistingBuildingsByAddress, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
 import { showToast } from '../lib/toast'
 import './RestaurantRegistrationModal.css'
@@ -49,7 +49,7 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
     if (!value || searchingPlace) return
     setSearchingPlace(true)
     setPlaceResults(null)
-    const result = await searchPlacesForCongregation(value)
+    const result = await searchPlacesAndAddressesForCongregation(value)
     setSearchingPlace(false)
     if (!result.ok) {
       showToast(result.reason === 'no_session' || result.reason === 'rejected'
@@ -62,7 +62,7 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
 
   function pickPlace(place: ClassifiedRestaurantPlace) {
     if (place.status === 'registered') return
-    setName(place.name)
+    setName(place.source === 'address' && isAddressLikePlaceQuery(name) ? '' : place.name)
     setAddress(place.address)
     setSelectedLat(place.lat)
     setSelectedLng(place.lng)
@@ -112,7 +112,7 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
           <button type="button" className="v2-picker-close" disabled={saving} onClick={onClose} aria-label={msg('닫기')}>×</button>
         </div>
         <fieldset disabled={saving}>
-          <label>{msg('식당 이름')}<span className="restaurant-registration-search-row"><input autoFocus required maxLength={200} value={name} onChange={e => { setName(e.target.value); setPlaceResults(null) }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void runPlaceSearch(name) } }} /><button type="button" onClick={() => void runPlaceSearch(name)} disabled={!name.trim() || searchingPlace}>{searchingPlace ? msg('검색 중...') : msg('네이버 검색')}</button></span></label>
+          <label>{msg(verifiedAddress ? '식당 이름' : '식당 이름 또는 주소')}<span className="restaurant-registration-search-row"><input aria-label={msg('식당 이름')} autoFocus required maxLength={200} placeholder={msg('상호명이나 도로명 주소를 입력하세요')} value={name} onChange={e => { setName(e.target.value); setPlaceResults(null) }} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void runPlaceSearch(name) } }} /><button type="button" onClick={() => void runPlaceSearch(name)} disabled={!name.trim() || searchingPlace}>{searchingPlace ? msg('검색 중...') : msg('검색')}</button></span></label>
           {placeResults && (
             <div className="restaurant-registration-place-results" aria-label={msg('장소 검색 결과')}>
               {placeResults.length === 0 ? <p>{msg('검색 결과가 없습니다.')}</p> : placeResults.map((place) => (
@@ -153,7 +153,13 @@ export function RestaurantRegistrationModal({ buildings, cardBoundaries = [], vi
             </div>
           )}
           {!verifiedAddress && !manualAddressOpen && (
-            <button className="restaurant-registration-manual-address" type="button" onClick={() => setManualAddressOpen(true)}>
+            <button className="restaurant-registration-manual-address" type="button" onClick={() => {
+              if (isAddressLikePlaceQuery(name)) {
+                setAddress(name.trim())
+                setName('')
+              }
+              setManualAddressOpen(true)
+            }}>
               {msg('검색 결과에 없나요? 주소 직접 입력')}
             </button>
           )}

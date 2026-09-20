@@ -49,4 +49,16 @@ describe('classifyRestaurantPlaces', () => {
       buildingIds: [1, 2],
     })
   })
+
+  it('도로명에 동 글자가 있어도 DB와 같은 주소 키를 쓴다', () => {
+    const dongcheon = [{
+      ...buildings[0],
+      address: '경기도 용인시 수지구 동천로 12 (동천동)',
+      name: '동천빌딩',
+    }] as Building[]
+    const [result] = classifyRestaurantPlaces([
+      { name: '새식당', address: '동천로 12', category: '중식', lat: 37.2, lng: 127.2 },
+    ], dongcheon, boundaries)
+    expect(result).toMatchObject({ status: 'existing-building', buildingId: 1 })
+  })
 })

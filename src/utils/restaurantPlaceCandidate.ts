@@ -2,7 +2,7 @@ import type { Building, CardBoundary } from '../types'
 import type { PlaceCandidate } from '../lib/placeSearch'
 import { normalizeCardSearch } from './cardSearch'
 import { findCardForCoordinates, isValidMapCoordinate } from './mapUtils'
-import { shortAddress } from './shortAddress'
+import { buildingAddressKey } from './shortAddress'
 
 export type RestaurantPlaceStatus = 'registered' | 'existing-building' | 'ambiguous-building' | 'new'
 export type RestaurantPlaceScope = 'card' | 'unassigned' | 'outside'
@@ -24,9 +24,9 @@ function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number):
 }
 
 export function findExistingBuildingsByAddress(address: string, buildings: Building[]): Building[] {
-  const key = normalizeCardSearch(shortAddress(address))
+  const key = buildingAddressKey(address)
   if (!key) return []
-  return buildings.filter((building) => normalizeCardSearch(shortAddress(building.address)) === key)
+  return buildings.filter((building) => buildingAddressKey(building.address) === key)
 }
 
 function findExistingBuildings(place: PlaceCandidate, buildings: Building[]): Building[] {
