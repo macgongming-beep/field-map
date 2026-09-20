@@ -197,8 +197,7 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.click(screen.getByRole('button', { name: '검색' }))
 
     expect(await screen.findByText('경기도 용인시 기흥구 언동로 213')).toBeVisible()
-    fireEvent.click(screen.getByRole('button', { name: /언동로 213/ }))
-    fireEvent.click(await screen.findByRole('button', { name: '이 주소에 건물 추가' }))
+    fireEvent.click(screen.getByRole('button', { name: '언동로 213 추가' }))
 
     const sheet = screen.getByRole('heading', { name: '장소 등록' }).closest('.mm-building-edit-sheet') as HTMLElement
     expect(screen.getByDisplayValue('경기도 용인시 기흥구 언동로 213')).toBeVisible()
@@ -232,8 +231,7 @@ describe('모바일 지도 하단 시트', () => {
       target: { value: '카멜리아힐' },
     })
     fireEvent.click(screen.getByRole('button', { name: '검색' }))
-    fireEvent.click(await screen.findByRole('button', { name: /카멜리아힐/ }))
-    fireEvent.click(screen.getByRole('button', { name: '이 주소에 건물 추가' }))
+    fireEvent.click(await screen.findByRole('button', { name: '카멜리아힐 추가' }))
 
     const sheet = screen.getByRole('heading', { name: '장소 등록' }).closest('.mm-building-edit-sheet') as HTMLElement
     expect(within(sheet).getByRole('button', { name: '상가' })).toHaveClass('active')
@@ -292,7 +290,7 @@ describe('모바일 지도 하단 시트', () => {
       target: { value: '카멜리아힐' },
     })
     fireEvent.click(screen.getByRole('button', { name: '검색' }))
-    fireEvent.click(await screen.findByRole('button', { name: /카멜리아힐/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '카멜리아힐 추가' }))
 
     const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
     const input = await within(scroll).findByDisplayValue('카멜리아힐')
@@ -453,8 +451,7 @@ describe('모바일 지도 하단 시트', () => {
       target: { value: '언동로 216' },
     })
     fireEvent.click(screen.getByRole('button', { name: '검색' }))
-    fireEvent.click(await screen.findByRole('button', { name: /언동로 216/ }))
-    fireEvent.click(screen.getByRole('button', { name: '이 주소에 건물 추가' }))
+    fireEvent.click(await screen.findByRole('button', { name: '언동로 216 추가' }))
     expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
 
     fireEvent.click(screen.getByRole('button', { name: /핀 위치 조정/ }))

@@ -241,7 +241,6 @@ export function MobileMap({
   const [cardSearch, setCardSearch] = useState('')
   const [addressSearchResults, setAddressSearchResults] = useState<ClassifiedRestaurantPlace[]>([])
   const [addressSearching, setAddressSearching] = useState(false)
-  const [selectedAddressCandidate, setSelectedAddressCandidate] = useState<ClassifiedRestaurantPlace | null>(null)
   const searchPanelRef = useRef<HTMLDivElement | null>(null)
   const [mapToolbarSearchPush, setMapToolbarSearchPush] = useState(0)
 
@@ -264,7 +263,7 @@ export function MobileMap({
     const observer = new ResizeObserver(update)
     observer.observe(panel)
     return () => observer.disconnect()
-  }, [showCardFinder, cardSearch, addressSearching, addressSearchResults, selectedAddressCandidate])
+  }, [showCardFinder, cardSearch, addressSearching, addressSearchResults])
 
   // 필터
   const [strategyFilter] = useState<StrategyFilter>('전체')
@@ -1391,7 +1390,6 @@ export function MobileMap({
     setShowCardFinder(false)
     setCardSearch('')
     setAddressSearchResults([])
-    setSelectedAddressCandidate(null)
 
     if (result.kind === 'informal' && result.informalId != null) {
       const next = new URLSearchParams()
@@ -1515,7 +1513,6 @@ export function MobileMap({
     const query = cardSearch.trim()
     if (!query || addressSearching) return
     setAddressSearching(true)
-    setSelectedAddressCandidate(null)
     try {
       const result = await searchPlacesAndAddressesForCongregation(query)
       if (!result.ok) {
@@ -1549,7 +1546,7 @@ export function MobileMap({
       }
       return
     }
-    setSelectedAddressCandidate(candidate)
+    openAddressCandidateAdd(candidate)
   }
 
   const openAddressCandidateAdd = (candidate: ClassifiedRestaurantPlace) => {
@@ -1571,7 +1568,6 @@ export function MobileMap({
     setShowCardFinder(false)
     setCardSearch('')
     setAddressSearchResults([])
-    setSelectedAddressCandidate(null)
     backdropTouched.current = false
     addingGuard.current = true
     setShowAddModal(true)
@@ -1723,7 +1719,6 @@ export function MobileMap({
                   onChange={(event) => {
                     setCardSearch(event.target.value)
                     setAddressSearchResults([])
-                    setSelectedAddressCandidate(null)
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter') return
@@ -1743,12 +1738,12 @@ export function MobileMap({
               {cardSearch && (
                 <div className="mobile-map-card-results">
                   {bareUnitSearch && (
-                    <span>{t(language, 'map.searchUnitHint')}</span>
+                    <span className="mobile-map-results-summary">{t(language, 'map.searchUnitHint')}</span>
                   )}
                   {!bareUnitSearch && visibleSearchResultCount === 0 && (
-                    <span>{msg('등록된 건물이 없습니다.')}</span>
+                    <span className="mobile-map-results-summary">{msg('등록된 건물이 없습니다.')}</span>
                   )}
-                  {visibleSearchResultCount > 0 && <span>{t(language, 'map.searchResults')} {visibleSearchResultCount}{t(language, 'calendar.countSuffix')}</span>}
+                  {visibleSearchResultCount > 0 && <span className="mobile-map-results-summary">{t(language, 'map.searchResults')} {visibleSearchResultCount}{t(language, 'calendar.countSuffix')}</span>}
                   {mapSearchResults.map((result) => (
                     <button
                       key={result.key}
@@ -1794,25 +1789,27 @@ export function MobileMap({
                       })}
                     </div>
                   ) : (
-                    <button key={`${candidate.address}:${index}`} onClick={() => chooseAddressCandidate(candidate)} type="button">
-                      <span className={`mobile-map-search-kind ${candidateBuildingType(candidate) === '상가' ? 'kind-restaurant' : 'kind-address'}`}>
-                        {candidate.source === 'address' ? msg('주소') : buildingTypeLabel(candidateBuildingType(candidate) ?? '주택')}
-                      </span>
-                      <strong>{candidate.name}</strong>
-                      <small>{candidate.address}</small>
-                    </button>
-                  ))}
-                  {selectedAddressCandidate?.status === 'new' && (
-                    <div className="mobile-map-address-confirm">
-                      <div>
-                        <strong>{msg('등록된 건물이 없습니다.')}</strong>
-                        <small>{selectedAddressCandidate.address}</small>
-                      </div>
-                      <button onClick={() => openAddressCandidateAdd(selectedAddressCandidate)} type="button">
-                        {msg('이 주소에 건물 추가')}
+                    <div className="mobile-map-search-result-row" key={`${candidate.address}:${index}`}>
+                      <button className="mobile-map-search-result-main" onClick={() => chooseAddressCandidate(candidate)} type="button">
+                        <span className={`mobile-map-search-kind ${candidateBuildingType(candidate) === '상가' ? 'kind-restaurant' : 'kind-address'}`}>
+                          {candidate.source === 'address' ? msg('주소') : buildingTypeLabel(candidateBuildingType(candidate) ?? '주택')}
+                        </span>
+                        <strong>{candidate.name}</strong>
+                        <small>{candidate.address}</small>
                       </button>
+                      {(candidate.status === 'new' || (candidate.status === 'existing-building' && candidate.source === 'place')) && (
+                        <button
+                          aria-label={msg('{v1} 추가', { v1: candidate.name })}
+                          className="mobile-map-search-result-add"
+                          onClick={() => chooseAddressCandidate(candidate)}
+                          title={msg('{v1} 추가', { v1: candidate.name })}
+                          type="button"
+                        >
+                          <span aria-hidden="true">+</span>
+                        </button>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
             </div>
@@ -2667,12 +2664,12 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                 }
               }}
             >
-              <div className="mm-building-edit-sheet" onClick={e => e.stopPropagation()}>
-                <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 700 }}>
+              <div className={`mm-building-edit-sheet${addSearchCandidate ? ' mm-building-edit-sheet--place' : ''}`} onClick={e => e.stopPropagation()}>
+                <h3 className="mm-add-place-title">
                   {addSearchCandidate ? msg('장소 등록') : t(language, 'map.addBuilding')}
                 </h3>
-                {addLat && <p style={{ margin: '0 0 8px', fontSize: '12px', color: '#94a3b8' }}>{addLat.toFixed(5)}, {addLng?.toFixed(5)} {geocoding ? `· ${t(language, 'map.searchingAddress')}` : ''}</p>}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {addLat && <p className="mm-add-place-coordinates">{addLat.toFixed(5)}, {addLng?.toFixed(5)} {geocoding ? `· ${t(language, 'map.searchingAddress')}` : ''}</p>}
+                <div className="mm-add-place-fields">
                   <div>
                     <label className="mm-add-place-label">{t(language, 'map.type')}</label>
                     <div className="mm-add-place-type" role="group" aria-label={t(language, 'map.type')}>
@@ -2692,27 +2689,26 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                     )}
                   </div>
                   <div>
-                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'zone.cardCount')}</label>
-                    <select value={addCardId} onChange={e => { setAddCardId(Number(e.target.value)); setAddCardManuallySelected(true) }} style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px' }}>
+                    <label className="mm-add-place-label">{t(language, 'zone.cardCount')}</label>
+                    <select className="mm-add-place-control" value={addCardId} onChange={e => { setAddCardId(Number(e.target.value)); setAddCardManuallySelected(true) }}>
                       {addCardId === 0 && <option value={0}>{msg('카드를 선택하세요')}</option>}
                       {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                     {addCardId === 0 && <p style={{ margin: '5px 0 0', color: '#b45309', fontSize: '11px' }}>{msg('구역선으로 카드를 정하지 못했습니다. 실제 카드를 선택해 주세요.')}</p>}
                   </div>
                   <div>
-                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>
+                    <label className="mm-add-place-label">
                       {addSearchCandidate ? msg('건물명') : t(language, 'map.buildingNameRequired')}
                     </label>
-                    <input value={addName} onChange={e => setAddName(e.target.value)} placeholder={t(language, 'map.buildingNamePlaceholder')}
-                      style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px', boxSizing: 'border-box' }} />
+                    <input className="mm-add-place-control" value={addName} onChange={e => setAddName(e.target.value)} placeholder={t(language, 'map.buildingNamePlaceholder')} />
                   </div>
                   <div>
-                    <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'map.address')}</label>
+                    <label className="mm-add-place-label">{t(language, 'map.address')}</label>
                     <input
                       value={addAddress}
                       onChange={e => setAddAddress(e.target.value)}
                       placeholder={[getCongregationProfile().provinceShort || getCongregationProfile().province, getCongregationProfile().defaultCity, '...'].filter(Boolean).join(' ')}
-                      style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px', boxSizing: 'border-box' }} />
+                      className="mm-add-place-control" />
                   </div>
                   {addSearchCandidate && (
                     <div>
@@ -2724,7 +2720,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                         value={addFirstUnitName}
                         onChange={(event) => setAddFirstUnitName(event.target.value)}
                         placeholder={addType === '상가' ? msg('예: 카멜리아힐') : msg('예: 101호')}
-                        style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px', boxSizing: 'border-box' }}
+                        className="mm-add-place-control"
                       />
                       {!addFirstUnitName.trim() && (
                         <p className="mm-add-place-validation">
@@ -2741,22 +2737,12 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                     </span>
                   </button>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
-                  <button onClick={closeAddModal} style={{ flex: 1, padding: '12px', borderRadius: 'var(--r-md)', border: '1px solid #e2e8f0', background: '#f8fafc', fontWeight: 700, cursor: 'pointer', fontSize: '15px' }}>{t(language, 'common.cancel')}</button>
+                <div className="mm-add-place-actions">
+                  <button className="mm-add-place-cancel" onClick={closeAddModal}>{t(language, 'common.cancel')}</button>
                   <button
+                    className="mm-add-place-submit"
                     onClick={handleConfirmAdd}
                     disabled={!addName.trim() || addCardId === 0 || Boolean(addSearchCandidate && (!addTypeConfirmed || !addFirstUnitName.trim()))}
-                    style={{
-                      flex: 2,
-                      padding: '12px',
-                      borderRadius: 'var(--r-md)',
-                      border: 'none',
-                      background: addName.trim() && addCardId !== 0 && (!addSearchCandidate || (addTypeConfirmed && addFirstUnitName.trim())) ? 'var(--accent-700)' : '#e2e8f0',
-                      color: addName.trim() && addCardId !== 0 && (!addSearchCandidate || (addTypeConfirmed && addFirstUnitName.trim())) ? '#fff' : '#94a3b8',
-                      fontWeight: 700,
-                      cursor: addName.trim() && addCardId !== 0 && (!addSearchCandidate || (addTypeConfirmed && addFirstUnitName.trim())) ? 'pointer' : 'not-allowed',
-                      fontSize: '15px',
-                    }}
                   >
                     {addSearchCandidate ? msg('건물과 세대 등록') : t(language, 'common.add')}
                   </button>
