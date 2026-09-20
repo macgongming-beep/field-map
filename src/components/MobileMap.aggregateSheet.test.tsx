@@ -41,7 +41,11 @@ vi.mock('./MapCanvas', () => ({
 }))
 
 describe('모바일 지도 하단 시트', () => {
-  beforeEach(() => searchPlacesAndAddressesForCongregation.mockReset())
+  beforeEach(() => {
+    searchPlacesAndAddressesForCongregation.mockReset()
+    delete (window as any).__mobileMapInstance
+    delete (window as any).naver
+  })
 
   const mapProps = () => territoryProps({
     actualRole: 'admin',
@@ -99,7 +103,7 @@ describe('모바일 지도 하단 시트', () => {
     now.mockRestore()
   })
 
-  test('정기방문 핀을 누르면 선택 건물만 작은 시트에 보여 준다', async () => {
+  test('정기방문 핀을 누르면 선택 건물을 앞에 두고 기존 목록을 유지한다', async () => {
     Element.prototype.scrollIntoView = vi.fn()
     const first = testBuilding(1, 1, '영덕빌라')
     const second = testBuilding(2, 2, '죽전빌라')
@@ -125,7 +129,9 @@ describe('모바일 지도 하단 시트', () => {
     const expectedHeight = getMobileMapSelectedPeekHeight(window.innerHeight)
     await waitFor(() => expect(sheet.style.height).toBe(`${expectedHeight}px`))
     expect(within(scroll).getByText('영덕빌라')).toBeVisible()
-    expect(within(scroll).queryByText('죽전빌라')).not.toBeInTheDocument()
+    expect(within(scroll).getByText('죽전빌라')).toBeVisible()
+    const names = within(scroll).getAllByText(/빌라$/)
+    expect(names[0]).toHaveTextContent('영덕빌라')
     expect(screen.getByTestId('map-bottom-padding')).toHaveTextContent(String(expectedHeight + 20))
   })
 
@@ -187,6 +193,19 @@ describe('모바일 지도 하단 시트', () => {
 
   test('주소로 건물을 추가하면 갱신된 건물로 이동하고 하단 정보를 연다', async () => {
     Element.prototype.scrollIntoView = vi.fn()
+    const setCenter = vi.fn()
+    const panBy = vi.fn()
+    ;(window as any).naver = {
+      maps: {
+        LatLng: class LatLng { constructor(public lat: number, public lng: number) {} },
+        Point: class Point { constructor(public x: number, public y: number) {} },
+      },
+    }
+    ;(window as any).__mobileMapInstance = {
+      getZoom: () => 17,
+      setCenter,
+      panBy,
+    }
     searchPlacesAndAddressesForCongregation.mockResolvedValue({
       ok: true,
       places: [{
@@ -199,7 +218,11 @@ describe('모바일 지도 하단 시트', () => {
       }],
     })
     const onCreateBuilding = vi.fn(async () => true)
-    const props = territoryProps({ ...mapProps(), buildings: [], onCreateBuilding })
+    const other = testBuilding(92, 1, '언동로 218')
+    other.address = '경기도 용인시 기흥구 언동로 218'
+    other.lat = 37.277
+    other.lng = 127.12
+    const props = territoryProps({ ...mapProps(), buildings: [other], onCreateBuilding })
     const { container, rerender } = render(
       <MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>,
     )
@@ -220,7 +243,7 @@ describe('모바일 지도 하단 시트', () => {
     created.lat = 37.276
     created.lng = 127.119
     rerender(
-      <MemoryRouter><MobileMap {...({ ...props, buildings: [created] } as never)} /></MemoryRouter>,
+      <MemoryRouter><MobileMap {...({ ...props, buildings: [other, created] } as never)} /></MemoryRouter>,
     )
 
     const sheet = container.querySelector('.mobile-bottom-sheet') as HTMLElement
@@ -231,10 +254,17 @@ describe('모바일 지도 하단 시트', () => {
     })
     const buildingButton = within(scroll).getByRole('button', { name: /언동로 216/ })
     expect(buildingButton).toBeVisible()
+    expect(within(scroll).getByRole('button', { name: /언동로 218/ })).toBeVisible()
 
     fireEvent.click(buildingButton)
     await waitFor(() => expect(sheet.style.height).toBe(`${window.innerHeight * 0.46}px`))
     expect(within(scroll).getByText('101호')).toBeVisible()
+
+    fireEvent.click(within(scroll).getByRole('button', { name: /언동로 216/ }))
+    fireEvent.click(within(scroll).getByRole('button', { name: /언동로 216/ }))
+    expect(setCenter).toHaveBeenCalledTimes(4)
+    expect(setCenter.mock.calls.every(([point]) => point.lat === 37.276 && point.lng === 127.119)).toBe(true)
+    expect(panBy).toHaveBeenCalledTimes(4)
   })
 
   test('주소 후보가 기존 건물과 일치하면 새 건물 추가 대신 기존 건물을 연다', async () => {

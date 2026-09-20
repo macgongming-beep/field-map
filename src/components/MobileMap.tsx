@@ -982,12 +982,24 @@ export function MobileMap({
 
   const sheetBuildingGroups = useMemo(() => {
     if (selectedBuildingId == null) return buildingGroups
-    return buildingGroups
-      .map((group) => ({
-        ...group,
-        buildings: group.buildings.filter((building) => building.id === selectedBuildingId),
-      }))
-      .filter((group) => group.buildings.length > 0)
+    const selectedGroup = buildingGroups.find((group) =>
+      group.buildings.some((building) => building.id === selectedBuildingId)
+    )
+    if (!selectedGroup) return buildingGroups
+
+    const selectedBuilding = selectedGroup.buildings.find((building) => building.id === selectedBuildingId)
+    if (!selectedBuilding) return buildingGroups
+
+    return [
+      {
+        ...selectedGroup,
+        buildings: [
+          selectedBuilding,
+          ...selectedGroup.buildings.filter((building) => building.id !== selectedBuildingId),
+        ],
+      },
+      ...buildingGroups.filter((group) => group.status !== selectedGroup.status),
+    ]
   }, [buildingGroups, selectedBuildingId])
 
   const unitTotal = useMemo(() => filteredBuildings.reduce((t, b) => t + b.units.length, 0), [filteredBuildings])
@@ -1186,7 +1198,9 @@ export function MobileMap({
     if (!naver?.maps || !map || !Number.isFinite(lat) || !Number.isFinite(lng)) return
     const latLng = new naver.maps.LatLng(lat, lng)
     const centerInVisibleArea = () => {
-      map.panTo(latLng)
+      // Restart from the pin coordinate so the sheet offset cannot accumulate.
+      if (typeof map.setCenter === 'function') map.setCenter(latLng)
+      else map.panTo(latLng)
       const offset = getMobileMapPinPanOffset(visibleSheetHeight)
       if (offset > 0 && typeof map.panBy === 'function') {
         map.panBy(new naver.maps.Point(0, offset))
