@@ -30,6 +30,7 @@ const { makeBuildingMutations } = await import('./buildings')
 
 function mutations() {
   return makeBuildingMutations({
+    role: 'admin',
     fetchAll: vi.fn().mockResolvedValue(undefined),
     buildings: [],
     cards: [],

@@ -4,6 +4,7 @@
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
 export const messagesEn: Record<string, string> = {
+  '이 건물에 이미 등록된 식당입니다.': 'This restaurant is already registered in this building.',
   '테스트 앱 초기화': 'Reset test app',
   '기본 데모 자료로 되돌리기': 'Restore default demo data',
   '초기화 중…': 'Resetting…',

@@ -1,9 +1,9 @@
-import type { Building, TerritoryCard, Unit, UnitStatus } from '../../types'
+import type { Building, Role, TerritoryCard, Unit, UnitStatus } from '../../types'
 import type { CsvBuildingImport } from '../../utils/csvBuildingImport'
 import { isValidMapCoordinate } from '../../utils/mapUtils'
 import { buildImportPayload } from '../../utils/importBuildingPayload'
 import { explainDbError } from '../../utils/dbError'
-import { getAuthToken, getStoredAuthSession } from '../../lib/authToken'
+import { getAuthToken } from '../../lib/authToken'
 import { promptDialog } from '../../lib/confirm'
 import type { MergeResult } from '../../utils/duplicateBuildingMerge'
 import { ensureAffectedRows, supabase, showToast, reportMutationError } from './shared'
@@ -12,6 +12,7 @@ import { msg } from '../../lib/msg'
 import { canonicalUnitNumber } from '../../utils/unitNumber'
 
 export function makeBuildingMutations(deps: {
+  role: Role
   fetchAll: () => Promise<void>
   buildings: Building[]
   cards: TerritoryCard[]
@@ -23,18 +24,11 @@ export function makeBuildingMutations(deps: {
   appendUnits: (buildingId: number, units: Unit[]) => void
   removeUnit: (unitId: number) => void
 }) {
-  const { fetchAll, buildings, cards, appendUnits, removeUnit } = deps
+  const { role, fetchAll, buildings, cards, appendUnits, removeUnit } = deps
 
-  const canDeleteWithoutReasonPrompt = () => {
-    const stored = getStoredAuthSession()
-    if (!stored) return false
-    try {
-      const role = (JSON.parse(stored.raw) as { role?: string } | null)?.role
-      return role === 'leader' || role === 'admin' || role === 'developer'
-    } catch {
-      return false
-    }
-  }
+  const canDeleteWithoutReasonPrompt = () => (
+    role === 'leader' || role === 'admin' || role === 'developer'
+  )
 
   /** 성공하면 true, 실패하면 false. 이 계약이 화면까지 그대로 간다. */
   const createBuilding = async (input: {

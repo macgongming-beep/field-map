@@ -27,6 +27,7 @@ import type {
   Unit,
   VisitHistory,
   PlaceDeletionSignal,
+  Role,
 } from '../types'
 import {
   toBuilding,
@@ -110,7 +111,7 @@ async function fetchAllPages<T>(
  * 예전에는 로그인 화면에서도 전부 받았다 (App.tsx 는 인증 판단보다 먼저
  * useStore() 를 호출한다). 실측으로 API 만 약 2.2MB · 47개 요청이었다.
  */
-export function useStore(enabled: boolean = true) {
+export function useStore(enabled: boolean = true, role: Role = 'user') {
   const [cards, setCards] = useState<TerritoryCard[]>([])
   const [buildings, setBuildings] = useState<Building[]>([])
   // buildings는 cards transform에서 참조됨. fetchSlice가 useCallback([])이라
@@ -790,7 +791,7 @@ export function useStore(enabled: boolean = true) {
     setUnitsSurveyed,
     moveBuildingToCard,
     reassignBuildingsToCards,
-  } = makeBuildingMutations({ fetchAll: refetchBuildings, buildings, cards, appendUnits, removeUnit })
+  } = makeBuildingMutations({ role, fetchAll: refetchBuildings, buildings, cards, appendUnits, removeUnit })
 
   const { saveCardBoundary, deleteCardBoundary, restoreCardBoundaries, mergeCardBoundaries, undoMergeCardBoundaries } = makeCardBoundaryMutations({ fetchAll: refetchCardBoundaries, cardBoundaries, buildings })
 

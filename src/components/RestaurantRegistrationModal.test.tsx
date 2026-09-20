@@ -157,4 +157,26 @@ describe('RestaurantRegistrationModal', () => {
     expect(screen.queryByText('주소를 확인했습니다. 식당 이름을 입력하면 등록할 수 있습니다.')).toBeNull()
     expect((screen.getByRole('button', { name: '등록' }) as HTMLButtonElement).disabled).toBe(false)
   })
+
+  it('주소를 먼저 고른 뒤 기존 식당 이름을 입력해도 중복 등록을 막는다', async () => {
+    searchPlacesAndAddressesForCongregation.mockResolvedValue({ ok: true, places: [{
+      name: '우정원길 1',
+      address: '용인시 우정원길 1',
+      category: '주소',
+      lat: 37.2,
+      lng: 127.2,
+      source: 'address',
+    }] })
+    const onRegister = vi.fn()
+    render(<RestaurantRegistrationModal buildings={buildings} onRegister={onRegister} onClose={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('식당 이름'), { target: { value: '우정원길 1' } })
+    fireEvent.click(screen.getByRole('button', { name: '검색' }))
+    fireEvent.click(await screen.findByRole('button', { name: /우정원길 1/ }))
+    fireEvent.change(screen.getByLabelText('식당 이름'), { target: { value: ' 기존식당 ' } })
+
+    expect(screen.getByRole('alert').textContent).toBe('이 건물에 이미 등록된 식당입니다.')
+    expect((screen.getByRole('button', { name: '등록' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.submit(screen.getByRole('dialog'))
+    expect(onRegister).not.toHaveBeenCalled()
+  })
 })
