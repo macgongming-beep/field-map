@@ -1,7 +1,7 @@
 // 병합 계획. **여기가 "무엇을 지울지" 를 정한다.**
 // 틀리면 방문 기록이 cascade 로 사라지고 되돌릴 수 없다.
 import { describe, test, expect } from 'vitest'
-import { buildDuplicateUnitPreviews, normalizeAddress, normalizeUnitNumber, planDuplicateBuildingMerge } from './duplicateBuildingMerge'
+import { buildDuplicateUnitPreviews, buildingAddressCandidateKey, normalizeAddress, normalizeUnitNumber, planDuplicateBuildingMerge } from './duplicateBuildingMerge'
 import { testBuilding, testUnit } from '../test/territoryFixture'
 import type { Building, VisitHistory } from '../types'
 
@@ -83,6 +83,19 @@ describe('planDuplicateBuildingMerge', () => {
       at(2, '언동로1-2', ['201호']),
     ])
     expect(plan.merge).toHaveLength(1)
+    expect(plan.merge[0].matchType).toBe('exact')
+  })
+
+  test('짧은 주소와 전체 주소는 사람이 확인할 병합 후보로 잡는다', () => {
+    expect(buildingAddressCandidateKey('갈천로 76')).toBe(
+      buildingAddressCandidateKey('경기도 용인시 기흥구 갈천로 76 (상갈동, 1층)'),
+    )
+    const plan = planDuplicateBuildingMerge([
+      at(1, '갈천로 76', ['101호']),
+      at(2, '경기도 용인시 기흥구 갈천로 76 (상갈동, 1층)', ['201호']),
+    ])
+    expect(plan.merge).toHaveLength(1)
+    expect(plan.merge[0].matchType).toBe('candidate')
   })
 
   test('카드를 지정하면 그 카드만 본다', () => {

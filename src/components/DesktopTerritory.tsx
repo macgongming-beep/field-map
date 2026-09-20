@@ -146,7 +146,7 @@ export function DesktopTerritory({
   onSetMultipleCardLeaders: (cardIds: number[], leaderNames: string[], options?: { silentSuccess?: boolean }) => Promise<void> | void
   onDeleteBuildings: (buildingIds: number[]) => void
   onDeleteCards: (cardIds: number[]) => void
-  onMergeDuplicateBuildings: (scopeCardId?: number, nameOverrides?: Record<number, string>, selectedPrimaryIds?: number[]) => Promise<MergeResult>
+  onMergeDuplicateBuildings: (scopeCardId?: number, nameOverrides?: Record<number, string>, selectedPrimaryIds?: number[], addressOverrides?: Record<number, string>) => Promise<MergeResult>
   onImportBuildings: (inputs: CsvBuildingImport[]) => Promise<{ inserted: number; skipped: number }>
   onMoveBuildingToCard: (buildingId: number, cardId: number) => Promise<boolean>
   onReassignBuildingsToCards: (updates: Array<{ buildingId: number; cardId: number }>) => Promise<{ updated: number; failed: number }>
@@ -288,7 +288,9 @@ export function DesktopTerritory({
     buildingCount: number
     unitCount: number
     names: string[]
+    addresses: string[]
     duplicateUnits: DuplicateUnitPreview[]
+    matchType: 'exact' | 'candidate'
   }> | null>(null)
   /** 병합 중에는 창을 닫지 않는다. 닫아도 작업은 계속돼 결과를 아무도 못 본다 */
   const [pendingChineseToggle, setPendingChineseToggle] = useState<{
@@ -2005,7 +2007,9 @@ export function DesktopTerritory({
                       buildingCount: sorted.length,
                       unitCount: sorted.reduce((sum, building) => sum + building.units.length, 0),
                       names: sorted.map((b) => b.name),
+                      addresses: [...new Set(sorted.map((b) => b.address))],
                       duplicateUnits: buildDuplicateUnitPreviews(g, visitHistories),
+                      matchType: g.matchType,
                     }
                   })
                   setMergeModalGroups(groups)

@@ -16,7 +16,9 @@ export type MergeGroup = {
   buildingCount: number
   unitCount: number
   names: string[]
+  addresses: string[]
   duplicateUnits: DuplicateUnitPreview[]
+  matchType: 'exact' | 'candidate'
 }
 
 type Props = {
@@ -36,6 +38,7 @@ type Props = {
     plan: undefined,
     nameChoices: Record<number, string>,
     selectedPrimaryIds: number[],
+    addressChoices: Record<number, string>,
   ) => Promise<MergeResult>
 }
 
@@ -43,12 +46,23 @@ export function DuplicateBuildingMergeModal({
   groups: mergeModalGroups, mergePlan, cardName, onClose, onMerge: onMergeDuplicateBuildings,
 }: Props) {
   const [mergeNameChoices, setMergeNameChoices] = useState<Record<number, string>>({})
-  // 열릴 때 **전부 선택**해 둔다. 예전에는 여는 쪽이 이걸 해 줬는데,
-  // 그러면 여는 곳이 늘 때마다 초기화를 잊을 수 있다.
+  const [mergeAddressChoices, setMergeAddressChoices] = useState<Record<number, string>>(() => (
+    Object.fromEntries(mergeModalGroups.map((group) => [
+      group.primaryId,
+      [...group.addresses].sort((a, b) => b.length - a.length)[0] ?? group.address,
+    ]))
+  ))
+  // 전체 주소까지 같은 묶음만 기본 선택한다. 도로명·건물번호만 같은 후보는
+  // 실제 다른 건물일 수 있으므로 관리자가 내용을 보고 직접 체크해야 한다.
   const [mergeSelectedPrimaryIds, setMergeSelectedPrimaryIds] = useState<Set<number>>(
-    () => new Set(mergeModalGroups.map((g) => g.primaryId)),
+    () => new Set(mergeModalGroups.filter((group) => group.matchType === 'exact').map((group) => group.primaryId)),
   )
   const [merging, setMerging] = useState(false)
+  const exactGroupIds = mergeModalGroups
+    .filter((group) => group.matchType === 'exact')
+    .map((group) => group.primaryId)
+  const allExactSelected = exactGroupIds.length > 0
+    && exactGroupIds.every((id) => mergeSelectedPrimaryIds.has(id))
 
   return (
       <div className="cal-modal-backdrop" onClick={() => { if (!merging) onClose() }}>
@@ -67,15 +81,21 @@ export function DuplicateBuildingMergeModal({
           <div className="merge-name-toolbar">
             <label className="merge-name-select-all">
               <input
-                checked={mergeModalGroups.length > 0 && mergeSelectedPrimaryIds.size === mergeModalGroups.length}
+                checked={allExactSelected}
                 onChange={(event) => {
-                  setMergeSelectedPrimaryIds(event.target.checked
-                    ? new Set(mergeModalGroups.map((group) => group.primaryId))
-                    : new Set())
+                  setMergeSelectedPrimaryIds((previous) => {
+                    const next = new Set(previous)
+                    exactGroupIds.forEach((id) => {
+                      if (event.target.checked) next.add(id)
+                      else next.delete(id)
+                    })
+                    return next
+                  })
                 }}
+                disabled={exactGroupIds.length === 0}
                 type="checkbox"
               />
-              전체 선택
+              동일 주소 전체 선택
             </label>
             <span>선택 {mergeSelectedPrimaryIds.size} / {mergeModalGroups.length}그룹</span>
           </div>
@@ -100,6 +120,23 @@ export function DuplicateBuildingMergeModal({
                   </label>
                   <span className="merge-name-count">{group.cardName} · 건물 {group.buildingCount}개 · 세대 {group.unitCount}개</span>
                 </div>
+                {group.matchType === 'candidate' && (
+                  <div className="merge-name-candidate-addresses">
+                    <strong>같은 건물인지 확인하고, 남길 주소를 선택하세요.</strong>
+                    {group.addresses.map((address) => (
+                      <label key={address}>
+                        <input
+                          checked={mergeAddressChoices[group.primaryId] === address}
+                          disabled={!mergeSelectedPrimaryIds.has(group.primaryId)}
+                          name={`merge-address-${group.primaryId}`}
+                          onChange={() => setMergeAddressChoices((previous) => ({ ...previous, [group.primaryId]: address }))}
+                          type="radio"
+                        />
+                        <span>{address}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
                 <div className="merge-name-chips">
                   {group.names.map((name) => (
                     <button
@@ -184,13 +221,15 @@ export function DuplicateBuildingMergeModal({
                 if (merging) return
                 // 빈 입력은 첫 번째 이름으로 fallback
                 const finalChoices: Record<number, string> = {}
+                const finalAddressChoices: Record<number, string> = {}
                 const selectedPrimaryIds = Array.from(mergeSelectedPrimaryIds)
                 mergeModalGroups.filter((g) => mergeSelectedPrimaryIds.has(g.primaryId)).forEach((g) => {
                   finalChoices[g.primaryId] = mergeNameChoices[g.primaryId]?.trim() || g.names[0]
+                  finalAddressChoices[g.primaryId] = mergeAddressChoices[g.primaryId] || g.address
                 })
                 setMerging(true)
                 try {
-                  const result = await onMergeDuplicateBuildings(undefined, finalChoices, selectedPrimaryIds)
+                  const result = await onMergeDuplicateBuildings(undefined, finalChoices, selectedPrimaryIds, finalAddressChoices)
                   // 실패했으면 창을 열어 둔다 — 고른 것과 적은 이름을 지킨다.
                   // 예전에는 부르기 전에 닫아서, 실패해도 아무도 몰랐다.
                   if (!result.ok) return

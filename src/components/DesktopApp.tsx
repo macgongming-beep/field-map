@@ -253,7 +253,7 @@ export function DesktopApp({
   onDeleteBuilding: (buildingId: number) => void
   onDeleteBuildings: (buildingIds: number[]) => void
   onDeleteCards: (cardIds: number[]) => void
-  onMergeDuplicateBuildings: (scopeCardId?: number, nameOverrides?: Record<number, string>, selectedPrimaryIds?: number[]) => Promise<MergeResult>
+  onMergeDuplicateBuildings: (scopeCardId?: number, nameOverrides?: Record<number, string>, selectedPrimaryIds?: number[], addressOverrides?: Record<number, string>) => Promise<MergeResult>
   onUpdateBuilding: (buildingId: number, name: string, address: string, lat?: number, lng?: number, type?: Building['type'], memo?: string, isChineseHeavy?: boolean) => Promise<boolean>
   onSetUnitsSurveyed?: (buildingId: number, surveyed: boolean) => Promise<boolean> | void
   onMoveBuildingToCard: (buildingId: number, cardId: number) => Promise<boolean>

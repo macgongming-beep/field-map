@@ -48,6 +48,8 @@ describe('DuplicateBuildingMergeModal', () => {
           buildingCount: 2,
           unitCount: 2,
           names: ['옛 건물', '최근 건물'],
+          addresses: ['중부대로1408번길 16'],
+          matchType: 'exact',
           duplicateUnits: [{
             normalizedNumber: '201',
             displayNumber: '201호',
@@ -70,5 +72,34 @@ describe('DuplicateBuildingMergeModal', () => {
     expect(screen.getByText('최근 건물의 현재 정보 유지')).toBeTruthy()
     expect(screen.getByText('기록 2건 보존')).toBeTruthy()
     expect(screen.getByText('최근 2026-09-19 · 부재')).toBeTruthy()
+  })
+
+  it('주소 표기가 다른 후보는 기본 선택하지 않고 직접 확인하게 한다', () => {
+    const onMerge = vi.fn()
+    render(
+      <DuplicateBuildingMergeModal
+        groups={[{
+          primaryId: 1,
+          address: '갈천로 76',
+          cardName: '기흥구 상갈동 001',
+          buildingCount: 2,
+          unitCount: 2,
+          names: ['갈천로 76', '갈천로 76 1층'],
+          addresses: ['갈천로 76', '경기도 용인시 기흥구 갈천로 76 (상갈동, 1층)'],
+          duplicateUnits: [],
+          matchType: 'candidate',
+        }]}
+        mergePlan={{ conflicts: [] }}
+        cardName={() => '기흥구 상갈동 001'}
+        onClose={vi.fn()}
+        onMerge={onMerge}
+      />,
+    )
+
+    expect(screen.getByText('같은 건물인지 확인하고, 남길 주소를 선택하세요.')).toBeTruthy()
+    expect(screen.getByText('경기도 용인시 기흥구 갈천로 76 (상갈동, 1층)')).toBeTruthy()
+    expect((screen.getByRole('radio', { name: '경기도 용인시 기흥구 갈천로 76 (상갈동, 1층)' }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByRole('button', { name: '선택한 주소·기록 합치기' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('checkbox', { name: /갈천로 76/ }) as HTMLInputElement).checked).toBe(false)
   })
 })

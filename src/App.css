@@ -14090,7 +14090,6 @@ button:focus-visible {
 
   .merge-name-group.is-unselected {
     background: #f8fafc;
-    opacity: .62;
   }
 
   .merge-name-group-head {
@@ -14116,6 +14115,40 @@ button:focus-visible {
     font-weight: 700;
     line-height: 1.6;
     white-space: nowrap;
+  }
+
+  .merge-name-candidate-addresses {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border-left: 3px solid #f59e0b;
+    background: #fffbeb;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .merge-name-candidate-addresses strong {
+    color: #92400e;
+    font-size: 12px;
+  }
+
+  .merge-name-candidate-addresses label {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .merge-name-candidate-addresses input {
+    flex: 0 0 auto;
+    margin-top: 2px;
+    accent-color: #92400e;
+  }
+
+  .merge-name-candidate-addresses span {
+    overflow-wrap: anywhere;
   }
 
   .merge-name-chips {

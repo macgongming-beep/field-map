@@ -11,6 +11,7 @@
  * 환경 변수 (.env.local):
  *   VITE_SUPABASE_URL=...
  *   SUPABASE_SERVICE_ROLE_KEY=...   ← Supabase Dashboard → Settings → API
+ *   SUPABASE_DB_URL=...             ← private 병합 감사 스냅샷 백업
  *
  * SERVICE_ROLE_KEY 는 RLS 를 우회하므로 절대 클라이언트에 노출 금지.
  * .env.local 은 .gitignore 에 등록되어 있어 커밋되지 않습니다.
@@ -20,6 +21,7 @@ import { createClient } from '@supabase/supabase-js'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { spawnSync } from 'node:child_process'
 
 // ── .env.local 로드 (dotenv 의존성 없이 직접 파싱) ──────────────
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -41,6 +43,7 @@ if (existsSync(envPath)) {
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY
+const DB_URL = process.env.SUPABASE_DB_URL
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('❌ 환경변수 설정 필요:')
@@ -157,6 +160,53 @@ async function dumpTable(name) {
   return { status: 'ok', rows }
 }
 
+function findPgDump() {
+  return [
+    process.env.PG_DUMP_BIN,
+    '/opt/homebrew/opt/libpq/bin/pg_dump',
+    '/usr/local/opt/libpq/bin/pg_dump',
+    'pg_dump',
+  ].filter(Boolean).find((candidate) => {
+    const result = spawnSync(candidate, ['--version'], { stdio: 'ignore' })
+    return result.status === 0
+  }) ?? null
+}
+
+/** private 스키마는 PostgREST로 읽을 수 없어서 pg_dump로 별도 보존한다. */
+function dumpPrivateMergeAudits(dir) {
+  if (!DB_URL) {
+    return { status: 'failed', reason: '.env.local에 SUPABASE_DB_URL이 없습니다' }
+  }
+  const pgDump = findPgDump()
+  if (!pgDump) return { status: 'failed', reason: 'pg_dump를 찾지 못했습니다' }
+
+  let url
+  try {
+    url = new URL(DB_URL)
+  } catch {
+    return { status: 'failed', reason: 'SUPABASE_DB_URL 형식이 잘못됐습니다' }
+  }
+  const password = decodeURIComponent(url.password)
+  url.password = ''
+  const file = join(dir, 'private_duplicate_building_merge_audits.sql')
+  const result = spawnSync(pgDump, [
+    '--data-only',
+    '--column-inserts',
+    '--no-owner',
+    '--no-privileges',
+    '--table=private.duplicate_building_merge_audits',
+    '--file', file,
+    url.toString(),
+  ], {
+    env: { ...process.env, PGPASSWORD: password },
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) {
+    return { status: 'failed', reason: result.stderr?.trim() || 'pg_dump 실패' }
+  }
+  return { status: 'ok', file }
+}
+
 async function main() {
   const stamp = todayStamp()
   const dir = join(projectRoot, 'backups', stamp)
@@ -188,6 +238,14 @@ async function main() {
     console.log(`✅ ${t.padEnd(32)} ${String(result.rows.length).padStart(5)} 행`)
   }
 
+  const privateAudit = dumpPrivateMergeAudits(dir)
+  if (privateAudit.status === 'ok') {
+    console.log(`✅ ${'private.merge_audits'.padEnd(32)} SQL 스냅샷`)
+  } else {
+    failed++
+    console.error(`❌ private.merge_audits: ${privateAudit.reason}`)
+  }
+
   // 메타 정보 저장
   const meta = {
     backedUpAt: new Date().toISOString(),
@@ -196,6 +254,7 @@ async function main() {
     tablesSkipped: skipped,
     tablesFailed: failed,
     totalRows: total,
+    privateAuditBackedUp: privateAudit.status === 'ok',
   }
   writeFileSync(join(dir, '_meta.json'), JSON.stringify(meta, null, 2), 'utf-8')
 
@@ -204,6 +263,7 @@ async function main() {
   if (skipped > 0) console.log(`   스킵: ${skipped}개 (테이블 없음)`)
   if (failed > 0) console.log(`   ❌ 실패: ${failed}개 (위 로그 확인)`)
   console.log(`   📁 backups/${stamp}/`)
+  if (failed > 0) process.exitCode = 1
 }
 
 main().catch((e) => {

@@ -8,6 +8,7 @@
 //   이 함수는 화면의 미리보기만 만든다. 실제 연결 자료 이동과 현재 담당 충돌 판정은
 //   DB 트랜잭션 merge_duplicate_buildings_tx 가 잠근 최신 자료로 다시 수행한다.
 import type { Building, UnitStatus, VisitHistory } from '../types'
+import { buildingAddressKey } from './shortAddress'
 
 export type MergeGroup = {
   /** 남길 건물 (id 가 가장 작은 것) */
@@ -18,6 +19,8 @@ export type MergeGroup = {
   movingUnits: number
   /** 기록까지 통합할 중복 호수 표기 */
   duplicateUnitNumbers: string[]
+  /** 전체 주소까지 같은지, 도로명·건물번호만 같은 확인 후보인지 */
+  matchType: 'exact' | 'candidate'
 }
 
 export type ConflictGroup = {
@@ -140,6 +143,11 @@ export function normalizeAddress(address: string): string {
   return address.trim().toLowerCase().replace(/\s+/g, '').replace(/[-‐]/g, '-')
 }
 
+/** 식당 등록과 같은 도로명·건물번호 열쇠. 자동 병합이 아니라 사람이 볼 후보를 찾는 데만 쓴다. */
+export function buildingAddressCandidateKey(address: string): string {
+  return buildingAddressKey(address)
+}
+
 export function planDuplicateBuildingMerge(
   buildings: Building[],
   options: { scopeCardId?: number; selectedPrimaryIds?: number[] } = {},
@@ -148,10 +156,11 @@ export function planDuplicateBuildingMerge(
     ? buildings.filter((b) => b.cardId === options.scopeCardId)
     : buildings
 
-  // 같은 카드 · 같은 주소끼리 묶는다
+  // 같은 카드 · 같은 도로명/건물번호를 후보로 묶는다. 전체 주소가 다른 후보는
+  // 화면에서 기본 선택하지 않아 사람이 실제 같은 건물인지 확인해야 한다.
   const groups = new Map<string, Building[]>()
   for (const b of scope) {
-    const key = `${b.cardId}::${normalizeAddress(b.address)}`
+    const key = `${b.cardId}::${buildingAddressCandidateKey(b.address)}`
     const list = groups.get(key)
     if (list) list.push(b)
     else groups.set(key, [b])
@@ -184,6 +193,9 @@ export function planDuplicateBuildingMerge(
       absorbed,
       movingUnits,
       duplicateUnitNumbers: [...new Set(duplicateUnitNumbers)].sort(),
+      matchType: group.every((building) => normalizeAddress(building.address) === normalizeAddress(primary.address))
+        ? 'exact'
+        : 'candidate',
     })
   }
 

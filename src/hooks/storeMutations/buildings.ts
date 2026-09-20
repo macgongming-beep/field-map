@@ -329,7 +329,7 @@ export function makeBuildingMutations(deps: {
    * - 나머지 건물 삭제
    */
   /**
-   * 같은 주소로 두 번 등록된 건물을 합친다. **DB 안에서 한 트랜잭션으로 돈다.**
+   * 같은 주소 후보로 등록된 건물을 합친다. **DB 안에서 한 트랜잭션으로 돈다.**
    *
    * 예전에는 여기서 이름변경 → 호수이동 → 건물삭제를 순서대로 쐈다. 중간에
    * 실패하면 앞의 변경이 남아 DB 와 화면이 어긋났고, 되돌릴 방법이 없었다.
@@ -339,7 +339,8 @@ export function makeBuildingMutations(deps: {
    * ⚠ **RPC 가 없으면 옛 경로로 돌아가지 않는다.** 조용히 폴백하면 지금 상황이
    *   그대로 반복된다. 명확히 실패시킨다.
    *
-   * 호수가 겹치면 가장 최근 방문 세대의 현재 정보를 남기고 이력을 통합한다.
+   * 화면에서 관리자가 고른 주소 후보만 wrapper RPC가 받아들인다. 호수가 겹치면
+   * 가장 최근 방문 세대의 현재 정보를 남기고 이력을 통합한다.
    * 서로 다른 정기방문 담당자·복수의 진행 중 재방문·일정 배정처럼 자동 판단할 수
    * 없는 현재 업무만 conflicts 로 돌려준다.
    */
@@ -347,6 +348,7 @@ export function makeBuildingMutations(deps: {
     scopeCardId?: number,
     nameOverrides?: Record<number, string>,
     selectedPrimaryIds?: number[],
+    addressOverrides?: Record<number, string>,
   ): Promise<MergeResult> => {
     const token = getAuthToken()
     if (!token) {
@@ -354,11 +356,12 @@ export function makeBuildingMutations(deps: {
       return { ok: false, mergedBuildings: 0, movedUnits: 0, conflicts: [] }
     }
 
-    const { data, error } = await supabase.rpc('merge_duplicate_buildings_tx', {
+    const { data, error } = await supabase.rpc('merge_selected_duplicate_buildings_tx', {
       p_token: token,
       p_scope_card_id: scopeCardId ?? null,
       p_name_overrides: nameOverrides ?? {},
       p_selected_primary_ids: selectedPrimaryIds ?? null,
+      p_address_overrides: addressOverrides ?? {},
     })
 
     if (error) {
