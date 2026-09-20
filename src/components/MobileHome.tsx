@@ -361,7 +361,7 @@ export function MobileHome({
     assignments: Array<{ userName: string; cardId?: number | null; cardIds?: number[] | null }>,
     options?: { silentSuccess?: boolean; status?: 'confirmed' | 'shared' },
   ) => Promise<void> | void
-  onCreateBuilding: (input: { cardId: number; name: string; address: string; type: Building['type']; lat: number; lng: number }) => void
+  onCreateBuilding: (input: { cardId: number; name: string; address: string; type: Building['type']; lat: number; lng: number }) => Promise<boolean>
   onDeleteBuilding: (buildingId: number) => void
   onUpdateBuilding: (buildingId: number, name: string, address: string, lat?: number, lng?: number, type?: Building['type']) => Promise<boolean>
   /** 건물의 '세대를 다 파악함' 표시. 없으면 완료로 안 친다 (utils/buildingPin) */

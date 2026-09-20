@@ -21,4 +21,5 @@
 | `20260826_1400_team_without_card.sql` | 구역 카드 없는 팀 (비공식만 맡은 팀) | ✅ 2026-08-26 |
 | `20260826_2000_guest_participant.sql` | 게스트 참가자 (role 에 '게스트' 추가) | ⬜ 아직 |
 | `20260920_1000_merge_duplicate_unit_history.sql` | 중복 건물·세대 기록 병합 + 감사 스냅샷 | ✅ 2026-09-20 |
-| `20260920_1100_duplicate_building_candidate_key.sql` | 식당 등록과 같은 주소 후보를 관리자 선택 후 병합 | ⬜ 아직 |
+| `20260920_1100_duplicate_building_candidate_key.sql` | 식당 등록과 같은 주소 후보를 관리자 선택 후 병합 | ✅ 2026-09-20 |
+| `20260920_1200_create_building_tx.sql` | PC·모바일 건물 등록 RPC + 식당과 같은 주소 중복 판정 | ⬜ 아직 |

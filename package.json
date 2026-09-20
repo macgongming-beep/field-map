@@ -34,6 +34,7 @@
     "smoke:review-tasks": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeReviewTasks.js",
     "smoke:restaurant-requests": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeRestaurantRequests.js",
     "smoke:restaurant-register": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeRegisterRestaurant.js",
+    "smoke:create-building": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeCreateBuilding.js",
     "smoke:add-units": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeAddUnits.js",
     "smoke:return-visit-create": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeReturnVisitCreate.js",
     "smoke:return-visit-end": "PLAYWRIGHT_ALLOW_WRITES=true node scripts/smokeReturnVisitEnd.js",

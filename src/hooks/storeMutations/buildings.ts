@@ -55,25 +55,51 @@ export function makeBuildingMutations(deps: {
       return parts.slice(-2).join(' ')
     })()
 
-    const result = await supabase.from('buildings').insert({
-      card_id: input.cardId,
-      name: autoName,
-      address: input.address.trim(),
-      type: input.type,
-      lat: input.lat,
-      lng: input.lng,
+    const token = getAuthToken()
+    if (!token) {
+      showToast(msg('로그인 정보가 없습니다. 다시 로그인해 주세요.'), 'error')
+      return false
+    }
+
+    const result = await supabase.rpc('create_building_tx', {
+      p_token: token,
+      p_card_id: input.cardId,
+      p_name: autoName,
+      p_address: input.address.trim(),
+      p_type: input.type,
+      p_lat: input.lat,
+      p_lng: input.lng,
     })
     if (result.error) {
       reportMutationError(msg('건물을 추가하지 못했습니다.'), result.error)
       return false
     }
-    const card = cards.find((c) => c.id === input.cardId)
-    await logServiceAction({
-      cardId: input.cardId,
-      action: 'building_added',
-      targetType: 'building',
-      details: { building_name: autoName, card_name: card?.name ?? null },
-    })
+
+    const response = result.data as {
+      ok?: boolean
+      action?: 'created' | 'existing' | 'ambiguous'
+      building_id?: number
+      candidate_ids?: number[]
+    } | null
+    if (response?.action === 'existing') {
+      const existing = buildings.find((building) => building.id === response.building_id)
+      showToast(
+        existing
+          ? msg('이미 등록된 건물입니다: {name}', { name: existing.name || existing.address })
+          : msg('이 주소에 이미 건물이 있습니다. 기존 건물을 열어 주세요.'),
+        'info',
+      )
+      return false
+    }
+    if (response?.action === 'ambiguous') {
+      showToast(msg('같은 주소의 건물이 여러 개입니다. 기존 건물을 선택해 주세요.'), 'error')
+      return false
+    }
+    if (!response?.ok || response.action !== 'created' || !response.building_id) {
+      reportMutationError(msg('건물을 추가하지 못했습니다.'), { message: msg('서버 응답이 올바르지 않습니다.') })
+      return false
+    }
+
     await fetchAll()
     showToast(msg('"{autoName}" 건물이 추가됐습니다', { autoName: autoName }))
     return true

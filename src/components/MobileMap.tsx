@@ -30,6 +30,8 @@ import { getCongregationProfile } from '../lib/congregationProfile'
 import { getCurrentRestaurantAssignmentsForUnit } from '../utils/restaurantAssignments'
 import { buildingHasUsage, effectiveUnitUsage, scopeBuildingToUsage, unitsForUsage } from '../utils/unitUsage'
 import { getMobileMapPinPanOffset, getMobileMapSelectedSheetHeight } from '../utils/mobileMapViewport'
+import { searchPlacesAndAddressesForCongregation } from '../lib/placeSearch'
+import { classifyRestaurantPlaces, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
@@ -149,7 +151,7 @@ export function MobileMap({
   onBack: () => void
   onAddUnit: (buildingId: number, unitNumber: string | string[], usageType?: Building['type']) => Promise<number[] | false>
   onSetBuildingAccess: (buildingId: number, blocked: boolean, note?: string) => Promise<boolean>
-  onCreateBuilding: (input: { cardId: number; name: string; address: string; type: Building['type']; lat: number; lng: number }) => void
+  onCreateBuilding: (input: { cardId: number; name: string; address: string; type: Building['type']; lat: number; lng: number }) => Promise<boolean>
   onDeleteBuilding: (buildingId: number) => void
   onUpdateBuilding: (buildingId: number, name: string, address: string, lat?: number, lng?: number, type?: Building['type']) => Promise<boolean>
   onDeleteUnit: (buildingId: number, unitId: number) => void
@@ -220,6 +222,9 @@ export function MobileMap({
   const [entrySelectedRegion] = useState<string | null>(initialMapDong || null)
   const [showCardFinder, setShowCardFinder] = useState(false)
   const [cardSearch, setCardSearch] = useState('')
+  const [addressSearchResults, setAddressSearchResults] = useState<ClassifiedRestaurantPlace[]>([])
+  const [addressSearching, setAddressSearching] = useState(false)
+  const [selectedAddressCandidate, setSelectedAddressCandidate] = useState<ClassifiedRestaurantPlace | null>(null)
 
   // 필터
   const [strategyFilter] = useState<StrategyFilter>('전체')
@@ -479,6 +484,7 @@ export function MobileMap({
   // 건물 추가 모달
   const backdropTouched = useRef(false)
   const addingGuard = useRef(false)
+  const savingBuildingRef = useRef(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [addLat, setAddLat] = useState<number | null>(null)
   const [addLng, setAddLng] = useState<number | null>(null)
@@ -1064,7 +1070,7 @@ export function MobileMap({
     setExpandedBuildingIds(new Set())
     setAddLat(lat); setAddLng(lng); setAddName(t(language, 'map.addBuilding')); setAddAddress(''); setAddType('주택')
     const matched = findCardForCoordinates(lat, lng, cardBoundaries)
-    setAddCardId(matched ?? selectedCardId ?? cards[0]?.id ?? 1)
+    setAddCardId(matched ?? selectedCardId ?? 0)
 
     // 역지오코딩으로 주소/건물명만 자동 입력 (좌표는 탭 위치 그대로 유지)
     const naver = (window as any).naver
@@ -1103,11 +1109,22 @@ export function MobileMap({
     setAddingBuildingMode(false)
   }
 
-  const handleConfirmAdd = () => {
-    if (!addName.trim() || addLat == null || addLng == null) return
-    onCreateBuilding({ cardId: addCardId, name: addName.trim(), address: addAddress.trim(), type: addType, lat: addLat, lng: addLng })
-    closeAddModal()
-    showToast(t(language, 'map.buildingAdded'), 'success')
+  const handleConfirmAdd = async () => {
+    if (!addName.trim() || addLat == null || addLng == null || savingBuildingRef.current) return
+    savingBuildingRef.current = true
+    try {
+      const created = await onCreateBuilding({
+        cardId: addCardId,
+        name: addName.trim(),
+        address: addAddress.trim(),
+        type: addType,
+        lat: addLat,
+        lng: addLng,
+      })
+      if (created) closeAddModal()
+    } finally {
+      savingBuildingRef.current = false
+    }
   }
 
   const openAddBuildingMode = () => {
@@ -1182,6 +1199,8 @@ export function MobileMap({
   const selectMapSearchResult = (result: MapSearchResult) => {
     setShowCardFinder(false)
     setCardSearch('')
+    setAddressSearchResults([])
+    setSelectedAddressCandidate(null)
 
     if (result.kind === 'informal' && result.informalId != null) {
       const next = new URLSearchParams()
@@ -1246,6 +1265,62 @@ export function MobileMap({
       }
     }, 80)
   }
+
+  const searchAddressCandidates = async () => {
+    const query = cardSearch.trim()
+    if (!query || addressSearching) return
+    setAddressSearching(true)
+    setSelectedAddressCandidate(null)
+    try {
+      const result = await searchPlacesAndAddressesForCongregation(query)
+      if (!result.ok) {
+        showToast(msg('주소 검색을 사용할 수 없습니다. 잠시 뒤 다시 시도해 주세요.'), 'error')
+        setAddressSearchResults([])
+        return
+      }
+      setAddressSearchResults(classifyRestaurantPlaces(result.places, buildings, cardBoundaries))
+    } finally {
+      setAddressSearching(false)
+    }
+  }
+
+  const chooseAddressCandidate = (candidate: ClassifiedRestaurantPlace) => {
+    if (candidate.status === 'existing-building' || candidate.status === 'registered') {
+      if (candidate.buildingId != null) {
+        const building = buildings.find((item) => item.id === candidate.buildingId)
+        if (building) {
+          selectMapSearchResult({
+            key: `building:${building.id}`,
+            kind: 'building',
+            title: building.name || building.address,
+            subtitle: building.address,
+            cardId: building.cardId,
+            buildingId: building.id,
+          })
+        }
+      }
+      return
+    }
+    setSelectedAddressCandidate(candidate)
+  }
+
+  const openAddressCandidateAdd = (candidate: ClassifiedRestaurantPlace) => {
+    const matchedCardId = findCardForCoordinates(candidate.lat, candidate.lng, cardBoundaries)
+    setAddLat(candidate.lat)
+    setAddLng(candidate.lng)
+    setAddName(candidate.name || shortenAddress(candidate.address))
+    setAddAddress(candidate.address)
+    setAddType('주택')
+    setAddCardId(matchedCardId ?? 0)
+    setShowCardFinder(false)
+    setCardSearch('')
+    setAddressSearchResults([])
+    setSelectedAddressCandidate(null)
+    backdropTouched.current = false
+    addingGuard.current = true
+    setShowAddModal(true)
+  }
+
   const hasAreaChips = !isUserMap && !enteredDirectly && areas.length > 1
   return (
     <main
@@ -1383,12 +1458,16 @@ export function MobileMap({
                 autoFocus
                 placeholder={t(language, 'map.searchAllPlaceholder')}
                 value={cardSearch}
-                onChange={(event) => setCardSearch(event.target.value)}
+                onChange={(event) => {
+                  setCardSearch(event.target.value)
+                  setAddressSearchResults([])
+                  setSelectedAddressCandidate(null)
+                }}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && mapSearchResults[0]) {
-                    event.preventDefault()
-                    selectMapSearchResult(mapSearchResults[0])
-                  }
+                  if (event.key !== 'Enter') return
+                  event.preventDefault()
+                  if (mapSearchResults[0]) selectMapSearchResult(mapSearchResults[0])
+                  else void searchAddressCandidates()
                 }}
               />
               {cardSearch && (
@@ -1396,7 +1475,9 @@ export function MobileMap({
                   {bareUnitSearch && (
                     <span>{t(language, 'map.searchUnitHint')}</span>
                   )}
-                  {!bareUnitSearch && mapSearchResults.length === 0 && <span>{t(language, 'map.noSearchResults')}</span>}
+                  {!bareUnitSearch && mapSearchResults.length === 0 && (
+                    <span>{msg('등록된 건물이 없습니다.')}</span>
+                  )}
                   {mapSearchResults.length > 0 && <span>{t(language, 'map.searchResults')} {mapSearchResults.length}{t(language, 'calendar.countSuffix')}</span>}
                   {mapSearchResults.map((result) => (
                     <button
@@ -1411,6 +1492,66 @@ export function MobileMap({
                       {result.subtitle && <small>{translateKoreanAddress(result.subtitle, language, translatePlaceNames)}</small>}
                     </button>
                   ))}
+                  {!bareUnitSearch && mapSearchResults.length === 0 && (
+                    <button
+                      aria-label={msg('네이버에서 주소 찾기')}
+                      className="mobile-map-address-search-action"
+                      disabled={addressSearching}
+                      onClick={() => void searchAddressCandidates()}
+                      type="button"
+                    >
+                      <span className="mobile-map-search-kind kind-address">{msg('주소')}</span>
+                      <strong>{addressSearching ? msg('검색 중...') : msg('네이버에서 주소 찾기')}</strong>
+                      <small>{msg('도로명 주소를 확인한 뒤 기존 건물과 대조합니다.')}</small>
+                    </button>
+                  )}
+                  {addressSearchResults.length === 0 && !addressSearching && selectedAddressCandidate === null && mapSearchResults.length === 0 && (
+                    <small className="mobile-map-address-empty">{msg('주소 후보를 선택해야 건물을 추가할 수 있습니다.')}</small>
+                  )}
+                  {addressSearchResults.map((candidate, index) => candidate.status === 'ambiguous-building' ? (
+                    <div className="mobile-map-address-ambiguous" key={`${candidate.address}:${index}`}>
+                      <strong>{candidate.address}</strong>
+                      <small>{msg('같은 주소의 건물이 여러 개입니다. 기존 건물을 선택해 주세요.')}</small>
+                      {candidate.buildingIds.map((buildingId) => {
+                        const building = buildings.find((item) => item.id === buildingId)
+                        if (!building) return null
+                        return (
+                          <button
+                            key={building.id}
+                            onClick={() => selectMapSearchResult({
+                              key: `building:${building.id}`,
+                              kind: 'building',
+                              title: building.name || building.address,
+                              subtitle: building.address,
+                              cardId: building.cardId,
+                              buildingId: building.id,
+                            })}
+                            type="button"
+                          >
+                            <strong>{building.name || building.address}</strong>
+                            <small>{building.address}</small>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <button key={`${candidate.address}:${index}`} onClick={() => chooseAddressCandidate(candidate)} type="button">
+                      <span className="mobile-map-search-kind kind-address">{msg('주소')}</span>
+                      <strong>{candidate.name}</strong>
+                      <small>{candidate.address}</small>
+                    </button>
+                  ))}
+                  {selectedAddressCandidate?.status === 'new' && (
+                    <div className="mobile-map-address-confirm">
+                      <div>
+                        <strong>{msg('등록된 건물이 없습니다.')}</strong>
+                        <small>{selectedAddressCandidate.address}</small>
+                      </div>
+                      <button onClick={() => openAddressCandidateAdd(selectedAddressCandidate)} type="button">
+                        {msg('이 주소에 건물 추가')}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2256,8 +2397,10 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'zone.cardCount')}</label>
                     <select value={addCardId} onChange={e => setAddCardId(Number(e.target.value))} style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: 'var(--r-md)', fontSize: '14px' }}>
+                      {addCardId === 0 && <option value={0}>{msg('카드를 선택하세요')}</option>}
                       {cards.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
+                    {addCardId === 0 && <p style={{ margin: '5px 0 0', color: '#b45309', fontSize: '11px' }}>{msg('구역선으로 카드를 정하지 못했습니다. 실제 카드를 선택해 주세요.')}</p>}
                   </div>
                   <div>
                     <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--ink-500)', display: 'block', marginBottom: '4px' }}>{t(language, 'map.buildingNameRequired')}</label>
@@ -2282,7 +2425,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                 </div>
                 <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
                   <button onClick={closeAddModal} style={{ flex: 1, padding: '12px', borderRadius: 'var(--r-md)', border: '1px solid #e2e8f0', background: '#f8fafc', fontWeight: 700, cursor: 'pointer', fontSize: '15px' }}>{t(language, 'common.cancel')}</button>
-                  <button onClick={handleConfirmAdd} disabled={!addName.trim()} style={{ flex: 2, padding: '12px', borderRadius: 'var(--r-md)', border: 'none', background: addName.trim() ? 'var(--accent-700)' : '#e2e8f0', color: addName.trim() ? '#fff' : '#94a3b8', fontWeight: 700, cursor: addName.trim() ? 'pointer' : 'not-allowed', fontSize: '15px' }}>{t(language, 'common.add')}</button>
+                  <button onClick={handleConfirmAdd} disabled={!addName.trim() || addCardId === 0} style={{ flex: 2, padding: '12px', borderRadius: 'var(--r-md)', border: 'none', background: addName.trim() && addCardId !== 0 ? 'var(--accent-700)' : '#e2e8f0', color: addName.trim() && addCardId !== 0 ? '#fff' : '#94a3b8', fontWeight: 700, cursor: addName.trim() && addCardId !== 0 ? 'pointer' : 'not-allowed', fontSize: '15px' }}>{t(language, 'common.add')}</button>
                 </div>
               </div>
             </div>

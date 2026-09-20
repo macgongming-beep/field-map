@@ -6507,6 +6507,68 @@ button:focus-visible {
   color: #765080;
 }
 
+.mobile-map-search-kind.kind-address {
+  background: #eef6ff;
+  color: #275f9b;
+}
+
+.mobile-map-card-results .mobile-map-address-search-action {
+  border: 1px solid #cfe0f2;
+  background: #f7fbff;
+}
+
+.mobile-map-address-empty {
+  padding: 0 8px 6px;
+  color: var(--ink-400);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mobile-map-address-ambiguous,
+.mobile-map-address-confirm {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: #ffffff;
+}
+
+.mobile-map-address-ambiguous > strong,
+.mobile-map-address-confirm strong {
+  font-size: 13px;
+}
+
+.mobile-map-address-ambiguous > small,
+.mobile-map-address-confirm small {
+  display: block;
+  color: var(--ink-500);
+  font-size: 11px;
+}
+
+.mobile-map-card-results .mobile-map-address-ambiguous button {
+  min-height: 42px;
+  border: 1px solid var(--line-muted);
+}
+
+.mobile-map-address-confirm {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-color: #b9d4ee;
+  background: #f7fbff;
+}
+
+.mobile-map-card-results .mobile-map-address-confirm button {
+  display: inline-flex;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--ink-900);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .mobile-map-mode-banner {
   display: grid;
   grid-template-columns: auto auto;

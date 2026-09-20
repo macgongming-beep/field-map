@@ -3,14 +3,16 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { testBuilding, testCard, territoryProps } from '../test/territoryFixture'
 import { MobileMap } from './MobileMap'
 import { getMobileMapPinPanOffset, getMobileMapSelectedSheetHeight } from '../utils/mobileMapViewport'
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
+const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
 
 vi.mock('../lib/confirm', () => ({ confirmDialog }))
+vi.mock('../lib/placeSearch', () => ({ searchPlacesAndAddressesForCongregation }))
 vi.mock('./OverlayPortal', () => ({
   OverlayPortal: ({ children }: { children: ReactNode }) => children,
 }))
@@ -38,6 +40,8 @@ vi.mock('./MapCanvas', () => ({
 }))
 
 describe('모바일 지도 하단 시트', () => {
+  beforeEach(() => searchPlacesAndAddressesForCongregation.mockReset())
+
   const mapProps = () => territoryProps({
     actualRole: 'admin',
     currentVisitor: '관리자',
@@ -149,6 +153,68 @@ describe('모바일 지도 하단 시트', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
     expect(mapContainer.style.getPropertyValue('--map-toolbar-search-push')).toBe('0px')
+  })
+
+  test('등록 자료에 없는 주소는 네이버 후보를 확인한 뒤 건물 추가로 이어진다', async () => {
+    searchPlacesAndAddressesForCongregation.mockResolvedValue({
+      ok: true,
+      places: [{
+        name: '언동로 213',
+        address: '경기도 용인시 기흥구 언동로 213',
+        category: '주소',
+        lat: 37.275,
+        lng: 127.118,
+        source: 'address',
+      }],
+    })
+    const props = mapProps()
+    render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
+      target: { value: '언동로 213' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '네이버에서 주소 찾기' }))
+
+    expect(await screen.findByText('경기도 용인시 기흥구 언동로 213')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /언동로 213/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '이 주소에 건물 추가' }))
+
+    expect(screen.getByRole('heading', { name: '건물 추가' })).toBeVisible()
+    expect(screen.getByDisplayValue('경기도 용인시 기흥구 언동로 213')).toBeVisible()
+  })
+
+  test('주소 후보가 기존 건물과 일치하면 새 건물 추가 대신 기존 건물을 연다', async () => {
+    const building = testBuilding(1, 1, '언동로 건물')
+    building.address = '경기도 용인시 기흥구 언동로 213'
+    building.lat = 37.275
+    building.lng = 127.118
+    searchPlacesAndAddressesForCongregation.mockResolvedValue({
+      ok: true,
+      places: [{
+        name: '언동로 213',
+        address: '경기도 용인시 기흥구 언동로 213',
+        category: '주소',
+        lat: 37.275,
+        lng: 127.118,
+        source: 'address',
+      }],
+    })
+    const props = territoryProps({
+      ...mapProps(),
+      buildings: [building],
+    })
+    render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
+      target: { value: '경기도 용인시 기흥구 언동로 213 1층' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '네이버에서 주소 찾기' }))
+    fireEvent.click(await screen.findByRole('button', { name: /언동로 213/ }))
+
+    expect(screen.queryByRole('button', { name: '이 주소에 건물 추가' })).not.toBeInTheDocument()
+    expect(await screen.findByText('건물 포인트 1개')).toBeVisible()
   })
 
   test('모바일 건물 수정 시트에서 건물 유형을 바꾼다', async () => {
