@@ -2283,7 +2283,7 @@ export function DesktopTerritory({
               </div>
             )}
           </div>
-          {filteredBuildings.length > 0 && buildingPageSize !== '전체' && (
+          {buildingPageCount > 1 && buildingPageSize !== '전체' && (
             <nav className="building-pagination" aria-label="건물 목록 페이지">
               <span className="building-pagination-summary">
                 {buildingPageStart + 1}-{buildingPageStart + pagedBuildings.length} / {filteredBuildings.length}
