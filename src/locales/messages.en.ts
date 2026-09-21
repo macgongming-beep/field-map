@@ -139,6 +139,7 @@ export const messagesEn: Record<string, string> = {
   '상호명을 입력해 주세요.': 'Enter the business name.',
   '첫 호수를 입력해 주세요.': 'Enter the first unit number.',
   '새 건물': 'New building',
+  '새 건물 찾기': 'Find a new building',
   '새 건물 핀을 원하는 위치로 옮기세요': 'Move the new building pin to the correct location',
   '핀 위치 조정': 'Adjust pin location',
   '필요한 경우에만 지도에서 위치를 옮기세요': 'Move it on the map only when needed',

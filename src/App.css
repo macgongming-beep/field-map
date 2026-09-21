@@ -6548,39 +6548,24 @@ button:focus-visible {
   min-width: 0;
 }
 
-.mobile-map-search-result-row.selected {
-  border-color: var(--ink-900);
-  background: #ffffff;
-  box-shadow: 0 0 0 1px var(--ink-900);
-}
-
-.mobile-map-search-result-row.selected .mobile-map-search-result-main {
-  background: #ffffff;
-}
-
-.mobile-map-card-results .mobile-map-results-add {
-  display: grid;
-  grid-template-columns: 1fr;
-  width: 30px;
-  min-width: 30px;
+.mobile-map-card-results .mobile-map-empty-search-action {
+  display: inline-flex;
+  width: auto;
   min-height: 30px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: var(--ink-900);
-  color: #ffffff;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid var(--brand-700);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--brand-800);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
-.mobile-map-card-results .mobile-map-results-add:active {
-  background: var(--gray-100);
-}
-
-.mobile-map-card-results .mobile-map-results-add:disabled {
-  background: var(--gray-200);
+.mobile-map-card-results .mobile-map-empty-search-action:disabled {
+  border-color: var(--gray-200);
   color: var(--gray-500);
 }
 

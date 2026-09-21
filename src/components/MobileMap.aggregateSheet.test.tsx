@@ -203,7 +203,7 @@ describe('모바일 지도 하단 시트', () => {
     expect(screen.queryByRole('button', { name: '건물 추가' })).not.toBeInTheDocument()
   })
 
-  test('검색창을 닫으면 선택한 외부 후보와 추가 버튼 상태를 초기화한다', async () => {
+  test('검색창을 닫으면 외부 검색 결과를 초기화한다', async () => {
     searchPlacesAndAddressesForCongregation.mockResolvedValue({
       ok: true,
       places: [{
@@ -223,14 +223,12 @@ describe('모바일 지도 하단 시트', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '검색' }))
     const results = document.querySelector('.mobile-map-card-results') as HTMLElement
-    fireEvent.click(await within(results).findByRole('button', { name: /카멜리아힐/ }))
-    expect(within(results).getByRole('button', { name: '추가' })).toBeEnabled()
+    expect(await within(results).findByRole('button', { name: /카멜리아힐/ })).toBeVisible()
 
     fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
     fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
     expect(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색')).toHaveValue('')
     expect(screen.queryByText('카멜리아힐')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '추가' })).not.toBeInTheDocument()
   })
 
   test('등록 자료에 없는 주소는 네이버 후보를 확인한 뒤 건물 추가로 이어진다', async () => {
@@ -252,14 +250,13 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
       target: { value: '언동로 213' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '검색' }))
+    expect(screen.getByText('등록된 건물이 없습니다.')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '새 건물 찾기' }))
 
     expect(await screen.findByText('경기도 용인시 기흥구 언동로 213')).toBeVisible()
     const results = document.querySelector('.mobile-map-card-results') as HTMLElement
     const candidateButton = within(results).getByRole('button', { name: /언동로 213/ })
     fireEvent.click(candidateButton)
-    expect(candidateButton.closest('.mobile-map-search-result-row')).toHaveClass('selected')
-    fireEvent.click(within(results).getByRole('button', { name: '추가' }))
 
     const sheet = screen.getByRole('heading', { name: '장소 등록' }).closest('.mm-building-edit-sheet') as HTMLElement
     expect(screen.getByDisplayValue('경기도 용인시 기흥구 언동로 213')).toBeVisible()
@@ -296,8 +293,6 @@ describe('모바일 지도 하단 시트', () => {
     const results = document.querySelector('.mobile-map-card-results') as HTMLElement
     const candidateButton = await within(results).findByRole('button', { name: /카멜리아힐/ })
     fireEvent.click(candidateButton)
-    expect(candidateButton.closest('.mobile-map-search-result-row')).toHaveClass('selected')
-    fireEvent.click(within(results).getByRole('button', { name: '추가' }))
 
     const sheet = screen.getByRole('heading', { name: '장소 등록' }).closest('.mm-building-edit-sheet') as HTMLElement
     expect(within(sheet).getByRole('button', { name: '상가' })).toHaveClass('active')
@@ -359,7 +354,6 @@ describe('모바일 지도 하단 시트', () => {
     const results = document.querySelector('.mobile-map-card-results') as HTMLElement
     const candidateButton = await within(results).findByRole('button', { name: /카멜리아힐/ })
     fireEvent.click(candidateButton)
-    fireEvent.click(within(results).getByRole('button', { name: '추가' }))
 
     const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
     const input = await within(scroll).findByDisplayValue('카멜리아힐')
@@ -519,10 +513,9 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), {
       target: { value: '언동로 216' },
     })
-    fireEvent.click(screen.getByRole('button', { name: '검색' }))
+    fireEvent.click(screen.getByRole('button', { name: '새 건물 찾기' }))
     const results = document.querySelector('.mobile-map-card-results') as HTMLElement
     fireEvent.click(await within(results).findByRole('button', { name: /언동로 216/ }))
-    fireEvent.click(within(results).getByRole('button', { name: '추가' }))
     expect(screen.getByText('37.27600, 127.11900')).toBeVisible()
 
     fireEvent.click(screen.getByRole('button', { name: /핀 위치 조정/ }))

@@ -241,7 +241,7 @@ export function MobileMap({
   const [cardSearch, setCardSearch] = useState('')
   const [addressSearchResults, setAddressSearchResults] = useState<ClassifiedRestaurantPlace[]>([])
   const [addressSearching, setAddressSearching] = useState(false)
-  const [selectedAddressCandidate, setSelectedAddressCandidate] = useState<ClassifiedRestaurantPlace | null>(null)
+  const [addressSearchAttempted, setAddressSearchAttempted] = useState(false)
   const searchPanelRef = useRef<HTMLDivElement | null>(null)
   const [mapToolbarSearchPush, setMapToolbarSearchPush] = useState(0)
 
@@ -249,7 +249,7 @@ export function MobileMap({
     if (showCardFinder) return
     setCardSearch('')
     setAddressSearchResults([])
-    setSelectedAddressCandidate(null)
+    setAddressSearchAttempted(false)
   }, [showCardFinder])
 
   useEffect(() => {
@@ -271,7 +271,7 @@ export function MobileMap({
     const observer = new ResizeObserver(update)
     observer.observe(panel)
     return () => observer.disconnect()
-  }, [showCardFinder, cardSearch, addressSearching, addressSearchResults, selectedAddressCandidate])
+  }, [showCardFinder, cardSearch, addressSearching, addressSearchResults])
 
   // 필터
   const [strategyFilter] = useState<StrategyFilter>('전체')
@@ -1398,7 +1398,7 @@ export function MobileMap({
     setShowCardFinder(false)
     setCardSearch('')
     setAddressSearchResults([])
-    setSelectedAddressCandidate(null)
+    setAddressSearchAttempted(false)
 
     if (result.kind === 'informal' && result.informalId != null) {
       const next = new URLSearchParams()
@@ -1519,7 +1519,7 @@ export function MobileMap({
     const query = cardSearch.trim()
     if (!query || addressSearching) return
     setAddressSearching(true)
-    setSelectedAddressCandidate(null)
+    setAddressSearchAttempted(true)
     try {
       const result = await searchPlacesAndAddressesForCongregation(query)
       if (!result.ok) {
@@ -1558,22 +1558,15 @@ export function MobileMap({
   }
 
   const chooseAddressCandidate = (candidate: ClassifiedRestaurantPlace) => {
-    const canAdd = candidate.status === 'new'
-      || (candidate.status === 'existing-building' && candidate.source === 'place')
-    if (canAdd) {
-      setSelectedAddressCandidate(candidate)
+    if (candidate.status === 'new') {
+      openAddressCandidateAdd(candidate)
+      return
+    }
+    if (candidate.status === 'existing-building' && candidate.source === 'place') {
+      focusAddressCandidateBuilding(candidate, { addPlaceToExistingBuilding: true })
       return
     }
     focusAddressCandidateBuilding(candidate)
-  }
-
-  const addSelectedAddressCandidate = () => {
-    if (!selectedAddressCandidate) return
-    if (selectedAddressCandidate.status === 'new') {
-      openAddressCandidateAdd(selectedAddressCandidate)
-      return
-    }
-    focusAddressCandidateBuilding(selectedAddressCandidate, { addPlaceToExistingBuilding: true })
   }
 
   const openAddressCandidateAdd = (candidate: ClassifiedRestaurantPlace) => {
@@ -1595,7 +1588,7 @@ export function MobileMap({
     setShowCardFinder(false)
     setCardSearch('')
     setAddressSearchResults([])
-    setSelectedAddressCandidate(null)
+    setAddressSearchAttempted(false)
     backdropTouched.current = false
     addingGuard.current = true
     setShowAddModal(true)
@@ -1753,7 +1746,7 @@ export function MobileMap({
                   onChange={(event) => {
                     setCardSearch(event.target.value)
                     setAddressSearchResults([])
-                    setSelectedAddressCandidate(null)
+                    setAddressSearchAttempted(false)
                   }}
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter') return
@@ -1776,23 +1769,23 @@ export function MobileMap({
                     <div className="mobile-map-results-summary"><span>{t(language, 'map.searchUnitHint')}</span></div>
                   )}
                   {!bareUnitSearch && visibleSearchResultCount === 0 && (
-                    <div className="mobile-map-results-summary"><span>{msg('등록된 건물이 없습니다.')}</span></div>
+                    <div className="mobile-map-results-summary">
+                      <span>{msg(addressSearchAttempted ? '검색 결과가 없습니다.' : '등록된 건물이 없습니다.')}</span>
+                      {!addressSearchAttempted && (
+                        <button
+                          className="mobile-map-empty-search-action"
+                          disabled={addressSearching}
+                          onClick={() => void searchAddressCandidates()}
+                          type="button"
+                        >
+                          {msg('새 건물 찾기')}
+                        </button>
+                      )}
+                    </div>
                   )}
                   {visibleSearchResultCount > 0 && (
                     <div className="mobile-map-results-summary">
                       <span>{t(language, 'map.searchResults')} {visibleSearchResultCount}{t(language, 'calendar.countSuffix')}</span>
-                      {visibleAddressSearchResults.some((candidate) => candidate.status === 'new' || (candidate.status === 'existing-building' && candidate.source === 'place')) && (
-                        <button
-                          aria-label={t(language, 'common.add')}
-                          className="mobile-map-results-add"
-                          disabled={!selectedAddressCandidate}
-                          onClick={addSelectedAddressCandidate}
-                          title={t(language, 'common.add')}
-                          type="button"
-                        >
-                          <span aria-hidden="true">+</span>
-                        </button>
-                      )}
                     </div>
                   )}
                   {mapSearchResults.map((result) => (
@@ -1838,7 +1831,7 @@ export function MobileMap({
                     </div>
                   ) : (
                     <div
-                      className={`mobile-map-search-result-row${selectedAddressCandidate === candidate ? ' selected' : ''}`}
+                      className="mobile-map-search-result-row"
                       key={`${candidate.address}:${index}`}
                     >
                       <button className="mobile-map-search-result-main" onClick={() => chooseAddressCandidate(candidate)} type="button">
@@ -2071,7 +2064,7 @@ export function MobileMap({
                 setShowCardFinder(false)
                 setCardSearch('')
                 setAddressSearchResults([])
-                setSelectedAddressCandidate(null)
+                setAddressSearchAttempted(false)
                 setShowMapActionMenu(prev => !prev)
               }}
               onToggleAddingBuilding={setAddingBuildingMode}
