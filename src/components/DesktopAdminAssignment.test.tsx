@@ -59,4 +59,48 @@ describe('PC 관리자 카드 배정', () => {
     expect(summary.querySelectorAll('.la-assignee-badge')).toHaveLength(2)
     expect(summary).toHaveAttribute('title', leaders.join(', '))
   })
+
+  test('활성 인도자 목록이 비어 있어도 삭제된 계정을 배정 후보로 되살리지 않는다', () => {
+    const card = testCard(1, '기흥구 구갈동 1', {
+      buildings: 1,
+      units: 1,
+      assignedLeader: '삭제된 인도자 이름',
+      assignedLeaders: ['삭제된 인도자 이름'],
+    })
+
+    render(
+      <DesktopAdminAssignment
+        cards={[card]}
+        currentVisitor="관리자"
+        leaderNames={[]}
+        onSetCardLeaders={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByText('삭제된 인도자 이름')).not.toBeInTheDocument()
+    expect(screen.getByText('인도자가 없습니다')).toBeVisible()
+  })
+
+  test('긴 인도자 이름과 담당 구역 수를 모두 표시한다', () => {
+    const longName = '金輝敏김휘민'
+    const card = testCard(1, '기흥구 구갈동 1', {
+      buildings: 1,
+      units: 1,
+      assignedLeader: longName,
+      assignedLeaders: [longName],
+    })
+
+    render(
+      <DesktopAdminAssignment
+        cards={[card]}
+        currentVisitor="관리자"
+        leaderNames={[longName]}
+        onSetCardLeaders={vi.fn()}
+      />,
+    )
+
+    const leaderButton = screen.getByRole('button', { name: new RegExp(`${longName}.*담당 구역 1개`) })
+    expect(within(leaderButton).getByText(longName)).toBeVisible()
+    expect(within(leaderButton).getByText('담당 구역 1개')).toBeVisible()
+  })
 })

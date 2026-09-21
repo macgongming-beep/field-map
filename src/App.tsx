@@ -230,9 +230,14 @@ function App() {
     onRecover: () => { void recoverCreatedUnits() },
   })
 
-  // role이 leader 또는 admin인 유저만 인도자 목록으로
+  // 승인된 활성 인도자·관리자만 배정 후보로 노출한다.
+  // 탈퇴 처리는 감사 이력을 위해 행을 비활성화해 보존하므로 역할만 보면 옛 이름이 다시 나타난다.
   const leaderNames = allUsers
-    .filter((u) => u.role === 'leader' || u.role === 'admin')
+    .filter((u) =>
+      (u.role === 'leader' || u.role === 'admin')
+      && u.isActive !== false
+      && (u.approvalStatus ?? 'approved') === 'approved',
+    )
     .map((u) => u.name)
     .sort((a, b) => a.localeCompare(b, 'ko'))
 

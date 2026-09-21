@@ -68,7 +68,7 @@ function SearchIcon({ size = 16 }: { size?: number }) {
 export function MobileAdminAssignment({
   cards: rawCards,
   buildings = [],
-  leaderNames = [],
+  leaderNames,
   currentVisitor = '',
   onSetCardLeaders,
   onOpenMapView,
@@ -83,7 +83,7 @@ export function MobileAdminAssignment({
   // 담당자 이름 정제: 현재 존재하는 인도자/관리자(leaderNames)만 남김.
   // → 삭제·개명된 계정 잔재와 개발자 계정(leaderNames 에 원래 미포함)이 배정 탭에서 사라짐.
   const cards = useMemo(() => {
-    if (leaderNames.length === 0) return rawCards
+    if (leaderNames === undefined) return rawCards
     const valid = new Set(leaderNames)
     return rawCards.map((card) => {
       const filtered = getCardLeaders(card).filter((name) => valid.has(name))
@@ -142,7 +142,7 @@ export function MobileAdminAssignment({
   const [actionTarget, setActionTarget] = useState<TerritoryCard | null>(null)
 
   const leaders = useMemo(() => {
-    const names = leaderNames.length > 0
+    const names = leaderNames !== undefined
       ? leaderNames
       : Array.from(new Set(cards.flatMap((card) => getCardLeaders(card))))
     return names.sort((a, b) => a.localeCompare(b, 'ko'))
