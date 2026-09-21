@@ -6555,17 +6555,17 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
   padding: 0 10px;
-  border: 1px solid var(--brand-700);
+  border: 0;
   border-radius: 6px;
-  background: #ffffff;
-  color: var(--brand-800);
+  background: var(--ink-900);
+  color: #ffffff;
   font-size: 11px;
   font-weight: 800;
   white-space: nowrap;
 }
 
 .mobile-map-card-results .mobile-map-empty-search-action:disabled {
-  border-color: var(--gray-200);
+  background: var(--gray-200);
   color: var(--gray-500);
 }
 

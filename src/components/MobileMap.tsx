@@ -2761,7 +2761,6 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                         {addType === '상가' ? msg('상호명') : msg('첫 호수')}
                       </label>
                       <input
-                        autoFocus={addType === '주택'}
                         value={addFirstUnitName}
                         onChange={(event) => setAddFirstUnitName(event.target.value)}
                         placeholder={addType === '상가' ? msg('예: 카멜리아힐') : msg('예: 101호')}

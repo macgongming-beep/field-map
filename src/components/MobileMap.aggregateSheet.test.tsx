@@ -262,6 +262,7 @@ describe('모바일 지도 하단 시트', () => {
     expect(screen.getByDisplayValue('경기도 용인시 기흥구 언동로 213')).toBeVisible()
     expect(screen.getByDisplayValue('언동로 213')).toBeVisible()
     expect(screen.getByPlaceholderText('예: 101호')).toBeVisible()
+    expect(screen.getByPlaceholderText('예: 101호')).not.toHaveFocus()
     expect(within(sheet).getByRole('button', { name: '주택' })).not.toHaveClass('active')
     expect(within(sheet).getByRole('button', { name: '상가' })).not.toHaveClass('active')
     expect(within(sheet).getByText('주택 또는 상가를 선택해 주세요.')).toBeVisible()
