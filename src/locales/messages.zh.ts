@@ -214,6 +214,7 @@ export const messagesZh: Record<string, string> = {
   "{length}개 일정이 등록됐습니다": "已登记 {length} 个日程",
   "{length}개 일정이 시리즈로 묶였습니다": "已将 {length} 个日程归为同一系列",
   "{length}개 카드를 {selectedLeader}님께 배정했습니다.": "已将 {length} 张卡片分配给{selectedLeader}。",
+  "{length}개 카드에서 {selectedLeader}님의 배정을 해제했습니다.": "已从 {length} 张卡片中取消{selectedLeader}的分配。",
   "{length}개의 일정을 인식했습니다.": "已识别 {length} 个日程。",
   "{name} -> {selectedLeader} 배정 완료": "已将{name}分配给{selectedLeader}",
   "{name} → {selectedLeader} 배정 완료": "已将{name}分配给{selectedLeader}",

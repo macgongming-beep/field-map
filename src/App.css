@@ -21003,6 +21003,18 @@ button:focus-visible {
 
   .la-bulk-assign-btn:disabled { opacity: .5; cursor: default; }
 
+  .la-bulk-release-btn {
+    margin-left: auto;
+    border-color: var(--status-danger) !important;
+    color: var(--status-danger) !important;
+  }
+
+  .la-bulk-release-btn + .la-bulk-assign-btn {
+    margin-left: 0;
+  }
+
+  .la-bulk-release-btn:disabled { opacity: .45; cursor: default; }
+
   .la-filters {
     display: flex;
     align-items: center;
@@ -21041,7 +21053,8 @@ button:focus-visible {
   }
 
   .la-card-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(160px, .8fr) minmax(220px, 1.2fr);
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
@@ -21055,6 +21068,10 @@ button:focus-visible {
   .la-card-row:hover { background: var(--tint); }
   .la-card-row.selected { background: var(--tint); }
 
+  .la-card-row.selecting {
+    grid-template-columns: 20px minmax(160px, .8fr) minmax(220px, 1.2fr);
+  }
+
   .la-card-check {
     width: 16px;
     height: 16px;
@@ -21063,15 +21080,25 @@ button:focus-visible {
     accent-color: var(--ink);
   }
 
-  .la-card-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-  .la-card-info strong { font-size: 15px; font-weight: 700; color: var(--ink); }
+  .la-card-info { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .la-card-info strong { font-size: 15px; font-weight: 700; color: var(--ink); line-height: 1.35; word-break: keep-all; overflow-wrap: break-word; }
   .la-card-info span { font-size: 12px; font-weight: 600; color: var(--muted); }
 
   .la-card-meta {
-    display: flex;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0;
+  }
+
+  .la-assignee-summary {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    overflow: hidden;
   }
 
   .la-assignee-badge {
@@ -21086,6 +21113,14 @@ button:focus-visible {
 
   .la-assignee-badge.mine { background: var(--status-warn-bg); color: var(--status-warn); }
   .la-assignee-badge.unassigned { background: var(--tint); color: var(--muted-3); }
+
+  .la-assignee-more {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
 
   .la-detail-btn {
     height: 36px;
@@ -21103,6 +21138,11 @@ button:focus-visible {
 
   .la-detail-btn:hover {
     background: var(--tint);
+  }
+
+  .la-detail-btn.release {
+    border-color: var(--status-danger);
+    color: var(--status-danger);
   }
 
   .la-pagination {

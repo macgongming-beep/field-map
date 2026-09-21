@@ -214,6 +214,7 @@ export const messagesEn: Record<string, string> = {
   "{length}개 일정이 등록됐습니다": "{length} events created",
   "{length}개 일정이 시리즈로 묶였습니다": "{length} events grouped into a series",
   "{length}개 카드를 {selectedLeader}님께 배정했습니다.": "Assigned {length} cards to {selectedLeader}.",
+  "{length}개 카드에서 {selectedLeader}님의 배정을 해제했습니다.": "Unassigned {selectedLeader} from {length} cards.",
   "{length}개의 일정을 인식했습니다.": "Recognized {length} events.",
   "{name} -> {selectedLeader} 배정 완료": "Assigned {name} to {selectedLeader}",
   "{name} → {selectedLeader} 배정 완료": "Assigned {name} to {selectedLeader}",

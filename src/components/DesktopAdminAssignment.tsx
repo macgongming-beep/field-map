@@ -163,7 +163,7 @@ export function DesktopAdminAssignment({
   const [statusFilter, setStatusFilter] = useState('전체')
   const [selectMode, setSelectMode] = useState(false)
   const [selectedCardIds, setSelectedCardIds] = useState<Set<number>>(new Set())
-  const [bulkAssigning, setBulkAssigning] = useState(false)
+  const [bulkWorking, setBulkWorking] = useState<'assign' | 'release' | null>(null)
   const [releasing, setReleasing] = useState<number | null>(null)
   const [showStatusModal, setShowStatusModal] = useState(false)
 
@@ -212,6 +212,19 @@ export function DesktopAdminAssignment({
     [cards],
   )
 
+  const allFilteredSelected = filteredCards.length > 0
+    && filteredCards.every((card) => selectedCardIds.has(card.id))
+  const selectedCards = useMemo(
+    () => cards.filter((card) => selectedCardIds.has(card.id)),
+    [cards, selectedCardIds],
+  )
+  const selectedAssignableCount = selectedLeader
+    ? selectedCards.filter((card) => !getCardLeaders(card).includes(selectedLeader)).length
+    : 0
+  const selectedReleasableCount = selectedLeader
+    ? selectedCards.filter((card) => getCardLeaders(card).includes(selectedLeader)).length
+    : 0
+
   const toggleSelectCard = (id: number) => {
     setSelectedCardIds((prev) => {
       const next = new Set(prev)
@@ -222,11 +235,7 @@ export function DesktopAdminAssignment({
   }
 
   const toggleSelectAll = () => {
-    setSelectedCardIds((prev) =>
-      prev.size === filteredCards.length
-        ? new Set()
-        : new Set(filteredCards.map((card) => card.id)),
-    )
+    setSelectedCardIds(allFilteredSelected ? new Set() : new Set(filteredCards.map((card) => card.id)))
   }
 
   const handleRelease = async (card: TerritoryCard) => {
@@ -254,19 +263,40 @@ export function DesktopAdminAssignment({
 
   const handleBulkAssign = async () => {
     if (!selectedLeader || selectedCardIds.size === 0) return
-    setBulkAssigning(true)
-    const ids = Array.from(selectedCardIds)
-    await Promise.all(ids.map((id) => {
-      const card = cards.find((item) => item.id === id)
-      if (!card) return Promise.resolve()
-      const currentLeaders = getCardLeaders(card)
-      if (currentLeaders.includes(selectedLeader)) return Promise.resolve()
-      return Promise.resolve(onSetCardLeaders(id, [...currentLeaders, selectedLeader], { silentSuccess: true }))
-    }))
-    showToast(msg('{length}개 카드를 {selectedLeader}님께 배정했습니다.', { length: ids.length, selectedLeader: selectedLeader }))
-    setSelectedCardIds(new Set())
-    setSelectMode(false)
-    setBulkAssigning(false)
+    const targets = selectedCards.filter((card) => !getCardLeaders(card).includes(selectedLeader))
+    if (targets.length === 0) return
+    setBulkWorking('assign')
+    try {
+      await Promise.all(targets.map((card) => Promise.resolve(onSetCardLeaders(
+        card.id,
+        [...getCardLeaders(card), selectedLeader],
+        { silentSuccess: true },
+      ))))
+      showToast(msg('{length}개 카드를 {selectedLeader}님께 배정했습니다.', { length: targets.length, selectedLeader: selectedLeader }))
+      setSelectedCardIds(new Set())
+      setSelectMode(false)
+    } finally {
+      setBulkWorking(null)
+    }
+  }
+
+  const handleBulkRelease = async () => {
+    if (!selectedLeader || selectedCardIds.size === 0) return
+    const targets = selectedCards.filter((card) => getCardLeaders(card).includes(selectedLeader))
+    if (targets.length === 0) return
+    setBulkWorking('release')
+    try {
+      await Promise.all(targets.map((card) => Promise.resolve(onSetCardLeaders(
+        card.id,
+        getCardLeaders(card).filter((leader) => leader !== selectedLeader),
+        { silentSuccess: true },
+      ))))
+      showToast(msg('{length}개 카드에서 {selectedLeader}님의 배정을 해제했습니다.', { length: targets.length, selectedLeader: selectedLeader }))
+      setSelectedCardIds(new Set())
+      setSelectMode(false)
+    } finally {
+      setBulkWorking(null)
+    }
   }
 
   return (
@@ -344,7 +374,7 @@ export function DesktopAdminAssignment({
               <button className={`la-select-mode-btn ${selectMode ? 'active' : ''}`} onClick={() => { setSelectMode((value) => !value); setSelectedCardIds(new Set()) }} type="button">
                 {selectMode ? '선택 모드' : '선택 모드'}
               </button>
-              {selectMode && <button className="la-select-all-btn" onClick={toggleSelectAll} type="button">전체 선택</button>}
+              {selectMode && <button className="la-select-all-btn" onClick={toggleSelectAll} type="button">{allFilteredSelected ? '전체 선택 해제' : '전체 선택'}</button>}
             </div>
           </div>
 
@@ -352,8 +382,11 @@ export function DesktopAdminAssignment({
             <div className="la-selection-bar">
               <span>{selectedCardIds.size}개 선택됨</span>
               <button onClick={() => setSelectedCardIds(new Set())} type="button">선택 해제</button>
-              <button className="la-bulk-assign-btn" disabled={!selectedLeader || bulkAssigning} onClick={() => void handleBulkAssign()} type="button">
-                {bulkAssigning ? '배정 중...' : selectedLeader ? `${selectedLeader}에게 일괄 배정` : '인도자 먼저 선택'}
+              <button className="la-bulk-release-btn" disabled={!selectedLeader || selectedReleasableCount === 0 || bulkWorking !== null} onClick={() => void handleBulkRelease()} type="button">
+                {bulkWorking === 'release' ? '해제 중...' : selectedLeader ? `${selectedLeader} 일괄 해제` : '인도자 먼저 선택'}
+              </button>
+              <button className="la-bulk-assign-btn" disabled={!selectedLeader || selectedAssignableCount === 0 || bulkWorking !== null} onClick={() => void handleBulkAssign()} type="button">
+                {bulkWorking === 'assign' ? '배정 중...' : selectedLeader ? `${selectedLeader}에게 일괄 배정` : '인도자 먼저 선택'}
               </button>
             </div>
           )}
@@ -379,9 +412,12 @@ export function DesktopAdminAssignment({
           <div className="la-card-list">
             {filteredCards.map((card) => {
               const leadersForCard = getCardLeaders(card)
+              const displayedLeaders = selectedLeader && leadersForCard.includes(selectedLeader)
+                ? [selectedLeader, ...leadersForCard.filter((leader) => leader !== selectedLeader)].slice(0, 2)
+                : leadersForCard.slice(0, 2)
               const isSelected = selectedCardIds.has(card.id)
               return (
-                <div className={`la-card-row ${isSelected ? 'selected' : ''}`} key={card.id} onClick={() => selectMode && toggleSelectCard(card.id)}>
+                <div className={`la-card-row${selectMode ? ' selecting' : ''}${isSelected ? ' selected' : ''}`} key={card.id} onClick={() => selectMode && toggleSelectCard(card.id)}>
                   {selectMode && (
                     <input className="la-card-check" type="checkbox" checked={isSelected} onChange={() => toggleSelectCard(card.id)} onClick={(event) => event.stopPropagation()} />
                   )}
@@ -390,15 +426,29 @@ export function DesktopAdminAssignment({
                     <span>{card.region} / {card.area}</span>
                   </div>
                   <div className="la-card-meta">
-                    {leadersForCard.length > 0 ? (
-                      leadersForCard.map((leader) => (
-                        <span className={`la-assignee-badge ${leader === currentVisitor ? 'mine' : ''}`} key={leader}>{leader} 담당</span>
-                      ))
-                    ) : (
-                      <span className="la-assignee-badge unassigned">미배정</span>
-                    )}
-                    <button className="la-detail-btn" type="button" onClick={(event) => { event.stopPropagation(); void handleAssignCard(card) }}>
-                      {leadersForCard.includes(selectedLeader ?? '') ? '배정됨' : '배정'}
+                    <div className="la-assignee-summary" title={leadersForCard.join(', ')}>
+                      {leadersForCard.length > 0 ? (
+                        <>
+                          {displayedLeaders.map((leader) => (
+                            <span className={`la-assignee-badge ${leader === currentVisitor ? 'mine' : ''}`} key={leader}>{leader}</span>
+                          ))}
+                          {leadersForCard.length > 2 && <span className="la-assignee-more">+{leadersForCard.length - 2}명</span>}
+                        </>
+                      ) : (
+                        <span className="la-assignee-badge unassigned">미배정</span>
+                      )}
+                    </div>
+                    <button
+                      className={`la-detail-btn${leadersForCard.includes(selectedLeader ?? '') ? ' release' : ''}`}
+                      disabled={releasing === card.id}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        if (leadersForCard.includes(selectedLeader ?? '')) void handleRelease(card)
+                        else void handleAssignCard(card)
+                      }}
+                    >
+                      {releasing === card.id ? '...' : leadersForCard.includes(selectedLeader ?? '') ? '해제' : '배정'}
                     </button>
                   </div>
                 </div>
