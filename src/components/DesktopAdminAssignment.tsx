@@ -165,6 +165,7 @@ export function DesktopAdminAssignment({
   const [selectedCardIds, setSelectedCardIds] = useState<Set<number>>(new Set())
   const [bulkWorking, setBulkWorking] = useState<'assign' | 'release' | null>(null)
   const [releasing, setReleasing] = useState<number | null>(null)
+  const [openAssigneeCardId, setOpenAssigneeCardId] = useState<number | null>(null)
   const [showStatusModal, setShowStatusModal] = useState(false)
 
   const leaders = useMemo(() => {
@@ -412,9 +413,6 @@ export function DesktopAdminAssignment({
           <div className="la-card-list">
             {filteredCards.map((card) => {
               const leadersForCard = getCardLeaders(card)
-              const displayedLeaders = selectedLeader && leadersForCard.includes(selectedLeader)
-                ? [selectedLeader, ...leadersForCard.filter((leader) => leader !== selectedLeader)].slice(0, 2)
-                : leadersForCard.slice(0, 2)
               const isSelected = selectedCardIds.has(card.id)
               return (
                 <div className={`la-card-row${selectMode ? ' selecting' : ''}${isSelected ? ' selected' : ''}`} key={card.id} onClick={() => selectMode && toggleSelectCard(card.id)}>
@@ -426,16 +424,32 @@ export function DesktopAdminAssignment({
                     <span>{card.region} / {card.area}</span>
                   </div>
                   <div className="la-card-meta">
-                    <div className="la-assignee-summary" title={leadersForCard.join(', ')}>
+                    <div className="la-assignee-count-wrap">
                       {leadersForCard.length > 0 ? (
-                        <>
-                          {displayedLeaders.map((leader) => (
-                            <span className={`la-assignee-badge ${leader === currentVisitor ? 'mine' : ''}`} key={leader}>{leader}</span>
-                          ))}
-                          {leadersForCard.length > 2 && <span className="la-assignee-more">+{leadersForCard.length - 2}명</span>}
-                        </>
+                        <button
+                          aria-expanded={openAssigneeCardId === card.id}
+                          aria-label={`배정 인도자 ${leadersForCard.length}명 보기`}
+                          className="la-assignee-count-btn"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setOpenAssigneeCardId((current) => current === card.id ? null : card.id)
+                          }}
+                          type="button"
+                        >
+                          {leadersForCard.length}명
+                        </button>
                       ) : (
-                        <span className="la-assignee-badge unassigned">미배정</span>
+                        <span className="la-assignee-count-empty">0명</span>
+                      )}
+                      {openAssigneeCardId === card.id && leadersForCard.length > 0 && (
+                        <div aria-label={`${card.name} 배정 인도자`} className="la-assignee-popover" role="dialog">
+                          <strong>배정 인도자 {leadersForCard.length}명</strong>
+                          <ul>
+                            {leadersForCard.map((leader) => (
+                              <li className={leader === currentVisitor ? 'mine' : ''} key={leader}>{leader}</li>
+                            ))}
+                          </ul>
+                        </div>
                       )}
                     </div>
                     <button

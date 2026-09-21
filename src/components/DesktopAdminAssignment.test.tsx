@@ -33,7 +33,7 @@ describe('PC 관리자 카드 배정', () => {
     expect(onSetCardLeaders).toHaveBeenCalledWith(2, [], { silentSuccess: true })
   })
 
-  test('카드 담당자가 많으면 두 명과 나머지 인원수로 요약한다', () => {
+  test('전체 구역 목록은 배정 인원수만 보이고 숫자를 누르면 전체 이름을 표시한다', () => {
     const leaders = ['가인도', '나인도', '다인도', '라인도', '마인도']
     const card = testCard(1, '기흥구 구갈동 1', {
       buildings: 1,
@@ -52,12 +52,15 @@ describe('PC 관리자 카드 배정', () => {
     )
 
     const row = container.querySelector('.la-card-row') as HTMLElement
-    const summary = row.querySelector('.la-assignee-summary') as HTMLElement
-    expect(within(summary).getByText('가인도')).toBeVisible()
-    expect(within(summary).getByText('나인도')).toBeVisible()
-    expect(within(summary).getByText('+3명')).toBeVisible()
-    expect(summary.querySelectorAll('.la-assignee-badge')).toHaveLength(2)
-    expect(summary).toHaveAttribute('title', leaders.join(', '))
+    expect(within(row).queryByText('가인도')).not.toBeInTheDocument()
+
+    const countButton = within(row).getByRole('button', { name: '배정 인도자 5명 보기' })
+    expect(countButton).toHaveTextContent('5명')
+    fireEvent.click(countButton)
+
+    const popover = within(row).getByRole('dialog', { name: '기흥구 구갈동 1 배정 인도자' })
+    leaders.forEach((leader) => expect(within(popover).getByText(leader)).toBeVisible())
+    expect(within(popover).getAllByRole('listitem')).toHaveLength(5)
   })
 
   test('활성 인도자 목록이 비어 있어도 삭제된 계정을 배정 후보로 되살리지 않는다', () => {
