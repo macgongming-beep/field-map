@@ -28,6 +28,7 @@ const requiredForwardMigrations = [
   '20260918_1000_chinese_territory_reports.sql',
   '20260920_1200_create_building_tx.sql',
   '20260922_1000_revoke_login_logs_select.sql',
+  '20260922_1100_territory_report_regular_visit_visibility.sql',
 ]
 const neutralRuntimeFiles = [
   'vite.config.ts',

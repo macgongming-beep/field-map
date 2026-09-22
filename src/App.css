@@ -33424,6 +33424,7 @@ button > svg {
 .territory-report-generated { color: #747974; font-size: 12px; align-self: end; }
 .territory-report-note { margin: 22px 0; padding: 14px 16px; background: #f3f5f2; border-left: 3px solid #587d73; line-height: 1.6; font-size: 14px; }
 .territory-report-kpis { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid #dedfdb; margin: 24px 0 32px; }
+.territory-report-kpis.is-three { grid-template-columns: repeat(3, 1fr); }
 .territory-report-kpis > div { padding: 15px 18px; border-right: 1px solid #dedfdb; }
 .territory-report-kpis > div:last-child { border: 0; }
 .territory-report-kpis span { display: block; color: #707570; font-size: 12px; margin-bottom: 7px; }
