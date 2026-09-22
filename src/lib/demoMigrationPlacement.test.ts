@@ -15,9 +15,11 @@ describe('demo database scripts', () => {
 
   it('keeps rollback scripts out of the forward install migration set', () => {
     const migrations = readdirSync('supabase/migrations').filter((name) => name.endsWith('.sql'))
+    const strayRollbacks = readdirSync('supabase/tools').filter((name) => name.startsWith('_ROLLBACK_'))
     expect(migrations.length).toBeGreaterThan(0)
     expect(migrations.every((name) => /^20\d{6}_\d{4}_.+\.sql$/.test(name))).toBe(true)
     expect(migrations.some((name) => name.includes('ROLLBACK'))).toBe(false)
+    expect(strayRollbacks).toEqual([])
     expect(existsSync('supabase/tools/rollbacks/_ROLLBACK_20260920_건물등록RPC.sql')).toBe(true)
   })
 })

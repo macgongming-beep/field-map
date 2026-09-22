@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const migrationsDir = join(root, 'supabase', 'migrations')
+const toolsDir = join(root, 'supabase', 'tools')
 const rollbackDir = join(root, 'supabase', 'tools', 'rollbacks')
 const requiredFiles = [
   'supabase/baseline.sql',
@@ -16,9 +17,17 @@ const requiredFiles = [
 ]
 const requiredForwardMigrations = [
   '20260828_1000_session_helper_and_signup.sql',
+  '20260828_1200_anon_write_lockdown.sql',
+  '20260901_0910_guard_login_logs.sql',
+  '20260907_1000_finalize_admin_settings_notices.sql',
+  '20260907_1100_finalize_calendar_assignment_policies.sql',
+  '20260907_1200_finalize_personal_service_policies.sql',
+  '20260907_1300_finalize_territory_structure_policies.sql',
+  '20260907_1400_finalize_visit_history_policies.sql',
   '20260907_1510_finalize_app_user_policies.sql',
   '20260918_1000_chinese_territory_reports.sql',
   '20260920_1200_create_building_tx.sql',
+  '20260922_1000_revoke_login_logs_select.sql',
 ]
 const neutralRuntimeFiles = [
   'vite.config.ts',
@@ -35,6 +44,9 @@ const forwardMigrations = readdirSync(migrationsDir).filter((name) => name.endsW
 const rollbackFiles = existsSync(rollbackDir)
   ? readdirSync(rollbackDir).filter((name) => name.endsWith('.sql')).sort()
   : []
+const strayRollbackFiles = readdirSync(toolsDir)
+  .filter((name) => /^_ROLLBACK_.+\.sql$/.test(name))
+  .sort()
 
 for (const file of requiredFiles) {
   if (!existsSync(join(root, file))) errors.push(`필수 파일 없음: ${file}`)
@@ -55,6 +67,9 @@ for (const file of requiredForwardMigrations) {
 }
 
 if (rollbackFiles.length === 0) errors.push('supabase/tools/rollbacks 에 복구 SQL이 없습니다')
+if (strayRollbackFiles.length > 0) {
+  errors.push(`롤백 SQL이 rollbacks/ 밖에 있음: ${strayRollbackFiles.join(', ')}`)
+}
 
 for (const file of neutralRuntimeFiles) {
   const source = readFileSync(join(root, file), 'utf8')
