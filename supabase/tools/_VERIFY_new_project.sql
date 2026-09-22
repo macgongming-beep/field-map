@@ -24,6 +24,34 @@ with checks as (
     and grantee in ('anon', 'authenticated') and privilege_type = 'SELECT'
 
   union all
+  select 45, 'app_users.pin 읽기 차단',
+         case when has_column_privilege('anon', 'public.app_users', 'pin', 'SELECT')
+                or has_column_privilege('authenticated', 'public.app_users', 'pin', 'SELECT')
+              then 'open' else 'blocked' end,
+         'blocked',
+         not has_column_privilege('anon', 'public.app_users', 'pin', 'SELECT')
+           and not has_column_privilege('authenticated', 'public.app_users', 'pin', 'SELECT')
+
+  union all
+  select 46, 'login_logs 직접 SELECT 차단',
+         case when has_table_privilege('anon', 'public.login_logs', 'SELECT')
+                or has_table_privilege('authenticated', 'public.login_logs', 'SELECT')
+                or exists (
+                  select 1 from information_schema.column_privileges
+                  where table_schema = 'public' and table_name = 'login_logs'
+                    and grantee in ('anon', 'authenticated') and privilege_type = 'SELECT'
+                )
+              then 'open' else 'blocked' end,
+         'blocked',
+         not has_table_privilege('anon', 'public.login_logs', 'SELECT')
+           and not has_table_privilege('authenticated', 'public.login_logs', 'SELECT')
+           and not exists (
+             select 1 from information_schema.column_privileges
+             where table_schema = 'public' and table_name = 'login_logs'
+               and grantee in ('anon', 'authenticated') and privilege_type = 'SELECT'
+           )
+
+  union all
   select 50, '세션 역할 판정 helper', count(*)::text, '1', count(*) = 1
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'private' and p.proname = 'request_session_role'
