@@ -54,11 +54,10 @@ npm run apply:relock -- --confirm <project-ref>
 급히 되돌려야 하면 `npm run apply:emergency-open -- --confirm <project-ref>`.
 복구는 `app_users` 를 **절대 열지 않고** 나머지 26개만 연다.
 
-⚠ **이건 1차 봉쇄다.** `TEMP_session_gate_*` 는 '로그인했나' 만 본다 —
-**승인된 계정 하나가 탈취되면 대부분의 표를 여전히 고치고 지울 수 있다.**
-→ 다음 일은 **역할별 권한으로 좁히기**. 다른 회중 배포 조건 = TEMP 정책 0개.
-   ⚠ 권한표에 **표뿐 아니라 RPC 와 클라이언트 폴백 경로**를 넣을 것 —
-     표만 막고 닫혔다고 했다가 definer 함수 65개가 열려 있던 적이 있다.
+이 단계는 당시 1차 봉쇄였다. 이후 `20260907_*_finalize_*` 마이그레이션으로
+역할별 권한 전환을 마쳤다. **2026-09-22 운영·데모 실측은 TEMP 정책 0개**이며,
+`app_users` 전체표 SELECT 권한도 0개다. 새 회중은 `_VERIFY_new_project.sql`에서
+같은 조건이 모두 `ok`인지 확인한다.
 
 ⚠⚠ **Supabase SQL Editor 는 `begin; … commit;` 을 지키지 않는다.** 실측했다 —
 마지막 검증만 실패했는데 앞의 정책 112개는 그대로 남았다. 되돌리기 어려운
@@ -71,9 +70,8 @@ npm run apply:relock -- --confirm <project-ref>
 접속은 **Session pooler(5432)**. 직접연결(`db.<ref>.supabase.co`)은 IPv6 전용이라 안 닿는다.
 ⚠ `supabase` CLI 의 `--linked` 는 **운영에 링크돼 있다.** 쓰지 말 것.
 
-⚠ **이건 완료가 아니라 1차 봉쇄다.** `TEMP_session_gate_*` 는 '로그인했나' 만 본다.
-**승인된 계정 하나가 탈취되면 대부분의 표를 여전히 고치고 지울 수 있다.**
-→ 역할별 권한으로 좁히는 것이 다음 일. **다른 회중 배포 조건 = TEMP 정책 0개.**
+역할별 권한 전환은 2026-09-07 완료했고 2026-09-22 운영·데모에서
+**TEMP 정책 0개**를 다시 확인했다. 이 조건은 새 회중 설치 검증에도 포함돼 있다.
 
 ### ⚠⚠ definer RPC 는 RLS 를 우회한다 — 표만 막으면 뒷문이 열려 있다
 
@@ -338,16 +336,16 @@ SUPABASE_SERVICE_ROLE_KEY=...   # 백업 스크립트용 (RLS 우회)
 - 직접 SELECT 차단, **`get_login_logs` RPC** 로만 조회 가능
 - 본인 기록은 누구나, 다른 사람 기록은 developer 만 (클라이언트 측 체크)
 
-### RLS 현 상태 (2026-08-29 **닫았다**)
-- 쓰기는 **세션 토큰이 있어야** 한다 (`TEMP_session_gate_*` 86개). 읽기는 그대로 열려 있다
-  (Realtime 이 SELECT RLS 를 보는데 WebSocket 에는 헤더가 안 붙는다)
+### RLS 현 상태 (2026-09-22 실측)
+- TEMP 정책은 운영·데모 모두 **0개**다. 쓰기는 역할·소유권 정책으로 전환했다.
+  Realtime 때문에 공개 SELECT가 필요한 표는 쓰기 정책과 별도로 관리한다.
 - `app_users`: PIN 컬럼 SELECT 차단 ✅ · INSERT 는 관리자만 · UPDATE 는 **본인 또는 관리자** ·
   role·approval_status·is_active 는 트리거가 한 겹 더 막는다
 - `login_logs`: 직접 SELECT 차단 ✅
 - 열린 `FOR ALL` 은 `app_private_settings_deny_all` **하나뿐**
 
-⚠ **1차 봉쇄다.** 승인된 계정 하나가 탈취되면 대부분의 표를 여전히 고치고 지울 수 있다.
-역할별 권한으로 좁히는 것이 남았다. **다른 회중 배포 조건 = TEMP 정책 0개.**
+새 회중에서도 `supabase/tools/_VERIFY_new_project.sql`로 TEMP 정책 0개와
+`app_users` 전체표 SELECT 권한 0개를 확인해야 한다.
 
 ### 백업 ✅ 완료
 - `npm run backup` → `backups/YYYY-MM-DD/*.json` 18개 테이블 저장
@@ -601,17 +599,12 @@ App.css          [모바일 공통] 0px~
 - 역할별 탭/기능 분기
 
 ### 미완료 / 향후 과제 (급한 순)
-1. **`TEMP_session_gate_*` 를 역할별 권한으로 좁히기** ← 다른 회중 배포 전 필수.
-   지금은 '로그인했나' 만 본다 (anon 쓰기 차단은 2026-08-31 재잠금으로 완료).
-   ⚠ 권한표에 **표 30개 + definer RPC + 클라이언트 폴백 경로**를 함께 넣을 것.
-   ⚠ 쉬운 표부터 (자기 것만 다루고 실패해도 봉사에 지장 없는 것). `visit_histories`·`cards` 로 시작하지 말 것.
-2. `20260825_1200_merge_conflict_fix.sql` **운영 미적용** (중복 주소 0개라 급하지 않다)
-3. 구조 정리 이어가기 — DesktopMap 2752 · MobileMap 2406 · 카드 표(335줄·61개)
-4. chat_messages SELECT 를 더 좁은 RLS 로 (지금은 `using (deleted_at is null)` open)
-5. 정기방문 시작일이 날짜가 아니라 **ISO 시각**으로 저장된다 (`2026-01-01T03:00:00Z`).
+1. 구조 정리 이어가기 — DesktopMap · MobileMap · 카드 표
+2. chat_messages SELECT 를 더 좁은 RLS 로 (지금은 `using (deleted_at is null)` open)
+3. 정기방문 시작일이 날짜가 아니라 **ISO 시각**으로 저장된다 (`2026-01-01T03:00:00Z`).
    날짜 경계에서 하루가 밀릴 수 있다
 - [x] CSV import — 건물 하나가 한 트랜잭션 (`import_building_tx`)
-- [x] 자동화 테스트 — **537개** (vitest). 순수 로직 + 모달 조립 시험
+- [x] 자동화 테스트 — **984개** (vitest, 2026-09-22). 순수 로직 + 모달 조립 시험
 
 ---
 

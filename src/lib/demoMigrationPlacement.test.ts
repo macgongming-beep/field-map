@@ -12,4 +12,12 @@ describe('demo database scripts', () => {
     expect(existsSync('supabase/demo/20260913_1100_demo_environment_reset.sql')).toBe(true)
     expect(readFileSync('docs/새-회중-설치.md', 'utf8')).toContain('`supabase/demo/` 는 외부 시연 DB 전용')
   })
+
+  it('keeps rollback scripts out of the forward install migration set', () => {
+    const migrations = readdirSync('supabase/migrations').filter((name) => name.endsWith('.sql'))
+    expect(migrations.length).toBeGreaterThan(0)
+    expect(migrations.every((name) => /^20\d{6}_\d{4}_.+\.sql$/.test(name))).toBe(true)
+    expect(migrations.some((name) => name.includes('ROLLBACK'))).toBe(false)
+    expect(existsSync('supabase/tools/rollbacks/_ROLLBACK_20260920_건물등록RPC.sql')).toBe(true)
+  })
 })

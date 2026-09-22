@@ -8,7 +8,8 @@
  * 비교**한다. 표나 함수를 새로 만들어도 검사 항목에 저절로 들어온다.
  *
  * 실행:
- *   npm run verify-install -- --target-url https://xxx.supabase.co --target-key <service_role>
+ *   TARGET_SUPABASE_URL=https://xxx.supabase.co \
+ *   TARGET_SUPABASE_SERVICE_ROLE_KEY=<service_role> npm run verify-install
  *
  * 기준(우리 프로젝트)은 .env.local 의 VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 를 쓴다.
  *
@@ -46,8 +47,8 @@ const argOf = (name) => {
 
 const baseUrl = process.env.VITE_SUPABASE_URL
 const baseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-const targetUrl = argOf('--target-url')
-const targetKey = argOf('--target-key')
+const targetUrl = process.env.TARGET_SUPABASE_URL ?? argOf('--target-url')
+const targetKey = process.env.TARGET_SUPABASE_SERVICE_ROLE_KEY
 
 if (!baseUrl || !baseKey) {
   console.error('❌ .env.local 에 VITE_SUPABASE_URL 과 SUPABASE_SERVICE_ROLE_KEY 가 필요합니다')
@@ -55,8 +56,10 @@ if (!baseUrl || !baseKey) {
 }
 if (!targetUrl || !targetKey) {
   console.error('❌ 검사할 프로젝트를 알려 주세요:')
-  console.error('   npm run verify-install -- --target-url https://xxx.supabase.co --target-key <service_role>')
+  console.error('   TARGET_SUPABASE_URL=https://xxx.supabase.co \\')
+  console.error('   TARGET_SUPABASE_SERVICE_ROLE_KEY=<service_role> npm run verify-install')
   console.error('\n   service_role 키: 그 프로젝트 Dashboard → Settings → API')
+  console.error('   키는 셸 기록에 남지 않도록 .env.local 또는 현재 셸 환경변수로 넣으세요.')
   process.exit(1)
 }
 
@@ -120,6 +123,8 @@ async function main() {
   console.log('   · Edge Function (send-push, cleanup-chat-images)')
   console.log('   · 푸시 열쇠(VAPID) — 회중마다 새로 만들어야 합니다')
   console.log('   · 첫 관리자 계정\n')
+  console.log('그다음 새 프로젝트 SQL Editor에서 supabase/tools/_VERIFY_new_project.sql을 실행해')
+  console.log('TEMP 정책·권한·데모 함수가 없는지도 확인하세요.\n')
 }
 
 main().catch((e) => { console.error('❌', e.message); process.exit(1) })

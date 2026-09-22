@@ -13,6 +13,7 @@ type LoginProps = {
 
 const LANGUAGES: AppLanguage[] = ['ko', 'zh', 'en']
 const IS_DEMO = import.meta.env.VITE_DEMO_MODE === 'true'
+const APP_LABEL = import.meta.env.VITE_APP_LABEL?.trim()
 
 export function Login({ language, onChangeLanguage, onLogin, onSignup }: LoginProps) {
   const [isSignup, setIsSignup] = useState(false)
@@ -67,7 +68,7 @@ export function Login({ language, onChangeLanguage, onLogin, onSignup }: LoginPr
           </div>
           <h1>{isSignup ? t(language, 'login.signupTitle') : t(language, 'login.appName')}</h1>
           <p className={!isSignup ? 'login-yongin' : ''}>
-            {isSignup ? t(language, 'login.signupSubtitle') : IS_DEMO ? 'DEMO' : t(language, 'login.subtitle')}
+            {isSignup ? t(language, 'login.signupSubtitle') : IS_DEMO ? 'DEMO' : APP_LABEL || t(language, 'login.subtitle')}
           </p>
           <div className="login-language-switcher" aria-label={t(language, 'settings.language')}>
             {LANGUAGES.map((item) => (
