@@ -31,6 +31,7 @@ import type { AuthUser, LoginLogRecord } from '../hooks/useAuth'
 import { roleLabels } from '../types'
 import type { AppLanguage } from '../i18n'
 import { msg } from '../lib/msg'
+import { getCongregationProfile } from '../lib/congregationProfile'
 import type { MergeResult } from '../utils/duplicateBuildingMerge'
 
 const IS_DEMO = import.meta.env.VITE_DEMO_MODE === 'true'
@@ -479,7 +480,9 @@ export function DesktopApp({
           </div>
           <div className="nav-brand-text">
             <strong style={{ fontSize: 18 }}>Field Map</strong>
-            <span style={{ letterSpacing: '0.2em', fontSize: '10px' }}>{IS_DEMO ? 'DEMO' : 'YONGIN'}</span>
+            <span style={{ letterSpacing: '0.08em', fontSize: '10px' }}>
+              {IS_DEMO ? 'DEMO' : import.meta.env.VITE_APP_LABEL?.trim() || getCongregationProfile().name}
+            </span>
           </div>
         </div>
 

@@ -36,7 +36,7 @@ export function TerritoryReportView({ snapshot, shared = false }: {
     <article className={`territory-report-view${shared ? ' is-shared' : ''}`}>
       <header className="territory-report-heading">
         <div>
-          <p className="territory-report-eyebrow">{snapshot.congregationName || '경기용인중국어'} 구역 관리 현황</p>
+          <p className="territory-report-eyebrow">{snapshot.congregationName || 'Field Map'} 구역 관리 현황</p>
           <h1>구역 관리 보고서</h1>
           <p>{dateLabel(snapshot.periodStart)} - {dateLabel(snapshot.periodEnd)}</p>
         </div>
