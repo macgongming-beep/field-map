@@ -10,6 +10,7 @@ export function TerritoryReportView({ snapshot, shared = false }: {
   shared?: boolean
 }) {
   const hasManaged180d = snapshot.regions.every(row => row.managed180d != null)
+  const showRegularVisits = snapshot.showRegularVisits !== false
   const s = snapshot.summary
   const monthlyVisits = snapshot.monthlyVisits ?? []
   const cardRegions = snapshot.cardRegions ?? []
@@ -45,11 +46,11 @@ export function TerritoryReportView({ snapshot, shared = false }: {
 
       {snapshot.note && <p className="territory-report-note">{snapshot.note}</p>}
 
-      <section className="territory-report-kpis" aria-label="핵심 현황">
+      <section className={`territory-report-kpis${showRegularVisits ? '' : ' is-three'}`} aria-label="핵심 현황">
         <div><span>중국어 세대</span><strong>{fmt(s.total)}</strong></div>
         <div><span>주택 세대</span><strong>{fmt(s.residential)}</strong></div>
         <div><span>식당·상가</span><strong>{fmt(s.business)}</strong></div>
-        <div><span>정기 방문</span><strong>{fmt(s.regularVisits)}</strong></div>
+        {showRegularVisits && <div><span>정기 방문</span><strong>{fmt(s.regularVisits ?? 0)}</strong></div>}
       </section>
 
       <section className="territory-report-section">

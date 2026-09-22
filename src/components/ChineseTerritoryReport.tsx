@@ -37,6 +37,7 @@ export function ChineseTerritoryReport() {
   const [note, setNote] = useState('중국어 세대의 지역별 분포와 최근 관리 현황을 집계한 보고서입니다.')
   const [snapshot, setSnapshot] = useState<ChineseTerritoryReportSnapshot | null>(null)
   const [includeAreaDetails, setIncludeAreaDetails] = useState(false)
+  const [showRegularVisits, setShowRegularVisits] = useState(true)
   const [shares, setShares] = useState<TerritoryReportShare[]>([])
   const [loading, setLoading] = useState(true)
   const [shareOpen, setShareOpen] = useState(false)
@@ -52,13 +53,13 @@ export function ChineseTerritoryReport() {
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
-      setSnapshot(await previewChineseTerritoryReport(start, end, note, includeAreaDetails))
+      setSnapshot(await previewChineseTerritoryReport(start, end, note, includeAreaDetails, showRegularVisits))
     } catch (error) {
       showToast(error instanceof Error ? error.message : '보고서를 불러오지 못했습니다.', 'error')
     } finally {
       setLoading(false)
     }
-  }, [start, end, note, includeAreaDetails])
+  }, [start, end, note, includeAreaDetails, showRegularVisits])
 
   useEffect(() => { void refresh(); void refreshShares() }, [refresh, refreshShares])
 
@@ -70,7 +71,7 @@ export function ChineseTerritoryReport() {
     const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
     try {
       const result = await createChineseTerritoryReportShare({
-        start, end, note, expiresAt, pin: usePin ? pin : undefined, includeAreaDetails,
+        start, end, note, expiresAt, pin: usePin ? pin : undefined, includeAreaDetails, showRegularVisits,
       })
       const link = `${window.location.origin}/shared/territory-report/${result.shareToken}`
       setCreatedLink(link)
@@ -111,6 +112,10 @@ export function ChineseTerritoryReport() {
           <label className="territory-report-detail-toggle">
             <input type="checkbox" checked={includeAreaDetails} onChange={event => setIncludeAreaDetails(event.target.checked)} />
             <span>동별 상세 포함</span>
+          </label>
+          <label className="territory-report-detail-toggle">
+            <input type="checkbox" checked={showRegularVisits} onChange={event => setShowRegularVisits(event.target.checked)} />
+            <span>정기방문 숫자 표시</span>
           </label>
           <button type="button" className="territory-report-refresh" onClick={() => void refresh()} disabled={loading}><ReportIcon name="refresh" />보고서 갱신</button>
         </div>

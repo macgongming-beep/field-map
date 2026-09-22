@@ -50,17 +50,24 @@ async function loadReportRegionBoundaries() {
   return regionBoundariesPromise
 }
 
-async function reportPresentation(includeAreaDetails: boolean) {
+async function reportPresentation(includeAreaDetails: boolean, showRegularVisits: boolean) {
   return {
     p_include_area_details: includeAreaDetails,
+    p_show_regular_visits: showRegularVisits,
     p_region_boundaries: await loadReportRegionBoundaries(),
   }
 }
 
-export async function previewChineseTerritoryReport(start: string, end: string, note: string, includeAreaDetails = false) {
-  return rpc<ChineseTerritoryReportSnapshot>('preview_chinese_territory_report_v2_tx', {
+export async function previewChineseTerritoryReport(
+  start: string,
+  end: string,
+  note: string,
+  includeAreaDetails = false,
+  showRegularVisits = true,
+) {
+  return rpc<ChineseTerritoryReportSnapshot>('preview_chinese_territory_report_v3_tx', {
     p_token: requireToken(), p_period_start: start, p_period_end: end, p_note: note,
-    ...await reportPresentation(includeAreaDetails),
+    ...await reportPresentation(includeAreaDetails, showRegularVisits),
   })
 }
 
@@ -71,9 +78,10 @@ export function createChineseTerritoryReportShare(input: {
   expiresAt: string
   pin?: string
   includeAreaDetails?: boolean
+  showRegularVisits?: boolean
 }) {
-  return reportPresentation(Boolean(input.includeAreaDetails)).then(presentation => rpc<{ ok: true; id: string; shareToken: string; expiresAt: string; pinRequired: boolean }>(
-    'create_chinese_territory_report_share_v2_tx',
+  return reportPresentation(Boolean(input.includeAreaDetails), input.showRegularVisits !== false).then(presentation => rpc<{ ok: true; id: string; shareToken: string; expiresAt: string; pinRequired: boolean }>(
+    'create_chinese_territory_report_share_v3_tx',
     {
       p_token: requireToken(), p_period_start: input.start, p_period_end: input.end,
       p_expires_at: input.expiresAt, p_pin: input.pin || null, p_note: input.note,

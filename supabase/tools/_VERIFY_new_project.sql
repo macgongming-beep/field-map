@@ -67,6 +67,15 @@ with checks as (
   where n.nspname = 'public' and p.proname = 'merge_selected_duplicate_buildings_tx'
 
   union all
+  select 75, '보고서 표시 옵션 RPC', count(*)::text, '2', count(*) = 2
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public'
+    and p.proname in (
+      'preview_chinese_territory_report_v3_tx',
+      'create_chinese_territory_report_share_v3_tx'
+    )
+
+  union all
   select 80, '구역 보고서 공유 표', count(*)::text, '1', count(*) = 1
   from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relname = 'territory_report_shares' and c.relkind = 'r'

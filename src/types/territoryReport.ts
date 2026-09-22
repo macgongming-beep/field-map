@@ -2,7 +2,7 @@ export type TerritoryReportSummary = {
   total: number
   residential: number
   business: number
-  regularVisits: number
+  regularVisits?: number
   totalCards: number
   targetCards: number
   assignedCards: number
@@ -17,7 +17,7 @@ export type TerritoryReportRegion = {
   business: number
   managed30d: number
   managed180d?: number
-  regularVisits: number
+  regularVisits?: number
   centerLat: number | null
   centerLng: number | null
 }
@@ -47,6 +47,7 @@ export type ChineseTerritoryReportSnapshot = {
   periodEnd: string
   note: string
   includeAreaDetails?: boolean
+  showRegularVisits?: boolean
   summary: TerritoryReportSummary
   management: {
     within30Days: number
