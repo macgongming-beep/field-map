@@ -788,6 +788,7 @@ export function MobileHome({
             focusedInformalId={focusedInformalId}
             onCreateInformalPlace={role === 'admin' || role === 'developer' ? onCreateInformalPlace : undefined}
             onUpdateInformalPlace={role === 'admin' || role === 'developer' ? onUpdateInformalPlace : undefined}
+            onDeleteInformalAsset={role === 'admin' || role === 'developer' ? onDeleteInformalAsset : undefined}
             buildings={mapBuildings}
             cardBoundaries={mapCardBoundaries}
             cards={mapCards}

@@ -2124,15 +2124,15 @@ export function MapCanvas({
   // MockMap with clustering simulation at small zoom + preview pin
   return (
     <div
-      className={['mock-map', drawingBoundary ? 'drawing-boundary' : '', addingBuilding ? 'adding-building' : '', editingBuildingLocation ? 'editing-building-location' : ''].join(' ')}
+      className={['mock-map', drawingBoundary ? 'drawing-boundary' : '', addingBuilding || pickingPoint ? 'adding-building' : '', editingBuildingLocation ? 'editing-building-location' : ''].join(' ')}
       aria-label="샘플 지도"
-      style={addingBuilding ? { cursor: 'crosshair' } : editingBuildingLocation ? { cursor: 'grab' } : undefined}
+      style={addingBuilding || pickingPoint ? { cursor: 'crosshair' } : editingBuildingLocation ? { cursor: 'grab' } : undefined}
       onClick={(event) => {
         if (drawingBoundary && onAddBoundaryPoint) {
           onAddBoundaryPoint(getPointFromMockEvent(event))
           return
         }
-        if (addingBuilding && onMapClick) {
+        if ((addingBuilding || pickingPoint) && onMapClick) {
           const pt = getPointFromMockEvent(event)
           onMapClick(pt.lat, pt.lng)
         }

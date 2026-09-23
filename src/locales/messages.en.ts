@@ -968,4 +968,8 @@ export const messagesEn: Record<string, string> = {
   "전시대 승인": "Cart approval",
   "전시대 봉사 승인 관리": "Cart service approval management",
   "오른쪽 버튼으로 신청 가능 여부를 정합니다.": "Use the button on the right to set application access.",
+  "위치 변경": "Change location",
+  "포인트 삭제": "Delete point",
+  "{v1} 포인트를 정말 삭제할까요?": "Delete the {v1} point?",
+  "{v1} 핀을 끌거나 지도를 눌러 옮기세요": "Drag the {v1} pin or tap the map to move it",
 }

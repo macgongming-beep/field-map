@@ -102,6 +102,7 @@ export function MobileMap({
   focusedInformalId,
   onCreateInformalPlace,
   onUpdateInformalPlace,
+  onDeleteInformalAsset,
   focusedCardIds = [],
   focusedBuildingId,
   regularVisitScope = false,
@@ -161,6 +162,8 @@ export function MobileMap({
     assetId: number,
     input: { name?: string; memo?: string; lat?: number; lng?: number; zoom?: number | null; kind?: InformalKind },
   ) => Promise<boolean>
+  /** 하위 비공식 포인트 삭제. 상위 카드는 자료 관리 화면에서만 삭제한다. */
+  onDeleteInformalAsset?: (assetId: number) => Promise<boolean>
   focusedCardIds?: number[]
   focusedBuildingId?: number | null
   regularVisitScope?: boolean
@@ -311,6 +314,13 @@ export function MobileMap({
     { id: number; name: string; memo: string } | null
   >(null)
   const [savingInformalEdit, setSavingInformalEdit] = useState(false)
+  const [movingInformalPoint, setMovingInformalPoint] = useState<{
+    id: number
+    name: string
+    lat: number
+    lng: number
+  } | null>(null)
+  const [savingInformalLocation, setSavingInformalLocation] = useState(false)
 
   const selectedInformal = useMemo(
     () => (focusedInformalId ? informalAssets.find((a) => a.id === focusedInformalId) ?? null : null),
@@ -345,6 +355,7 @@ export function MobileMap({
   useEffect(() => {
     // 다른 구역으로 옮겨 가면 골라 둔 점은 뜻이 없다
     setFocusedChildId(focusedInformalChildId)
+    setMovingInformalPoint(null)
   }, [focusedInformalChildId, focusedInformalId])
 
   /** 구역 안에 찍은 점의 이름을 정하는 창 */
@@ -445,7 +456,53 @@ export function MobileMap({
             onChange={(event) => setEditInformalDraft({ ...editInformalDraft, memo: event.target.value })}
           />
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        {(() => {
+          const asset = informalAssets.find((item) => item.id === editInformalDraft.id)
+          const isChildPoint = Boolean(asset?.parentId)
+          return isChildPoint && asset ? (
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              {typeof asset.lat === 'number' && typeof asset.lng === 'number' && (
+                <button
+                  className="cal-cancel-btn"
+                  style={{ flex: 1 }}
+                  type="button"
+                  onClick={() => {
+                    setMovingInformalPoint({ id: asset.id, name: asset.name, lat: asset.lat as number, lng: asset.lng as number })
+                    setFocusedChildId(asset.id)
+                    setEditInformalDraft(null)
+                    setSheetHeight(MIN_HEIGHT)
+                  }}
+                >
+                  {msg('위치 변경')}
+                </button>
+              )}
+              {onDeleteInformalAsset && (
+                <button
+                  className="cal-cancel-btn"
+                  style={{ flex: 1, color: 'var(--danger-600)', borderColor: 'var(--danger-200)' }}
+                  type="button"
+                  onClick={async () => {
+                    const confirmed = await confirmDialog({
+                      title: msg('포인트 삭제'),
+                      message: msg('{v1} 포인트를 정말 삭제할까요?', { v1: asset.name }),
+                      confirmLabel: msg('삭제'),
+                      danger: true,
+                    })
+                    if (!confirmed) return
+                    const deleted = await onDeleteInformalAsset(asset.id)
+                    if (deleted) {
+                      setFocusedChildId(null)
+                      setEditInformalDraft(null)
+                    }
+                  }}
+                >
+                  {msg('삭제')}
+                </button>
+              )}
+            </div>
+          ) : null
+        })()}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button className="cal-cancel-btn" style={{ flex: 1 }} type="button" onClick={() => setEditInformalDraft(null)}>{msg('취소')}</button>
           <button
             className="cal-save-btn"
@@ -1966,7 +2023,9 @@ export function MobileMap({
               </div>
             )}
             <MapCanvas
-              informalPlaces={informalPins}
+              informalPlaces={movingInformalPoint
+                ? informalPins.filter((place) => place.id !== movingInformalPoint.id)
+                : informalPins}
               informalShape={informalShape}
               focusPoint={informalFocusPoint}
               onSelectInformal={(id) => {
@@ -2023,10 +2082,12 @@ export function MobileMap({
               }}
               onSelectCardBoundary={(cardId) => setSelectedCardId(cardId)}
               selectedBuildingId={selectedBuildingId ?? 0}
-              pickingPoint={addingChildKind !== null}
+              pickingPoint={addingChildKind !== null || movingInformalPoint !== null}
               onMapClick={(lat, lng) => {
                 if (adjustingNewBuildingPin) {
                   return
+                } else if (movingInformalPoint) {
+                  setMovingInformalPoint({ ...movingInformalPoint, lat, lng })
                 } else if (addingChildKind !== null) {
                   // 한 번 찍으면 모드를 끈다 — 계속 켜져 있으면 지도를 누를
                   // 때마다 창이 떠서 다른 일을 못 한다
@@ -2044,12 +2105,16 @@ export function MobileMap({
                   setSheetHeight(MIN_HEIGHT)
                 }
               }}
-              previewPinLat={addLat}
-              previewPinLng={addLng}
+              previewPinLat={movingInformalPoint?.lat ?? addLat}
+              previewPinLng={movingInformalPoint?.lng ?? addLng}
               virtualPinLat={virtualPinLat}
               virtualPinLng={virtualPinLng}
               virtualPinLabel={pinLabelParam}
               onMovePreviewPin={(lat, lng) => {
+                if (movingInformalPoint) {
+                  setMovingInformalPoint({ ...movingInformalPoint, lat, lng })
+                  return
+                }
                 addPinManuallyAdjustedRef.current = true
                 setAddLat(lat)
                 setAddLng(lng)
@@ -2156,10 +2221,38 @@ export function MobileMap({
             )}
           </div>
 
-          {(addingBuildingMode || editingPinMode || adjustingNewBuildingPin) && (
-            <div className={`mobile-map-mode-banner${editingPinMode || adjustingNewBuildingPin ? ' edit-pin' : ''}${adjustingNewBuildingPin ? ' pin-adjust' : ''}`}>
-              <strong>{adjustingNewBuildingPin ? msg('새 건물 핀을 원하는 위치로 옮기세요') : editingPinMode ? t(language, 'map.editPin') : t(language, 'map.addBuilding')}</strong>
-              {adjustingNewBuildingPin ? (
+          {(addingBuildingMode || editingPinMode || adjustingNewBuildingPin || movingInformalPoint) && (
+            <div className={`mobile-map-mode-banner${editingPinMode || adjustingNewBuildingPin || movingInformalPoint ? ' edit-pin' : ''}${adjustingNewBuildingPin || movingInformalPoint ? ' pin-adjust' : ''}`}>
+              <strong>{movingInformalPoint
+                ? msg('{v1} 핀을 끌거나 지도를 눌러 옮기세요', { v1: movingInformalPoint.name })
+                : adjustingNewBuildingPin
+                  ? msg('새 건물 핀을 원하는 위치로 옮기세요')
+                  : editingPinMode ? t(language, 'map.editPin') : t(language, 'map.addBuilding')}</strong>
+              {movingInformalPoint ? (
+                <span className="mobile-map-pin-adjust-actions">
+                  <button disabled={savingInformalLocation} onClick={() => setMovingInformalPoint(null)} type="button">{t(language, 'common.cancel')}</button>
+                  <button
+                    className="primary"
+                    disabled={savingInformalLocation}
+                    onClick={async () => {
+                      if (!onUpdateInformalPlace) return
+                      setSavingInformalLocation(true)
+                      try {
+                        const saved = await onUpdateInformalPlace(movingInformalPoint.id, {
+                          lat: movingInformalPoint.lat,
+                          lng: movingInformalPoint.lng,
+                        })
+                        if (saved) setMovingInformalPoint(null)
+                      } finally {
+                        setSavingInformalLocation(false)
+                      }
+                    }}
+                    type="button"
+                  >
+                    {savingInformalLocation ? msg('저장 중…') : msg('저장')}
+                  </button>
+                </span>
+              ) : adjustingNewBuildingPin ? (
                 <span className="mobile-map-pin-adjust-actions">
                   <button onClick={cancelNewBuildingPinAdjustment} type="button">{t(language, 'common.cancel')}</button>
                   <button className="primary" onClick={finishNewBuildingPinAdjustment} type="button">{msg('완료')}</button>
