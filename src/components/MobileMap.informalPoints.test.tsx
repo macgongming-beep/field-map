@@ -6,6 +6,9 @@ import type { InformalAsset } from '../types'
 import { testBuilding, testCard, testUnit, territoryProps } from '../test/territoryFixture'
 import { MobileMap } from './MobileMap'
 
+const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
+vi.mock('../lib/confirm', () => ({ confirmDialog }))
+
 const parent: InformalAsset = {
   id: 1,
   name: '경희대',
@@ -25,9 +28,14 @@ const child: InformalAsset = {
   name: '정자',
   kind: '대화장소',
   memo: '점심시간에 학생들이 많이 지납니다.',
+  lat: 37.277,
+  lng: 127.118,
 }
 
-function renderMap(onUpdateInformalPlace?: ReturnType<typeof vi.fn>) {
+function renderMap(
+  onUpdateInformalPlace?: ReturnType<typeof vi.fn>,
+  onDeleteInformalAsset?: ReturnType<typeof vi.fn>,
+) {
   const props = {
     language: 'ko',
     buildings: [],
@@ -39,6 +47,7 @@ function renderMap(onUpdateInformalPlace?: ReturnType<typeof vi.fn>) {
     informalAssets: [parent, child],
     focusedInformalId: 1,
     onUpdateInformalPlace,
+    onDeleteInformalAsset,
     focusedCardIds: [],
     onBack: vi.fn(),
     visitHistories: [],
@@ -70,6 +79,46 @@ describe('모바일 비공식 포인트', () => {
       name: '정자',
       memo: '저녁에는 조용합니다.',
     }))
+  })
+
+  test('관리자는 포인트 위치를 지도에서 다시 정해 저장한다', async () => {
+    const update = vi.fn().mockResolvedValue(true)
+    renderMap(update)
+
+    fireEvent.click(screen.getByRole('button', { name: '정자 수정' }))
+    fireEvent.click(screen.getByRole('button', { name: '위치 변경' }))
+    expect(screen.getByText(/정자 핀을 끌거나 지도를 눌러 옮기세요/)).toBeVisible()
+
+    const map = screen.getByLabelText('샘플 지도')
+    map.getBoundingClientRect = () => ({
+      x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 200,
+      width: 200, height: 200, toJSON: () => ({}),
+    })
+    fireEvent.click(map, { clientX: 150, clientY: 50 })
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+
+    await waitFor(() => expect(update).toHaveBeenCalledWith(2, expect.objectContaining({
+      lat: expect.any(Number),
+      lng: expect.any(Number),
+    })))
+    const saved = update.mock.calls[0][1]
+    expect(saved.lat).not.toBe(child.lat)
+    expect(saved.lng).not.toBe(child.lng)
+  })
+
+  test('관리자는 확인 후 개별 포인트를 삭제한다', async () => {
+    const update = vi.fn().mockResolvedValue(true)
+    const remove = vi.fn().mockResolvedValue(true)
+    renderMap(update, remove)
+
+    fireEvent.click(screen.getByRole('button', { name: '정자 수정' }))
+    fireEvent.click(screen.getByRole('button', { name: '삭제' }))
+
+    await waitFor(() => expect(confirmDialog).toHaveBeenCalledWith(expect.objectContaining({
+      title: '포인트 삭제',
+      danger: true,
+    })))
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(2))
   })
 })
 
