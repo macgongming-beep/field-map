@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { InformalAsset } from '../types'
-import { assignableInformalAssets, countInformalCards } from './informalAssets'
+import { assignableInformalAssets, countInformalCards, informalAssetsForMap } from './informalAssets'
 
 const asset = (
   id: number,
@@ -29,6 +29,23 @@ describe('비공식 구역 카드 수', () => {
       asset(4, 1),
       asset(5, 2),
     ])).toBe(2)
+  })
+})
+
+describe('비공식 지도 표시 범위', () => {
+  const assets = [asset(1), asset(2), asset(3, 1), asset(4, 1), asset(5, 2)]
+
+  test('선택한 카드와 그 카드의 하위 장소만 남긴다', () => {
+    expect(informalAssetsForMap(assets, 1).map((row) => row.id)).toEqual([1, 3, 4])
+  })
+
+  test('하위 장소로 진입해도 그 장소가 속한 카드 묶음만 남긴다', () => {
+    expect(informalAssetsForMap(assets, 5).map((row) => row.id)).toEqual([2, 5])
+  })
+
+  test('선택이 없거나 자료에 없는 장소면 아무것도 표시하지 않는다', () => {
+    expect(informalAssetsForMap(assets, null)).toEqual([])
+    expect(informalAssetsForMap(assets, 999)).toEqual([])
   })
 })
 

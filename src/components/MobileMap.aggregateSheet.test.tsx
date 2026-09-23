@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { testBuilding, testCard, territoryProps } from '../test/territoryFixture'
 import { MobileMap } from './MobileMap'
 import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight } from '../utils/mobileMapViewport'
+import type { InformalAsset } from '../types'
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
@@ -34,6 +35,7 @@ vi.mock('./MapCanvas', () => ({
         </button>
       ))}
       <output data-testid="highlighted-scope">{[...(props.highlightedCardIds ?? [])].sort((a, b) => a - b).join(',')}</output>
+      <output data-testid="informal-pin-ids">{(props.informalPlaces ?? []).map((place: { id: number }) => place.id).join(',')}</output>
       {(props.aggregateMarkers ?? []).length === 0 && <output>건물 포인트 {props.buildings.length}개</output>}
       {(props.buildings ?? []).map((building: { id: number; name: string }) => (
         <button key={building.id} type="button" onClick={() => props.onSelectBuilding(building.id)}>
@@ -93,6 +95,45 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.click(screen.getByRole('button', { name: 'zoom close' }))
     expect(await screen.findByText('건물 포인트 2개')).toBeVisible()
     expect(screen.getByTestId('highlighted-scope')).toHaveTextContent('1,2')
+  })
+
+  test('비공식 카드는 일반 구역 핀을 숨기고 선택한 카드의 장소만 보여 준다', () => {
+    const informalAsset = (
+      id: number,
+      parentId: number | null,
+      name: string,
+    ): InformalAsset => ({
+      id,
+      parentId,
+      name,
+      kind: parentId == null ? '비공식구역' : '대화하기 좋은 장소',
+      lat: 37.27 + id / 10_000,
+      lng: 127.11 + id / 10_000,
+      imageUrl: '',
+      imagePath: '',
+      uploadedBy: '관리자',
+      createdAt: '2026-09-23T00:00:00Z',
+      archived: false,
+      groupId: null,
+    })
+    const props = territoryProps({
+      ...mapProps(),
+      focusedInformalId: 10,
+      informalAssets: [
+        informalAsset(10, null, '경희대'),
+        informalAsset(11, 10, '경희대 거점'),
+        informalAsset(20, null, '강남대'),
+        informalAsset(21, 20, '강남대 거점'),
+      ],
+    })
+
+    render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+
+    expect(screen.getByText('건물 포인트 0개')).toBeVisible()
+    expect(screen.queryByRole('button', { name: '지도 건물 영덕빌라' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '지도 집계 기흥구' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('informal-pin-ids')).toHaveTextContent('10,11')
+    expect(screen.getByTestId('informal-pin-ids')).not.toHaveTextContent('20')
   })
 
   test('사용자가 내려둔 시트 높이를 구와 동 집계 핀 선택이 바꾸지 않는다', async () => {

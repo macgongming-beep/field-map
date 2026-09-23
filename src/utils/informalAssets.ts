@@ -6,6 +6,18 @@ export function countInformalCards(assets: InformalAsset[]): number {
   return assets.filter((asset) => !asset.parentId).length
 }
 
+/** 선택한 비공식 카드와 그 카드에 직접 속한 장소만 지도에 올린다. */
+export function informalAssetsForMap(
+  assets: InformalAsset[],
+  focusedId: number | null | undefined,
+): InformalAsset[] {
+  if (focusedId == null) return []
+  const focused = assets.find((asset) => asset.id === focusedId)
+  if (!focused) return []
+  const parentId = focused.parentId ?? focused.id
+  return assets.filter((asset) => asset.id === parentId || asset.parentId === parentId)
+}
+
 /**
  * 배정 화면에 올릴 비공식 대상.
  *

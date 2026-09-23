@@ -35,6 +35,7 @@ import { geocodeFirstMatch } from '../lib/naverGeocode'
 import { classifyRestaurantPlaces, type ClassifiedRestaurantPlace } from '../utils/restaurantPlaceCandidate'
 import { getGeocodeCandidates } from '../utils/geocodeCandidates'
 import { candidateBuildingName, candidateBuildingType, candidateFirstUnitName } from '../utils/searchedPlaceDraft'
+import { informalAssetsForMap } from '../utils/informalAssets'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
@@ -289,11 +290,15 @@ export function MobileMap({
   // 기본은 감추고, 비공식 화면에서 '지도에서 보기' 로 들어왔을 때만 보인다.
   // 호별방문 지도에 섞이면 구역이 안 보인다 (docs/비공식-봉사-재설계.md)
   const showInformal = Boolean(focusedInformalId)
+  const scopedInformalAssets = useMemo(
+    () => informalAssetsForMap(informalAssets, focusedInformalId),
+    [focusedInformalId, informalAssets],
+  )
   const informalPins = useMemo(
-    () => (!showInformal ? [] : informalAssets)
+    () => scopedInformalAssets
       .filter((a) => typeof a.lat === 'number' && typeof a.lng === 'number')
       .map((a) => ({ id: a.id, name: a.name, kind: a.kind, lat: a.lat as number, lng: a.lng as number })),
-    [informalAssets, showInformal],
+    [scopedInformalAssets],
   )
   /** 추가 중인 비공식 포인트의 종류. null 이면 추가 모드가 아니다 */
   const [addingChildKind, setAddingChildKind] = useState<InformalKind | null>(null)
@@ -321,9 +326,9 @@ export function MobileMap({
   /** 지금 보고 있는 구역에 속한 점들 */
   const informalChildren = useMemo(
     () => (selectedInformal
-      ? informalAssets.filter((a) => a.parentId === selectedInformal.id)
+      ? scopedInformalAssets.filter((a) => a.parentId === selectedInformal.id)
       : []),
-    [informalAssets, selectedInformal],
+    [scopedInformalAssets, selectedInformal],
   )
   const informalFocusPoint = useMemo(() => {
     // 목록에서 고른 점이 있으면 그쪽이 우선이다
@@ -1968,9 +1973,9 @@ export function MobileMap({
                 const place = informalAssets.find((a) => a.id === id)
                 if (place) showToast(place.memo?.trim() || place.name, 'info')
               }}
-              buildings={mapAggregateMarkers.length > 0 ? [] : mapBuildings}
-              aggregateMarkers={mapAggregateMarkers}
-              cardBoundaries={mapAggregateMarkers.length > 0 || selectedInformal ? [] : mapBoundaries}
+              buildings={showInformal || mapAggregateMarkers.length > 0 ? [] : mapBuildings}
+              aggregateMarkers={showInformal ? [] : mapAggregateMarkers}
+              cardBoundaries={showInformal || mapAggregateMarkers.length > 0 ? [] : mapBoundaries}
               cards={cards}
               selectedCardId={mapSelectedCardId}
               highlightedCardIds={scopedCardIds}
