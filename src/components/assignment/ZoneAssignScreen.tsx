@@ -406,8 +406,10 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
                   {team.name}
                   <span className="asg-teambar-cnt">{team.members.length}</span>
                 </span>
-                <span className="asg-teambar-zones" style={areas ? undefined : { color: 'var(--warn, #b8862a)' }}>
-                  {scopeEnabled && team.cardIds.length > 0 ? `${cardServiceLabel(team.cardScope ?? '전체')} · ` : ''}{areas ?? msg('구역 미배정')}
+                <span className="asg-teambar-zones" title={areas ?? undefined} style={areas ? undefined : { color: 'var(--warn, #b8862a)' }}>
+                  {scopeEnabled && team.cardIds.length > 0
+                    ? `${msg(team.cardScope ?? '전체')} · ${msg('카드 {n}개', { n: team.cardIds.length })}`
+                    : areas ?? msg('구역 미배정')}
                 </span>
               </button>
             )
@@ -425,20 +427,12 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
               </button>
             </div>}
             
-            {/* [카드][비공식][식당] 탭 — 라운드 네모 */}
+            {/* 배분 대상 탭 */}
             <div className="asg-zone-kind-tabs">
               {(['카드', '비공식', '식당'] as const).map((tb) => {
                 const on = mainTab === tb
                 return (
-                  <button key={tb} type="button" aria-pressed={on} onClick={() => setMainTab(tb)}
-                    style={{
-                      minHeight: 0, padding: '6px 12px', borderRadius: 8, fontSize: 12.5, lineHeight: 1.2,
-                      fontWeight: on ? 700 : 500, cursor: 'pointer',
-                      border: on ? '1px solid var(--ink)' : '1px solid var(--line)',
-                      background: on ? 'var(--ink)' : 'var(--surface)',
-                      color: on ? '#fff' : 'var(--muted)',
-                    }}
-                  >{msg(tb)}</button>
+                  <button key={tb} type="button" aria-pressed={on} onClick={() => setMainTab(tb)}>{msg(tb)}</button>
                 )
               })}
             </div>
@@ -447,13 +441,15 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
       </div>
 
       {mainTab === '카드' && scopeEnabled && (
+        <div className="asg-service-scope-row">
         <div className="asg-service-scope" role="group" aria-label={msg('봉사 형태')}>
           {(['전체', '주택', '상가'] as const).map((scope) => (
             <button key={scope} type="button" aria-pressed={buildingTypeFilter === scope}
               disabled={!canEdit || !activeTeam} onClick={() => changeScope(scope)}>
-              {cardServiceLabel(scope)}
+              {scope === '전체' ? msg('전체') : cardServiceLabel(scope)}
             </button>
           ))}
+        </div>
         </div>
       )}
       {/* 본문 */}
