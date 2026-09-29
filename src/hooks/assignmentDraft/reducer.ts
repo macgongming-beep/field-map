@@ -81,6 +81,12 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
     case 'SET_ACTIVE_TEAM':
       return { ...state, activeTeamId: action.teamId }
 
+    case 'SET_CARD_SCOPE':
+      return { ...state, undo: state.draft, draft: touch({ ...state.draft,
+        teams: state.draft.teams.map((t) => t.id === action.teamId
+          ? { ...t, cardScope: action.scope, cardIds: action.cardIds } : t),
+      }) }
+
     case 'CREATE_TEAM': {
       const teams = state.draft.teams
       const members = action.members ?? []

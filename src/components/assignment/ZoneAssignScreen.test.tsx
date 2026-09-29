@@ -72,3 +72,17 @@ test('사진 없는 비공식 카드는 공용 종류 아이콘을 사용한다'
   expect(container.querySelector('.asg-informal-icon svg')).toBeInTheDocument()
   expect(container.textContent).not.toContain('🖼️')
 })
+
+test('데모 실제 지도와 목록에서 봉사 형태를 팀 초안에 저장한다', () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  try {
+    const dispatch = vi.fn()
+    renderAssignment(dispatch)
+    expect(screen.queryByText('카드 봉사')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '상가 봉사', exact: true }))
+    expect(dispatch).toHaveBeenCalledWith({ type: 'SET_CARD_SCOPE', teamId: 'team-1', scope: '상가', cardIds: [] })
+    fireEvent.click(screen.getByRole('button', { name: '목록', exact: true }))
+    expect(screen.getByRole('button', { name: '주택 봉사', exact: true })).toBeVisible()
+    expect(screen.queryByRole('combobox', { name: '카드 구성' })).not.toBeInTheDocument()
+  } finally { vi.unstubAllEnvs() }
+})

@@ -106,6 +106,7 @@ export type RawCalendarEvent = {
   assignment_status?: 'draft' | 'confirmed' | 'shared' | null
   assignment_shared_at?: string | null
   assignment_shared_by?: string | null
+  assignment_team_scopes?: Record<string, '전체' | '주택' | '상가'> | null
   memo: string
   series_id: string | null
   event_participants: { user_name: string; role: string }[]
@@ -408,7 +409,9 @@ export function toCalendarEvent(
       .sort((a, b) => Number(b.isTeamLead) - Number(a.isTeamLead) || a.createdAt.localeCompare(b.createdAt)),
     assigned: participants.filter((p) => p.role === '입명').map((p) => p.user_name),
     guests: participants.filter((p) => p.role === '게스트').map((p) => p.user_name),
-    cardAssignments,
+    cardAssignments: cardAssignments.map((a) => ({ ...a,
+      cardScope: (a.teamKey && raw.assignment_team_scopes?.[a.teamKey]) || '전체',
+    })),
     assignmentStatus: raw.assignment_status ?? 'draft',
     assignmentSharedAt: raw.assignment_shared_at ?? null,
     assignmentSharedBy: raw.assignment_shared_by ?? null,

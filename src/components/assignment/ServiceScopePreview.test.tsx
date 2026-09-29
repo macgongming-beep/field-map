@@ -62,10 +62,10 @@ test('개인 식당 배정은 같은 팀의 다른 사람에게 복제되지 않
 test('범위 변경 취소 시 선택 카드와 봉사 범위를 유지한다', () => {
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
   render(<ServiceScopePreview />)
-  fireEvent.click(screen.getByRole('button', { name: '상가', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: '상가 봉사', exact: true }))
   expect(confirm).toHaveBeenCalledOnce()
   expect(
-    screen.getByRole('button', { name: '주택', exact: true }),
+    screen.getByRole('button', { name: '주택 봉사', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true')
   expect(screen.getByRole('button', { name: '카드 3' })).toBeVisible()
   confirm.mockRestore()

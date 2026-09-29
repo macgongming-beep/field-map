@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '../utils/cardServiceScope'
 import { FontScalePicker } from './FontScalePicker'
 import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { MobileAdminAssignment } from './MobileAdminAssignment'
@@ -554,6 +555,8 @@ export function MobileHome({
   // (정기방문 미리보기는 활동 탭으로 이동, 홈에서는 미사용)
   const focusedMapCardId = searchParams.get('cardId') ? Number(searchParams.get('cardId')) : null
   const focusedInformalId = searchParams.get('informalId') ? Number(searchParams.get('informalId')) : null
+  const assignmentMapId = import.meta.env.VITE_DEMO_MODE === 'true' ? Number(searchParams.get('assignmentMap')) : 0
+  const assignedMap = useMemo(() => assignedServiceScope(calendarEvents.find((e) => e.id === assignmentMapId), currentVisitor), [calendarEvents, assignmentMapId, currentVisitor])
   const mapScope = searchParams.get('scope')
   const isRegularVisitMapScope = mapScope === 'regularVisits'
   const focusedReturnVisitId = searchParams.get('returnVisitId') ? Number(searchParams.get('returnVisitId')) : null
@@ -566,7 +569,7 @@ export function MobileHome({
       .map((value) => Number(value))
       .filter((value) => Number.isFinite(value))
   }, [searchParams])
-  const focusedMapScopeLabel = mapScope === 'mine'
+  const focusedMapScopeLabel = assignmentMapId ? cardServiceLabel(assignedMap.scope) : mapScope === 'mine'
     ? t(language, 'zone.myTerritories')
     : isRegularVisitMapScope
       ? t(language, 'territory.regularVisit')
@@ -687,13 +690,15 @@ export function MobileHome({
   const isUserMapScope = role === 'user'
   const mapCards = useMemo(
     () => {
+      if (assignmentMapId) return cards.filter((card) => assignedMap.ids.includes(card.id))
       if (isRegularVisitMapScope) return cards.filter((card) => regularVisitVisibleCardIds.has(card.id))
       return isUserMapScope ? cards.filter((card) => userVisibleMapCardIds.has(card.id)) : cards
     },
-    [cards, isRegularVisitMapScope, isUserMapScope, regularVisitVisibleCardIds, userVisibleMapCardIds],
+    [cards, isRegularVisitMapScope, isUserMapScope, regularVisitVisibleCardIds, userVisibleMapCardIds, assignmentMapId, assignedMap.ids],
   )
   const mapBuildings = useMemo(
     () => {
+      if (assignmentMapId) return scopeServiceBuildings(buildings, assignedMap.ids, assignedMap.scope)
       if (isRegularVisitMapScope) {
         return buildings
           .filter((building) => regularVisitVisibleBuildingIds.has(building.id))
@@ -711,14 +716,15 @@ export function MobileHome({
       }
       return isUserMapScope ? buildings.filter((building) => userVisibleMapCardIds.has(building.cardId)) : buildings
     },
-    [buildings, isRegularVisitMapScope, isUserMapScope, regularVisitVisibleBuildingIds, regularVisitVisibleUnitIds, userVisibleMapCardIds],
+    [buildings, isRegularVisitMapScope, isUserMapScope, regularVisitVisibleBuildingIds, regularVisitVisibleUnitIds, userVisibleMapCardIds, assignmentMapId, assignedMap.ids, assignedMap.scope],
   )
   const mapCardBoundaries = useMemo(
     () => {
+      if (assignmentMapId) return cardBoundaries.filter((boundary) => assignedMap.ids.includes(boundary.cardId))
       if (isRegularVisitMapScope) return cardBoundaries.filter((boundary) => regularVisitVisibleCardIds.has(boundary.cardId))
       return isUserMapScope ? cardBoundaries.filter((boundary) => userVisibleMapCardIds.has(boundary.cardId)) : cardBoundaries
     },
-    [cardBoundaries, isRegularVisitMapScope, isUserMapScope, regularVisitVisibleCardIds, userVisibleMapCardIds],
+    [cardBoundaries, isRegularVisitMapScope, isUserMapScope, regularVisitVisibleCardIds, userVisibleMapCardIds, assignmentMapId, assignedMap.ids],
   )
   const safeFocusedMapCardId =
     isRegularVisitMapScope
@@ -798,11 +804,12 @@ export function MobileHome({
             currentUserId={currentUser.id}
             actualRole={role}
             serviceSessions={serviceSessions}
-            focusedCardId={safeFocusedMapCardId}
-            focusedCardIds={safeFocusedMapCardIds}
+            focusedCardId={assignmentMapId ? null : safeFocusedMapCardId}
+            focusedCardIds={assignmentMapId ? assignedMap.ids : safeFocusedMapCardIds}
             focusedBuildingId={isRegularVisitMapScope ? focusedRegularVisitBuildingId : requestedRegularVisitBuildingId}
             regularVisitScope={isRegularVisitMapScope}
             focusedScopeLabel={focusedMapScopeLabel}
+            assignmentServiceMap={Boolean(assignmentMapId)}
             onBack={() => navigate(-1)}
             onAddUnit={onAddUnit}
             onSetBuildingAccess={onSetBuildingAccess}
@@ -1031,6 +1038,7 @@ export function MobileHome({
                   returnVisits={returnVisits}
                   returnVisitLogs={returnVisitLogs}
                   onOpenMap={(cardId) => navigate(`/map?cardId=${cardId}`)}
+                  onOpenAssignmentMap={import.meta.env.VITE_DEMO_MODE === 'true' ? (eventId) => navigate(`/map?assignmentMap=${eventId}`) : undefined}
                   onOpenInformalMap={(assetId) => navigate(`/map?informalId=${assetId}`)}
                   onOpenRegularVisitMap={(returnVisitId) => {
                     const params = new URLSearchParams()

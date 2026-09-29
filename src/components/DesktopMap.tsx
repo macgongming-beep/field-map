@@ -101,6 +101,7 @@ export function DesktopMap({
   serviceSessions,
   focusedCardId,
   focusedBuildingId,
+  assignmentServiceLabel,
   onAddUnit,
   onCreateBuilding,
   onDeleteBuilding,
@@ -166,6 +167,7 @@ export function DesktopMap({
   actualRole: Role
   serviceSessions: ServiceSession[]
   focusedCardId?: number | null
+  assignmentServiceLabel?: string
   focusedBuildingId?: number | null
   onAddUnit: (buildingId: number, unitNumber: string | string[], usageType?: Building['type']) => Promise<number[] | false>
   onCreateBuilding: (input: {
@@ -1573,7 +1575,7 @@ export function DesktopMap({
             {areaFilter !== '전체' ? areaFilter : regionFilter !== '전체' ? regionFilter : '구역 목록'}
           </button>
           {/* 건물 유형 segment */}
-          <div className="map-toolbar-item">
+          {assignmentServiceLabel ? <strong className="map-toolbar-item">{assignmentServiceLabel} · {msg('카드 {n}개', { n: cards.length })}</strong> : <div className="map-toolbar-item">
             <span className="map-toolbar-label">{t(language, 'map.buildings')}</span>
             <div className="map-toolbar-seg">
               {(['전체', '상가', '주택'] as Array<Building['type'] | '전체'>).map((t) => (
@@ -1588,6 +1590,7 @@ export function DesktopMap({
               ))}
             </div>
           </div>
+          }
           {/* 상태 segment */}
           <div className="map-toolbar-item">
             <span className="map-toolbar-label">{t(language, 'map.status')}</span>

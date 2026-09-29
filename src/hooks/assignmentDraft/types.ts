@@ -15,6 +15,7 @@ export type DraftTeam = {
   color: string
   order: number
   cardIds: number[]   // 이 팀에 배정된 구역 카드 (비공식/식당 제외)
+  cardScope?: '전체' | '주택' | '상가'
   members: string[]   // 이 팀에 속한 참가자 이름
 }
 
@@ -43,6 +44,7 @@ export type DraftAction =
   | { type: 'DELETE_TEAM'; teamId: string }
   | { type: 'RENAME_TEAM'; teamId: string; name: string }
   | { type: 'SET_ACTIVE_TEAM'; teamId: string | null }
+  | { type: 'SET_CARD_SCOPE'; teamId: string; scope: '전체' | '주택' | '상가'; cardIds: number[] }
   // 멤버
   | { type: 'ADD_MEMBER'; teamId: string; name: string }
   | { type: 'REMOVE_MEMBER'; teamId: string; name: string }

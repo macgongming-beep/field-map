@@ -102,6 +102,9 @@
   font-size: 13px;
   font-weight: 600;
 }
+.sp-scope {
+  flex-wrap: wrap;
+}
 .sp-regions {
   padding: 12px 0;
 }

@@ -3,6 +3,7 @@ import type { AppLanguage } from '../i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Building, CalendarEvent, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, ReturnVisit, ReturnVisitLog, Role, ServiceSession, TerritoryCard, TimeSlot } from '../types'
 import { getAssignmentTeamMembers } from '../utils/assignmentTeamMembers'
+import { assignedServiceScope, cardServiceLabel } from '../utils/cardServiceScope'
 import { getUserReturnVisits } from '../utils/returnVisits'
 import { msg } from '../lib/msg'
 
@@ -73,6 +74,7 @@ export function DesktopMyService({
   returnVisits = [],
   returnVisitLogs = [],
   onOpenMap,
+  onOpenAssignmentMap,
   onOpenInformalMap,
   onOpenBuildingMap,
   onEndServiceSession: _onEndServiceSession,  // 종료 버튼 제거 — auto_close가 처리. 후방호환 유지.
@@ -91,6 +93,7 @@ export function DesktopMyService({
   returnVisits?: ReturnVisit[]
   returnVisitLogs?: ReturnVisitLog[]
   onOpenMap: (cardId: number) => void
+  onOpenAssignmentMap?: (eventId: number) => void
   onOpenInformalMap?: (assetId: number) => void
   onOpenBuildingMap?: (buildingId: number) => void
   onEndServiceSession: (sessionId: number) => void
@@ -274,16 +277,19 @@ export function DesktopMyService({
                             </div>
                           ) : (
                             <>
+                              {onOpenAssignmentMap && assignedCards.length > 0 && <button type="button" onClick={() => onOpenAssignmentMap(event.id)}>
+                                {cardServiceLabel(assignedServiceScope(event, currentVisitor).scope)} · {msg('배정 구역 지도 보기')}
+                              </button>}
                               {assignedCards.map((card) => (
                               <div className="dms-assigned-card" key={card.id}>
                                 <div>
                                   <strong>
                                     {card.name}
                                   </strong>
-                                  <span>{card.area} · {card.units}세대</span>
+                                  <span>{card.area}{(!onOpenAssignmentMap || assignedServiceScope(event, currentVisitor).scope === '전체') ? ` · ${card.units}세대` : ''}</span>
                                 </div>
-                                <em>{card.progress}%</em>
-                                <button onClick={() => onOpenMap(card.id)} type="button">지도</button>
+                                {(!onOpenAssignmentMap || assignedServiceScope(event, currentVisitor).scope === '전체') && <em>{card.progress}%</em>}
+                                <button onClick={() => onOpenAssignmentMap ? onOpenAssignmentMap(event.id) : onOpenMap(card.id)} type="button">지도</button>
                               </div>
                               ))}
                               {myInformal.map((assignment) => {

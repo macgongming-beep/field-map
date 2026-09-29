@@ -163,6 +163,8 @@ export function AssignmentEditor({ event, cards, allCards = [], buildings, visit
       }
       clearLocalDraft(event.id, currentVisitor) // 성공 후에만 정리
       onClose()
+    } catch {
+      showToast(msg('배정을 공유하지 못했습니다. 임시 저장은 유지됩니다. 새로고침 후 다시 시도해 주세요.'), 'error')
     } finally {
       setSharing(false)
     }

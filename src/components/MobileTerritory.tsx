@@ -10,6 +10,7 @@ import { RestaurantServiceSheet } from './RestaurantServiceSheet'
 import { msg } from '../lib/msg'
 import { showToast } from '../lib/toast'
 import { getAssignmentTeamMembers } from '../utils/assignmentTeamMembers'
+import { assignedServiceScope, cardServiceLabel } from '../utils/cardServiceScope'
 import { chooseCardForBuilding } from '../utils/chooseCardForBuilding'
 import { buildingAddressKey, shortAddress } from '../utils/shortAddress'
 import { EndReturnVisitDialog } from './EndReturnVisitDialog'
@@ -102,6 +103,7 @@ export function MobileTerritory({
   returnVisits = [],
   returnVisitLogs = [],
   onOpenMap,
+  onOpenAssignmentMap,
   onOpenInformalMap,
   onOpenRegularVisitMap,
   onEndServiceSession: _onEndServiceSession,  // 종료 버튼 제거 — auto_close가 처리. prop 시그니처는 후방호환 유지.
@@ -143,6 +145,7 @@ export function MobileTerritory({
   onUpdateRestaurantRequestMemo?: (requestId: number, memo: string) => Promise<void>
   restaurantRequests?: import('../types').RestaurantRequest[]
   onOpenMap: (cardId: number) => void
+  onOpenAssignmentMap?: (eventId: number) => void
   onOpenInformalMap?: (assetId: number) => void
   onOpenRegularVisitMap?: (returnVisitId?: number) => void
   onEndServiceSession: (sessionId: number) => void
@@ -769,6 +772,9 @@ export function MobileTerritory({
                             <div className="mobile-territory-empty compact">{t(language, 'territory.noAssignedCards')}</div>
                           ) : (
                             <>
+                              {onOpenAssignmentMap && assignedCards.length > 0 && <button type="button" onClick={() => onOpenAssignmentMap(event.id)}>
+                                {cardServiceLabel(assignedServiceScope(event, currentVisitor).scope)} · {msg('배정 구역 지도 보기')}
+                              </button>}
                               {assignedCards.map((card) => {
                                 return (
                                   <div className="mobile-today-card-row" key={`card-${card.id}`}>
@@ -777,8 +783,8 @@ export function MobileTerritory({
                                       {translateKoreanAddress(card.name, language, translatePlaceNames)}
 
                                     </strong>
-                                    <em>{card.progress}%</em>
-                                    <button onClick={() => onOpenMap(card.id)} type="button">{t(language, 'zone.map')}</button>
+                                    {(!onOpenAssignmentMap || assignedServiceScope(event, currentVisitor).scope === '전체') && <em>{card.progress}%</em>}
+                                    <button onClick={() => onOpenAssignmentMap ? onOpenAssignmentMap(event.id) : onOpenMap(card.id)} type="button">{t(language, 'zone.map')}</button>
                                   </div>
                                 )
                               })}

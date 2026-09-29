@@ -63,7 +63,7 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
 
   const assignCardsToEventParticipantsBulk = async (
     eventId: number,
-    assignments: Array<{ userName: string; cardId?: number | null; cardIds?: number[] | null; teamKey?: string | null }>,
+    assignments: Array<{ userName: string; cardId?: number | null; cardIds?: number[] | null; teamKey?: string | null; cardScope?: '전체' | '주택' | '상가' }>,
     options?: {
       silentSuccess?: boolean
       status?: 'confirmed' | 'shared'
@@ -72,6 +72,7 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
     },
   ) => {
     const silentSuccess = options?.silentSuccess === true
+    const scoped = assignments.some((a) => a.cardScope != null)
     const normalizedAssignments = Array.from(
       new Map(
         assignments
@@ -89,6 +90,7 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
               cardId: cardIds[0] ?? null,
               cardIds,
               teamKey: item.teamKey ?? null,
+              cardScope: item.cardScope,
             }
           })
           .filter((item) => item.userName.length > 0)
@@ -99,10 +101,12 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
     // ── 1순위: 트랜잭션 RPC (원자적 + 충돌 감지) ──
     // 카드 0개인 사람도 보낸다 — 비공식 봉사만 맡은 팀이 여기서 사라졌었다
     const rpcPayload = normalizedAssignments
-      .map((item) => ({ userName: item.userName, cardIds: item.cardIds, teamKey: item.teamKey }))
+      .map((item) => ({ userName: item.userName, cardIds: item.cardIds, teamKey: item.teamKey,
+        ...(scoped ? { cardScope: item.cardScope ?? '전체' } : {}),
+      }))
     const token = (await import('../../lib/authToken')).getAuthToken()
     if (token) {
-      const rpcRes = await supabase.rpc('assign_cards_bulk_tx', {
+      const rpcRes = await supabase.rpc(scoped ? 'assign_scoped_cards_bulk_tx' : 'assign_cards_bulk_tx', {
         p_token: token,
         p_event_id: eventId,
         p_assignments: rpcPayload,
@@ -126,10 +130,11 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
       //   2026-08-30 봉사 중 본 오류 문구("event_card_assignments SQL 을 먼저…")도
       //   이 폴백이 직접 쓰기를 하다 막힌 것이었다.
       const functionMissing = String(rpcRes.error.message ?? '').includes('Could not find the function')
-      if (!functionMissing) throw rpcRes.error
+      if (scoped || !functionMissing) throw rpcRes.error
       console.warn('[assign_cards_bulk_tx] 함수가 없어 폴백을 쓴다:', rpcRes.error.message)
     }
 
+    if (scoped) throw new Error(msg('세션이 유효하지 않습니다'))
     // ── 폴백: 기존 방식 (RPC 미적용 환경 호환) ──
     await supabase.from('event_card_assignment_cards').delete().eq('event_id', eventId)
 

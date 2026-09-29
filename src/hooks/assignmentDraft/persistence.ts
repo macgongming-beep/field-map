@@ -18,7 +18,7 @@ function storageKey(eventId: number, userName: string): string {
 // ⚠ DB는 사용자별 cardIds만 저장. 팀의 이름/색/순서는 보존되지 않으므로
 //   "같은 cardIds 가진 사람끼리 묶기"로 팀을 재생성하고 메타는 새로 부여한다.
 export function buildDraftFromServer(event: CalendarEvent): AssignmentDraft {
-  const grouped = new Map<string, { cardIds: number[]; members: string[] }>()
+  const grouped = new Map<string, { cardIds: number[]; members: string[]; teamKey?: string | null; cardScope?: DraftTeam['cardScope'] }>()
   event.cardAssignments.forEach((assignment) => {
     const cardIds = assignment.assignedCardIds && assignment.assignedCardIds.length > 0
       ? assignment.assignedCardIds
@@ -31,17 +31,18 @@ export function buildDraftFromServer(event: CalendarEvent): AssignmentDraft {
     const key = assignment.teamKey
       ? `team:${assignment.teamKey}`
       : cardIds.slice().sort((a, b) => a - b).join(',') || `member:${assignment.userName}`
-    const current = grouped.get(key) ?? { cardIds, members: [] }
+    const current = grouped.get(key) ?? { cardIds, members: [], teamKey: assignment.teamKey, cardScope: assignment.cardScope ?? '전체' }
     current.members.push(assignment.userName)
     grouped.set(key, current)
   })
 
   const teams: DraftTeam[] = Array.from(grouped.values()).map((group, index) => ({
-    id: `team-server-${index}-${group.cardIds.join('-')}`,
+    id: group.teamKey || `team-server-${index}-${group.cardIds.join('-')}`,
     name: `팀 ${index + 1}`,
     color: TEAM_COLORS[index % TEAM_COLORS.length],
     order: index,
     cardIds: group.cardIds,
+    cardScope: group.cardScope,
     members: group.members,
   }))
 
@@ -61,13 +62,15 @@ export function buildEmptyDraft(): AssignmentDraft {
 // draft → 서버 bulk 배정 형식 (각 멤버가 자기 팀의 cardIds를 받음)
 export function draftToAssignments(
   draft: AssignmentDraft,
-): Array<{ userName: string; cardIds: number[]; teamKey: string }> {
-  const out: Array<{ userName: string; cardIds: number[]; teamKey: string }> = []
+): Array<{ userName: string; cardIds: number[]; teamKey: string; cardScope?: DraftTeam['cardScope'] }> {
+  const out: Array<{ userName: string; cardIds: number[]; teamKey: string; cardScope?: DraftTeam['cardScope'] }> = []
   draft.teams.forEach((team) => {
     team.members.forEach((userName) => {
       // teamKey 를 함께 저장해야 복원 시 팀이 그대로 나뉜다
       // (같은 구역을 맡은 다른 팀과 합쳐지지 않도록)
-      out.push({ userName, cardIds: team.cardIds, teamKey: team.id })
+      out.push({ userName, cardIds: team.cardIds, teamKey: team.id,
+        ...(import.meta.env.VITE_DEMO_MODE === 'true' ? { cardScope: team.cardScope ?? '전체' } : {}),
+      })
     })
   })
   return out

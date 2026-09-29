@@ -21,6 +21,7 @@ import { InformalKindIcon } from '../InformalKindIcon'
 import { getBuildingStatus } from '../../utils/mapUtils'
 import { msg } from '../../lib/msg'
 import { buildingHasUsage, scopeBuildingToUsage, unitsForUsage } from '../../utils/unitUsage'
+import { cardServiceLabel, scopeServiceBuildings } from '../../utils/cardServiceScope'
 
 type BuildingTypeFilter = '전체' | '주택' | '상가'
 
@@ -58,7 +59,26 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
   const isMapView = mainTab === '카드' && view === 'map'
   const [query, setQuery] = useState('')
   const [unassignedOnly, setUnassignedOnly] = useState(false)
-  const [buildingTypeFilter, setBuildingTypeFilter] = useState<BuildingTypeFilter>('전체')
+  const [legacyTypeFilter, setLegacyTypeFilter] = useState<BuildingTypeFilter>('전체')
+  const activeTeam = teams.find((t) => t.id === activeTeamId) ?? null
+  const scopeEnabled = import.meta.env.VITE_DEMO_MODE === 'true'
+  const buildingTypeFilter: BuildingTypeFilter = useMemo(() => {
+    if (import.meta.env.VITE_DEMO_MODE !== 'true') return legacyTypeFilter
+    return teams.find((t) => t.id === activeTeamId)?.cardScope ?? '전체'
+  }, [teams, activeTeamId, legacyTypeFilter])
+  const changeScope = (scope: BuildingTypeFilter) => {
+    if (!canEdit || !activeTeam) return
+    const valid = new Set(scopeServiceBuildings(buildings, activeTeam.cardIds, scope).map((b) => b.cardId))
+    const retained = activeTeam.cardIds.filter((id) => valid.has(id))
+    const removed = activeTeam.cardIds.length - retained.length
+    if (removed && !window.confirm(msg('해당 세대가 없는 카드 {n}개를 배정에서 제외할까요?', { n: removed }))) return
+    dispatch({ type: 'SET_CARD_SCOPE', teamId: activeTeam.id, scope, cardIds: retained })
+  }
+  const eligibleCards = useMemo(() => {
+    if (!scopeEnabled || buildingTypeFilter === '전체') return cards
+    const ids = new Set(scopeServiceBuildings(buildings, cards.map((c) => c.id), buildingTypeFilter).map((b) => b.cardId))
+    return cards.filter((c) => ids.has(c.id))
+  }, [scopeEnabled, buildingTypeFilter, buildings, cards])
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [openCompletedGroups, setOpenCompletedGroups] = useState<Set<string>>(new Set())
   const [expandedSubGroups, setExpandedSubGroups] = useState<Set<string>>(new Set())
@@ -83,8 +103,8 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
       return next
     })
   const regionCards = useMemo(
-    () => (selectedRegions.size === 0 ? cards : cards.filter((c) => selectedRegions.has(c.region))),
-    [cards, selectedRegions],
+    () => (selectedRegions.size === 0 ? eligibleCards : eligibleCards.filter((c) => selectedRegions.has(c.region))),
+    [eligibleCards, selectedRegions],
   )
 
   // cardId → 이 카드를 맡은 팀들 (한 카드를 여러 팀이 함께 맡을 수 있음)
@@ -102,7 +122,9 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
   }, [teams])
 
   // 선택된 구의 담당 카드만 지도에 (경계선 있는 것) — 한 구로 좁혀 줌 적정화
-  const myCardIds = useMemo(() => new Set(regionCards.map((c) => c.id)), [regionCards])
+  const myCardIds = useMemo(() => new Set(scopeEnabled && buildingTypeFilter !== '전체'
+    ? scopeServiceBuildings(buildings, regionCards.map((c) => c.id), buildingTypeFilter).map((b) => b.cardId)
+    : regionCards.map((c) => c.id)), [regionCards, buildings, buildingTypeFilter, scopeEnabled])
   const myBoundaries = useMemo(
     () => cardBoundaries.filter((b) => myCardIds.has(b.cardId)),
     [cardBoundaries, myCardIds],
@@ -115,7 +137,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
       if (!buildingHasUsage(b, buildingTypeFilter)) return false
       if (getBuildingStatus(scopeBuildingToUsage(b, buildingTypeFilter)) === '방문완료') return false
       return true
-    })
+    }).map((b) => scopeBuildingToUsage(b, buildingTypeFilter))
   }, [buildings, myCardIds, buildingTypeFilter])
 
   // 카드별 주택/상가 세대 수
@@ -151,14 +173,13 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
     return mm ? `${Number(mm[2])}/${Number(mm[3])}` : v
   }
 
-  const activeTeam = teams.find((t) => t.id === activeTeamId) ?? null
 
   // 구별 카드 수 (필터 pill 카운트)
   const regionCount = useMemo(() => {
     const m = new Map<string, number>()
-    cards.forEach((c) => m.set(c.region, (m.get(c.region) ?? 0) + 1))
+    eligibleCards.forEach((c) => m.set(c.region, (m.get(c.region) ?? 0) + 1))
     return m
-  }, [cards])
+  }, [eligibleCards])
 
   // cardId → 짧은 카드명 (지역/구 접두 제거: "처인구 고림동 1" → "고림동 1")
   const shortName = (id: number) => {
@@ -386,7 +407,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
                   <span className="asg-teambar-cnt">{team.members.length}</span>
                 </span>
                 <span className="asg-teambar-zones" style={areas ? undefined : { color: 'var(--warn, #b8862a)' }}>
-                  {areas ?? msg('구역 미배정')}
+                  {scopeEnabled && team.cardIds.length > 0 ? `${cardServiceLabel(team.cardScope ?? '전체')} · ` : ''}{areas ?? msg('구역 미배정')}
                 </span>
               </button>
             )
@@ -425,6 +446,16 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
         </div>
       </div>
 
+      {mainTab === '카드' && scopeEnabled && (
+        <div className="asg-service-scope" role="group" aria-label={msg('봉사 형태')}>
+          {(['전체', '주택', '상가'] as const).map((scope) => (
+            <button key={scope} type="button" aria-pressed={buildingTypeFilter === scope}
+              disabled={!canEdit || !activeTeam} onClick={() => changeScope(scope)}>
+              {cardServiceLabel(scope)}
+            </button>
+          ))}
+        </div>
+      )}
       {/* 본문 */}
       {isMapView ? (
         <div className="asg-zone-map">
@@ -435,7 +466,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
               <button type="button"
                 className={`asg-filter-pill${selectedRegions.size === 0 ? ' is-on' : ''}`}
                 onClick={() => setSelectedRegions(new Set())}
-              >{t(currentLang(), 'map.filterAll')} <span className="asg-filter-cnt">{cards.length}</span></button>
+              >{t(currentLang(), 'map.filterAll')} <span className="asg-filter-cnt">{eligibleCards.length}</span></button>
               {regions.map((r) => (
                 <button key={r} type="button"
                   className={`asg-filter-pill${selectedRegions.has(r) ? ' is-on' : ''}`}
@@ -478,7 +509,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
             <div className="asg-list-regions">
               <button type="button" className={`asg-filter-pill${selectedRegions.size === 0 ? ' is-on' : ''}`}
                 aria-pressed={selectedRegions.size === 0} onClick={() => setSelectedRegions(new Set())}
-              >{t(currentLang(), 'map.filterAll')} <span className="asg-filter-cnt">{cards.length}</span></button>
+              >{t(currentLang(), 'map.filterAll')} <span className="asg-filter-cnt">{eligibleCards.length}</span></button>
               {regions.map((region) => (
                 <button key={region} type="button" className={`asg-filter-pill${selectedRegions.has(region) ? ' is-on' : ''}`}
                   aria-pressed={selectedRegions.has(region)} onClick={() => toggleRegion(region)}
@@ -498,8 +529,8 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
               <input type="checkbox" checked={unassignedOnly} onChange={(e) => setUnassignedOnly(e.target.checked)} />
               {msg('미배정만')}
             </label>
-            {mainTab === '카드' && <select className="asg-card-composition" aria-label={msg('카드 구성')}
-              value={buildingTypeFilter} onChange={(e) => setBuildingTypeFilter(e.target.value as BuildingTypeFilter)}>
+            {mainTab === '카드' && !scopeEnabled && <select className="asg-card-composition" aria-label={msg('카드 구성')}
+              value={buildingTypeFilter} onChange={(e) => setLegacyTypeFilter(e.target.value as BuildingTypeFilter)}>
               {(['전체', '주택', '상가'] as BuildingTypeFilter[]).map((type) => (
                 <option key={type} value={type}>{msg('카드 구성')}: {msg(type)}</option>
               ))}

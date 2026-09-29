@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '../utils/cardServiceScope'
 import { showToast } from '../lib/toast'
 import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { DesktopCalendar } from './DesktopCalendar'
@@ -404,17 +405,19 @@ export function DesktopApp({
     return ids
   }, [cards, currentVisitor, serviceSessions])
   const isUserMapScope = viewMode === 'user'
+  const assignmentMapId = import.meta.env.VITE_DEMO_MODE === 'true' ? Number(searchParams.get('assignmentMap')) : 0
+  const assignedMap = useMemo(() => assignedServiceScope(calendarEvents.find((e) => e.id === assignmentMapId), currentVisitor), [calendarEvents, assignmentMapId, currentVisitor])
   const mapCards = useMemo(
-    () => isUserMapScope ? cards.filter((card) => userVisibleMapCardIds.has(card.id)) : cards,
-    [cards, isUserMapScope, userVisibleMapCardIds],
+    () => assignmentMapId ? cards.filter((c) => assignedMap.ids.includes(c.id)) : isUserMapScope ? cards.filter((card) => userVisibleMapCardIds.has(card.id)) : cards,
+    [cards, isUserMapScope, userVisibleMapCardIds, assignmentMapId, assignedMap.ids],
   )
   const mapBuildings = useMemo(
-    () => isUserMapScope ? buildings.filter((building) => userVisibleMapCardIds.has(building.cardId)) : buildings,
-    [buildings, isUserMapScope, userVisibleMapCardIds],
+    () => assignmentMapId ? scopeServiceBuildings(buildings, assignedMap.ids, assignedMap.scope) : isUserMapScope ? buildings.filter((building) => userVisibleMapCardIds.has(building.cardId)) : buildings,
+    [buildings, isUserMapScope, userVisibleMapCardIds, assignmentMapId, assignedMap.ids, assignedMap.scope],
   )
   const mapCardBoundaries = useMemo(
-    () => isUserMapScope ? cardBoundaries.filter((boundary) => userVisibleMapCardIds.has(boundary.cardId)) : cardBoundaries,
-    [cardBoundaries, isUserMapScope, userVisibleMapCardIds],
+    () => assignmentMapId ? cardBoundaries.filter((b) => assignedMap.ids.includes(b.cardId)) : isUserMapScope ? cardBoundaries.filter((boundary) => userVisibleMapCardIds.has(boundary.cardId)) : cardBoundaries,
+    [cardBoundaries, isUserMapScope, userVisibleMapCardIds, assignmentMapId, assignedMap.ids],
   )
   const safeFocusedMapCardId =
     isUserMapScope && focusedMapCardId && !userVisibleMapCardIds.has(focusedMapCardId)
@@ -706,6 +709,7 @@ export function DesktopApp({
               returnVisits={returnVisits}
               returnVisitLogs={returnVisitLogs}
               onOpenMap={openCardOnMap}
+              onOpenAssignmentMap={import.meta.env.VITE_DEMO_MODE === 'true' ? (eventId) => navigate(`/map?assignmentMap=${eventId}`) : undefined}
               onOpenInformalMap={openInformalOnMap}
               onOpenBuildingMap={openBuildingOnMap}
               onEndServiceSession={onEndServiceSession}
@@ -819,6 +823,7 @@ export function DesktopApp({
         <Route path="/map" element={
           <DesktopMap language={language}
             buildings={mapBuildings}
+            assignmentServiceLabel={assignmentMapId ? cardServiceLabel(assignedMap.scope) : undefined}
             informalAssets={informalAssets}
             focusedInformalId={focusedInformalId}
             onCreateInformalPlace={onCreateInformalPlace}

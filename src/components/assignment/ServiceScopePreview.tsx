@@ -18,6 +18,9 @@ import './ServiceScopePreview.css'
 const toggle = (items: number[], id: number) =>
   items.includes(id) ? items.filter((n) => n !== id) : [...items, id]
 
+const serviceLabel = (scope: UnitUsageFilter) =>
+  scope === '전체' ? msg('주택·상가 전체') : scope === '주택' ? msg('주택 봉사') : msg('상가 봉사')
+
 export default function ServiceScopePreview() {
   const [teams, setTeams] = useState(initialTeams)
   const [teamId, setTeamId] = useState(initialTeams[0].id)
@@ -71,11 +74,11 @@ export default function ServiceScopePreview() {
   const myBuildings = scopedPreviewBuildings(mine.cardIds, mine.scope)
   const summary = (t: typeof team) =>
     [
-      t.cardIds.length ? `${t.scope} 카드 ${t.cardIds.length}개` : '',
+      t.cardIds.length ? `${serviceLabel(t.scope)} · 카드 ${t.cardIds.length}개` : '',
       t.informalIds.length ? `비공식 ${t.informalIds.length}개` : '',
     ]
       .filter(Boolean)
-      .join(' · ') || '팀 배정 없음'
+      .join(' + ') || '팀 배정 없음'
   const openMyMap = (target: 'cards' | number) => {
     setMapTarget(target)
     setBuildingId(0)
@@ -200,10 +203,6 @@ export default function ServiceScopePreview() {
           {tab === '카드' && (
             <>
               <div className="sp-scope">
-                <span>
-                  {team.name}
-                  {msg('봉사 범위')}
-                </span>
                 <div className="sp-segment">
                   {(['전체', '주택', '상가'] as const).map((s) => (
                     <button
@@ -211,7 +210,7 @@ export default function ServiceScopePreview() {
                       aria-pressed={team.scope === s}
                       onClick={() => setScope(s)}
                     >
-                      {s}
+                      {serviceLabel(s)}
                     </button>
                   ))}
                 </div>
@@ -390,7 +389,7 @@ export default function ServiceScopePreview() {
               <h2>
                 {informal
                   ? informal.name
-                  : `${mine.scope} 봉사 · 카드 ${mine.cardIds.length}개`}
+                  : `${serviceLabel(mine.scope)} · 카드 ${mine.cardIds.length}개`}
               </h2>
               <div className="sp-map sp-service-map">
                 <MapCanvas
@@ -466,8 +465,7 @@ export default function ServiceScopePreview() {
               {mine.cardIds.length > 0 && (
                 <section className="sp-work">
                   <h2>
-                    {mine.scope}{' '}
-                    {msg('봉사')}{' '}
+                    {serviceLabel(mine.scope)}{' '}
                     <small>
                       {msg('카드')}{' '}
                       {mine.cardIds.length}

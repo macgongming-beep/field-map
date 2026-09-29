@@ -106,6 +106,8 @@ export function MobileMap({
   focusedCardIds = [],
   focusedBuildingId,
   regularVisitScope = false,
+  focusedScopeLabel,
+  assignmentServiceMap = false,
   onOpenLocationSettings,
   onBack,
   onAddUnit,
@@ -168,6 +170,7 @@ export function MobileMap({
   focusedBuildingId?: number | null
   regularVisitScope?: boolean
   focusedScopeLabel?: string
+  assignmentServiceMap?: boolean
   onOpenLocationSettings?: () => void
   onBack: () => void
   onAddUnit: (buildingId: number, unitNumber: string | string[], usageType?: Building['type']) => Promise<number[] | false>
@@ -1683,8 +1686,8 @@ export function MobileMap({
                 <h1>{selectedInformal.name}</h1>
               ) : navLevel === 'map' ? (
                 <>
-                  <h1>{selectedCardId ? translateKoreanAddress(cards.find(c => c.id === selectedCardId)?.name ?? t(language, 'map.zoneMap'), language, translatePlaceNames) : t(language, 'map.zoneMap')}</h1>
-                  <span className="mm-stats-sub" role="tablist">
+                  <h1>{assignmentServiceMap ? focusedScopeLabel : selectedCardId ? translateKoreanAddress(cards.find(c => c.id === selectedCardId)?.name ?? t(language, 'map.zoneMap'), language, translatePlaceNames) : t(language, 'map.zoneMap')}</h1>
+                  {assignmentServiceMap ? <span className="mm-stats-sub">{msg('카드 {n}개', { n: cards.length })} · {typeCounts.전체}{msg('세대')}</span> : <span className="mm-stats-sub" role="tablist">
                     <button
                       type="button"
                       role="tab"
@@ -1712,7 +1715,7 @@ export function MobileMap({
                     >
                       <span>{t(language, 'map.shop')}</span><b className="tnum">{typeCounts.상가}</b>
                     </button>
-                  </span>
+                  </span>}
                 </>
               ) : (
                 <>
