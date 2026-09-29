@@ -86,3 +86,15 @@ test('데모 실제 지도와 목록에서 봉사 형태를 팀 초안에 저장
     expect(screen.queryByRole('combobox', { name: '카드 구성' })).not.toBeInTheDocument()
   } finally { vi.unstubAllEnvs() }
 })
+
+test('데모 비공식 선택은 개인 즉시 저장 대신 팀 초안 액션이다', () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  try {
+    const dispatch = vi.fn()
+    renderAssignment(dispatch)
+    fireEvent.click(screen.getByRole('button', { name: '비공식', exact: true }))
+    fireEvent.click(screen.getByText('미분류'))
+    fireEvent.click(screen.getByText('경희대'))
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith({ type: 'TOGGLE_TEAM_INFORMAL', teamId: 'team-1', assetId: 10 })
+  } finally { vi.unstubAllEnvs() }
+})

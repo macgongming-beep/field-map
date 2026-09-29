@@ -17,3 +17,15 @@ test('범위 저장 RPC가 없으면 옛 직접 저장으로 폴백하지 않고
   expect(mocks.from).not.toHaveBeenCalled()
   expect(fetchAll).not.toHaveBeenCalled()
 })
+
+test('데모는 비공식 팀 목록을 새 RPC로 보내며 비어 있는 전체 배정도 새 RPC로 해제한다', async () => {
+  vi.stubEnv('VITE_DEMO_MODE','true')
+  try {
+    mocks.rpc.mockResolvedValue({data:{ok:true},error:null})
+    const mutation = makeEventAssignmentMutations({fetchAll:vi.fn()})
+    await mutation.assignCardsToEventParticipantsBulk(1,[{userName:'A',teamKey:'t1',cardIds:[],informalAssetIds:[9]}])
+    expect(mocks.rpc).toHaveBeenLastCalledWith('assign_team_service_bulk_tx',expect.objectContaining({p_assignments:[{userName:'A',teamKey:'t1',cardIds:[],cardScope:'전체',informalAssetIds:[9]}]}))
+    await mutation.assignCardsToEventParticipantsBulk(1,[])
+    expect(mocks.rpc).toHaveBeenLastCalledWith('assign_team_service_bulk_tx',expect.objectContaining({p_assignments:[]}))
+  } finally {vi.unstubAllEnvs()}
+})

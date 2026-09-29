@@ -128,8 +128,12 @@ export function AssignmentEditor({ event, cards, allCards = [], buildings, visit
   //   **어제 다른 일정에서 받은 비공식·식당이 오늘 팀에 붙어 보였다.**
   //   구역 카드는 일정별로 제대로 걸렀는데 이 둘만 빠져 있었다.
   const informalHere = useMemo(
-    () => eventInformalAssignments.filter((a) => a.eventId === event.id),
-    [eventInformalAssignments, event.id],
+    () => import.meta.env.VITE_DEMO_MODE === 'true'
+      ? teams.flatMap((t) => t.members.flatMap((userName) => (t.informalAssetIds ?? []).map((assetId) => ({
+        id: -assetId, eventId: event.id, userName, assetId, assignedBy: currentVisitor, assignedAt: '', memo: '',
+      }))))
+      : eventInformalAssignments.filter((a) => a.eventId === event.id),
+    [eventInformalAssignments, event.id, teams, currentVisitor],
   )
   const restaurantHere = useMemo(
     () => eventRestaurantAssignments.filter((a) => a.eventId === event.id),

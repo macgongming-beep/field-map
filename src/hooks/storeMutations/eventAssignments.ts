@@ -63,7 +63,7 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
 
   const assignCardsToEventParticipantsBulk = async (
     eventId: number,
-    assignments: Array<{ userName: string; cardId?: number | null; cardIds?: number[] | null; teamKey?: string | null; cardScope?: '전체' | '주택' | '상가' }>,
+    assignments: Array<{ userName: string; cardId?: number | null; cardIds?: number[] | null; teamKey?: string | null; cardScope?: '전체' | '주택' | '상가'; informalAssetIds?: number[] }>,
     options?: {
       silentSuccess?: boolean
       status?: 'confirmed' | 'shared'
@@ -72,7 +72,8 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
     },
   ) => {
     const silentSuccess = options?.silentSuccess === true
-    const scoped = assignments.some((a) => a.cardScope != null)
+    const teamService = import.meta.env.VITE_DEMO_MODE === 'true'
+    const scoped = teamService || assignments.some((a) => a.cardScope != null)
     const normalizedAssignments = Array.from(
       new Map(
         assignments
@@ -91,6 +92,7 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
               cardIds,
               teamKey: item.teamKey ?? null,
               cardScope: item.cardScope,
+              informalAssetIds: item.informalAssetIds ?? [],
             }
           })
           .filter((item) => item.userName.length > 0)
@@ -103,10 +105,11 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
     const rpcPayload = normalizedAssignments
       .map((item) => ({ userName: item.userName, cardIds: item.cardIds, teamKey: item.teamKey,
         ...(scoped ? { cardScope: item.cardScope ?? '전체' } : {}),
+        ...(teamService ? { informalAssetIds: item.informalAssetIds } : {}),
       }))
     const token = (await import('../../lib/authToken')).getAuthToken()
     if (token) {
-      const rpcRes = await supabase.rpc(scoped ? 'assign_scoped_cards_bulk_tx' : 'assign_cards_bulk_tx', {
+      const rpcRes = await supabase.rpc(teamService ? 'assign_team_service_bulk_tx' : scoped ? 'assign_scoped_cards_bulk_tx' : 'assign_cards_bulk_tx', {
         p_token: token,
         p_event_id: eventId,
         p_assignments: rpcPayload,

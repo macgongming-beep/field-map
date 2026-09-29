@@ -3,7 +3,7 @@
 //
 // 원칙:
 //  - draft.teams[] 가 유일한 진실. 지도/목록 UI는 여기서 파생만.
-//  - draft는 "구역(cardIds) + 팀 멤버"만 담는다. 비공식/식당은 즉시저장(B안)이라 draft에 없음.
+//  - 데모는 비공식도 팀 초안에 담아 함께 공유한다. 식당은 기존 개인 즉시저장이다.
 //  - 팀 이름/색/순서는 서버에 저장 안 됨(DB는 cardIds만) → 서버 복원 시 재생성될 수 있음.
 
 export type AssignmentMode = 'card'
@@ -16,6 +16,7 @@ export type DraftTeam = {
   order: number
   cardIds: number[]   // 이 팀에 배정된 구역 카드 (비공식/식당 제외)
   cardScope?: '전체' | '주택' | '상가'
+  informalAssetIds?: number[]
   members: string[]   // 이 팀에 속한 참가자 이름
 }
 
@@ -45,6 +46,7 @@ export type DraftAction =
   | { type: 'RENAME_TEAM'; teamId: string; name: string }
   | { type: 'SET_ACTIVE_TEAM'; teamId: string | null }
   | { type: 'SET_CARD_SCOPE'; teamId: string; scope: '전체' | '주택' | '상가'; cardIds: number[] }
+  | { type: 'TOGGLE_TEAM_INFORMAL'; teamId: string; assetId: number }
   // 멤버
   | { type: 'ADD_MEMBER'; teamId: string; name: string }
   | { type: 'REMOVE_MEMBER'; teamId: string; name: string }

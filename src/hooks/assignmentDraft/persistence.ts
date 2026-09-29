@@ -43,6 +43,7 @@ export function buildDraftFromServer(event: CalendarEvent): AssignmentDraft {
     order: index,
     cardIds: group.cardIds,
     cardScope: group.cardScope,
+    informalAssetIds: group.teamKey ? event.assignmentTeamInformal?.[group.teamKey] ?? [] : [],
     members: group.members,
   }))
 
@@ -62,14 +63,14 @@ export function buildEmptyDraft(): AssignmentDraft {
 // draft → 서버 bulk 배정 형식 (각 멤버가 자기 팀의 cardIds를 받음)
 export function draftToAssignments(
   draft: AssignmentDraft,
-): Array<{ userName: string; cardIds: number[]; teamKey: string; cardScope?: DraftTeam['cardScope'] }> {
-  const out: Array<{ userName: string; cardIds: number[]; teamKey: string; cardScope?: DraftTeam['cardScope'] }> = []
+): Array<{ userName: string; cardIds: number[]; teamKey: string; cardScope?: DraftTeam['cardScope']; informalAssetIds?: number[] }> {
+  const out: Array<{ userName: string; cardIds: number[]; teamKey: string; cardScope?: DraftTeam['cardScope']; informalAssetIds?: number[] }> = []
   draft.teams.forEach((team) => {
     team.members.forEach((userName) => {
       // teamKey 를 함께 저장해야 복원 시 팀이 그대로 나뉜다
       // (같은 구역을 맡은 다른 팀과 합쳐지지 않도록)
       out.push({ userName, cardIds: team.cardIds, teamKey: team.id,
-        ...(import.meta.env.VITE_DEMO_MODE === 'true' ? { cardScope: team.cardScope ?? '전체' } : {}),
+        ...(import.meta.env.VITE_DEMO_MODE === 'true' ? { cardScope: team.cardScope ?? '전체', informalAssetIds: team.informalAssetIds ?? [] } : {}),
       })
     })
   })

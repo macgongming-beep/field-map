@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { supabase } from '../lib/supabase'
 import { trackFetch } from '../lib/perfTracker'
 import { withLoadDeadline } from '../lib/loadDeadline'
@@ -127,6 +128,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   const [returnVisitLogs, setReturnVisitLogs] = useState<ReturnVisitLog[]>([])
   const [informalAssets, setInformalAssets] = useState<InformalAsset[]>([])
   const [eventInformalAssignments, setEventInformalAssignments] = useState<EventInformalAssignment[]>([])
+  const recipientInformalAssignments = useMemo(() => teamInformalAssignments(calendarEvents, eventInformalAssignments), [calendarEvents, eventInformalAssignments])
   const [eventRestaurantAssignments, setEventRestaurantAssignments] = useState<EventRestaurantAssignment[]>([])
   const [informalGroups, setInformalGroups] = useState<InformalGroup[]>([])
   const [restaurantRequests, setRestaurantRequests] = useState<RestaurantRequest[]>([])
@@ -981,7 +983,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     getActiveSpecialPeriodIdForDate,
     // v2 신 배정 모델
     informalAssets,
-    eventInformalAssignments,
+    eventInformalAssignments: recipientInformalAssignments,
     eventRestaurantAssignments,
     informalGroups,
     createInformalPlace,

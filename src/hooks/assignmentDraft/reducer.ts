@@ -81,6 +81,16 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
     case 'SET_ACTIVE_TEAM':
       return { ...state, activeTeamId: action.teamId }
 
+    case 'TOGGLE_TEAM_INFORMAL':
+      return { ...state, undo: state.draft, draft: touch({ ...state.draft,
+        teams: state.draft.teams.map((t) => {
+          if (t.id !== action.teamId) return t
+          const ids = t.informalAssetIds ?? []
+          return { ...t, informalAssetIds: ids.includes(action.assetId)
+            ? ids.filter((id) => id !== action.assetId) : [...ids, action.assetId] }
+        }),
+      }) }
+
     case 'SET_CARD_SCOPE':
       return { ...state, undo: state.draft, draft: touch({ ...state.draft,
         teams: state.draft.teams.map((t) => t.id === action.teamId

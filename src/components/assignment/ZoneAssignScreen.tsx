@@ -257,6 +257,10 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
       showToast(msg('멤버가 있는 팀을 먼저 선택하세요'), 'error')
       return
     }
+    if (scopeEnabled) {
+      dispatch({ type: 'TOGGLE_TEAM_INFORMAL', teamId: activeTeam.id, assetId })
+      return
+    }
     const members = activeTeam.members
     const toRemove = (informalAssigns.get(assetId) ?? []).filter((a) => members.includes(a.user))
     if (toRemove.length > 0) {
@@ -301,8 +305,10 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
     const byGroup = new Map<number | 'null', SubItem[]>()
     visible.forEach((a) => {
       const assigns = informalAssigns.get(a.id) ?? []
-      if (unassignedOnly && assigns.length > 0) return
-      const item: SubItem = { key: `inf-asset-${a.id}`, id: a.id, unitId: null, name: a.name, address: '', imageUrl: a.imageUrl, kind: a.kind, assignedTo: assigns.map((x) => x.user), isActive: assigns.some((x) => memberSet.has(x.user)) }
+      const assignedTeams = teams.filter((t) => t.informalAssetIds?.includes(a.id))
+      const assignedTo = scopeEnabled ? assignedTeams.map((t) => t.name) : assigns.map((x) => x.user)
+      if (unassignedOnly && assignedTo.length > 0) return
+      const item: SubItem = { key: `inf-asset-${a.id}`, id: a.id, unitId: null, name: a.name, address: '', imageUrl: a.imageUrl, kind: a.kind, assignedTo, isActive: scopeEnabled ? assignedTeams.some((t) => t.id === activeTeamId) : assigns.some((x) => memberSet.has(x.user)) }
       const key = a.groupId ?? 'null'
       byGroup.set(key, [...(byGroup.get(key) ?? []), item])
     })
@@ -312,7 +318,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
       if (byGroup.has(g.id)) sections.push({ key: `inf-${g.id}`, title: g.name, items: byGroup.get(g.id)! })
     })
     return sections
-  }, [informalAssets, informalGroups, query, informalAssigns, unassignedOnly, teams, activeTeamId])
+  }, [informalAssets, informalGroups, query, informalAssigns, unassignedOnly, teams, activeTeamId, scopeEnabled])
 
   // 식당 — 구(區)별 + 세대 단위. 구역 식당 화면처럼 중국인 세대별 행.
   const cardRegionById = useMemo(() => {
@@ -407,8 +413,9 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
                   <span className="asg-teambar-cnt">{team.members.length}</span>
                 </span>
                 <span className="asg-teambar-zones" title={areas ?? undefined} style={areas ? undefined : { color: 'var(--warn, #b8862a)' }}>
-                  {scopeEnabled && team.cardIds.length > 0
-                    ? `${msg(team.cardScope ?? '전체')} · ${msg('카드 {n}개', { n: team.cardIds.length })}`
+                  {scopeEnabled && (team.cardIds.length > 0 || team.informalAssetIds?.length)
+                    ? [team.cardIds.length > 0 ? `${msg(team.cardScope ?? '전체')} · ${msg('카드 {n}개', { n: team.cardIds.length })}` : '',
+                      team.informalAssetIds?.length ? `${msg('비공식')} ${team.informalAssetIds.length}` : ''].filter(Boolean).join(' · ')
                     : areas ?? msg('구역 미배정')}
                 </span>
               </button>
