@@ -17,6 +17,7 @@ import type { DraftAction, DraftTeam } from '../../hooks/assignmentDraft'
 import { teamHex } from './teamColors'
 import { sortTerritoryCardsByOperationalPriority } from '../../utils/cardSearch'
 import { MapCanvas } from '../MapCanvas'
+import { InformalKindIcon } from '../InformalKindIcon'
 import { getBuildingStatus } from '../../utils/mapUtils'
 import { msg } from '../../lib/msg'
 import { buildingHasUsage, scopeBuildingToUsage, unitsForUsage } from '../../utils/unitUsage'
@@ -52,8 +53,9 @@ type ViewMode = 'list' | 'map'
 
 
 export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitHistories = [], cardBoundaries, canEdit, dispatch, eventId, currentVisitor, allCards = [], informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onBack }: Props) {
-  const [view, setView] = useState<ViewMode>('list')
+  const [view, setView] = useState<ViewMode>('map')
   const [mainTab, setMainTab] = useState<'카드' | '비공식' | '식당'>('카드')
+  const isMapView = mainTab === '카드' && view === 'map'
   const [query, setQuery] = useState('')
   const [unassignedOnly, setUnassignedOnly] = useState(false)
   const [buildingTypeFilter, setBuildingTypeFilter] = useState<BuildingTypeFilter>('전체')
@@ -269,7 +271,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
   }
 
   // 공용 항목 타입 (비공식·식당). 식당은 unitId, 비공식은 imageUrl 세팅.
-  type SubItem = { key: string; id: number; unitId: number | null; name: string; address: string; imageUrl?: string; assignedTo: string[]; isActive: boolean }
+  type SubItem = { key: string; id: number; unitId: number | null; name: string; address: string; imageUrl?: string; kind?: InformalAsset['kind']; assignedTo: string[]; isActive: boolean }
 
   // 비공식 — 그룹(미분류 + 그룹)별 묶음. 구역 비공식 화면과 동일한 구성.
   const informalGroupSections = useMemo(() => {
@@ -279,7 +281,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
     visible.forEach((a) => {
       const assigns = informalAssigns.get(a.id) ?? []
       if (unassignedOnly && assigns.length > 0) return
-      const item: SubItem = { key: `inf-asset-${a.id}`, id: a.id, unitId: null, name: a.name, address: '', imageUrl: a.imageUrl, assignedTo: assigns.map((x) => x.user), isActive: assigns.some((x) => memberSet.has(x.user)) }
+      const item: SubItem = { key: `inf-asset-${a.id}`, id: a.id, unitId: null, name: a.name, address: '', imageUrl: a.imageUrl, kind: a.kind, assignedTo: assigns.map((x) => x.user), isActive: assigns.some((x) => memberSet.has(x.user)) }
       const key = a.groupId ?? 'null'
       byGroup.set(key, [...(byGroup.get(key) ?? []), item])
     })
@@ -348,7 +350,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
   }
 
   return (
-    <div className={`asg-zone${view === 'map' ? ' is-map-view' : ''}`}>
+    <div className={`asg-zone${isMapView ? ' is-map-view' : ''}`}>
       {/* sticky 헤더 */}
       <div className="asg-zone-sticky">
         <header className="asg-editor-head" style={{ position: 'relative', borderBottom: 'none' }}>
@@ -393,7 +395,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
         {/* 뷰 토글 */}
         <div className="asg-zone-controls">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div className="asg-zone-toggle" style={{ padding: 0, margin: 0, flexShrink: 0 }}>
+            {mainTab === '카드' && <div className="asg-zone-toggle" style={{ padding: 0, margin: 0, flexShrink: 0 }}>
               <button className={view === 'list' ? 'is-on' : ''} onClick={() => setView('list')} type="button" style={{ padding: '6px 10px', fontSize: 12 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                 {msg('목록')}
@@ -402,7 +404,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
                 지도
               </button>
-            </div>
+            </div>}
             
             {/* [카드][비공식][식당] 탭 — 라운드 네모 */}
             <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
@@ -426,7 +428,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
       </div>
 
       {/* 본문 */}
-      {view === 'map' ? (
+      {isMapView ? (
         <div className="asg-zone-map">
           {/* 구 + 주택/상가 + 완료 필터 (sticky 헤더 바로 아래) */}
           {/* 오버레이 필터: 구 선택 (좌측 상단) */}
@@ -474,6 +476,18 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
         </div>
       ) : (
         <div className="asg-zone-list">
+          {mainTab === '카드' && regions.length > 1 && (
+            <div className="asg-list-regions">
+              <button type="button" className={`asg-filter-pill${selectedRegions.size === 0 ? ' is-on' : ''}`}
+                aria-pressed={selectedRegions.size === 0} onClick={() => setSelectedRegions(new Set())}
+              >{t(currentLang(), 'map.filterAll')} <span className="asg-filter-cnt">{cards.length}</span></button>
+              {regions.map((region) => (
+                <button key={region} type="button" className={`asg-filter-pill${selectedRegions.has(region) ? ' is-on' : ''}`}
+                  aria-pressed={selectedRegions.has(region)} onClick={() => toggleRegion(region)}
+                >{region} <span className="asg-filter-cnt">{regionCount.get(region) ?? 0}</span></button>
+              ))}
+            </div>
+          )}
           <div className="asg-zone-filter" style={{ gap: 6, alignItems: 'center' }}>
             <input
               className="asg-zone-search"
@@ -553,7 +567,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
                                         style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--line)', display: 'block' }} />
                                     </a>
                                   ) : (
-                                    <span style={{ flexShrink: 0, width: 44, height: 44, borderRadius: 8, background: 'var(--tint)', display: 'grid', placeItems: 'center', color: 'var(--muted)', fontSize: 18 }}>🖼️</span>
+                                    <span className="asg-informal-icon"><InformalKindIcon kind={item.kind ?? '비공식구역'} size={22} /></span>
                                   )
                                 )}
                                 <div style={{ flex: 1, minWidth: 0 }}>

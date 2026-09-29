@@ -32413,6 +32413,31 @@ button:focus-visible {
 .asg-filter-pill.is-on { background: var(--ink); color: #fff; border-color: var(--ink); }
 .asg-filter-cnt { font-size: 11px; opacity: 0.7; font-variant-numeric: tabular-nums; font-weight: 500; }
 
+.asg-list-regions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.asg-list-regions .asg-filter-pill {
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.asg-informal-icon {
+  display: grid;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--tint);
+}
+
 
 /* 배정 지도 오버레이 필터 */
 .asg-map-overlay-regions {
