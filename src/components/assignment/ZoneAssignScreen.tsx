@@ -21,7 +21,7 @@ import { InformalKindIcon } from '../InformalKindIcon'
 import { getBuildingStatus } from '../../utils/mapUtils'
 import { msg } from '../../lib/msg'
 import { buildingHasUsage, scopeBuildingToUsage, unitsForUsage } from '../../utils/unitUsage'
-import { cardServiceLabel, scopeServiceBuildings } from '../../utils/cardServiceScope'
+import { scopeServiceBuildings } from '../../utils/cardServiceScope'
 
 type BuildingTypeFilter = '전체' | '주택' | '상가'
 
@@ -67,12 +67,13 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
     return teams.find((t) => t.id === activeTeamId)?.cardScope ?? '전체'
   }, [teams, activeTeamId, legacyTypeFilter])
   const changeScope = (scope: BuildingTypeFilter) => {
-    if (!canEdit || !activeTeam) return
+    if (!canEdit || !activeTeam) return false
     const valid = new Set(scopeServiceBuildings(buildings, activeTeam.cardIds, scope).map((b) => b.cardId))
     const retained = activeTeam.cardIds.filter((id) => valid.has(id))
     const removed = activeTeam.cardIds.length - retained.length
-    if (removed && !window.confirm(msg('해당 세대가 없는 카드 {n}개를 배정에서 제외할까요?', { n: removed }))) return
+    if (removed && !window.confirm(msg('해당 세대가 없는 카드 {n}개를 배정에서 제외할까요?', { n: removed }))) return false
     dispatch({ type: 'SET_CARD_SCOPE', teamId: activeTeam.id, scope, cardIds: retained })
+    return true
   }
   const eligibleCards = useMemo(() => {
     if (!scopeEnabled || buildingTypeFilter === '전체') return cards
@@ -424,7 +425,17 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
         </div>
         {/* 뷰 토글 */}
         <div className="asg-zone-controls">
-          <div className="asg-zone-navigation">
+          <div className={`asg-zone-navigation${scopeEnabled ? ' is-unified' : ''}`}>
+            {scopeEnabled && <div className="asg-zone-scope-tabs" role="group" aria-label={msg('봉사 형태')}>
+              {(['전체', '주택', '상가'] as const).map((scope) => (
+                <button key={scope} type="button" aria-pressed={mainTab === '카드' && buildingTypeFilter === scope}
+                  disabled={!activeTeam || (!canEdit && buildingTypeFilter !== scope)}
+                  onClick={() => {
+                    if (buildingTypeFilter === scope || changeScope(scope)) setMainTab('카드')
+                  }}>{msg(scope)}</button>
+              ))}
+            </div>}
+            <div className={`asg-zone-view-slot${mainTab !== '카드' ? ' is-empty' : ''}`}>
             {mainTab === '카드' && <div className="asg-zone-toggle" style={{ padding: 0, margin: 0, flexShrink: 0 }}>
               <button className={view === 'list' ? 'is-on' : ''} onClick={() => setView('list')} type="button" aria-label={msg('목록')} title={msg('목록')} aria-pressed={view === 'list'}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -433,10 +444,11 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
               </button>
             </div>}
+            </div>
             
             {/* 배분 대상 탭 */}
             <div className="asg-zone-kind-tabs">
-              {(['카드', '비공식', '식당'] as const).map((tb) => {
+              {(scopeEnabled ? ['비공식', '식당'] as const : ['카드', '비공식', '식당'] as const).map((tb) => {
                 const on = mainTab === tb
                 return (
                   <button key={tb} type="button" aria-pressed={on} onClick={() => setMainTab(tb)}>{msg(tb)}</button>
@@ -447,18 +459,6 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
         </div>
       </div>
 
-      {mainTab === '카드' && scopeEnabled && (
-        <div className="asg-service-scope-row">
-        <div className="asg-service-scope" role="group" aria-label={msg('봉사 형태')}>
-          {(['전체', '주택', '상가'] as const).map((scope) => (
-            <button key={scope} type="button" aria-pressed={buildingTypeFilter === scope}
-              disabled={!canEdit || !activeTeam} onClick={() => changeScope(scope)}>
-              {scope === '전체' ? msg('전체') : cardServiceLabel(scope)}
-            </button>
-          ))}
-        </div>
-        </div>
-      )}
       {/* 본문 */}
       {isMapView ? (
         <div className="asg-zone-map">

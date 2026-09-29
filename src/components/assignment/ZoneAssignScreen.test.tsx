@@ -79,11 +79,27 @@ test('데모 실제 지도와 목록에서 봉사 형태를 팀 초안에 저장
     const dispatch = vi.fn()
     renderAssignment(dispatch)
     expect(screen.queryByText('카드 봉사')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '상가 봉사', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: '상가', exact: true }))
     expect(dispatch).toHaveBeenCalledWith({ type: 'SET_CARD_SCOPE', teamId: 'team-1', scope: '상가', cardIds: [] })
     fireEvent.click(screen.getByRole('button', { name: '목록', exact: true }))
-    expect(screen.getByRole('button', { name: '주택 봉사', exact: true })).toBeVisible()
+    expect(screen.getByRole('button', { name: '주택', exact: true })).toBeVisible()
     expect(screen.queryByRole('combobox', { name: '카드 구성' })).not.toBeInTheDocument()
+  } finally { vi.unstubAllEnvs() }
+})
+
+test('데모 통합 탭은 비공식에서 돌아와도 같은 봉사 형태를 다시 저장하지 않는다', () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  try {
+    const dispatch = vi.fn()
+    const { container } = renderAssignment(dispatch)
+    expect(screen.queryByRole('button', { name: '카드', exact: true })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '비공식', exact: true }))
+    expect(screen.queryByRole('button', { name: '지도', exact: true })).not.toBeInTheDocument()
+    expect(screen.getByRole('group', { name: '봉사 형태' })).toBeVisible()
+    expect(container.querySelector('.asg-zone-scope-tabs button')).toHaveAttribute('aria-pressed','false')
+    fireEvent.click(screen.getByRole('group', { name: '봉사 형태' }).querySelector('button')!)
+    expect(screen.getByTestId('assignment-map')).toBeVisible()
+    expect(dispatch).not.toHaveBeenCalled()
   } finally { vi.unstubAllEnvs() }
 })
 
