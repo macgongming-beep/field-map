@@ -1,0 +1,205 @@
+.scope-preview {
+  max-width: 1040px;
+  margin: auto;
+  padding: 0 20px 30px;
+  color: var(--ink);
+  letter-spacing: 0;
+}
+.scope-preview * {
+  box-sizing: border-box;
+}
+.scope-preview button,
+.scope-preview select {
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.scope-preview button[aria-pressed="true"],
+.scope-preview .sp-primary {
+  background: var(--ink);
+  color: white;
+  border-color: var(--ink);
+}
+.sp-demo {
+  padding: 10px 0;
+  font-size: 12px;
+  color: #705619;
+  border-bottom: 1px solid var(--line);
+}
+.sp-demo a {
+  float: right;
+  color: inherit;
+}
+.sp-pages {
+  display: flex;
+  gap: 8px;
+  padding-top: 16px;
+}
+.scope-preview header {
+  padding: 22px 0 12px;
+}
+.scope-preview h1 {
+  font-size: 24px;
+  margin: 0 0 6px;
+}
+.scope-preview h2 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+.scope-preview p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 4px 0 12px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+.scope-preview small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.sp-teams {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 3px 0 14px;
+}
+.sp-teams button {
+  flex: 0 0 180px;
+  text-align: left;
+}
+.sp-teams button[aria-pressed="true"] small {
+  color: #ddd;
+}
+.sp-nav,
+.sp-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.sp-segment,
+.sp-regions {
+  display: flex;
+  gap: 4px;
+}
+.sp-segment button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sp-scope > span {
+  font-size: 13px;
+  font-weight: 600;
+}
+.sp-regions {
+  padding: 12px 0;
+}
+.sp-map {
+  height: 360px;
+  overflow: hidden;
+  position: relative;
+}
+.sp-map .map-canvas-container,
+.sp-map .naver-map-canvas,
+.sp-map .mock-map {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+.scope-preview > input {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 12px 0;
+}
+.sp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.sp-row > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sp-row > button {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.sp-row input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: #242424;
+}
+.sp-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  font-size: 14px;
+}
+.sp-person select {
+  min-width: 0;
+  flex: 1;
+  max-width: 300px;
+}
+.sp-work {
+  padding: 22px 0;
+  border-top: 1px solid var(--line);
+}
+.sp-work h2 small {
+  display: inline;
+  margin-left: 8px;
+}
+.scope-preview footer {
+  padding: 20px 0;
+}
+.sp-sheet {
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding: 12px;
+}
+.sp-sheet > button {
+  width: 100%;
+  text-align: left;
+}
+.sp-sheet > button span {
+  float: right;
+}
+.sp-sheet > div {
+  padding: 12px 0;
+}
+.sp-back {
+  margin: 8px 0 12px;
+}
+@media (max-width: 520px) {
+  .scope-preview {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .sp-teams button {
+    flex-basis: 158px;
+  }
+  .sp-map {
+    height: 300px;
+  }
+  .sp-service-map {
+    height: 400px;
+  }
+}

@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
@@ -10,6 +10,9 @@ import { initSentry } from './lib/sentry'
 import './lib/pwa' // Service Worker 등록 (사이드 이펙트만)
 import { applyUpdate } from './lib/pwa'
 import { msg } from './lib/msg'
+
+const ServiceScopePreview = import.meta.env.VITE_DEMO_MODE === 'true'
+  ? lazy(() => import('./components/assignment/ServiceScopePreview')) : null
 
 // Sentry 가장 먼저 (이후 발생하는 모든 에러 캐치)
 initSentry()
@@ -98,6 +101,7 @@ createRoot(document.getElementById('root')!).render(
     >
       <BrowserRouter>
         <Routes>
+          {ServiceScopePreview && <Route path="/preview/service-scope" element={<Suspense fallback={<p>Loading...</p>}><ServiceScopePreview /></Suspense>} />}
           <Route path="/shared/territory-report/:shareToken" element={<SharedTerritoryReport />} />
           <Route path="*" element={<App />} />
         </Routes>
