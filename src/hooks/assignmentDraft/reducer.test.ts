@@ -28,10 +28,28 @@ describe('draftReducer — 팀', () => {
     expect(next.draft.teams).toHaveLength(2)
   })
 
-  it('CREATE_TEAM: 이름은 "팀 N" 다음 번호로', () => {
+  it('CREATE_TEAM: 빈 번호를 재사용하고 번호 사이에 표시한다', () => {
     const s = makeState([team({ id: 'a', name: '팀 1' }), team({ id: 'b', name: '팀 3' })])
     const next = draftReducer(s, { type: 'CREATE_TEAM', members: [] })
-    expect(next.draft.teams.at(-1)!.name).toBe('팀 4')
+    expect(next.draft.teams.map((t) => t.name)).toEqual(['팀 1', '팀 2', '팀 3'])
+    expect(next.draft.teams.map((t) => t.order)).toEqual([0, 1, 2])
+  })
+
+  it('팀 2 삭제 후 새 팀을 묶어도 남은 팀의 ID와 배정은 바뀌지 않는다', () => {
+    const teams = Array.from({ length: 6 }, (_, i) => team({ id: `t${i + 1}`, name: `팀 ${i + 1}`, order: i, members: [`멤버${i + 1}`], cardIds: [i + 10] }))
+    const removed = draftReducer(makeState(teams), { type: 'DELETE_TEAM', teamId: 't2' })
+    const next = draftReducer(removed, { type: 'CREATE_TEAM', members: ['새 멤버'] })
+    expect(next.draft.teams.map((t) => t.name)).toEqual(['팀 1', '팀 2', '팀 3', '팀 4', '팀 5', '팀 6'])
+    expect(next.draft.teams[1].id).not.toBe('t2')
+    expect(next.activeTeamId).toBe(next.draft.teams[1].id)
+    for (const original of teams.filter((t) => t.id !== 't2')) {
+      expect(next.draft.teams.find((t) => t.id === original.id)).toEqual(original)
+    }
+  })
+
+  it('사용자 지정 팀 이름은 유지하고 빈 첫 번호를 사용한다', () => {
+    const next = draftReducer(makeState([team({ name: '오후팀' }), team({ id: 't3', name: '팀 3' })]), { type: 'CREATE_TEAM' })
+    expect(next.draft.teams.map((t) => t.name)).toEqual(['오후팀', '팀 1', '팀 3'])
   })
 
   it('DELETE_TEAM: 활성팀 삭제 시 첫 팀으로 활성 이동', () => {

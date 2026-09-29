@@ -13,22 +13,19 @@ function genTeamId(): string {
     : `team-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-function nextOrder(teams: DraftTeam[]): number {
-  return teams.length === 0 ? 0 : Math.max(...teams.map((t) => t.order)) + 1
-}
-
 function nextColor(teams: DraftTeam[]): string {
   return TEAM_COLORS[teams.length % TEAM_COLORS.length]
 }
 
 function nextName(teams: DraftTeam[]): string {
-  // "팀 N" 중 가장 큰 N+1
+  // 기존 팀의 이름과 배정은 유지하고 비어 있는 가장 작은 번호를 재사용한다.
   const used = teams
     .map((t) => /^팀 (\d+)$/.exec(t.name)?.[1])
     .filter(Boolean)
     .map(Number)
-  const max = used.length > 0 ? Math.max(...used) : 0
-  return `팀 ${max + 1}`
+  let number = 1
+  while (used.includes(number)) number += 1
+  return `팀 ${number}`
 }
 
 function touch(draft: AssignmentDraft): AssignmentDraft {
@@ -96,13 +93,17 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
         id: genTeamId(),
         name: nextName(teams),
         color: nextColor(teams),
-        order: nextOrder(teams),
+        order: 0,
         cardIds: [],
         members,
       }
+      const number = Number(newTeam.name.slice(2))
+      const insertionIndex = cleared.findIndex((team) => Number(/^팀 (\d+)$/.exec(team.name)?.[1]) > number)
+      const ordered = [...cleared]
+      ordered.splice(insertionIndex < 0 ? ordered.length : insertionIndex, 0, newTeam)
       return {
         ...state,
-        draft: touch({ ...state.draft, teams: [...cleared, newTeam] }),
+        draft: touch({ ...state.draft, teams: ordered.map((team, order) => ({ ...team, order })) }),
         activeTeamId: newTeam.id, // 새로 만든 팀을 활성화
       }
     }
