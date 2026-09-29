@@ -4,6 +4,8 @@
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
 export const messagesEn: Record<string, string> = {
+  '카드 구성': 'Card contents',
+  '지도': 'Map',
   '등록된 건물이 없습니다.': 'No building is registered at this address.',
   '네이버에서 주소 찾기': 'Find address on Naver',
   '도로명 주소를 확인한 뒤 기존 건물과 대조합니다.': 'Confirm the street address, then compare it with existing buildings.',

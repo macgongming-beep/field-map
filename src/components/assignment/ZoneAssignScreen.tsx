@@ -367,7 +367,6 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
           </div>
         </header>
         {/* 배분할 팀 — 가로 스크롤, 받은 구역명 표시 */}
-        <span className="asg-teambar-label">{msg('배분할 팀')}</span>
         <div className="asg-teambar">
           {teams.map((team) => {
             const isActive = team.id === activeTeamId
@@ -376,6 +375,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
               <button
                 key={team.id}
                 type="button"
+                aria-pressed={isActive}
                 className={`asg-teambar-card${isActive ? ' is-active' : ''}`}
                 style={{ borderColor: isActive ? teamHex(team.color) : undefined }}
                 onClick={() => dispatch({ type: 'SET_ACTIVE_TEAM', teamId: team.id })}
@@ -394,24 +394,22 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
         </div>
         {/* 뷰 토글 */}
         <div className="asg-zone-controls">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div className="asg-zone-navigation">
             {mainTab === '카드' && <div className="asg-zone-toggle" style={{ padding: 0, margin: 0, flexShrink: 0 }}>
-              <button className={view === 'list' ? 'is-on' : ''} onClick={() => setView('list')} type="button" style={{ padding: '6px 10px', fontSize: 12 }}>
+              <button className={view === 'list' ? 'is-on' : ''} onClick={() => setView('list')} type="button" aria-label={msg('목록')} title={msg('목록')} aria-pressed={view === 'list'}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                {msg('목록')}
               </button>
-              <button className={view === 'map' ? 'is-on' : ''} onClick={() => setView('map')} type="button" style={{ padding: '6px 10px', fontSize: 12 }}>
+              <button className={view === 'map' ? 'is-on' : ''} onClick={() => setView('map')} type="button" aria-label={msg('지도')} title={msg('지도')} aria-pressed={view === 'map'}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-                지도
               </button>
             </div>}
             
             {/* [카드][비공식][식당] 탭 — 라운드 네모 */}
-            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+            <div className="asg-zone-kind-tabs">
               {(['카드', '비공식', '식당'] as const).map((tb) => {
                 const on = mainTab === tb
                 return (
-                  <button key={tb} type="button" onClick={() => setMainTab(tb)}
+                  <button key={tb} type="button" aria-pressed={on} onClick={() => setMainTab(tb)}
                     style={{
                       minHeight: 0, padding: '6px 12px', borderRadius: 8, fontSize: 12.5, lineHeight: 1.2,
                       fontWeight: on ? 700 : 500, cursor: 'pointer',
@@ -500,15 +498,12 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
               <input type="checkbox" checked={unassignedOnly} onChange={(e) => setUnassignedOnly(e.target.checked)} />
               {msg('미배정만')}
             </label>
-            {mainTab === '카드' && (['전체', '주택', '상가'] as BuildingTypeFilter[]).map((t) => {
-              const on = buildingTypeFilter === t
-              return (
-                <button key={t} type="button" onClick={() => setBuildingTypeFilter(t)}
-                  style={{ minHeight: 0, flexShrink: 0, padding: '7px 10px', borderRadius: 8, fontSize: 12, fontWeight: on ? 700 : 500,
-                    border: on ? '1px solid var(--ink)' : '1px solid var(--line)', background: on ? 'var(--ink)' : 'var(--surface)', color: on ? '#fff' : 'var(--muted)', cursor: 'pointer' }}
-                >{t}</button>
-              )
-            })}
+            {mainTab === '카드' && <select className="asg-card-composition" aria-label={msg('카드 구성')}
+              value={buildingTypeFilter} onChange={(e) => setBuildingTypeFilter(e.target.value as BuildingTypeFilter)}>
+              {(['전체', '주택', '상가'] as BuildingTypeFilter[]).map((type) => (
+                <option key={type} value={type}>{msg('카드 구성')}: {msg(type)}</option>
+              ))}
+            </select>}
           </div>
 
           {/* 비공식 / 식당 — 구역 화면과 동일한 그룹 구성. 탭=토글(배정↔해제) */}

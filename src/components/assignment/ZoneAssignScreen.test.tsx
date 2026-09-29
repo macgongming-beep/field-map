@@ -6,7 +6,7 @@ import { testCard } from '../../test/territoryFixture'
 
 vi.mock('../MapCanvas', () => ({ MapCanvas: () => <div data-testid="assignment-map" /> }))
 
-function renderAssignment() {
+function renderAssignment(dispatch = vi.fn()) {
   return render(<ZoneAssignScreen
     teams={[{ id: 'team-1', name: '팀 1', color: 'blue', order: 0, cardIds: [], members: ['인도자'] }]}
     activeTeamId="team-1"
@@ -14,12 +14,29 @@ function renderAssignment() {
       testCard(1, '처인구 고림동 1', { region: '처인구', area: '고림동' }),
       testCard(2, '기흥구 구갈동 1', { region: '기흥구', area: '구갈동' }),
     ]}
-    buildings={[]} cardBoundaries={[]} canEdit dispatch={vi.fn()}
+    buildings={[]} cardBoundaries={[]} canEdit dispatch={dispatch}
     eventId={1} currentVisitor="인도자" onBack={vi.fn()}
     informalAssets={[{ id: 10, name: '경희대', kind: '비공식구역', imageUrl: '', imagePath: '',
       uploadedBy: '인도자', createdAt: '', archived: false, groupId: null }]}
   />)
 }
+
+test('팀원 헤더를 유지하고 구성 조회는 배분을 변경하지 않는다', () => {
+  const dispatch = vi.fn()
+  const { container } = renderAssignment(dispatch)
+  expect(container.querySelector('.asg-editor-titles')).toHaveTextContent('팀 1 · 인도자')
+  expect(screen.queryByText('배분할 팀')).not.toBeInTheDocument()
+  expect(container.querySelector('.asg-teambar-card')).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: '지도', exact: true })).toHaveAttribute('title', '지도')
+  fireEvent.click(screen.getByRole('button', { name: '목록', exact: true }))
+  fireEvent.change(screen.getByRole('combobox', { name: '카드 구성' }), { target: { value: '상가' } })
+  expect(screen.getByRole('combobox', { name: '카드 구성' })).toHaveValue('상가')
+  expect(dispatch).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: '비공식', exact: true }))
+  expect(screen.queryByRole('combobox', { name: '카드 구성' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '카드', exact: true }))
+  expect(screen.getByRole('combobox', { name: '카드 구성' })).toHaveValue('상가')
+})
 
 test('카드는 지도로 시작하고 비공식과 식당은 지도 토글 없는 목록으로 전환한다', () => {
   const { container } = renderAssignment()
