@@ -35,11 +35,27 @@ test('publishes the server read-start baseline only after the full snapshot succ
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(result.current.territoryRealtime.checkpoint.baseline).toBe('2026-09-30T12:00:00Z')
   state.clock.mockRejectedValueOnce(new Error('clock offline'))
+  state.reads = []
   await act(async () => {
-    await expect(result.current.refetchSlices(['buildings', 'visits'])).rejects.toThrow('clock offline')
+    await expect(result.current.refetchSlices(['buildings', 'visits'])).resolves.toBeUndefined()
   })
+  expect(state.reads).toContain('buildings')
+  expect(state.reads).toContain('visit_histories')
   expect(result.current.territoryRealtime.checkpoint.baseline).toBe('2026-09-30T12:00:00Z')
 })
+
+test.each(['RPC not found in schema cache', 'network unavailable'])(
+  'initial data still loads when the optional clock fails: %s', async (message) => {
+    vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+    state.clock.mockRejectedValue(new Error(message))
+    const { result } = renderHook(() => useStore(true))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.error).toBeNull()
+    expect(state.reads).toContain('buildings')
+    expect(state.reads).toContain('visit_histories')
+    expect(result.current.territoryRealtime.checkpoint.baseline).toBeNull()
+  },
+)
 
 test('concurrent recovery requests share building reads but mutation refreshes do not', async () => {
   const { result } = renderHook(() => useStore(true))

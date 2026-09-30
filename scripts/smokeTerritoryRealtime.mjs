@@ -157,6 +157,14 @@ try {
     if(params.get('scope')!==scope || params.get('cardIds')!==String(f.cardId) || params.get('return')!=='territory')throw Error('Map scope lost: '+b.url())
     report.push({searchScopePreserved:scope})
   }
+  await b.route('**/rest/v1/rpc/territory_sync_clock', route=>route.fulfill({
+    status:404,contentType:'application/json',body:JSON.stringify({code:'PGRST202',message:'synthetic missing clock RPC'}),
+  }))
+  await b.goto(`https://chinese-territory-app-demo.vercel.app/map?assignmentMap=${f.eventId}&assignmentCard=${f.cardId}`,{waitUntil:'networkidle'})
+  await b.getByText('주택 봉사',{exact:true}).waitFor()
+  await b.locator(`#building-card-${buildingId}`).waitFor()
+  report.push({initialClockFailureTolerated:true})
+  await b.unroute('**/rest/v1/rpc/territory_sync_clock')
   await b.screenshot({path:'/tmp/territory-realtime-peer.png',fullPage:true})
   report.push({peerRequests:realtimeRequests,bytes:realtimeRequests.reduce((n,r)=>n+r.bytes,0)})
   console.log(JSON.stringify(report,null,2))

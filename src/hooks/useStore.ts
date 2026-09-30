@@ -513,7 +513,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       // Capture BEFORE the reads, not after: changes during the snapshot must be recovered.
       const baseline = import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
         && slices.includes('buildings') && slices.includes('visits')
-        ? await fetchTerritoryClock() : null
+        ? await fetchTerritoryClock().catch(() => {
+          // Optional realtime metadata must never block the ordinary data load.
+          console.warn('[territory realtime] clock unavailable; keeping previous watermark')
+          return null
+        }) : null
 
       // buildings와 cards가 둘 다 요청되면 buildings 먼저 fetch (의존성)
       if (slices.includes('buildings') && slices.includes('cards')) {
