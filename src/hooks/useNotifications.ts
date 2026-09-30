@@ -1,9 +1,9 @@
 // 사용자별 알림 함 + 안 읽음 카운트 + Realtime
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { getAuthToken } from '../lib/authToken'
 import { isActiveChatLink } from '../lib/activeChat'
-import { subscribeWithRecovery } from '../lib/realtimeRecovery'
+import { useVisibleRefresh } from './useVisibleRefresh'
 
 export type NotificationType =
   | 'notice'
@@ -71,11 +71,6 @@ async function markReadSilently(notificationId: number) {
 export function useNotifications(userId: number | null | undefined) {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(false)
-  const channelIdRef = useRef(
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  )
 
   const fetchAll = useCallback(async () => {
     if (!userId) return
@@ -94,63 +89,23 @@ export function useNotifications(userId: number | null | undefined) {
       console.warn('[notifications] fetch failed:', error)
       return
     }
-    setNotifications((data as RawNotification[]).map(toNotification))
+    setNotifications((data as RawNotification[]).map((raw) => {
+      if (!raw.is_read && (raw.type === 'chat' || raw.type === 'mention') && isActiveChatLink(raw.link)) {
+        void markReadSilently(raw.id)
+        return toNotification({ ...raw, is_read: true })
+      }
+      return toNotification(raw)
+    }))
   }, [userId])
 
   // 초기 로드
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial authenticated RPC load.
     fetchAll()
   }, [fetchAll])
 
-  // Realtime 구독
-  useEffect(() => {
-    if (!userId) return
-    const channel = supabase
-      .channel(`notifications:user:${userId}:${channelIdRef.current}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const raw = payload.new as RawNotification
-          if ((raw.type === 'chat' || raw.type === 'mention') && isActiveChatLink(raw.link)) {
-            void markReadSilently(raw.id)
-            return
-          }
-          setNotifications((prev) => {
-            // 중복 방지
-            if (prev.some((n) => n.id === raw.id)) return prev
-            return [toNotification(raw), ...prev].slice(0, PAGE_SIZE)
-          })
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const raw = payload.new as RawNotification
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === raw.id ? toNotification(raw) : n))
-          )
-        }
-      )
-    // 재연결 시 끊긴 동안 도착한 알림 catch-up
-    subscribeWithRecovery(channel, () => { void fetchAll() })
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchAll 은 안정적, userId 변경 시에만 재구독
-  }, [userId])
+  // This private table is RPC-only; direct subscriptions fail the column filter.
+  useVisibleRefresh(Boolean(userId), fetchAll)
 
   // 안 읽음 카운트
   const unreadCount = useMemo(

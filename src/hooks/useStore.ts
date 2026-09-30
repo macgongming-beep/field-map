@@ -3,6 +3,7 @@ import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
+import { createCardBoundaryReader } from './cardBoundaryRecovery'
 import { supabase } from '../lib/supabase'
 import { trackFetch } from '../lib/perfTracker'
 import { withLoadDeadline } from '../lib/loadDeadline'
@@ -80,7 +81,6 @@ import type {
   RawVisitHistory,
   RawRestaurantRequest,
   RawServiceSession,
-  RawCardBoundary,
   RawNotice,
   RawUnit,
 } from './storeTransforms'
@@ -128,6 +128,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   const [serviceSessions, setServiceSessions] = useState<ServiceSession[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
   const [cardBoundaries, setCardBoundaries] = useState<CardBoundary[]>([])
+  const boundaryReader = useRef(createCardBoundaryReader())
   const [notices, setNotices] = useState<Notice[]>([])
   const [specialPeriods, setSpecialPeriods] = useState<SpecialPeriod[]>([])
   const [returnVisits, setReturnVisits] = useState<ReturnVisit[]>([])
@@ -193,7 +194,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   ]
 
   // 각 slice를 독립적으로 fetch. 페이로드 크기 누적 반환.
-  const fetchSlice = useCallback(async (slice: Slice): Promise<number> => {
+  const fetchSlice = useCallback(async (slice: Slice, recovery = false): Promise<number> => {
     let approxBytes = 0
     // ⚠ 운영에서는 측정하지 않는다 — 숫자 하나 얻으려고 440KB 를 통째로
     //   문자열로 바꾸는 비용이 구형 기기에서 그대로 체감된다
@@ -286,15 +287,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       }
 
       case 'cardBoundaries': {
-        const boundariesRes = await supabase.from('card_boundaries').select('card_id, points, updated_at')
-        measure(boundariesRes.data)
-        const transformedBoundaries = boundariesRes.error
-          ? []
-          : ((boundariesRes.data as RawCardBoundary[]).map(toCardBoundary).filter(Boolean) as CardBoundary[])
-        if (boundariesRes.error) {
-          console.warn('카드별 구역선 로드 실패 (card_boundaries 스키마 미적용 가능).', boundariesRes.error)
-        }
-        setCardBoundaries(transformedBoundaries)
+        const rows = await boundaryReader.current(recovery, measure)
+        if (rows) setCardBoundaries(rows.map(toCardBoundary).filter(Boolean) as CardBoundary[])
         return approxBytes
       }
 
@@ -514,8 +508,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
             console.warn('[territory recovery] delta unavailable; loading full buildings')
             return fetchSlice(slice)
           })
-        : fetchSlice(slice)
-      recoveryReads.set(slice, { promise, delta: Boolean(canRecoverBuildings) })
+        : fetchSlice(slice, Boolean(recovery))
+      recoveryReads.set(slice, { promise, delta: Boolean(canRecoverBuildings || (recovery && slice === 'cardBoundaries')) })
       const clear = () => { if (recoveryReads.get(slice)?.promise === promise) recoveryReads.delete(slice) }
       void promise.then(clear, clear)
       return promise

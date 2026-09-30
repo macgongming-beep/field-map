@@ -140,6 +140,9 @@ try {
     return r.url.startsWith('buildings?') && params.get('select') !== 'id' && !params.has('id')
   })
   if(fullBuildingReads(longReturnReads).length)throw Error('Long foreground fetched full building bodies')
+  const boundaryReads=requests.slice(beforeLongReturn).filter(r=>r.url.startsWith('card_boundaries?'))
+  if(boundaryReads.length!==1 || new URLSearchParams(boundaryReads[0].url.split('?')[1]).get('select')!=='card_id,updated_at')throw Error('Unchanged boundaries downloaded coordinates')
+  report.push({boundaryRecoveryRequests:boundaryReads.length,boundaryRecoveryBytes:boundaryReads[0].bytes,fullBoundaryReads:0})
   report.push({longForegroundBuildingRequests:longReturnReads.length,fullBuildingReads:0,bytes:longReturnReads.reduce((n,r)=>n+r.bytes,0),urls:longReturnReads.map(r=>r.url)})
 
   // Reconcile deletion while offline, plus a unit update/create not delivered live.

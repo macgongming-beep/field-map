@@ -288,7 +288,7 @@ export function useUserChats(
   // Phase 2: 채팅 도메인만 구독 (캘린더/배정은 useCalendarRealtime이 별도 처리)
   //
   // 채팅에 직접 관련된 신호만 구독:
-  //   - chat_read_status: 본인 읽음 상태 변경
+  //   - Private read receipts are recovered by the authenticated RPC polling below.
   //   - event_participants: 채팅방 참여 여부 변경 (가입·탈퇴·일정 삭제 cascade)
   //   - chat_message_signals: 새 메시지 신호
   //
@@ -305,7 +305,6 @@ export function useUserChats(
 
     let channel = supabase
       .channel(`user_chats:user:${userId}:${channelIdRef.current}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_read_status', filter: `user_id=eq.${userId}` }, trigger)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_participants', filter: `user_name=eq.${userName}` }, trigger)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_message_signals' }, trigger)
     if (CART_APPLICATIONS_ENABLED) {

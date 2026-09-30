@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import { testBuilding } from '../test/territoryFixture'
 
-const state = vi.hoisted(() => ({ changed: vi.fn(), clock: vi.fn(), index: vi.fn(), reads: [] as string[], block: null as null | Promise<void> }))
+const state = vi.hoisted(() => ({ changed: vi.fn(), clock: vi.fn(), index: vi.fn(), reads: [] as string[], boundaryColumns: [] as string[], block: null as null | Promise<void> }))
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock, fetchBuildingRecoveryIndex: state.index }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: () => Promise.resolve({ error: null }),
@@ -11,6 +11,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     const chain: Record<string, unknown> = {}
     let lookup = false
     for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq']) chain[name] = () => chain
+    chain.select = (columns: string) => { if (table === 'card_boundaries') state.boundaryColumns.push(columns); return chain }
     chain.limit = () => { lookup = true; return chain }
     chain.then = async (resolve: (r: unknown) => void) => {
       state.reads.push(table)
@@ -20,7 +21,18 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     return chain
   },
 } }))
-afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllEnvs(); state.reads = []; state.block = null })
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllEnvs(); state.reads = []; state.boundaryColumns = []; state.block = null })
+
+test('store recovery reads only boundary versions; manual refresh still reads points', async () => {
+  const { result } = renderHook(() => useStore(true))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.boundaryColumns).toEqual(['card_id, points, updated_at'])
+  state.boundaryColumns = []
+  await act(async () => { await result.current.refetchSlices(['cardBoundaries'], { triggeredBy: 'foreground' }) })
+  expect(state.boundaryColumns).toEqual(['card_id, updated_at'])
+  await act(async () => { await result.current.refetchSlices(['cardBoundaries'], { triggeredBy: 'mutation:boundary' }) })
+  expect(state.boundaryColumns.at(-1)).toBe('card_id, points, updated_at')
+})
 
 test('foreground and delayed reconnect use delta while manual refresh stays full', async () => {
   vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
