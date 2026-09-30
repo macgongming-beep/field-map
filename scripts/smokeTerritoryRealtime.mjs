@@ -135,8 +135,38 @@ try {
   await b.waitForTimeout(3000)
   await b.evaluate(()=>window.__restoreSmokeClock())
   const longReturnReads=requests.slice(beforeLongReturn).filter(r=>r.url.startsWith('buildings?'))
-  if(longReturnReads.length>3)throw Error(`Long foreground duplicated ${longReturnReads.length} building batches`)
-  report.push({longForegroundBuildingRequests:longReturnReads.length,urls:longReturnReads.map(r=>r.url)})
+  const fullBuildingReads = (reads) => reads.filter(r => {
+    const params=new URLSearchParams(r.url.split('?')[1])
+    return r.url.startsWith('buildings?') && params.get('select') !== 'id' && !params.has('id')
+  })
+  if(fullBuildingReads(longReturnReads).length)throw Error('Long foreground fetched full building bodies')
+  report.push({longForegroundBuildingRequests:longReturnReads.length,fullBuildingReads:0,bytes:longReturnReads.reduce((n,r)=>n+r.bytes,0),urls:longReturnReads.map(r=>r.url)})
+
+  // Reconcile deletion while offline, plus a unit update/create not delivered live.
+  // Use synthetic rows only; retain the first fixture for subsequent scope tests.
+  await contextB.setOffline(true)
+  await b.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))})
+  await b.waitForTimeout(300)
+  sql(`select set_config('app.suppress_notifications','true',true);
+    delete from public.buildings where id=${result.building_id} and name='동기화새건물-${run}';
+    update public.units set status='미방문' where building_id=${buildingId} and number='204';
+    insert into public.units(building_id,number,status,usage_type) values(${buildingId},'205','미방문','주택');`)
+  await b.waitForTimeout(300)
+  const beforeRecovery=requests.length
+  await contextB.setOffline(false)
+  await b.evaluate(()=>{
+    const now=Date.now; window.__restoreSmokeClock=()=>{Date.now=now}; Date.now=()=>now()+250000;
+    Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await b.waitForFunction(id=>!document.querySelector(`#building-card-${id}`),result.building_id,{timeout:15000})
+  if(!await rowB.locator('.unit-grid-row').count())await rowB.locator('.bld-row-head-btn').click()
+  await rowB.getByText('205',{exact:true}).waitFor({timeout:15000})
+  await b.waitForFunction(id=>document.querySelectorAll(`#building-card-${id} .unit-check-btn.ucb-absent`).length===1,buildingId,{timeout:15000})
+  await b.waitForTimeout(2000)
+  await b.evaluate(()=>window.__restoreSmokeClock())
+  const recoveryReads=requests.slice(beforeRecovery)
+  if(fullBuildingReads(recoveryReads).length)throw Error('Offline recovery fetched full building bodies')
+  report.push({offlineDeletionAndUnitChangesRecovered:true,fullBuildingReads:0,buildingRequests:recoveryReads.filter(r=>r.url.startsWith('buildings?'))})
   const outsideCard=Number(sql(`select id from public.cards where id<>${f.cardId} order by id limit 1`))
   await b.waitForTimeout(1000)
   const beforeOutside=requests.length

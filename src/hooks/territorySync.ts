@@ -49,3 +49,15 @@ export async function fetchTerritorySignals(cardIds: number[], since: string): P
     .select('building_id,card_id,revision,changed_at').in('card_id', cardIds)
     .gte('changed_at', since).order('building_id').order('card_id').range(from, to))
 }
+
+// Recovery covers the store, not only cards currently visible on a map. New cards
+// and deletions must be found even when their former card is no longer displayed.
+export async function fetchBuildingRecoveryIndex(since: string) {
+  if (!Number.isFinite(Date.parse(since))) throw new Error('A recovery watermark is required')
+  const signals = await pages<TerritorySignal>((from, to) => supabase.from('territory_change_signals')
+    .select('building_id,card_id,revision,changed_at').gte('changed_at', since)
+    .order('building_id').order('card_id').range(from, to))
+  const buildings = await pages<{ id: number }>((from, to) => supabase.from('buildings')
+    .select('id').order('id').range(from, to))
+  return { signals, ids: buildings.map((b) => b.id) }
+}

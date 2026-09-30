@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
+import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
 import { supabase } from '../lib/supabase'
 import { trackFetch } from '../lib/perfTracker'
 import { withLoadDeadline } from '../lib/loadDeadline'
@@ -122,6 +123,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   const buildingsRef = useRef<Building[]>([])
   const realtimeVersionsRef = useRef(new Map<number, number>())
   const territoryCheckpoint = useRef(createTerritoryCheckpoint()).current
+  const syncBuildingsRef = useRef<((ids: number[]) => Promise<void>) | null>(null)
   const [visitHistories, setVisitHistories] = useState<VisitHistory[]>([])
   const [serviceSessions, setServiceSessions] = useState<ServiceSession[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
@@ -485,25 +487,36 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
-  const recoveryReads = useRef(new Map<Slice, Promise<number>>()).current
+  const recoveryReads = useRef(new Map<Slice, { promise: Promise<number>; delta: boolean }>()).current
   const fetchSlices = useCallback((
     slices: Slice[],
     options?: { triggeredBy?: string },
   ): Promise<void> => {
     // Only recovery callers share reads. A post-mutation refresh must not join a
     // query that started before the write and could return an older snapshot.
-    const share = options?.triggeredBy === 'fetchAll' || options?.triggeredBy?.startsWith('realtime:')
+    const recovery = options?.triggeredBy === 'foreground' || options?.triggeredBy?.startsWith('realtime:')
+    const share = options?.triggeredBy === 'fetchAll' || recovery
     let reusedTerritoryRead = false
     const read = (slice: Slice) => {
       if (!share) return fetchSlice(slice)
       const existing = recoveryReads.get(slice)
-      if (existing) {
+      if (existing && (recovery || !existing.delta)) {
         if (slice === 'buildings' || slice === 'visits') reusedTerritoryRead = true
-        return existing
+        return existing.promise
       }
-      const promise = fetchSlice(slice)
-      recoveryReads.set(slice, promise)
-      const clear = () => { if (recoveryReads.get(slice) === promise) recoveryReads.delete(slice) }
+      const canRecoverBuildings = slice === 'buildings' && recovery
+        && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
+        && territoryCheckpoint.baseline && syncBuildingsRef.current
+      if (canRecoverBuildings) reusedTerritoryRead = true
+      const promise = canRecoverBuildings
+        ? recoverTerritoryBuildings(territoryCheckpoint, buildingsRef.current.map((b) => b.id), syncBuildingsRef.current!)
+          .catch(() => {
+            console.warn('[territory recovery] delta unavailable; loading full buildings')
+            return fetchSlice(slice)
+          })
+        : fetchSlice(slice)
+      recoveryReads.set(slice, { promise, delta: Boolean(canRecoverBuildings) })
+      const clear = () => { if (recoveryReads.get(slice)?.promise === promise) recoveryReads.delete(slice) }
       void promise.then(clear, clear)
       return promise
     }
@@ -556,7 +569,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   }, [fetchSlice, territoryCheckpoint, recoveryReads])
 
   // 기존 fetchAll: 모든 slice + auto_close 부수효과 유지 (100% 후방호환)
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (recovery = false) => {
     // 자동 종료 함수 호출 (5분 디바운스, 백그라운드 fire-and-forget)
     if (Date.now() - lastAutoCloseAtRef.current > 5 * 60 * 1000) {
       lastAutoCloseAtRef.current = Date.now()
@@ -569,7 +582,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     // Clear previous failure before reading, never erase a failure reported by a slice.
     setError(null)
     try {
-      await withLoadDeadline(fetchSlices(ALL_SLICES, { triggeredBy: 'fetchAll' }))
+      await withLoadDeadline(fetchSlices(ALL_SLICES, { triggeredBy: recovery ? 'foreground' : 'fetchAll' }))
       loadedOnceRef.current = true
     } catch (error) {
       console.error('[fetchAll] failed:', error)
@@ -591,6 +604,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       fetchStartedRef.current = false
       loadedOnceRef.current = false
       territoryCheckpoint.baseline = null
+      territoryCheckpoint.buildingsThrough = null
       territoryCheckpoint.cards.clear()
       territoryCheckpoint.applied.clear()
       setLoading(false)
@@ -624,11 +638,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   // PWA 백그라운드 → 포어그라운드 복귀 시 자동 갱신
   // (브라우저 새로고침이 없는 PWA에서 최신 데이터 확보)
   //
-  // Phase 4: 디바운스 10초 → 2분 완화.
-  // 근거: Realtime 채널이 백그라운드에서도 살아있으므로 visibility 자체로
-  //       추가 fetch할 이유가 약함. 진짜 새 데이터는 PullToRefresh로.
-  // 효과: 빠르게 탭 전환·앱 전환 시 불필요한 전체 fetchAll 방지.
-  //       (자주 화면 켰다 끄는 모바일 환경에서 큰 절감)
+  // Two-minute foreground cooldown. Buildings use delta recovery when a server
+  // baseline exists; other domains and explicit manual refresh remain unchanged.
   useEffect(() => {
     if (!enabled) return   // 로그인 전에는 창을 다시 켜도 받지 않는다
     let lastFetchAt = Date.now()
@@ -637,7 +648,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       if (document.hidden) return
       if (Date.now() - lastFetchAt < VISIBILITY_DEBOUNCE_MS) return
       lastFetchAt = Date.now()
-      void fetchAll().catch(() => { /* fetchAll exposes the failure on screen */ })
+      void fetchAll(true).catch(() => { /* fetchAll exposes the failure on screen */ })
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
@@ -698,6 +709,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)), ...data.histories.filter((h) => unitIds.has(h.unitId))]
       .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
   }, [applyBuildingsChange])
+
+  useEffect(() => { syncBuildingsRef.current = syncChangedBuildings }, [syncChangedBuildings])
 
   const territoryRealtime = useMemo(() => ({ sync: syncChangedBuildings, checkpoint: territoryCheckpoint }),
     [syncChangedBuildings, territoryCheckpoint])

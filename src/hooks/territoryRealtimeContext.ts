@@ -3,6 +3,7 @@ import { createContext } from 'react'
 export function createTerritoryCheckpoint() {
   return {
     baseline: null as string | null,
+    buildingsThrough: null as string | null,
     cards: new Map<number, string>(),
     applied: new Map<string, string>(),
     snapshot: null as Promise<void> | null,

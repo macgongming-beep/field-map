@@ -3,8 +3,8 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import { testBuilding } from '../test/territoryFixture'
 
-const state = vi.hoisted(() => ({ changed: vi.fn(), clock: vi.fn(), reads: [] as string[], block: null as null | Promise<void> }))
-vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock }))
+const state = vi.hoisted(() => ({ changed: vi.fn(), clock: vi.fn(), index: vi.fn(), reads: [] as string[], block: null as null | Promise<void> }))
+vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock, fetchBuildingRecoveryIndex: state.index }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: () => Promise.resolve({ error: null }),
   from: (table: string) => {
@@ -21,6 +21,57 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   },
 } }))
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllEnvs(); state.reads = []; state.block = null })
+
+test('foreground and delayed reconnect use delta while manual refresh stays full', async () => {
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+  state.clock.mockResolvedValue('2026-09-30T12:00:00Z')
+  state.index.mockResolvedValue({ signals: [], ids: [] })
+  const { result } = renderHook(() => useStore(true))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  const now = Date.now()
+  const date = vi.spyOn(Date, 'now').mockReturnValue(now + 125_000)
+  await act(async () => { window.dispatchEvent(new Event('focus')) })
+  await waitFor(() => expect(state.index).toHaveBeenCalledTimes(1))
+  expect(state.reads).not.toContain('buildings')
+  expect(state.reads).toContain('calendar_events')
+  await act(async () => { await result.current.refetchSlices(['buildings', 'cards'], { triggeredBy: 'realtime:unit-created-recovery' }) })
+  expect(state.index).toHaveBeenCalledTimes(2)
+  expect(state.reads).not.toContain('buildings')
+  await act(async () => { await result.current.refetchAll() })
+  expect(state.reads).toContain('buildings')
+  date.mockRestore()
+})
+
+test('failed delta falls back to a full read without advancing its cursor', async () => {
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+  state.clock.mockResolvedValue('2026-09-30T12:00:00Z')
+  state.index.mockRejectedValue(new Error('unavailable'))
+  const { result } = renderHook(() => useStore(true))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  await act(async () => { await result.current.refetchSlices(['buildings'], { triggeredBy: 'realtime:place-deletion-recovery' }) })
+  expect(state.reads).toContain('buildings')
+  expect(result.current.territoryRealtime.checkpoint.buildingsThrough).toBeNull()
+})
+
+test('manual refresh does not join an in-flight delta as if it were a full snapshot', async () => {
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+  state.clock.mockResolvedValue('2026-09-30T12:00:00Z')
+  let release!: (value: unknown) => void
+  state.index.mockImplementationOnce(() => new Promise((resolve) => { release = resolve }))
+  const { result } = renderHook(() => useStore(true))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  let delta!: Promise<void>
+  await act(async () => {
+    delta = result.current.refetchSlices(['buildings'], { triggeredBy: 'realtime:place-deletion-recovery' })
+  })
+  await waitFor(() => expect(state.index).toHaveBeenCalled())
+  await act(async () => { await result.current.refetchAll() })
+  expect(state.reads).toContain('buildings')
+  await act(async () => { release({ signals: [], ids: [] }); await delta })
+})
 
 test('publishes the server read-start baseline only after the full snapshot succeeds', async () => {
   vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
