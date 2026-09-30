@@ -66,3 +66,9 @@
 ## 운영 상태
 
 운영/요금제는 변경하지 않는다. 데모 확인과 리뷰 뒤 별도 승인으로 반영한다.
+
+- 앱 커밋 `8d2afd7`, 브랜치 `codex/assignment-view-polish`에 push.
+- 최종 데모 `dpl_7j541asPebnWT1KcX4MzfeSjyxFz` Ready 및 데모 alias 확인.
+- 최종 배포 재시험: 부재 동기화 1,005ms, 긴 복귀 ID 목록 515바이트/전체 건물
+  본문 0회, 오프라인 삭제/호수/상태 복구와 clock 실패 방어 통과. fixture 정리 완료.
+- 운영 main은 `f801a66` 유지. 이번 변경을 운영에 배포하지 않았다.
