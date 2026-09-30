@@ -23,7 +23,7 @@ const assets = [
 
 function mount(e = event, informalAssets = assets, legacy: EventInformalAssignment[] = []) {
   const onShare=vi.fn().mockResolvedValue(undefined)
-  render(<AssignmentEditor event={e} cards={[testCard(1,'카드 1')]} buildings={[]} cardBoundaries={[]}
+  render(<AssignmentEditor event={e} cards={[]} allCards={[testCard(1,'카드 1')]} buildings={[]} cardBoundaries={[]}
     currentVisitor="A" canEdit informalAssets={informalAssets} eventInformalAssignments={legacy}
     onClose={vi.fn()} onShare={onShare} />)
   return onShare

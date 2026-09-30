@@ -36,7 +36,7 @@ function formatEventDateTime(event: CalendarEvent): string {
 type Props = {
   event: CalendarEvent
   cards: TerritoryCard[]          // 인도자 담당 카드
-  allCards?: TerritoryCard[]       // 전체 카드 (식당 구 그룹용)
+  allCards: TerritoryCard[]       // 전체 카드 (선택 유효성 검사 및 식당 구 그룹용)
   buildings: Building[]
   visitHistories?: VisitHistory[]
   cardBoundaries: CardBoundary[]
@@ -58,7 +58,7 @@ type Props = {
   ) => Promise<void> | void
 }
 
-export function AssignmentEditor({ event, cards, allCards = [], buildings, visitHistories = [], cardBoundaries, currentVisitor, canEdit, informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onClose, onShare }: Props) {
+export function AssignmentEditor({ event, cards, allCards, buildings, visitHistories = [], cardBoundaries, currentVisitor, canEdit, informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onClose, onShare }: Props) {
   // 편집 시작 시점의 서버 공유시각 — 공유 때 충돌 감지에 사용 (P0-3)
   const [entrySharedAt] = useState<string | null>(event.assignmentSharedAt ?? null)
   // 진입 시 draft 결정 (lazy 1회). 충돌이면 server로 시작하고 모달 띄움.
@@ -156,8 +156,8 @@ export function AssignmentEditor({ event, cards, allCards = [], buildings, visit
   const legacyPersonalCount = import.meta.env.VITE_DEMO_MODE === 'true' && event.assignmentTeamInformal == null
     ? eventInformalAssignments.filter((a) => a.eventId === event.id && a.id > 0).length : 0
   const selectionIssues = useMemo(() => import.meta.env.VITE_DEMO_MODE === 'true'
-    ? assignmentSelectionIssues(teams, allCards.length ? allCards : cards, informalAssets) : [],
-  [teams, allCards, cards, informalAssets])
+    ? assignmentSelectionIssues(teams, allCards, informalAssets) : [],
+  [teams, allCards, informalAssets])
 
   const doShare = async () => {
     if (sharing || legacyPersonalCount > 0 || selectionIssues.length > 0) return

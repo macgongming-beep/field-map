@@ -1,4 +1,5 @@
--- Export assignment_team_informal first. This rollback does not recreate cleared personal assignments.
+-- Export assignment_team_informal first. Personal assignments cleared before the
+-- 20260930_1400 guard are not recreated by this rollback; the guard no longer clears them.
 -- Run this before _ROLLBACK_20260930_team_card_scope.sql, in a single transaction.
 do $$ begin
   if to_regprocedure('private.assign_scoped_cards_bulk_tx(uuid,integer,jsonb,text,text)') is null
