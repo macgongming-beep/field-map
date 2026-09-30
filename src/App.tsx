@@ -12,6 +12,7 @@ import { useStore } from './hooks/useStore'
 import { useCalendarRealtime } from './hooks/useCalendarRealtime'
 import { usePlaceDeletionRealtime } from './hooks/usePlaceDeletionRealtime'
 import { useUnitCreationRealtime } from './hooks/useUnitCreationRealtime'
+import { TerritoryRealtimeContext } from './hooks/territoryRealtimeContext'
 import { useAuth } from './hooks/useAuth'
 import type { Role } from './types'
 import type { AppLanguage } from './i18n'
@@ -164,6 +165,7 @@ function App() {
     refetchSlices,
     applyPlaceDeletionSignal,
     syncCreatedUnits,
+    syncChangedBuildings,
     // v2 신 배정 모델
     informalAssets,
     eventInformalAssignments,
@@ -227,7 +229,8 @@ function App() {
       void recoverCreatedUnits()
     })
   }, {
-    enabled: Boolean(user),
+    enabled: Boolean(user) && !(import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
+      && (location.pathname === '/map' || (location.pathname === '/zone' && new URLSearchParams(location.search).get('view') === 'map'))),
     onRecover: () => { void recoverCreatedUnits() },
   })
 
@@ -358,6 +361,7 @@ function App() {
           <AppLoading kind="screen" />
         }
       >
+        <TerritoryRealtimeContext.Provider value={syncChangedBuildings}>
         {isDesktop ? (
           <DesktopApp
             language={language}
@@ -583,6 +587,7 @@ function App() {
             />
           </div>
         )}
+        </TerritoryRealtimeContext.Provider>
       </Suspense>
     </>
   )

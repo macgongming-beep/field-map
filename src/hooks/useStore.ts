@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { teamInformalAssignments } from '../utils/teamInformalAssignments'
+import { fetchChangedBuildings } from './territorySync'
 import { supabase } from '../lib/supabase'
 import { trackFetch } from '../lib/perfTracker'
 import { withLoadDeadline } from '../lib/loadDeadline'
@@ -118,6 +119,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   // buildings는 cards transform에서 참조됨. fetchSlice가 useCallback([])이라
   // 클로저가 stale 가능 → ref로 항상 최신값 보장.
   const buildingsRef = useRef<Building[]>([])
+  const realtimeVersionsRef = useRef(new Map<number, number>())
   const [visitHistories, setVisitHistories] = useState<VisitHistory[]>([])
   const [serviceSessions, setServiceSessions] = useState<ServiceSession[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
@@ -625,6 +627,33 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     setCards((prevCards) => prevCards.map((card) => recomputeCardStats(card, buildingsRef.current)))
   }, [])
 
+  // Realtime updates only the affected buildings and their visit histories.
+  const syncChangedBuildings = useCallback(async (buildingIds: number[]) => {
+    const versions = new Map(buildingIds.map((id) => {
+      const version = (realtimeVersionsRef.current.get(id) ?? 0) + 1
+      realtimeVersionsRef.current.set(id, version)
+      return [id, version]
+    }))
+    const data = await fetchChangedBuildings(buildingIds)
+    // A previous map's in-flight read must not overwrite a newer map's response.
+    const ids = new Set(buildingIds.filter((id) => versions.get(id) === realtimeVersionsRef.current.get(id)))
+    const updated = data.buildings.filter((b) => ids.has(b.id))
+    const unitIds = new Set([
+      ...buildingsRef.current.filter((b) => ids.has(b.id)).flatMap((b) => b.units.map((u) => u.id)),
+      ...updated.flatMap((b) => b.units.map((u) => u.id)),
+    ])
+    const updatedById = new Map(updated.map((b) => [b.id, b]))
+    applyBuildingsChange((current) => {
+      const existing = new Set(current.map((b) => b.id))
+      return [
+        ...current.flatMap((b) => ids.has(b.id) ? (updatedById.has(b.id) ? [updatedById.get(b.id)!] : []) : [b]),
+        ...updated.filter((b) => !existing.has(b.id)),
+      ]
+    })
+    setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)), ...data.histories.filter((h) => unitIds.has(h.unitId))]
+      .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
+  }, [applyBuildingsChange])
+
   // 세대 추가/삭제
   const appendUnits = useCallback((buildingId: number, units: Unit[]) => {
     if (units.length === 0) return
@@ -899,6 +928,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     refetchSlices: fetchSlices,
     applyPlaceDeletionSignal,
     syncCreatedUnits,
+    syncChangedBuildings,
     cards,
     buildings,
     visitHistories,

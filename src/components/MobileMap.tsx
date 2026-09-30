@@ -37,6 +37,7 @@ import { classifyRestaurantPlaces, type ClassifiedRestaurantPlace } from '../uti
 import { getGeocodeCandidates } from '../utils/geocodeCandidates'
 import { candidateBuildingName, candidateBuildingType, candidateFirstUnitName } from '../utils/searchedPlaceDraft'
 import { informalAssetsForMap } from '../utils/informalAssets'
+import { useTerritoryRealtime } from '../hooks/useTerritoryRealtime'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
@@ -842,10 +843,17 @@ export function MobileMap({
     setSheetHeight(MIN_HEIGHT)
   }, [selectedCardId])
 
+  const appliedFocusedEntryRef = useRef<string | null>(null)
   useEffect(() => {
-    if (focusedBuildingId == null) return
+    if (focusedBuildingId == null) {
+      appliedFocusedEntryRef.current = null
+      return
+    }
+    const entryKey = `${focusedBuildingId}:${focusedUnitId ?? ''}`
+    if (appliedFocusedEntryRef.current === entryKey) return
     const building = buildings.find((item) => item.id === focusedBuildingId)
     if (!building) return
+    appliedFocusedEntryRef.current = entryKey
     setSelectedBuildingId(focusedBuildingId)
     setExpandedBuildingIds(new Set([focusedBuildingId]))
     const focusedUnit = focusedUnitId == null ? null : building.units.find((unit) => unit.id === focusedUnitId)
@@ -944,6 +952,7 @@ export function MobileMap({
     () => new Set(scopedCards.map((card) => card.id)),
     [scopedCards]
   )
+  useTerritoryRealtime(focusedInformalId != null ? [] : selectedCardId != null ? [selectedCardId] : [...scopedCardIds])
 
   const cardMap = useMemo(() => new Map(cards.map(c => [c.id, c])), [cards])
   const visitHistoriesByUnitId = useMemo(() => {
@@ -1491,7 +1500,7 @@ export function MobileMap({
     // 단 배정 지도의 범위(배정 일정·카드 → 봉사 유형)는 필터가 아니라 이 지도 자체다.
     // 지우면 주택·상가 봉사 지도가 일반 카드 지도로 바뀐다 (건물 추가 직후 실제로 그랬다).
     const next = new URLSearchParams()
-    for (const key of ['return', 'assignmentMap', 'assignmentCard']) {
+    for (const key of ['return', 'assignmentMap', 'assignmentCard', 'scope', 'cardIds']) {
       const value = searchParams.get(key)
       if (value) next.set(key, value)
     }

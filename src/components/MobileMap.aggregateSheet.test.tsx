@@ -716,6 +716,25 @@ describe('모바일 지도 하단 시트', () => {
   })
 
   // 나의 봉사 지도: 지도를 눌러 빈 건물을 만든 뒤, 서버가 정한 ID 로 그 건물을 찾아 첫 세대 입력을 연다
+  test('건물 직접 진입 뒤 실시간 갱신은 지도와 시트를 다시 이동시키지 않는다', async () => {
+    const setCenter = vi.fn()
+    ;(window as any).naver = { maps: {
+      LatLng: class { constructor(public lat: number, public lng: number) {} },
+      Point: class { constructor(public x: number, public y: number) {} },
+    } }
+    ;(window as any).__mobileMapInstance = { getZoom: () => 17, setCenter, panBy: vi.fn() }
+    const props = { ...mapProps(), focusedBuildingId: 1, regularVisitScope: true }
+    const tree = (p: unknown) => <MemoryRouter><MobileMap {...(p as never)} /></MemoryRouter>
+    const { rerender, container } = render(tree(props))
+    expect(setCenter).toHaveBeenCalledTimes(1)
+    const height = (container.querySelector('.mobile-bottom-sheet') as HTMLElement).style.height
+    rerender(tree({ ...props, buildings: props.buildings.map((b) => ({ ...b, units: b.units.map((u) => ({ ...u, status: '부재' })) })) }))
+    expect(setCenter).toHaveBeenCalledTimes(1)
+    expect((container.querySelector('.mobile-bottom-sheet') as HTMLElement).style.height).toBe(height)
+    rerender(tree({ ...props, focusedBuildingId: 2 }))
+    expect(setCenter).toHaveBeenCalledTimes(2)
+  })
+
   const addBuildingByTappingMap = async (onCreateBuilding: ReturnType<typeof vi.fn>) => {
     fireEvent.click(screen.getByRole('button', { name: 'start add building' }))
     fireEvent.click(screen.getByRole('button', { name: 'tap map add' }))
@@ -779,6 +798,22 @@ describe('모바일 지도 하단 시트', () => {
   // 지워지면 MobileHome 이 주택·상가 봉사 지도를 일반 카드 지도로 바꾼다.
   const LocationProbe = () => <output data-testid="location-search">{useLocation().search}</output>
   const assignmentEntry = '/map?assignmentMap=501&assignmentCard=1&return=assignment'
+
+  test.each(['mine', 'regularVisits'])('검색 후에도 %s 지도와 카드 범위를 유지한다', async (scope) => {
+    render(<MemoryRouter initialEntries={[`/map?scope=${scope}&cardIds=1,2&region=old&status=old&return=territory`]}>
+      <MobileMap {...(mapProps() as never)} /><LocationProbe />
+    </MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), { target: { value: '영덕빌라 101' } })
+    fireEvent.click(await screen.findByRole('button', { name: /영덕빌라 · 101호/ }))
+    await waitFor(() => expect(screen.getByTestId('selected-building-id')).toHaveTextContent('1'))
+    const params = new URLSearchParams(screen.getByTestId('location-search').textContent ?? '')
+    expect(params.get('scope')).toBe(scope)
+    expect(params.get('cardIds')).toBe('1,2')
+    expect(params.get('return')).toBe('territory')
+    expect(params.has('region')).toBe(false)
+    expect(params.has('status')).toBe(false)
+  })
 
   test.each([
     ['새 건물', { action: 'created' as const, buildingId: 98 }],

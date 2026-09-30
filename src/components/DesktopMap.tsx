@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 SDK(window.naver)는 공식 TS 타입이 없어 any 사용이 불가피함 */
 import { t, type AppLanguage, currentLang } from '../i18n';
 import { useEffect, useRef, useState, useMemo } from 'react'
+import { useTerritoryRealtime } from '../hooks/useTerritoryRealtime'
 import { MapCanvas } from './MapCanvas'
 import type { MapAggregateMarker } from './MapCanvas'
 import { SpecialPeriodBanner } from './SpecialPeriodBanner'
@@ -770,6 +771,8 @@ export function DesktopMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 필터 함수는 이미 포함된 필터 state만 참조함
     [buildings, cardMap, regionFilter, areaFilter, cardFilter, targetTypeFilter, statusFilter, chineseOnlyFilter, visitResultFilter]
   )
+  useTerritoryRealtime(cards.filter((card) => cardMatchesStructureFilters(card)
+    && (cardFilter === '전체' || card.id === cardFilter)).map((card) => card.id))
 
   const contextBuildings = useMemo(() =>
     buildings.filter((building) => {
