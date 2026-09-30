@@ -6,6 +6,7 @@ declare
   v_building integer;
   v_unit integer;
   v_revision bigint;
+  v_started timestamptz := public.territory_sync_clock();
 begin
   if has_table_privilege('anon','public.territory_change_signals','INSERT,UPDATE,DELETE,TRUNCATE')
     or has_function_privilege('anon','private.signal_territory_change()','EXECUTE')
@@ -16,7 +17,7 @@ begin
     select min(id), max(id) into v_card, v_other from public.cards;
     insert into public.buildings(card_id,name,address,type,lat,lng)
       values(v_card,'synthetic signal contract','synthetic signal contract','주택',37,127) returning id into v_building;
-    if not exists(select 1 from public.territory_change_signals where building_id=v_building) then
+    if not exists(select 1 from public.territory_change_signals where building_id=v_building and changed_at >= v_started) then
       raise exception 'Empty building did not signal';
     end if;
     select revision into v_revision from public.territory_change_signals where building_id=v_building;

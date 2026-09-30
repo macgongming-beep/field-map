@@ -165,7 +165,7 @@ function App() {
     refetchSlices,
     applyPlaceDeletionSignal,
     syncCreatedUnits,
-    syncChangedBuildings,
+    territoryRealtime,
     // v2 신 배정 모델
     informalAssets,
     eventInformalAssignments,
@@ -361,7 +361,7 @@ function App() {
           <AppLoading kind="screen" />
         }
       >
-        <TerritoryRealtimeContext.Provider value={syncChangedBuildings}>
+        <TerritoryRealtimeContext.Provider value={territoryRealtime}>
         {isDesktop ? (
           <DesktopApp
             language={language}

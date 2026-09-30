@@ -111,6 +111,32 @@ try {
   await b.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'))})
   await b.waitForFunction((id)=>document.querySelectorAll(`#building-card-${id} .unit-check-btn.ucb-absent`).length===2,buildingId,{timeout:45000})
   report.push({foregroundResubscribeRecovery:true})
+  await b.waitForTimeout(800)
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const before = requests.length
+    await b.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))})
+    await b.waitForTimeout(100)
+    await b.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'))})
+    await b.waitForTimeout(1500)
+    const reads = requests.slice(before).filter(r=>r.url.startsWith('buildings?'))
+    if (reads.length) throw Error(`Unchanged foreground downloaded ${reads.length} building batches`)
+    report.push({unchangedForegroundBuildingRequests:reads.length,cycle})
+  }
+  // Exercise the existing two-minute foreground refresh without waiting two minutes.
+  const beforeLongReturn = requests.length
+  await b.evaluate(()=>{
+    const now=Date.now
+    window.__restoreSmokeClock=()=>{Date.now=now}
+    Date.now=()=>now()+125000
+    Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await b.waitForTimeout(100)
+  await b.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'))})
+  await b.waitForTimeout(3000)
+  await b.evaluate(()=>window.__restoreSmokeClock())
+  const longReturnReads=requests.slice(beforeLongReturn).filter(r=>r.url.startsWith('buildings?'))
+  if(longReturnReads.length>3)throw Error(`Long foreground duplicated ${longReturnReads.length} building batches`)
+  report.push({longForegroundBuildingRequests:longReturnReads.length,urls:longReturnReads.map(r=>r.url)})
   const outsideCard=Number(sql(`select id from public.cards where id<>${f.cardId} order by id limit 1`))
   await b.waitForTimeout(1000)
   const beforeOutside=requests.length

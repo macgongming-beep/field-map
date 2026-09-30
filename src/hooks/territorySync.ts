@@ -34,8 +34,18 @@ export async function fetchChangedBuildings(ids: number[]) {
   }
 }
 
-export async function fetchTerritorySignalIds(cardIds: number[]): Promise<number[]> {
-  const rows = await pages<{ building_id: number }>((from, to) => supabase.from('territory_change_signals')
-    .select('building_id').in('card_id', cardIds).order('building_id').order('card_id').range(from, to))
-  return rows.map((row) => row.building_id)
+export type TerritorySignal = { building_id: number; card_id: number; revision: number | string; changed_at: string }
+
+export async function fetchTerritoryClock(): Promise<string> {
+  const { data, error } = await supabase.rpc('territory_sync_clock')
+  if (error) throw error
+  if (typeof data !== 'string' || !Number.isFinite(Date.parse(data))) throw new Error('Invalid territory clock')
+  return data
+}
+
+export async function fetchTerritorySignals(cardIds: number[], since: string): Promise<TerritorySignal[]> {
+  if (!Number.isFinite(Date.parse(since))) throw new Error('A recovery watermark is required')
+  return pages<TerritorySignal>((from, to) => supabase.from('territory_change_signals')
+    .select('building_id,card_id,revision,changed_at').in('card_id', cardIds)
+    .gte('changed_at', since).order('building_id').order('card_id').range(from, to))
 }

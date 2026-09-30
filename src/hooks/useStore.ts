@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { teamInformalAssignments } from '../utils/teamInformalAssignments'
-import { fetchChangedBuildings } from './territorySync'
+import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
+import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { supabase } from '../lib/supabase'
 import { trackFetch } from '../lib/perfTracker'
 import { withLoadDeadline } from '../lib/loadDeadline'
@@ -120,6 +121,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   // 클로저가 stale 가능 → ref로 항상 최신값 보장.
   const buildingsRef = useRef<Building[]>([])
   const realtimeVersionsRef = useRef(new Map<number, number>())
+  const territoryCheckpoint = useRef(createTerritoryCheckpoint()).current
   const [visitHistories, setVisitHistories] = useState<VisitHistory[]>([])
   const [serviceSessions, setServiceSessions] = useState<ServiceSession[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
@@ -483,35 +485,71 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
-  const fetchSlices = useCallback(async (
+  const recoveryReads = useRef(new Map<Slice, Promise<number>>()).current
+  const fetchSlices = useCallback((
     slices: Slice[],
     options?: { triggeredBy?: string },
   ): Promise<void> => {
-    const start = performance.now()
-    let totalBytes = 0
-
-    // buildings와 cards가 둘 다 요청되면 buildings 먼저 fetch (의존성)
-    if (slices.includes('buildings') && slices.includes('cards')) {
-      const buildingsBytes = await fetchSlice('buildings')
-      totalBytes += buildingsBytes
-      const remaining = slices.filter((s) => s !== 'buildings')
-      const bytesArr = await Promise.all(remaining.map((s) => fetchSlice(s)))
-      totalBytes += bytesArr.reduce((a, b) => a + b, 0)
-    } else {
-      const bytesArr = await Promise.all(slices.map((s) => fetchSlice(s)))
-      totalBytes = bytesArr.reduce((a, b) => a + b, 0)
+    // Only recovery callers share reads. A post-mutation refresh must not join a
+    // query that started before the write and could return an older snapshot.
+    const share = options?.triggeredBy === 'fetchAll' || options?.triggeredBy?.startsWith('realtime:')
+    let reusedTerritoryRead = false
+    const read = (slice: Slice) => {
+      if (!share) return fetchSlice(slice)
+      const existing = recoveryReads.get(slice)
+      if (existing) {
+        if (slice === 'buildings' || slice === 'visits') reusedTerritoryRead = true
+        return existing
+      }
+      const promise = fetchSlice(slice)
+      recoveryReads.set(slice, promise)
+      const clear = () => { if (recoveryReads.get(slice) === promise) recoveryReads.delete(slice) }
+      void promise.then(clear, clear)
+      return promise
     }
+    const work = async () => {
+      const start = performance.now()
+      let totalBytes = 0
+      // Capture BEFORE the reads, not after: changes during the snapshot must be recovered.
+      const baseline = import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
+        && slices.includes('buildings') && slices.includes('visits')
+        ? await fetchTerritoryClock() : null
 
-    const duration = Math.round(performance.now() - start)
-    trackFetch({
-      triggeredBy: options?.triggeredBy ?? 'fetchSlices',
-      slices,
-      approxBytes: totalBytes,
-      durationMs: duration,
-      timestamp: Date.now(),
-    })
-    // 에러 클리어는 fetchAll에서만 (부분 fetch는 다른 slice의 실패 상태를 가리지 않음)
-  }, [fetchSlice])
+      // buildings와 cards가 둘 다 요청되면 buildings 먼저 fetch (의존성)
+      if (slices.includes('buildings') && slices.includes('cards')) {
+        const buildingsBytes = await read('buildings')
+        totalBytes += buildingsBytes
+        const remaining = slices.filter((s) => s !== 'buildings')
+        const bytesArr = await Promise.all(remaining.map(read))
+        totalBytes += bytesArr.reduce((a, b) => a + b, 0)
+      } else {
+        const bytesArr = await Promise.all(slices.map(read))
+        totalBytes = bytesArr.reduce((a, b) => a + b, 0)
+      }
+
+      if (baseline && !reusedTerritoryRead && (!territoryCheckpoint.baseline || baseline > territoryCheckpoint.baseline)) {
+        territoryCheckpoint.baseline = baseline
+        territoryCheckpoint.cards.clear()
+        territoryCheckpoint.applied.clear()
+      }
+      const duration = Math.round(performance.now() - start)
+      trackFetch({
+        triggeredBy: options?.triggeredBy ?? 'fetchSlices',
+        slices,
+        approxBytes: totalBytes,
+        durationMs: duration,
+        timestamp: Date.now(),
+      })
+      // 에러 클리어는 fetchAll에서만 (부분 fetch는 다른 slice의 실패 상태를 가리지 않음)
+    }
+    const promise = work()
+    if (slices.includes('buildings') && slices.includes('visits')) {
+      territoryCheckpoint.snapshot = promise
+      const clear = () => { if (territoryCheckpoint.snapshot === promise) territoryCheckpoint.snapshot = null }
+      void promise.then(clear, clear)
+    }
+    return promise
+  }, [fetchSlice, territoryCheckpoint, recoveryReads])
 
   // 기존 fetchAll: 모든 slice + auto_close 부수효과 유지 (100% 후방호환)
   const fetchAll = useCallback(async () => {
@@ -548,6 +586,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       // 안 그러면 로그인 화면이 '데이터 불러오는 중' 에서 멈춘다 (App.tsx)
       fetchStartedRef.current = false
       loadedOnceRef.current = false
+      territoryCheckpoint.baseline = null
+      territoryCheckpoint.cards.clear()
+      territoryCheckpoint.applied.clear()
       setLoading(false)
       return
     }
@@ -574,7 +615,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     }).catch((error: unknown) => {
       console.error('[initial load] failed:', error)
     })
-  }, [fetchAll, enabled])
+  }, [fetchAll, enabled, territoryCheckpoint])
 
   // PWA 백그라운드 → 포어그라운드 복귀 시 자동 갱신
   // (브라우저 새로고침이 없는 PWA에서 최신 데이터 확보)
@@ -653,6 +694,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)), ...data.histories.filter((h) => unitIds.has(h.unitId))]
       .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
   }, [applyBuildingsChange])
+
+  const territoryRealtime = useMemo(() => ({ sync: syncChangedBuildings, checkpoint: territoryCheckpoint }),
+    [syncChangedBuildings, territoryCheckpoint])
 
   // 세대 추가/삭제
   const appendUnits = useCallback((buildingId: number, units: Unit[]) => {
@@ -924,6 +968,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   }
 
   return {
+    territoryRealtime,
     refetchAll: fetchAll,
     refetchSlices: fetchSlices,
     applyPlaceDeletionSignal,

@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from 'vitest'
-import { fetchChangedBuildings } from './territorySync'
+import { fetchChangedBuildings, fetchTerritorySignals } from './territorySync'
 const mock = vi.hoisted(() => ({ calls: [] as unknown[][], units: [] as unknown[] }))
 vi.mock('../lib/supabase', () => ({ supabase: { from: (table: string) => {
   const q: Record<string, unknown> = {}
@@ -12,6 +12,12 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: (table: string) => {
   return q
 } } }))
 beforeEach(() => { mock.calls.length = 0; mock.units = [] })
+test('recovery query always restricts both cards and server timestamp', async () => {
+  await fetchTerritorySignals([1, 2], '2026-09-30T12:00:00Z')
+  expect(mock.calls).toContainEqual(['territory_change_signals', 'in', 'card_id', [1, 2]])
+  expect(mock.calls).toContainEqual(['territory_change_signals', 'gte', 'changed_at', '2026-09-30T12:00:00Z'])
+  await expect(fetchTerritorySignals([1], '')).rejects.toThrow('watermark')
+})
 test('fetches only requested buildings/units/history and includes an empty building', async () => {
   const data = await fetchChangedBuildings([7])
   expect(data.buildings[0].units).toEqual([])

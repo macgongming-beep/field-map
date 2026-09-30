@@ -1,4 +1,5 @@
 -- Disable VITE_TERRITORY_REALTIME_ENABLED and deploy the client before rollback.
+drop function if exists public.territory_sync_clock();
 drop trigger if exists signal_territory_building on public.buildings;
 drop trigger if exists signal_territory_unit on public.units;
 drop trigger if exists signal_territory_history on public.visit_histories;

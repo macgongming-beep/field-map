@@ -4,6 +4,9 @@
 - 결정일: 2026-09-30
 - 관련: `20260930_2200_territory_realtime_signals.sql`, `useTerritoryRealtime`, `territorySync`
 
+복구 범위/비용 결정은 [0009](0009-territory-recovery-watermark.md)로 대체한다.
+아래 과거 신호 전체 복구와 실측 수치는 첫 구현의 기록이며 현재 동작이 아니다.
+
 ## 배경과 결정
 
 기존 `unit_creation_signals`는 새 세대만 알린다. 부재/만남/취소와 빈 건물 추가는
@@ -22,6 +25,7 @@ store callback을 사용하며 필터/선택 건물/지도 위치/시트 상태�
   건물 이동은 양쪽 카드에 신호를 남긴다. 건물/카드 삭제 시 FK cascade로 지워진다.
 - 같은 트랜잭션의 여러 세대/이력 변경은 한 번으로 합친다. 구버전 호환을 위해
   기존 생성·삭제 채널과 트리거를 유지한다.
+  건물 삭제 알림은 이 표가 아니라 기존 `place_change_signals` 채널이 담당한다.
 
 ## 사용량과 복구
 
