@@ -863,10 +863,11 @@ export function MobileMap({
   }, [buildings, focusedBuildingId, focusedUnitId, visitHistories, SELECTED_BUILDING_HEIGHT])
 
   useEffect(() => {
-    if (!isUserMap || focusedCardId != null || !activeServiceSession?.primaryCardId) return
+    // An explicit multi-card entry takes precedence over the active session's primary card.
+    if (!isUserMap || assignmentServiceMap || focusedCardIds.length > 0 || focusedCardId != null || !activeServiceSession?.primaryCardId) return
     setNavLevel('map')
     setSelectedCardId(activeServiceSession.primaryCardId)
-  }, [activeServiceSession?.primaryCardId, focusedCardId, isUserMap])
+  }, [activeServiceSession?.primaryCardId, assignmentServiceMap, focusedCardIds.length, focusedCardId, isUserMap])
 
   // focusedCardId/배정 화면에서 직접 진입했는지 여부 (뒤로가기 시 외부 네비게이션으로 돌아가기 위함)
   const enteredFromAssignment = searchParams.get('return') === 'assignment'

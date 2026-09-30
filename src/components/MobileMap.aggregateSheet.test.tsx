@@ -8,6 +8,7 @@ import { testBuilding, testCard, territoryProps } from '../test/territoryFixture
 import { MobileMap } from './MobileMap'
 import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight } from '../utils/mobileMapViewport'
 import type { InformalAsset } from '../types'
+import { getLocalDateString } from '../utils/dateUtils'
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
@@ -81,6 +82,19 @@ describe('모바일 지도 하단 시트', () => {
     eventRestaurantAssignments: [],
     calendarEvents: [],
     onBack: vi.fn(),
+  })
+
+  test('배정 전체 지도는 진행 중 세션의 대표 카드로 좁혀지지 않는다', async () => {
+    const props = { ...mapProps(), actualRole: 'user', currentVisitor: '봉사자',
+      assignmentServiceMap: true, focusedCardIds: [1, 2],
+      serviceSessions: [{ id: 1, userName: '봉사자', serviceDate: getLocalDateString(), status: 'active', primaryCardId: 1 }],
+    }
+    const view = render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: 'zoom close' }))
+    expect(screen.getByRole('button', { name: '지도 건물 영덕빌라' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '지도 건물 죽전빌라' })).toBeVisible()
+    view.rerender(<MemoryRouter><MobileMap {...({ ...props, serviceSessions: [...props.serviceSessions] } as never)} /></MemoryRouter>)
+    expect(screen.getByRole('button', { name: '지도 건물 죽전빌라' })).toBeVisible()
   })
 
   test('확대 수준에 따라 구에서 동, 건물 포인트 순서로 상세화한다', async () => {

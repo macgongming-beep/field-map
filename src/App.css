@@ -9724,6 +9724,29 @@ button:focus-visible {
   padding: 0 12px 12px;
 }
 
+.mobile-today-service-body > .assigned-service-map-button,
+.dms-assigned-card-list > .assigned-service-map-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.assigned-service-map-button svg { flex-shrink: 0; }
+.assigned-service-map-button span { min-width: 0; overflow-wrap: anywhere; }
+.assigned-service-map-button:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
 .mobile-today-service-body p {
   margin: 0 0 2px;
   color: var(--muted);

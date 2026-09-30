@@ -277,8 +277,9 @@ export function DesktopMyService({
                             </div>
                           ) : (
                             <>
-                              {onOpenAssignmentMap && assignedCards.length > 0 && <button type="button" onClick={() => onOpenAssignmentMap(event.id)}>
-                                {cardServiceLabel(assignedServiceScope(event, currentVisitor).scope)} · {msg('배정 구역 지도 보기')}
+                              {onOpenAssignmentMap && assignedCards.length > 0 && <button className="assigned-service-map-button" type="button" onClick={() => onOpenAssignmentMap(event.id)}>
+                                <span>{cardServiceLabel(assignedServiceScope(event, currentVisitor).scope)} · {msg('전체 지도')}</span>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z M9 3v15 M15 6v15" /></svg>
                               </button>}
                               {assignedCards.map((card) => (
                               <div className="dms-assigned-card" key={card.id}>

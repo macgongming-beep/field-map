@@ -4,6 +4,7 @@
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
 export const messagesEn: Record<string, string> = {
+  '전체 지도': 'Full map',
   '선택 해제': 'Deselect',
   '배정할 수 없는 선택': 'Unavailable selections',
   '{name} 선택 해제': 'Deselect {name}',
