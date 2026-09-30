@@ -25,7 +25,7 @@
 | [0008](0008-scoped-territory-realtime.md) | 운영 적용 | 지도 범위 안의 건물·방문 기록만 실시간 동기화한다 |
 | [0009](0009-territory-recovery-watermark.md) | 운영 적용 | 실시간 복구를 서버 시각 이후로 제한하고 겹친 조회를 공유한다 |
 | [0010](0010-building-recovery-egress.md) | 운영 적용 | 자동 복구의 전체 건물 본문 대신 변경 신호와 ID 목록을 대조한다 |
-| [0011](0011-boundary-recovery-and-private-subscriptions.md) | 데모 검증 중 | 구역선 변경분만 복구하고 비공개 표의 실패하는 구독을 제거한다 |
+| [0011](0011-boundary-recovery-and-private-subscriptions.md) | 운영 적용 | 구역선 변경분만 복구하고 비공개 표의 실패하는 구독을 제거한다 |
 
 ## 새 기록 틀
 
