@@ -1,6 +1,6 @@
 # 자동 복구의 전체 건물 다운로드 절감
 
-- 상태: 데모 검증 중
+- 상태: 운영 적용
 - 결정일: 2026-09-30
 - 관련 기능: useStore foreground / place deletion / unit creation recovery
 - DB 변경: 없음 (운영에 있는 0008/0009 신호 표와 clock 사용)
@@ -65,10 +65,19 @@
 
 ## 운영 상태
 
-운영/요금제는 변경하지 않는다. 데모 확인과 리뷰 뒤 별도 승인으로 반영한다.
+데모 검증과 외부 GO 리뷰 후 사용자의 운영 승인으로 앱만 반영했다.
+DB/요금제는 변경하지 않았다.
 
 - 앱 커밋 `8d2afd7`, 브랜치 `codex/assignment-view-polish`에 push.
 - 최종 데모 `dpl_7j541asPebnWT1KcX4MzfeSjyxFz` Ready 및 데모 alias 확인.
 - 최종 배포 재시험: 부재 동기화 1,005ms, 긴 복귀 ID 목록 515바이트/전체 건물
   본문 0회, 오프라인 삭제/호수/상태 복구와 clock 실패 방어 통과. fixture 정리 완료.
-- 운영 main은 `f801a66` 유지. 이번 변경을 운영에 배포하지 않았다.
+- 데모 검증 당시 운영 main은 `f801a66`이었다.
+
+### 운영 반영 (2026-09-30)
+
+- main `f801a66`에서 `f90103c`로 fast-forward. 앱 변경 `8d2afd7`과 검증 기록 포함.
+- 운영 배포 `dpl_7tKBVbZCPEGfAaykhd3f1xcpNDvA` Ready, 운영 주소 alias 확인.
+- 운영 HTML/JS HTTP 200 및 delta recovery / buildingsThrough / clock 실패 방어 확인.
+- 운영 clock/신호 조회 HTTP 200, Realtime SUBSCRIBED. 업무 자료 쓰기 없이 점검했다.
+- 이 배포의 월간 절감률은 아직 측정하지 않았다. 0009의 사용량 비교 기준을 따른다.
