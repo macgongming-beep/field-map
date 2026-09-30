@@ -126,7 +126,7 @@ try {
     await b.getByRole('button',{name:'통합 검색',exact:true}).click()
     await b.getByPlaceholder('구역, 건물, 주소, 식당 검색').fill(`동기화검증-${run} 203`)
     await b.getByRole('button',{name:new RegExp(`동기화검증-${run}.*203`)}).click()
-    await b.locator(`#building-card-${buildingId}.bld-expanded`).waitFor({timeout:5000})
+    await b.waitForFunction(() => Number.parseFloat(document.querySelector('.mobile-bottom-sheet').style.height) === Math.round(Math.max(170, Math.min(200, window.innerHeight * 0.16 + 50))), null, {timeout:5000})
     const params=new URL(b.url()).searchParams
     if(params.get('scope')!==scope || params.get('cardIds')!==String(f.cardId) || params.get('return')!=='territory')throw Error('Map scope lost: '+b.url())
     report.push({searchScopePreserved:scope})
