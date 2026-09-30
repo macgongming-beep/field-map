@@ -199,15 +199,13 @@ export function useNotifications(userId: number | null | undefined) {
   // 읽음 처리된 알림 전체 삭제
   const clearReadNotifications = useCallback(async () => {
     const token = getAuthToken()
-    console.log('[clearRead] userId:', userId, 'token:', token, 'hasRead:', notifications.some((n) => n.isRead))
     if (!userId || notifications.every((n) => !n.isRead)) return
     if (!token) return
     // 낙관적 갱신
     setNotifications((prev) => prev.filter((n) => !n.isRead))
-    const { error, data } = await supabase.rpc('clear_read_notifications', {
+    const { error } = await supabase.rpc('clear_read_notifications', {
       p_token: token,
     })
-    console.log('[clearRead] result:', { error, data })
     if (error) {
       console.error('[notifications] clearRead failed:', JSON.stringify(error))
       await fetchAll()
