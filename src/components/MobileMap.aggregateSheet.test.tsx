@@ -802,4 +802,51 @@ describe('모바일 지도 하단 시트', () => {
     expect(params.get('assignmentCard')).toBe('1')
     expect(params.get('return')).toBe('assignment')
   })
+
+  // 내 구역(scope=mine·cardIds)과 정기방문(scope=regularVisits) 지도도 같은 모양이다.
+  // scope 가 지워지면 MobileHome 이 정기방문 범위를 풀고, cardIds 가 지워지면
+  // 전도인의 카드 직접 진입(기록 가능)과 드릴 범위가 사라진다.
+  const scopedEntries = [
+    ['내 구역 지도', '/map?cardIds=1%2C2&scope=mine&region=%EA%B8%B0%ED%9D%A5%EA%B5%AC', { scope: 'mine', cardIds: '1,2' }],
+    ['정기방문 지도', '/map?scope=regularVisits', { scope: 'regularVisits', cardIds: null }],
+  ] as const
+
+  test.each(scopedEntries)('%s에서 검색한 건물로 이동해도 지도 범위(scope·cardIds)를 유지한다', async (_label, entry, expected) => {
+    const props = territoryProps({ ...mapProps(), focusedCardIds: expected.cardIds ? [1, 2] : [] })
+    render(
+      <MemoryRouter initialEntries={[entry]}>
+        <MobileMap {...(props as never)} />
+        <LocationProbe />
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+    fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), { target: { value: '영덕빌라 101' } })
+    fireEvent.click(screen.getByRole('button', { name: /영덕빌라 · 101호/ }))
+
+    await waitFor(() => expect(screen.getByTestId('selected-building-id')).toHaveTextContent('1'))
+    const params = new URLSearchParams(screen.getByTestId('location-search').textContent ?? '')
+    expect(params.get('scope')).toBe(expected.scope)
+    expect(params.get('cardIds')).toBe(expected.cardIds)
+    // 지역 필터는 검색 결과를 가리지 않도록 계속 지운다
+    expect(params.get('region')).toBeNull()
+  })
+
+  test('내 구역 지도에서 건물을 추가해 이동해도 scope·cardIds 를 유지한다', async () => {
+    const onCreateBuilding = vi.fn(async () => ({ action: 'created' as const, buildingId: 99 }))
+    const props = territoryProps({ ...mapProps(), focusedCardIds: [1, 2], onCreateBuilding })
+    const tree = (buildings: unknown[]) => (
+      <MemoryRouter initialEntries={['/map?cardIds=1%2C2&scope=mine']}>
+        <MobileMap {...({ ...props, buildings } as never)} />
+        <LocationProbe />
+      </MemoryRouter>
+    )
+    const { rerender } = render(tree(props.buildings))
+    await addBuildingByTappingMap(onCreateBuilding)
+    rerender(tree([...props.buildings, testBuilding(99, 1, '내 구역 빈 건물', [])]))
+
+    await waitFor(() => expect(screen.getByTestId('selected-building-id')).toHaveTextContent('99'))
+    const params = new URLSearchParams(screen.getByTestId('location-search').textContent ?? '')
+    expect(params.get('scope')).toBe('mine')
+    expect(params.get('cardIds')).toBe('1,2')
+  })
 })

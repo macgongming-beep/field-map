@@ -1490,8 +1490,9 @@ export function MobileMap({
     // 검색 결과는 현재 지역·상태 필터 밖에 있어도 보여야 한다.
     // 단 배정 지도의 범위(배정 일정·카드 → 봉사 유형)는 필터가 아니라 이 지도 자체다.
     // 지우면 주택·상가 봉사 지도가 일반 카드 지도로 바뀐다 (건물 추가 직후 실제로 그랬다).
+    // 내 구역(scope=mine·cardIds)·정기방문(scope=regularVisits) 지도의 범위도 같다.
     const next = new URLSearchParams()
-    for (const key of ['return', 'assignmentMap', 'assignmentCard']) {
+    for (const key of ['return', 'assignmentMap', 'assignmentCard', 'scope', 'cardIds']) {
       const value = searchParams.get(key)
       if (value) next.set(key, value)
     }
