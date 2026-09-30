@@ -27,7 +27,7 @@ insert into public.event_card_assignment_cards(event_id,user_name,card_id) value
 update public.calendar_events set assignment_status='shared',assignment_shared_at=clock_timestamp(),assignment_team_scopes='{"realtime-check":"주택"}',assignment_team_informal='{}' where id=${f.eventId};`)
 const buildingId=Number(sql(`insert into public.buildings(card_id,name,address,type,lat,lng) values(${f.cardId},'동기화검증-${run}','경기도 용인시 기흥구 데모동기화로 ${run}','주택',37.28,127.11) returning id`))
 sql(`insert into public.units(building_id,number,status,usage_type) values(${buildingId},'203','미방문','주택'),(${buildingId},'204','미방문','주택')`)
-const createdIds=[buildingId], report=[]
+const createdIds=[buildingId], report=[], privateSubscriptions=[]
 const browser=await chromium.launch({channel:'chrome',headless:true})
 try {
   const pages=[]
@@ -36,6 +36,15 @@ try {
     const user={id:f.actor.id,name:f.actor.name,loginId:f.actor.login_id,role:f.actor.role,authToken:f.token}
     await context.addInitScript(({user,token})=>{localStorage.setItem('auth_session',JSON.stringify(user));localStorage.setItem('auth_token',token);localStorage.setItem('currentVisitor',user.name)}, {user,token:f.token})
     const p=await context.newPage()
+    p.on('websocket', socket=>socket.on('framesent', ({payload})=>{
+      try {
+        const frame=JSON.parse(String(payload))
+        const body=Array.isArray(frame)?frame[4]:frame.payload
+        for(const change of body?.config?.postgres_changes??[]){
+          if(['notifications','chat_read_status'].includes(change.table))privateSubscriptions.push(change.table)
+        }
+      } catch {}
+    }))
     p.on('console', msg=>{if(['warning','error'].includes(msg.type()))console.log('browser warning:',msg.text().slice(0,600))})
     p.on('response',async r=>{if(r.url().includes('/rpc/quick_log') || r.url().includes('/rpc/record_'))console.log('record response',r.status(),(await r.text()).slice(0,600))})
     await p.goto(`https://chinese-territory-app-demo.vercel.app/map?assignmentMap=${f.eventId}&assignmentCard=${f.cardId}`,{waitUntil:'networkidle'})
@@ -46,6 +55,8 @@ try {
     pages.push(p)
   }
   const [a,b]=pages
+  if(privateSubscriptions.length)throw Error(`Private tables subscribed: ${privateSubscriptions.join(',')}`)
+  report.push({privateTableSubscriptions:0})
   // Await initial catch-up before measuring mutations, without refreshing either browser.
   await b.waitForTimeout(1500)
   const requests=[]

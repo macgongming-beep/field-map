@@ -1,6 +1,6 @@
 # Boundary recovery and private subscriptions
 
-- Status: demo validation pending; not released to production
+- Status: demo verified; not released to production
 - Date: 2026-10-01
 
 ## Evidence and decision
@@ -47,3 +47,19 @@ Mutations were reverted. Demo smoke also checks that a two-minute foreground
 return fetches the boundary manifest, not the coordinate payload.
 
 No DB schema, grants or policies are changed. Production rollout is separate.
+
+## Demo result (2026-10-01 KST)
+
+- App commit: 4dd0044. Deployment: dpl_8VUx3Cp4zdTo4y9aCtMs6TsjcTkG.
+- 1,094 tests / 153 files passed; lint and build passed.
+- Two independent browser contexts: visit status in 1,727ms, undo, empty
+  building creation, unit creation and offline deletion/update recovery passed.
+- Map position, zoom and sheet height stayed unchanged on status updates.
+- Outgoing websocket subscriptions to the two private tables: zero.
+- Two-minute foreground recovery: one boundary manifest response, 456 bytes,
+  zero full coordinate reads; building recovery remained ID-only (515 bytes).
+- Synthetic demo records were cleaned up by the smoke script.
+- The intentional missing-clock test returned 404; initial data still loaded.
+- Production read-only size comparison: 603 boundaries, summed JSON row sizes
+  742,096 bytes with coordinates vs 40,842 with IDs/versions, no null versions.
+  This is uncompressed JSON estimation, not billed egress or total-app savings.

@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest'
 import { createCardBoundaryReader } from './cardBoundaryRecovery'
 
-const db = vi.hoisted(() => ({ rows: [] as Array<{ card_id: number; points: unknown[]; updated_at: string | null }>, reads: [] as Array<{ columns: string; ids?: number[] }>, fail: 0 }))
+const db = vi.hoisted(() => ({ rows: [] as Array<{ card_id: number; points: unknown[]; updated_at: string | null }>, reads: [] as Array<{ columns: string; ids?: number[] }>, fail: 0, pause: null as Promise<void> | null }))
 vi.mock('../lib/supabase', () => ({ supabase: { from: () => ({
   select: (columns: string) => {
     let ids: number[] | undefined
@@ -12,6 +12,9 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: () => ({
         db.reads.push({ columns, ids })
         if (db.fail > 0) { db.fail--; return { data: null, error: new Error('offline') } }
         const rows = db.rows.filter((r) => !ids || ids.includes(r.card_id)).slice(from, to + 1)
+        const pause = db.pause
+        db.pause = null
+        if (pause) await pause
         return { data: rows.map((r) => columns.includes('points') ? { ...r } : { card_id: r.card_id, updated_at: r.updated_at }), error: null }
       },
     }
@@ -19,7 +22,21 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: () => ({
   },
 }) } }))
 const row = (id: number, version = 'v1') => ({ card_id: id, updated_at: version, points: [id, 2, 3] })
-beforeEach(() => { db.rows = [row(1), row(2)]; db.reads = []; db.fail = 0 })
+beforeEach(() => { db.rows = [row(1), row(2)]; db.reads = []; db.fail = 0; db.pause = null })
+
+test('late snapshot cannot overwrite a newer mutation refresh', async () => {
+  const read = createCardBoundaryReader()
+  let release!: () => void
+  db.pause = new Promise<void>((resolve) => { release = resolve })
+  const older = read(false, vi.fn())
+  db.rows = [row(1, 'v2')]
+  expect(await read(false, vi.fn())).toEqual(db.rows)
+  release()
+  expect(await older).toBeNull()
+  db.reads = []
+  expect(await read(true, vi.fn())).toEqual(db.rows)
+  expect(db.reads).toEqual([{ columns: 'card_id, updated_at', ids: undefined }])
+})
 
 test('unchanged recovery reads versions only; explicit refresh reads coordinates', async () => {
   const read = createCardBoundaryReader()
