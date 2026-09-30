@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { testBuilding, testCard, territoryProps } from '../test/territoryFixture'
 import { MobileMap } from './MobileMap'
@@ -774,4 +774,32 @@ describe('모바일 지도 하단 시트', () => {
       unregister()
     }
   }, 10_000)
+
+  // 건물로 데려가며 URL 을 새로 짜도, 배정 지도의 범위(배정 일정·카드)는 남아야 한다.
+  // 지워지면 MobileHome 이 주택·상가 봉사 지도를 일반 카드 지도로 바꾼다.
+  const LocationProbe = () => <output data-testid="location-search">{useLocation().search}</output>
+  const assignmentEntry = '/map?assignmentMap=501&assignmentCard=1&return=assignment'
+
+  test.each([
+    ['새 건물', { action: 'created' as const, buildingId: 98 }],
+    ['기존 건물', { action: 'existing' as const, buildingId: 98 }],
+  ])('%s로 이동해도 배정 지도 범위(assignmentMap·assignmentCard)를 유지한다', async (_label, response) => {
+    const onCreateBuilding = vi.fn(async () => response)
+    const props = territoryProps({ ...mapProps(), assignmentServiceMap: true, focusedCardIds: [1], onCreateBuilding })
+    const tree = (buildings: unknown[]) => (
+      <MemoryRouter initialEntries={[assignmentEntry]}>
+        <MobileMap {...({ ...props, buildings } as never)} />
+        <LocationProbe />
+      </MemoryRouter>
+    )
+    const { rerender } = render(tree(props.buildings))
+    await addBuildingByTappingMap(onCreateBuilding)
+    rerender(tree([...props.buildings, testBuilding(98, 1, '배정 안 빈 건물', [])]))
+
+    await waitFor(() => expect(screen.getByTestId('selected-building-id')).toHaveTextContent('98'))
+    const params = new URLSearchParams(screen.getByTestId('location-search').textContent ?? '')
+    expect(params.get('assignmentMap')).toBe('501')
+    expect(params.get('assignmentCard')).toBe('1')
+    expect(params.get('return')).toBe('assignment')
+  })
 })
