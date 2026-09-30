@@ -21,6 +21,18 @@ begin
   select assignment_shared_at::text into stamp from public.calendar_events where id=ev;
   insert into public.service_sessions(user_name,calendar_event_id,source,time_slot,service_date)
     values(other_name,ev,'assigned','오전','2099-01-01') returning id into sid;
+  -- Direct REST DELETE must not let an assigned member bypass the RPC role check.
+  update public.event_participants set role='입명' where event_id=ev and user_name=other_name;
+  perform set_config('request.headers',jsonb_build_object('x-session-token',member_tok)::text,true);
+  execute 'set local role anon';
+  delete from public.event_participants where event_id=ev and user_name=other_name;
+  execute 'reset role';
+  if not exists(select 1 from public.event_participants where event_id=ev and user_name=other_name)
+    or not exists(select 1 from public.event_card_assignments where event_id=ev and user_name=other_name)
+    or not exists(select 1 from public.service_sessions where id=sid and status='active') then
+    raise exception 'Direct assigned-member self DELETE bypassed authorization';
+  end if;
+  update public.event_participants set role='신청' where event_id=ev and user_name=other_name;
   execute 'set local role anon';
   begin
     perform public.remove_team_event_participant_tx(member_tok,ev,who,false,stamp);
