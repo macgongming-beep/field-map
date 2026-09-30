@@ -23,6 +23,8 @@ export const messagesEn: Record<string, string> = {
   '해당 세대가 없는 카드 {n}개를 배정에서 제외할까요?': 'Remove {n} cards with no matching units from this assignment?',
   '주택·상가 전체': 'Homes and businesses',
   '주택 봉사': 'Residential ministry',
+  '주택봉사': 'Residential ministry',
+  '상가봉사': 'Business ministry',
   '상가 봉사': 'Business ministry',
   '거점 1 · 대화장소 1': '1 meeting point · 1 conversation spot',
   '담당자': 'Assignee',

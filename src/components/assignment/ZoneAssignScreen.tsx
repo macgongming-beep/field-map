@@ -25,6 +25,7 @@ import { buildingHasUsage, scopeBuildingToUsage, unitsForUsage } from '../../uti
 import { scopeServiceBuildings } from '../../utils/cardServiceScope'
 
 type BuildingTypeFilter = '전체' | '주택' | '상가'
+const scopeLabel = (scope: BuildingTypeFilter) => msg(scope === '주택' ? '주택봉사' : scope === '상가' ? '상가봉사' : '전체')
 
 type Props = {
   teams: DraftTeam[]
@@ -416,7 +417,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
                 </span>
                 <span className="asg-teambar-zones" title={areas ?? undefined} style={areas ? undefined : { color: 'var(--warn, #b8862a)' }}>
                   {scopeEnabled && (team.cardIds.length > 0 || team.informalAssetIds?.length)
-                    ? [team.cardIds.length > 0 ? `${msg(team.cardScope ?? '전체')} · ${msg('카드 {n}개', { n: team.cardIds.length })}` : '',
+                    ? [team.cardIds.length > 0 ? `${scopeLabel(team.cardScope ?? '전체')} · ${msg('카드 {n}개', { n: team.cardIds.length })}` : '',
                       team.informalAssetIds?.length ? `${msg('비공식')} ${team.informalAssetIds.length}` : ''].filter(Boolean).join(' · ')
                     : areas ?? msg('구역 미배정')}
                 </span>
@@ -433,7 +434,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
                   disabled={!activeTeam || (!canEdit && buildingTypeFilter !== scope)}
                   onClick={() => {
                     if (buildingTypeFilter === scope || changeScope(scope)) setMainTab('카드')
-                  }}>{msg(scope)}</button>
+                  }}>{scopeLabel(scope)}</button>
               ))}
             </div>}
             <div className={`asg-zone-view-slot${mainTab !== '카드' ? ' is-empty' : ''}`}>
