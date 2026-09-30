@@ -4,7 +4,8 @@ export function getMobileMapSelectedSheetHeight(viewportHeight: number, regularV
 }
 
 export function getMobileMapSelectedPeekHeight(viewportHeight: number): number {
-  return Math.round(Math.max(118, Math.min(150, viewportHeight * 0.16)))
+  // Leave room for the handle, summary, three building lines and bottom safe area.
+  return Math.round(Math.max(170, Math.min(200, viewportHeight * 0.16 + 50)))
 }
 
 export function getMobileMapPinPanOffset(sheetHeight: number, topInset = 90): number {
