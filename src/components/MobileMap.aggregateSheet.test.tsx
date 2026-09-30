@@ -9,6 +9,7 @@ import { MobileMap } from './MobileMap'
 import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight } from '../utils/mobileMapViewport'
 import type { InformalAsset } from '../types'
 import { getLocalDateString } from '../utils/dateUtils'
+import { registerToastListener } from '../lib/toast'
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
@@ -339,7 +340,7 @@ describe('모바일 지도 하단 시트', () => {
         source: 'place',
       }],
     })
-    const onCreateBuilding = vi.fn(async () => true)
+    const onCreateBuilding = vi.fn(async () => ({ action: 'created' as const, buildingId: 93 }))
     const onAddUnit = vi.fn(async () => [9102])
     const props = territoryProps({ ...mapProps(), onCreateBuilding, onAddUnit })
     const { rerender } = render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
@@ -400,7 +401,7 @@ describe('모바일 지도 하단 시트', () => {
         source: 'place',
       }],
     })
-    const onCreateBuilding = vi.fn(async () => true)
+    const onCreateBuilding = vi.fn(async () => null)
     const onAddUnit = vi.fn(async () => [9103])
     const props = territoryProps({ ...mapProps(), buildings: [building], onCreateBuilding, onAddUnit })
     const { container } = render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
@@ -557,7 +558,7 @@ describe('모바일 지도 하단 시트', () => {
         source: 'address',
       }],
     })
-    const onCreateBuilding = vi.fn(async () => true)
+    const onCreateBuilding = vi.fn(async () => ({ action: 'created' as const, buildingId: 91 }))
     const onAddUnit = vi.fn(async () => [9101])
     const other = testBuilding(92, 1, '언동로 218')
     other.address = '경기도 용인시 기흥구 언동로 218'
@@ -713,4 +714,64 @@ describe('모바일 지도 하단 시트', () => {
       7, '명지로 106', building.address, undefined, undefined, '주택',
     ))
   })
+
+  // 나의 봉사 지도: 지도를 눌러 빈 건물을 만든 뒤, 서버가 정한 ID 로 그 건물을 찾아 첫 세대 입력을 연다
+  const addBuildingByTappingMap = async (onCreateBuilding: ReturnType<typeof vi.fn>) => {
+    fireEvent.click(screen.getByRole('button', { name: 'start add building' }))
+    fireEvent.click(screen.getByRole('button', { name: 'tap map add' }))
+    const addSheet = document.querySelector('.mm-building-edit-sheet') as HTMLElement
+    fireEvent.change(within(addSheet).getByRole('combobox'), { target: { value: '1' } })
+    fireEvent.click(within(addSheet).getByRole('button', { name: '추가' }))
+    await waitFor(() => expect(onCreateBuilding).toHaveBeenCalledTimes(1))
+  }
+
+  test('지도에서 직접 추가한 빈 건물은 서버가 정한 ID 로 찾아 첫 세대 입력을 연다', async () => {
+    const onCreateBuilding = vi.fn(async () => ({ action: 'created' as const, buildingId: 95 }))
+    const props = territoryProps({ ...mapProps(), onCreateBuilding })
+    const { container, rerender } = render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+    await addBuildingByTappingMap(onCreateBuilding)
+    expect(onCreateBuilding).toHaveBeenCalledWith(expect.objectContaining({ cardId: 1, lat: 37.276, lng: 127.119 }))
+
+    const created = testBuilding(95, 1, '새 건물', [])
+    rerender(<MemoryRouter><MobileMap {...({ ...props, buildings: [...props.buildings, created] } as never)} /></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByTestId('selected-building-id')).toHaveTextContent('95'))
+    const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
+    expect(await within(scroll).findByText('첫 세대를 등록해 주세요')).toBeVisible()
+  })
+
+  test('서버가 주소 표기가 다른 기존 건물을 돌려주면 그 건물로 데려간다', async () => {
+    const onCreateBuilding = vi.fn(async () => ({ action: 'existing' as const, buildingId: 96 }))
+    // 입력한 주소와 표기가 다르다 — 주소 문자열로 찾으면 못 찾는다
+    const existing = testBuilding(96, 1, '예전에 만든 빈 건물', [])
+    existing.address = '경기도 용인시 기흥구 영덕동 1-2'
+    const props = territoryProps({ ...mapProps(), onCreateBuilding })
+    const { container, rerender } = render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+    await addBuildingByTappingMap(onCreateBuilding)
+
+    rerender(<MemoryRouter><MobileMap {...({ ...props, buildings: [...props.buildings, existing] } as never)} /></MemoryRouter>)
+
+    await waitFor(() => expect(screen.getByTestId('selected-building-id')).toHaveTextContent('96'))
+    const scroll = container.querySelector('.mobile-sheet-scroll') as HTMLElement
+    expect(await within(scroll).findByText('첫 세대를 등록해 주세요')).toBeVisible()
+  })
+
+  test('저장된 건물이 이 지도의 범위 밖이면 멈춰 있지 않고 이유를 알려 준다', async () => {
+    const toasts: string[] = []
+    const unregister = registerToastListener((message) => { toasts.push(message) })
+    try {
+      const onCreateBuilding = vi.fn(async () => ({ action: 'created' as const, buildingId: 97 }))
+      const props = territoryProps({ ...mapProps(), onCreateBuilding })
+      render(<MemoryRouter><MobileMap {...(props as never)} /></MemoryRouter>)
+      await addBuildingByTappingMap(onCreateBuilding)
+
+      await waitFor(
+        () => expect(toasts).toContain('건물은 저장됐지만 지금 배정받은 범위 밖이라 이 지도에 보이지 않습니다.'),
+        { timeout: 6_000 },
+      )
+      expect(screen.getByTestId('selected-building-id')).not.toHaveTextContent('97')
+    } finally {
+      unregister()
+    }
+  }, 10_000)
 })

@@ -782,6 +782,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
 
   const {
     createBuilding,
+    createBuildingForPlacement,
     importBuildings,
     addUnitToBuilding,
     setBuildingAccess,
@@ -927,6 +928,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     deleteVisitHistory,
     createCard,
     createBuilding,
+    createBuildingForPlacement,
     importBuildings,
     addUnitToBuilding,
     setBuildingAccess,

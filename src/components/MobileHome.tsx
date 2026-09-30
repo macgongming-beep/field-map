@@ -20,6 +20,7 @@ import { PrivacyPolicy } from './PrivacyPolicy'
 import { MobileProfileSettings } from './MobileProfileSettings'
 import { UserMobileHome } from './UserMobileHome'
 import type { Building, CalendarEvent, CardBoundary, EndReturnVisitInput, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, InformalGroup, InformalKind, Notice, ReturnVisit, ReturnVisitLog, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot, Unit, UnitStatus, VisitHistory } from '../types'
+import type { CreateBuildingInput, CreatedBuildingResult } from '../hooks/storeMutations/buildings'
 // InformalCardsTab / RestaurantsTab 은 AdminMobileZone 내부에서 사용됨 (직접 import 불필요)
 import type { AuthUser, LoginLogRecord } from '../hooks/useAuth'
 import type { AppLanguage } from '../i18n'
@@ -363,7 +364,7 @@ export function MobileHome({
     assignments: Array<{ userName: string; cardId?: number | null; cardIds?: number[] | null }>,
     options?: { silentSuccess?: boolean; status?: 'confirmed' | 'shared' },
   ) => Promise<void> | void
-  onCreateBuilding: (input: { cardId: number; name: string; address: string; type: Building['type']; lat: number; lng: number }) => Promise<boolean>
+  onCreateBuilding: (input: CreateBuildingInput) => Promise<CreatedBuildingResult | null>
   onDeleteBuilding: (buildingId: number) => void
   onUpdateBuilding: (buildingId: number, name: string, address: string, lat?: number, lng?: number, type?: Building['type']) => Promise<boolean>
   /** 건물의 '세대를 다 파악함' 표시. 없으면 완료로 안 친다 (utils/buildingPin) */
@@ -699,7 +700,8 @@ export function MobileHome({
   )
   const mapBuildings = useMemo(
     () => {
-      if (assignmentMapId) return scopeServiceBuildings(buildings, assignedMap.ids, assignedMap.scope)
+      // 지도는 빈 건물도 보여 준다 — 방금 추가한 건물이 사라지면 첫 세대 등록으로 못 넘어간다
+      if (assignmentMapId) return scopeServiceBuildings(buildings, assignedMap.ids, assignedMap.scope, { includeEmptyOfScopeType: true })
       if (isRegularVisitMapScope) {
         return buildings
           .filter((building) => regularVisitVisibleBuildingIds.has(building.id))

@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { MapCanvas } from './MapCanvas'
 import type { MapAggregateMarker } from './MapCanvas'
 import type { Building, CalendarEvent, CardBoundary, EventRestaurantAssignment, InformalAsset, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot, Unit, UnitStatus, VisitHistory } from '../types'
+import type { CreateBuildingInput, CreatedBuildingResult } from '../hooks/storeMutations/buildings'
 import type { AppLanguage } from '../i18n'
 import { t, translateKoreanAddress, currentLang } from '../i18n'
 import { findCardForCoordinates } from '../utils/mapUtils'
@@ -42,6 +43,8 @@ type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
 type BuildingTypeFilter = '전체' | Building['type']
 
 const BUILDING_PIN_AUTO_ADJUST_MAX_METERS = 200
+/** 저장한 건물이 이 지도에 나타나기를 기다리는 시간. 넘기면 범위 밖으로 보고 알린다 */
+const PENDING_CREATED_BUILDING_TIMEOUT_MS = 4_000
 
 function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number): number {
   const earthRadius = 6_371_000
@@ -175,7 +178,7 @@ export function MobileMap({
   onBack: () => void
   onAddUnit: (buildingId: number, unitNumber: string | string[], usageType?: Building['type']) => Promise<number[] | false>
   onSetBuildingAccess: (buildingId: number, blocked: boolean, note?: string) => Promise<boolean>
-  onCreateBuilding: (input: { cardId: number; name: string; address: string; type: Building['type']; lat: number; lng: number }) => Promise<boolean>
+  onCreateBuilding: (input: CreateBuildingInput) => Promise<CreatedBuildingResult | null>
   onDeleteBuilding: (buildingId: number) => void
   onUpdateBuilding: (buildingId: number, name: string, address: string, lat?: number, lng?: number, type?: Building['type']) => Promise<boolean>
   onDeleteUnit: (buildingId: number, unitId: number) => void
@@ -613,8 +616,10 @@ export function MobileMap({
   const [addSearchCandidate, setAddSearchCandidate] = useState<ClassifiedRestaurantPlace | null>(null)
   const [addCardId, setAddCardId] = useState(cards[0]?.id ?? 1)
   const [pendingCreatedBuilding, setPendingCreatedBuilding] = useState<{
-    cardId: number
-    address: string
+    /** 서버가 정한 건물. 새로 만든 것이든 이미 있던 것이든 이 ID 로 찾는다 */
+    buildingId: number
+    /** 서버가 새로 만들지 않고 이미 있던 건물을 돌려줬다 */
+    existing: boolean
     firstUnit?: { name: string; type: Building['type'] }
   } | null>(null)
   const [geocoding, setGeocoding] = useState(false)
@@ -1330,8 +1335,8 @@ export function MobileMap({
       })
       if (created) {
         setPendingCreatedBuilding({
-          cardId: addCardId,
-          address: addAddress.trim(),
+          buildingId: created.buildingId,
+          existing: created.action === 'existing',
           firstUnit: addSearchCandidate ? { name: firstUnitName, type: addType } : undefined,
         })
         closeAddModal()
@@ -1545,12 +1550,23 @@ export function MobileMap({
 
   useEffect(() => {
     if (!pendingCreatedBuilding) return
-    const normalizedAddress = pendingCreatedBuilding.address.replace(/\s+/g, '').toLowerCase()
-    const building = buildings.find((item) =>
-      item.cardId === pendingCreatedBuilding.cardId
-      && item.address.replace(/\s+/g, '').toLowerCase() === normalizedAddress
-    )
-    if (!building) return
+    // 서버가 정한 건물 ID 로 찾는다. 예전에는 카드+주소 문자열로 찾아서, 서버가 표기가 다른
+    // 기존 건물을 돌려주면 끝내 못 찾고 멈췄다.
+    const building = buildings.find((item) => item.id === pendingCreatedBuilding.buildingId)
+    if (!building) {
+      // 목록은 저장 직후 이미 새로 받아 둔 상태다. 그래도 없다면 이 지도의 범위(배정 카드·봉사 유형)
+      // 밖이라는 뜻이다. 조용히 기다리게 두면 사용자는 다시 등록하다 "이미 있습니다" 에 갇힌다.
+      const timer = window.setTimeout(() => {
+        setPendingCreatedBuilding(null)
+        showToast(
+          pendingCreatedBuilding.existing
+            ? msg('같은 주소의 건물이 이미 있지만, 지금 배정받은 범위 밖이라 이 지도에 보이지 않습니다.')
+            : msg('건물은 저장됐지만 지금 배정받은 범위 밖이라 이 지도에 보이지 않습니다.'),
+          'info',
+        )
+      }, PENDING_CREATED_BUILDING_TIMEOUT_MS)
+      return () => window.clearTimeout(timer)
+    }
 
     const pending = pendingCreatedBuilding
     setPendingCreatedBuilding(null)

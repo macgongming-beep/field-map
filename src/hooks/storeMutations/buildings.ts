@@ -11,6 +11,21 @@ import { logServiceAction } from './serviceLog'
 import { msg } from '../../lib/msg'
 import { canonicalUnitNumber } from '../../utils/unitNumber'
 
+export type CreateBuildingInput = {
+  cardId: number
+  name: string
+  address: string
+  type: Building['type']
+  lat: number
+  lng: number
+}
+
+/**
+ * 서버가 새로 만들었거나(`created`), 같은 주소의 건물을 이미 갖고 있어 그 건물을 돌려줬다(`existing`).
+ * 어느 쪽이든 **서버가 정한 건물 ID** 를 싣는다 — 화면이 주소 문자열로 다시 찾지 않게.
+ */
+export type CreatedBuildingResult = { action: 'created' | 'existing'; buildingId: number }
+
 export function makeBuildingMutations(deps: {
   role: Role
   fetchAll: () => Promise<void>
@@ -30,22 +45,18 @@ export function makeBuildingMutations(deps: {
     role === 'leader' || role === 'admin' || role === 'developer'
   )
 
-  /** 성공하면 true, 실패하면 false. 이 계약이 화면까지 그대로 간다. */
-  const createBuilding = async (input: {
-    cardId: number
-    name: string
-    address: string
-    type: Building['type']
-    lat: number
-    lng: number
-  }): Promise<boolean> => {
+  /**
+   * create_building_tx 를 부르고 결과를 그대로 알려 준다. 실패는 null.
+   * `existing` 일 때는 알림만 띄우고 목록을 다시 받지 않는다 — 그건 부르는 쪽이 정한다.
+   */
+  const requestCreateBuilding = async (input: CreateBuildingInput): Promise<CreatedBuildingResult | null> => {
     if (!input.address.trim()) {
       showToast(msg('주소를 입력해 주세요.'), 'error')
-      return false
+      return null
     }
     if (!cards.some((card) => card.id === input.cardId)) {
       showToast(msg('건물을 추가할 카드를 찾지 못했습니다. 카드를 직접 선택해 주세요.'), 'error')
-      return false
+      return null
     }
     // 이름이 없으면 주소에서 자동 추출 (예: "언동로 213")
     const autoName = input.name.trim() || (() => {
@@ -58,7 +69,7 @@ export function makeBuildingMutations(deps: {
     const token = getAuthToken()
     if (!token) {
       showToast(msg('로그인 정보가 없습니다. 다시 로그인해 주세요.'), 'error')
-      return false
+      return null
     }
 
     const result = await supabase.rpc('create_building_tx', {
@@ -72,7 +83,7 @@ export function makeBuildingMutations(deps: {
     })
     if (result.error) {
       reportMutationError(msg('건물을 추가하지 못했습니다.'), result.error)
-      return false
+      return null
     }
 
     const response = result.data as {
@@ -89,20 +100,39 @@ export function makeBuildingMutations(deps: {
           : msg('이 주소에 이미 건물이 있습니다. 기존 건물을 열어 주세요.'),
         'info',
       )
-      return false
+      return response.building_id ? { action: 'existing', buildingId: response.building_id } : null
     }
     if (response?.action === 'ambiguous') {
       showToast(msg('같은 주소의 건물이 여러 개입니다. 기존 건물을 선택해 주세요.'), 'error')
-      return false
+      return null
     }
     if (!response?.ok || response.action !== 'created' || !response.building_id) {
       reportMutationError(msg('건물을 추가하지 못했습니다.'), { message: msg('서버 응답이 올바르지 않습니다.') })
-      return false
+      return null
     }
 
     await fetchAll()
     showToast(msg('"{autoName}" 건물이 추가됐습니다', { autoName: autoName }))
-    return true
+    return { action: 'created', buildingId: response.building_id }
+  }
+
+  /**
+   * PC 화면 계약: 성공하면 true, 실패하면 false.
+   * ⚠ 이미 있는 건물(`existing`)은 **만들지 않았으므로 false** 다. PC 는 true 를 받으면
+   *   "카드에 자동 배정됐습니다" 를 띄우므로, 여기서 true 를 주면 만들지도 않은 건물에 성공 알림이 뜬다.
+   */
+  const createBuilding = async (input: CreateBuildingInput): Promise<boolean> =>
+    (await requestCreateBuilding(input))?.action === 'created'
+
+  /**
+   * 지도에서 건물을 놓은 뒤 **그 건물로 데려가야 하는** 화면용 (나의 봉사 지도).
+   * 이미 있는 건물이면 목록을 다시 받아 그 건물 ID 를 돌려준다 — 예전에는 "이미 있습니다" 만
+   * 알리고 멈춰서, 앞서 만든 빈 건물이 지도에서 안 보이면 사용자가 다시 등록하다 같은 알림에 갇혔다.
+   */
+  const createBuildingForPlacement = async (input: CreateBuildingInput): Promise<CreatedBuildingResult | null> => {
+    const created = await requestCreateBuilding(input)
+    if (created?.action === 'existing') await fetchAll()
+    return created
   }
 
   const importBuildings = async (inputs: CsvBuildingImport[]) => {
@@ -525,6 +555,7 @@ export function makeBuildingMutations(deps: {
 
   return {
     createBuilding,
+    createBuildingForPlacement,
     importBuildings,
     addUnitToBuilding,
     setBuildingAccess,

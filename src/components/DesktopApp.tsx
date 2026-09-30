@@ -413,7 +413,7 @@ export function DesktopApp({
     [cards, isUserMapScope, userVisibleMapCardIds, assignmentMapId, assignedMap.ids],
   )
   const mapBuildings = useMemo(
-    () => assignmentMapId ? scopeServiceBuildings(buildings, assignedMap.ids, assignedMap.scope) : isUserMapScope ? buildings.filter((building) => userVisibleMapCardIds.has(building.cardId)) : buildings,
+    () => assignmentMapId ? scopeServiceBuildings(buildings, assignedMap.ids, assignedMap.scope, { includeEmptyOfScopeType: true }) : isUserMapScope ? buildings.filter((building) => userVisibleMapCardIds.has(building.cardId)) : buildings,
     [buildings, isUserMapScope, userVisibleMapCardIds, assignmentMapId, assignedMap.ids, assignedMap.scope],
   )
   const mapCardBoundaries = useMemo(

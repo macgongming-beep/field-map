@@ -108,6 +108,7 @@ function App() {
     moveTerritoryRegion,
     deleteTerritoryRegion,
     createBuilding,
+    createBuildingForPlacement,
     importBuildings,
     addUnitToBuilding,
     setBuildingAccess,
@@ -514,7 +515,7 @@ function App() {
               onDeleteNotice={deleteNotice}
               onAddUnit={addUnitToBuilding}
               onSetBuildingAccess={setBuildingAccess}
-              onCreateBuilding={createBuilding}
+              onCreateBuilding={createBuildingForPlacement}
               onDeleteBuilding={deleteBuilding}
               onUpdateBuilding={updateBuilding}
               onSetUnitsSurveyed={setUnitsSurveyed}

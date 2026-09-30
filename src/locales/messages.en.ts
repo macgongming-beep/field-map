@@ -50,6 +50,8 @@ export const messagesEn: Record<string, string> = {
   '카드를 선택하세요': 'Select a card',
   '구역선으로 카드를 정하지 못했습니다. 실제 카드를 선택해 주세요.': 'A card could not be determined from the boundary. Select the correct card.',
   '이미 등록된 건물입니다: {name}': 'This building is already registered: {name}',
+  '같은 주소의 건물이 이미 있지만, 지금 배정받은 범위 밖이라 이 지도에 보이지 않습니다.': 'A building already exists at this address, but it is outside your current assignment, so it is not shown on this map.',
+  '건물은 저장됐지만 지금 배정받은 범위 밖이라 이 지도에 보이지 않습니다.': 'The building was saved, but it is outside your current assignment, so it is not shown on this map.',
   '이 주소에 이미 건물이 있습니다. 기존 건물을 열어 주세요.': 'A building already exists at this address. Open the existing building.',
   '같은 주소의 건물이 여러 개입니다. 기존 건물을 선택해 주세요.': 'Multiple buildings use this address. Select an existing building.',
   '서버 응답이 올바르지 않습니다.': 'The server response is invalid.',

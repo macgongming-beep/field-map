@@ -74,3 +74,41 @@ describe('건물 등록 RPC', () => {
     expect(state.toast).toHaveBeenCalledWith('같은 주소의 건물이 여러 개입니다. 기존 건물을 선택해 주세요.', 'error')
   })
 })
+
+// 나의 봉사 지도용. 저장 뒤 그 건물로 데려가야 하므로 서버가 정한 건물 ID 가 필요하다.
+describe('지도 배치용 건물 등록 (createBuildingForPlacement)', () => {
+  beforeEach(() => {
+    state.rpc.mockReset()
+    state.toast.mockReset()
+    state.error.mockReset()
+    state.fetchAll.mockReset()
+  })
+
+  test('새로 만들면 서버가 정한 건물 ID 를 돌려주고 목록은 한 번만 받는다', async () => {
+    state.rpc.mockResolvedValue({ data: { ok: true, action: 'created', building_id: 91 }, error: null })
+    await expect(mutations().createBuildingForPlacement(input)).resolves.toEqual({ action: 'created', buildingId: 91 })
+    expect(state.fetchAll).toHaveBeenCalledTimes(1)
+  })
+
+  test('이미 있는 건물이면 목록을 다시 받고 그 건물 ID 를 돌려준다 — 사용자가 그 건물로 가게', async () => {
+    state.rpc.mockResolvedValue({ data: { ok: true, action: 'existing', building_id: 7 }, error: null })
+    await expect(mutations().createBuildingForPlacement(input)).resolves.toEqual({ action: 'existing', buildingId: 7 })
+    // 예전에는 "이미 있습니다" 만 띄우고 멈춰, 앞서 만든 빈 건물이 지도에서 안 보이면 다시 등록하다 갇혔다
+    expect(state.fetchAll).toHaveBeenCalledTimes(1)
+  })
+
+  test('같은 입력이라도 PC 용 createBuilding 은 이미 있는 건물을 성공으로 보지 않는다', async () => {
+    state.rpc.mockResolvedValue({ data: { ok: true, action: 'existing', building_id: 7 }, error: null })
+    const m = mutations()
+    await expect(m.createBuilding(input)).resolves.toBe(false)
+    await expect(m.createBuildingForPlacement(input)).resolves.toMatchObject({ buildingId: 7 })
+  })
+
+  test('후보가 여러 개거나 서버 응답이 틀리면 null — 엉뚱한 건물로 데려가지 않는다', async () => {
+    state.rpc.mockResolvedValueOnce({ data: { ok: false, action: 'ambiguous', candidate_ids: [7, 8] }, error: null })
+    await expect(mutations().createBuildingForPlacement(input)).resolves.toBeNull()
+    state.rpc.mockResolvedValueOnce({ data: { ok: true, action: 'existing' }, error: null })
+    await expect(mutations().createBuildingForPlacement(input)).resolves.toBeNull()
+    expect(state.fetchAll).not.toHaveBeenCalled()
+  })
+})
