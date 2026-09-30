@@ -18,6 +18,8 @@ import { ZoneAssignScreen } from './ZoneAssignScreen'
 import { showToast } from '../../lib/toast'
 import { pushBackHandler } from '../../lib/backStack'
 import { msg } from '../../lib/msg'
+import { assignmentSelectionIssues } from '../../utils/assignmentSelectionIssues'
+import { AssignmentSelectionIssues } from './AssignmentSelectionIssues'
 
 // "5/29 (금) 10:00 · 봉사 모임" 형식
 function formatEventDateTime(event: CalendarEvent): string {
@@ -151,8 +153,14 @@ export function AssignmentEditor({ event, cards, allCards = [], buildings, visit
     return teams.filter((t) => t.members.length > 0 && t.cardIds.length === 0 && !hasWork(t.members))
   }, [teams, informalHere, restaurantHere])
 
+  const legacyPersonalCount = import.meta.env.VITE_DEMO_MODE === 'true' && event.assignmentTeamInformal == null
+    ? eventInformalAssignments.filter((a) => a.eventId === event.id && a.id > 0).length : 0
+  const selectionIssues = useMemo(() => import.meta.env.VITE_DEMO_MODE === 'true'
+    ? assignmentSelectionIssues(teams, allCards.length ? allCards : cards, informalAssets) : [],
+  [teams, allCards, cards, informalAssets])
+
   const doShare = async () => {
-    if (sharing) return
+    if (sharing || legacyPersonalCount > 0 || selectionIssues.length > 0) return
     setConfirmShare(false)
     setSharing(true)
     let conflicted = false
@@ -175,7 +183,7 @@ export function AssignmentEditor({ event, cards, allCards = [], buildings, visit
   }
 
   const handleShare = () => {
-    if (sharing) return
+    if (sharing || legacyPersonalCount > 0 || selectionIssues.length > 0) return
     // 구역 미배정 팀이 있으면 경고 (그 팀은 공유 시 보존 안 됨)
     if (emptyTeams.length > 0) {
       setConfirmShare(true)
@@ -242,6 +250,13 @@ export function AssignmentEditor({ event, cards, allCards = [], buildings, visit
         </div>
       </header>
 
+      {legacyPersonalCount > 0 && <p className="asg-selection-issues" role="alert">
+        {msg('개인 비공식 배정 {n}건이 남아 있어 공유할 수 없습니다. 기존 배정은 보존됩니다.', { n: legacyPersonalCount })}
+      </p>}
+      <AssignmentSelectionIssues issues={selectionIssues} canEdit={canEdit && !sharing} onRemove={(issue) => {
+        if (issue.kind === 'card') dispatch({ type: 'UNASSIGN_CARD', teamId: issue.teamId, cardId: issue.id })
+        else dispatch({ type: 'TOGGLE_TEAM_INFORMAL', teamId: issue.teamId, assetId: issue.id })
+      }} />
       <TeamBuildScreen
         eventId={event.id}
         participants={participants}
@@ -259,7 +274,7 @@ export function AssignmentEditor({ event, cards, allCards = [], buildings, visit
 
       {canEdit && (
         <div className="asg-editor-footer">
-          <button className="asg-share-btn" onClick={handleShare} disabled={sharing || teams.length === 0} type="button">
+          <button className="asg-share-btn" onClick={handleShare} disabled={sharing || teams.length === 0 || legacyPersonalCount > 0 || selectionIssues.length > 0} type="button">
             {sharing ? msg('공유 중...') : msg('배정 공유')}
           </button>
         </div>

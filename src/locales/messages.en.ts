@@ -4,6 +4,10 @@
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
 export const messagesEn: Record<string, string> = {
+  '선택 해제': 'Deselect',
+  '배정할 수 없는 선택': 'Unavailable selections',
+  '{name} 선택 해제': 'Deselect {name}',
+  '개인 비공식 배정 {n}건이 남아 있어 공유할 수 없습니다. 기존 배정은 보존됩니다.': 'Cannot share while {n} personal informal assignments remain. Existing assignments are preserved.',
   '데모 미리보기 · 가상 자료 · 실제 저장 없음': 'Demo preview · Sample data · Not saved',
   '데모 홈': 'Demo home',
   '미리보기 화면': 'Preview screen',

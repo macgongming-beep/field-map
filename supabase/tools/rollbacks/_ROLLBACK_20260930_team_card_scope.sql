@@ -1,4 +1,11 @@
 -- Back up calendar_events first. This removes scope metadata, not cards or visits.
+-- Required order: team_informal_assignments, then team_card_scope.
+do $$ begin
+  if to_regprocedure('public.assign_team_service_bulk_tx(uuid,integer,jsonb,text,text)') is not null
+    or to_regprocedure('private.assign_scoped_cards_bulk_tx(uuid,integer,jsonb,text,text)') is not null then
+    raise exception '비공식 롤백을 먼저 실행하세요 (team_informal_assignments → team_card_scope)';
+  end if;
+end $$;
 drop policy if exists scoped_assignment_rpc_insert on public.event_card_assignments;
 drop policy if exists scoped_assignment_rpc_update on public.event_card_assignments;
 drop policy if exists scoped_assignment_rpc_delete on public.event_card_assignments;

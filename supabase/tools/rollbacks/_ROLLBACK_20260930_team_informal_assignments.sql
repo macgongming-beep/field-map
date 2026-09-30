@@ -1,4 +1,13 @@
 -- Export assignment_team_informal first. This rollback does not recreate cleared personal assignments.
+-- Run this before _ROLLBACK_20260930_team_card_scope.sql, in a single transaction.
+do $$ begin
+  if to_regprocedure('private.assign_scoped_cards_bulk_tx(uuid,integer,jsonb,text,text)') is null
+    or to_regprocedure('private.assign_cards_bulk_tx(uuid,integer,jsonb,text,text)') is null
+    or not exists(select 1 from information_schema.columns where table_schema='public'
+      and table_name='calendar_events' and column_name='assignment_team_scopes') then
+    raise exception '비공식 롤백 선행 조건이 맞지 않습니다. 변경 없이 중단합니다';
+  end if;
+end $$;
 do $$ declare t text; begin
   foreach t in array array['event_informal_assignments','event_card_assignments','event_card_assignment_cards'] loop
     execute format('drop policy team_service_rpc_insert on public.%I',t);
