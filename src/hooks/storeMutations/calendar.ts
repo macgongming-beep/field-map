@@ -1,3 +1,4 @@
+import { teamServiceEnabled } from '../../config/teamService'
 import type { CalendarEvent } from '../../types'
 import { supabase, showToast, reportMutationError, getCurrentVisitor, ensureAffectedRows } from './shared'
 import { logServiceAction } from './serviceLog'
@@ -49,7 +50,7 @@ export function makeCalendarMutations(deps: {
 }) {
   const { fetchAll, refetchAfterParticipantRemoval, calendarEvents } = deps
 
-  const usesTeamAssignments = (event?: CalendarEvent) => import.meta.env.VITE_DEMO_MODE === 'true'
+  const usesTeamAssignments = (event?: CalendarEvent) => teamServiceEnabled()
     && !!event && (event.assignmentTeamInformal != null
       || event.cardAssignments?.some((a) => a.cardScope && a.cardScope !== '전체'))
 

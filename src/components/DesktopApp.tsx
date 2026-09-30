@@ -1,3 +1,4 @@
+import { teamServiceEnabled } from '../config/teamService'
 import { useMemo, useRef, useState } from 'react'
 import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '../utils/cardServiceScope'
 import { showToast } from '../lib/toast'
@@ -405,7 +406,7 @@ export function DesktopApp({
     return ids
   }, [cards, currentVisitor, serviceSessions])
   const isUserMapScope = viewMode === 'user'
-  const assignmentMapId = import.meta.env.VITE_DEMO_MODE === 'true' ? Number(searchParams.get('assignmentMap')) : 0
+  const assignmentMapId = teamServiceEnabled() ? Number(searchParams.get('assignmentMap')) : 0
   const assignedMap = useMemo(() => assignedServiceScope(calendarEvents.find((e) => e.id === assignmentMapId), currentVisitor, searchParams.has('assignmentCard') ? Number(searchParams.get('assignmentCard')) : undefined), [calendarEvents, assignmentMapId, currentVisitor, searchParams])
   const mapCards = useMemo(
     () => assignmentMapId ? cards.filter((c) => assignedMap.ids.includes(c.id)) : isUserMapScope ? cards.filter((card) => userVisibleMapCardIds.has(card.id)) : cards,
@@ -709,7 +710,7 @@ export function DesktopApp({
               returnVisits={returnVisits}
               returnVisitLogs={returnVisitLogs}
               onOpenMap={openCardOnMap}
-              onOpenAssignmentMap={import.meta.env.VITE_DEMO_MODE === 'true' ? (eventId, cardId) => navigate(`/map?assignmentMap=${eventId}${cardId == null ? '' : `&assignmentCard=${cardId}`}`) : undefined}
+              onOpenAssignmentMap={teamServiceEnabled() ? (eventId, cardId) => navigate(`/map?assignmentMap=${eventId}${cardId == null ? '' : `&assignmentCard=${cardId}`}`) : undefined}
               onOpenInformalMap={openInformalOnMap}
               onOpenBuildingMap={openBuildingOnMap}
               onEndServiceSession={onEndServiceSession}

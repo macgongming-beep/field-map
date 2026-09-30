@@ -1,3 +1,4 @@
+import { teamServiceEnabled } from '../../config/teamService'
 // 인도자 배정 draft — 서버 복원 + localStorage 영속 + 충돌 감지
 // 설계: docs/leader-assignment-redesign.md v3
 //
@@ -70,7 +71,7 @@ export function draftToAssignments(
       // teamKey 를 함께 저장해야 복원 시 팀이 그대로 나뉜다
       // (같은 구역을 맡은 다른 팀과 합쳐지지 않도록)
       out.push({ userName, cardIds: team.cardIds, teamKey: team.id,
-        ...(import.meta.env.VITE_DEMO_MODE === 'true' ? { cardScope: team.cardScope ?? '전체', informalAssetIds: team.informalAssetIds ?? [] } : {}),
+        ...(teamServiceEnabled() ? { cardScope: team.cardScope ?? '전체', informalAssetIds: team.informalAssetIds ?? [] } : {}),
       })
     })
   })

@@ -1,3 +1,4 @@
+import { teamServiceEnabled } from '../../config/teamService'
 // 인도자 배정 에디터 (호스트) — 화면1(팀짓기) ↔ 화면2(구역배분) + 배정 공유
 // 설계: docs/leader-assignment-redesign.md v3
 //
@@ -130,7 +131,7 @@ export function AssignmentEditor({ event, cards, allCards, buildings, visitHisto
   //   **어제 다른 일정에서 받은 비공식·식당이 오늘 팀에 붙어 보였다.**
   //   구역 카드는 일정별로 제대로 걸렀는데 이 둘만 빠져 있었다.
   const informalHere = useMemo(
-    () => import.meta.env.VITE_DEMO_MODE === 'true'
+    () => teamServiceEnabled()
       ? teams.flatMap((t) => t.members.flatMap((userName) => (t.informalAssetIds ?? []).map((assetId) => ({
         id: -assetId, eventId: event.id, userName, assetId, assignedBy: currentVisitor, assignedAt: '', memo: '',
       }))))
@@ -153,9 +154,9 @@ export function AssignmentEditor({ event, cards, allCards, buildings, visitHisto
     return teams.filter((t) => t.members.length > 0 && t.cardIds.length === 0 && !hasWork(t.members))
   }, [teams, informalHere, restaurantHere])
 
-  const legacyPersonalCount = import.meta.env.VITE_DEMO_MODE === 'true' && event.assignmentTeamInformal == null
+  const legacyPersonalCount = teamServiceEnabled() && event.assignmentTeamInformal == null
     ? eventInformalAssignments.filter((a) => a.eventId === event.id && a.id > 0).length : 0
-  const selectionIssues = useMemo(() => import.meta.env.VITE_DEMO_MODE === 'true'
+  const selectionIssues = useMemo(() => teamServiceEnabled()
     ? assignmentSelectionIssues(teams, allCards, informalAssets) : [],
   [teams, allCards, informalAssets])
 

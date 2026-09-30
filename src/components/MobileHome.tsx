@@ -1,3 +1,4 @@
+import { teamServiceEnabled } from '../config/teamService'
 import { useMemo, useState } from 'react'
 import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '../utils/cardServiceScope'
 import { FontScalePicker } from './FontScalePicker'
@@ -555,7 +556,7 @@ export function MobileHome({
   // (정기방문 미리보기는 활동 탭으로 이동, 홈에서는 미사용)
   const focusedMapCardId = searchParams.get('cardId') ? Number(searchParams.get('cardId')) : null
   const focusedInformalId = searchParams.get('informalId') ? Number(searchParams.get('informalId')) : null
-  const assignmentMapId = import.meta.env.VITE_DEMO_MODE === 'true' ? Number(searchParams.get('assignmentMap')) : 0
+  const assignmentMapId = teamServiceEnabled() ? Number(searchParams.get('assignmentMap')) : 0
   const assignedMap = useMemo(() => assignedServiceScope(calendarEvents.find((e) => e.id === assignmentMapId), currentVisitor, searchParams.has('assignmentCard') ? Number(searchParams.get('assignmentCard')) : undefined), [calendarEvents, assignmentMapId, currentVisitor, searchParams])
   const mapScope = searchParams.get('scope')
   const isRegularVisitMapScope = mapScope === 'regularVisits'
@@ -1038,7 +1039,7 @@ export function MobileHome({
                   returnVisits={returnVisits}
                   returnVisitLogs={returnVisitLogs}
                   onOpenMap={(cardId) => navigate(`/map?cardId=${cardId}`)}
-                  onOpenAssignmentMap={import.meta.env.VITE_DEMO_MODE === 'true' ? (eventId, cardId) => navigate(`/map?assignmentMap=${eventId}${cardId == null ? '' : `&assignmentCard=${cardId}`}`) : undefined}
+                  onOpenAssignmentMap={teamServiceEnabled() ? (eventId, cardId) => navigate(`/map?assignmentMap=${eventId}${cardId == null ? '' : `&assignmentCard=${cardId}`}`) : undefined}
                   onOpenInformalMap={(assetId) => navigate(`/map?informalId=${assetId}`)}
                   onOpenRegularVisitMap={(returnVisitId) => {
                     const params = new URLSearchParams()

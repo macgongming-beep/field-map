@@ -1,3 +1,4 @@
+import { teamServiceEnabled } from '../../config/teamService'
 import { supabase, showToast, reportMutationError, getCurrentVisitor, ensureAffectedRows } from './shared'
 import { msg } from '../../lib/msg'
 
@@ -72,7 +73,7 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
     },
   ) => {
     const silentSuccess = options?.silentSuccess === true
-    const teamService = import.meta.env.VITE_DEMO_MODE === 'true'
+    const teamService = teamServiceEnabled()
     const scoped = teamService || assignments.some((a) => a.cardScope != null)
     const normalizedAssignments = Array.from(
       new Map(

@@ -1,3 +1,4 @@
+import { teamServiceEnabled } from '../../config/teamService'
 // 화면2 — 구역 배분 (sticky 팀바 + 목록/지도 토글)
 // 설계: docs/leader-assignment-redesign.md v3 §3.3
 //
@@ -61,9 +62,9 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
   const [unassignedOnly, setUnassignedOnly] = useState(false)
   const [legacyTypeFilter, setLegacyTypeFilter] = useState<BuildingTypeFilter>('전체')
   const activeTeam = teams.find((t) => t.id === activeTeamId) ?? null
-  const scopeEnabled = import.meta.env.VITE_DEMO_MODE === 'true'
+  const scopeEnabled = teamServiceEnabled()
   const buildingTypeFilter: BuildingTypeFilter = useMemo(() => {
-    if (import.meta.env.VITE_DEMO_MODE !== 'true') return legacyTypeFilter
+    if (!teamServiceEnabled()) return legacyTypeFilter
     return teams.find((t) => t.id === activeTeamId)?.cardScope ?? '전체'
   }, [teams, activeTeamId, legacyTypeFilter])
   const changeScope = (scope: BuildingTypeFilter) => {
