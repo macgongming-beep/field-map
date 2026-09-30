@@ -1,6 +1,6 @@
 # 지도 범위별 건물·방문 기록 실시간 동기화
 
-- 상태: 데모 검증 중 (운영 미적용)
+- 상태: 운영 적용 (2026-09-30, 복구 방식은 0009로 대체)
 - 결정일: 2026-09-30
 - 관련: `20260930_2200_territory_realtime_signals.sql`, `useTerritoryRealtime`, `territorySync`
 
@@ -80,7 +80,7 @@ node scripts/smokeTerritoryRealtime.mjs
 
 1. 대상 DB를 백업하고 마이그레이션을 `psql --single-transaction`으로 적용한다.
 2. 해당 Vercel 프로젝트에서 `VITE_TERRITORY_REALTIME_ENABLED=true`를 설정하고 배포한다.
-3. 데모는 적용, 운영은 미적용이다. 운영 `main`을 이번 작업에서 갱신하지 않는다.
+3. 데모 검증 후 2026-09-30 운영 적용 완료. 상세 배포 기록은 0009를 참조한다.
 4. 복구 시 플래그를 끄고 앱을 배포한 뒤 전용 rollback SQL을 실행한다.
    원본 방문/건물 데이터와 구버전 생성·삭제 채널은 그대로 유지된다.
 
