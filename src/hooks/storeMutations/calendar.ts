@@ -49,6 +49,30 @@ export function makeCalendarMutations(deps: {
 }) {
   const { fetchAll, refetchAfterParticipantRemoval, calendarEvents } = deps
 
+  const usesTeamAssignments = (event?: CalendarEvent) => import.meta.env.VITE_DEMO_MODE === 'true'
+    && !!event && (event.assignmentTeamInformal != null
+      || event.cardAssignments?.some((a) => a.cardScope && a.cardScope !== '전체'))
+
+  const removeTeamParticipant = async (event: CalendarEvent, userName: string, self: boolean) => {
+    const token = getAuthToken()
+    if (!token) return false
+    const result = await supabase.rpc('remove_team_event_participant_tx', {
+      p_token: token, p_event_id: event.id, p_user_name: userName, p_self: self,
+      p_expected_shared_at: event.assignmentSharedAt ?? null,
+    })
+    const value = result.data as { ok?: boolean; conflict?: boolean } | null
+    if (result.error || !value?.ok) {
+      reportMutationError(msg('참가자를 제외하지 못했습니다.'), result.error ?? new Error('Assignment changed; refresh and retry'))
+      if (value?.conflict) await fetchAll()
+      return false
+    }
+    await logServiceAction({ eventId: event.id, action: 'left', targetType: 'event_participant',
+      details: { user_name: userName, source: self ? 'self_cancel' : 'admin_remove' } })
+    await (refetchAfterParticipantRemoval ?? fetchAll)()
+    showToast(self ? msg('신청이 취소됐습니다') : msg('{userName}님을 참가자와 배정에서 제외했습니다', { userName }))
+    return true
+  }
+
   // ─── 일정 CRUD ───────────────────────────────────────────────
   const createCalendarEvent = async (input: { date: string } & CalendarEventInput) => {
     const payload = { ...buildEventPayload(input), event_date: input.date }
@@ -196,6 +220,10 @@ export function makeCalendarMutations(deps: {
     const currentVisitor = getCurrentVisitor()
     const event = calendarEvents.find((e) => e.id === eventId)
     const isApplied = event?.applicants.includes(currentVisitor)
+    if (isApplied && usesTeamAssignments(event)) {
+      await removeTeamParticipant(event!, currentVisitor, true)
+      return
+    }
     if (event && !event.allowApplications && !isApplied) {
       showToast(msg('이 일정은 봉사 신청을 받지 않습니다.'), 'info')
       return
@@ -347,6 +375,11 @@ export function makeCalendarMutations(deps: {
   }
 
   const removeParticipantFromEvent = async (eventId: number, userName: string) => {
+    const event = calendarEvents.find((item) => item.id === eventId)
+    if (usesTeamAssignments(event)) {
+      await removeTeamParticipant(event!, userName, false)
+      return
+    }
     const multiCardResult = await supabase.from('event_card_assignment_cards')
       .delete()
       .eq('event_id', eventId)

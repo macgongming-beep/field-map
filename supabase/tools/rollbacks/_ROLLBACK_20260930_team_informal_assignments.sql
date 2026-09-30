@@ -2,6 +2,9 @@
 -- 20260930_1400 guard are not recreated by this rollback; the guard no longer clears them.
 -- Run this before _ROLLBACK_20260930_team_card_scope.sql, in a single transaction.
 do $$ begin
+  if to_regprocedure('private.cleanup_team_participant_removal()') is not null then
+    raise exception '참가 취소 롤백을 먼저 실행하세요 (atomic_team_participant_removal → team_informal_assignments → team_card_scope)';
+  end if;
   if to_regprocedure('private.assign_scoped_cards_bulk_tx(uuid,integer,jsonb,text,text)') is null
     or to_regprocedure('private.assign_cards_bulk_tx(uuid,integer,jsonb,text,text)') is null
     or not exists(select 1 from information_schema.columns where table_schema='public'
