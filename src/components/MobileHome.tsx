@@ -556,7 +556,7 @@ export function MobileHome({
   const focusedMapCardId = searchParams.get('cardId') ? Number(searchParams.get('cardId')) : null
   const focusedInformalId = searchParams.get('informalId') ? Number(searchParams.get('informalId')) : null
   const assignmentMapId = import.meta.env.VITE_DEMO_MODE === 'true' ? Number(searchParams.get('assignmentMap')) : 0
-  const assignedMap = useMemo(() => assignedServiceScope(calendarEvents.find((e) => e.id === assignmentMapId), currentVisitor), [calendarEvents, assignmentMapId, currentVisitor])
+  const assignedMap = useMemo(() => assignedServiceScope(calendarEvents.find((e) => e.id === assignmentMapId), currentVisitor, searchParams.has('assignmentCard') ? Number(searchParams.get('assignmentCard')) : undefined), [calendarEvents, assignmentMapId, currentVisitor, searchParams])
   const mapScope = searchParams.get('scope')
   const isRegularVisitMapScope = mapScope === 'regularVisits'
   const focusedReturnVisitId = searchParams.get('returnVisitId') ? Number(searchParams.get('returnVisitId')) : null
@@ -1038,7 +1038,7 @@ export function MobileHome({
                   returnVisits={returnVisits}
                   returnVisitLogs={returnVisitLogs}
                   onOpenMap={(cardId) => navigate(`/map?cardId=${cardId}`)}
-                  onOpenAssignmentMap={import.meta.env.VITE_DEMO_MODE === 'true' ? (eventId) => navigate(`/map?assignmentMap=${eventId}`) : undefined}
+                  onOpenAssignmentMap={import.meta.env.VITE_DEMO_MODE === 'true' ? (eventId, cardId) => navigate(`/map?assignmentMap=${eventId}${cardId == null ? '' : `&assignmentCard=${cardId}`}`) : undefined}
                   onOpenInformalMap={(assetId) => navigate(`/map?informalId=${assetId}`)}
                   onOpenRegularVisitMap={(returnVisitId) => {
                     const params = new URLSearchParams()

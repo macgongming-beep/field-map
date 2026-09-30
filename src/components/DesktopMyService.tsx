@@ -93,7 +93,7 @@ export function DesktopMyService({
   returnVisits?: ReturnVisit[]
   returnVisitLogs?: ReturnVisitLog[]
   onOpenMap: (cardId: number) => void
-  onOpenAssignmentMap?: (eventId: number) => void
+  onOpenAssignmentMap?: (eventId: number, cardId?: number) => void
   onOpenInformalMap?: (assetId: number) => void
   onOpenBuildingMap?: (buildingId: number) => void
   onEndServiceSession: (sessionId: number) => void
@@ -290,7 +290,7 @@ export function DesktopMyService({
                                   <span>{card.area}{(!onOpenAssignmentMap || assignedServiceScope(event, currentVisitor).scope === '전체') ? ` · ${card.units}세대` : ''}</span>
                                 </div>
                                 {(!onOpenAssignmentMap || assignedServiceScope(event, currentVisitor).scope === '전체') && <em>{card.progress}%</em>}
-                                <button onClick={() => onOpenAssignmentMap ? onOpenAssignmentMap(event.id) : onOpenMap(card.id)} type="button">지도</button>
+                                <button onClick={() => onOpenAssignmentMap ? onOpenAssignmentMap(event.id, card.id) : onOpenMap(card.id)} type="button">지도</button>
                               </div>
                               ))}
                               {myInformal.map((assignment) => {

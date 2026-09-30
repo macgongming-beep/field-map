@@ -864,10 +864,10 @@ export function MobileMap({
 
   useEffect(() => {
     // An explicit multi-card entry takes precedence over the active session's primary card.
-    if (!isUserMap || assignmentServiceMap || focusedCardIds.length > 0 || focusedCardId != null || !activeServiceSession?.primaryCardId) return
+    if (!isUserMap || showInformal || assignmentServiceMap || focusedCardIds.length > 0 || focusedCardId != null || !activeServiceSession?.primaryCardId) return
     setNavLevel('map')
     setSelectedCardId(activeServiceSession.primaryCardId)
-  }, [activeServiceSession?.primaryCardId, assignmentServiceMap, focusedCardIds.length, focusedCardId, isUserMap])
+  }, [activeServiceSession?.primaryCardId, assignmentServiceMap, focusedCardIds.length, focusedCardId, isUserMap, showInformal])
 
   // focusedCardId/배정 화면에서 직접 진입했는지 여부 (뒤로가기 시 외부 네비게이션으로 돌아가기 위함)
   const enteredFromAssignment = searchParams.get('return') === 'assignment'
@@ -1684,7 +1684,7 @@ export function MobileMap({
                    아무 상관이 없다. 숨기고 장소 이름과 메모만 보여 준다 */
                 /* 메모는 아래 시트에 있다. 헤더에도 넣으면 같은 글이 두 번 보이고,
                    긴 메모는 헤더에서 잘린다 */
-                <h1>{selectedInformal.name}</h1>
+                <><h1>{selectedInformal.name}</h1><span className="mm-stats-sub">{msg('장소 {n}개', { n: informalChildren.length })}</span></>
               ) : navLevel === 'map' ? (
                 <>
                   <h1>{assignmentServiceMap ? focusedScopeLabel : selectedCardId ? translateKoreanAddress(cards.find(c => c.id === selectedCardId)?.name ?? t(language, 'map.zoneMap'), language, translatePlaceNames) : t(language, 'map.zoneMap')}</h1>
@@ -1764,7 +1764,7 @@ export function MobileMap({
               </>
             )}
           </div>
-          {navLevel === 'map' && isUserMap && !isUserDirectAssignment && (
+          {navLevel === 'map' && isUserMap && !isUserDirectAssignment && !showInformal && (
             <div className="mobile-map-field-actions">
               {activeSessionCard && (
                 <button

@@ -5,6 +5,14 @@ import { buildDraftFromServer, draftToAssignments } from '../hooks/assignmentDra
 import { draftReducer } from '../hooks/assignmentDraft/reducer'
 import type { CalendarEvent } from '../types'
 
+test('개별 카드 진입은 배정 범위 안에서만 좁히고 봉사 형태를 유지한다', () => {
+  const event = { cardAssignments: [{ userName: 'A', assignedCardIds: [1, 3], cardScope: '상가' }] } as CalendarEvent
+  expect(assignedServiceScope(event, 'A')).toEqual({ ids: [1, 3], scope: '상가' })
+  expect(assignedServiceScope(event, 'A', 3)).toEqual({ ids: [3], scope: '상가' })
+  expect(assignedServiceScope(event, 'A', 999).ids).toEqual([])
+  expect(assignedServiceScope(event, 'A', NaN).ids).toEqual([])
+})
+
 test('실제 배정의 팀 키와 상가 범위가 복원 및 재공유에도 유지된다', () => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')
   try {

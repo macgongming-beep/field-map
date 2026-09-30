@@ -133,6 +133,7 @@ describe('모바일 지도 하단 시트', () => {
     const props = territoryProps({
       ...mapProps(),
       focusedInformalId: 10,
+      actualRole: 'user',
       informalAssets: [
         informalAsset(10, null, '경희대'),
         informalAsset(11, 10, '경희대 거점'),
@@ -147,6 +148,8 @@ describe('모바일 지도 하단 시트', () => {
     expect(screen.queryByRole('button', { name: '지도 건물 영덕빌라' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '지도 집계 기흥구' })).not.toBeInTheDocument()
     expect(screen.getByTestId('informal-pin-ids')).toHaveTextContent('10,11')
+    expect(document.querySelector('.mobile-map-field-actions')).toBeNull()
+    expect(screen.getByText('장소 1개')).toBeVisible()
     expect(screen.getByTestId('informal-pin-ids')).not.toHaveTextContent('20')
   })
 

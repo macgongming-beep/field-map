@@ -145,7 +145,7 @@ export function MobileTerritory({
   onUpdateRestaurantRequestMemo?: (requestId: number, memo: string) => Promise<void>
   restaurantRequests?: import('../types').RestaurantRequest[]
   onOpenMap: (cardId: number) => void
-  onOpenAssignmentMap?: (eventId: number) => void
+  onOpenAssignmentMap?: (eventId: number, cardId?: number) => void
   onOpenInformalMap?: (assetId: number) => void
   onOpenRegularVisitMap?: (returnVisitId?: number) => void
   onEndServiceSession: (sessionId: number) => void
@@ -785,7 +785,7 @@ export function MobileTerritory({
 
                                     </strong>
                                     {(!onOpenAssignmentMap || assignedServiceScope(event, currentVisitor).scope === '전체') && <em>{card.progress}%</em>}
-                                    <button onClick={() => onOpenAssignmentMap ? onOpenAssignmentMap(event.id) : onOpenMap(card.id)} type="button">{t(language, 'zone.map')}</button>
+                                    <button onClick={() => onOpenAssignmentMap ? onOpenAssignmentMap(event.id, card.id) : onOpenMap(card.id)} type="button">{t(language, 'zone.map')}</button>
                                   </div>
                                 )
                               })}
