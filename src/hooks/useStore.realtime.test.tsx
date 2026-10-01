@@ -25,6 +25,48 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 } }))
 afterEach(() => { cleanup(); vi.clearAllMocks(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
 
+test('successful building recovery skips global histories but keeps sessions and expires old records', async () => {
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+  state.clock.mockResolvedValue(new Date().toISOString())
+  state.index.mockResolvedValue({ signals: [], ids: [1] })
+  const { result } = renderHook(() => useStore(true))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const building = testBuilding(1, 1, 'kept')
+  const recent = { id: 1, unitId: building.units[0].id, visitor: 'test', result: '부재', timeSlot: '오전', visitedAt: '2026-10-02', createdAt: new Date().toISOString() }
+  state.changed.mockResolvedValueOnce({ buildings: [building], histories: [recent, { ...recent, id: 2, createdAt: '2000-01-01T00:00:00Z' }] })
+  await act(async () => { await result.current.syncChangedBuildings([1]) })
+  state.reads = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.reads).not.toContain('visit_histories')
+  expect(state.reads).toContain('service_sessions')
+  expect(result.current.visitHistories.map((h) => h.id)).toEqual([1])
+  state.index.mockRejectedValueOnce(new Error('offline'))
+  state.reads = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.reads).toContain('visit_histories')
+  expect(state.reads).toContain('buildings')
+  expect(state.reads).toContain('service_sessions')
+})
+
+test.each([[1, 2], [2, 1]])('unit move preserves history when building responses arrive in order %j', async (first, second) => {
+  const { result } = renderHook(() => useStore(false))
+  const source = testBuilding(1, 1, 'source')
+  const destination = { ...testBuilding(2, 2, 'destination'), units: [] }
+  const history = { id: 1, unitId: source.units[0].id, visitor: 'test', result: '부재', timeSlot: '오전', visitedAt: '2026-10-02' }
+  state.changed.mockResolvedValueOnce({ buildings: [source, destination], histories: [history] })
+  await act(async () => { await result.current.syncChangedBuildings([1, 2]) })
+  for (const id of [first, second]) {
+    state.changed.mockResolvedValueOnce({
+      buildings: [id === 1 ? { ...source, units: [] } : { ...destination, units: source.units }],
+      histories: id === 1 ? [] : [history],
+    })
+    await act(async () => { await result.current.syncChangedBuildings([id]) })
+  }
+  expect(result.current.visitHistories).toEqual([history])
+  expect(result.current.buildings.find((b) => b.id === 1)?.units).toEqual([])
+  expect(result.current.buildings.find((b) => b.id === 2)?.units).toEqual(source.units)
+})
+
 test('boundary save and delete use fresh manifests, not all coordinates', async () => {
   const { result } = renderHook(() => useStore(true))
   await waitFor(() => expect(result.current.loading).toBe(false))
@@ -223,6 +265,27 @@ test('sync inserts empty buildings, replaces remote status and histories, and pr
   expect(result.current.buildings.find((b) => b.id === 3)?.units).toEqual([])
   expect(result.current.buildings).toHaveLength(3)
 })
+
+test.each(['invalidation', 'history deletion', 'unit deletion', 'building deletion'])(
+  '%s removes cached old histories without erasing unrelated histories', async (change) => {
+    const { result } = renderHook(() => useStore(true))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const one = testBuilding(1, 1, 'changed')
+    const two = testBuilding(2, 2, 'unrelated')
+    const old = { id: 10, unitId: one.units[0].id, visitor: 'peer', result: '부재', timeSlot: '오전', visitedAt: '2026-08-01', createdAt: '2026-08-01T10:00:00Z' }
+    const unrelated = { ...old, id: 20, unitId: two.units[0].id }
+    state.changed.mockResolvedValueOnce({ buildings: [one, two], histories: [old, unrelated] })
+    await act(async () => { await result.current.syncChangedBuildings([1, 2]) })
+    expect(result.current.visitHistories).toHaveLength(2)
+    const remaining = change === 'building deletion' ? []
+      : [change === 'unit deletion' ? { ...one, units: [] } : one]
+    state.changed.mockResolvedValueOnce({ buildings: remaining, histories: [] })
+    await act(async () => { await result.current.syncChangedBuildings([1]) })
+    expect(result.current.visitHistories).toEqual([unrelated])
+    expect(result.current.buildings.find((b) => b.id === 2)).toEqual(two)
+    expect(result.current.buildings.find((b) => b.id === 1)).toEqual(remaining[0])
+  },
+)
 
 test('a failed targeted fetch does not erase existing data', async () => {
   const { result } = renderHook(() => useStore(true))
