@@ -492,7 +492,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     const share = options?.triggeredBy === 'fetchAll' || recovery
     let reusedTerritoryRead = false
     const read = (slice: Slice) => {
-      if (!share) return fetchSlice(slice)
+      if (!share) return fetchSlice(slice, slice === 'cardBoundaries' && options?.triggeredBy === 'mutation:cardBoundaries')
       const existing = recoveryReads.get(slice)
       if (existing && (recovery || !existing.delta)) {
         if (slice === 'buildings' || slice === 'visits') reusedTerritoryRead = true
@@ -706,6 +706,19 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
 
   useEffect(() => { syncBuildingsRef.current = syncChangedBuildings }, [syncChangedBuildings])
 
+  const refreshVisitUnit = useCallback(async (unitId: number) => {
+    const building = buildingsRef.current.find((b) => b.units.some((u) => u.id === unitId))
+    try {
+      if (!building) throw new Error('Unit is no longer in the local building snapshot')
+      // Use the same version guard as realtime; do not join a pre-save read.
+      await syncChangedBuildings([building.id])
+    } catch {
+      // The write already succeeded. Recover authoritative status/history, not
+      // just the optimistic patch, if the targeted read is unavailable.
+      await fetchSlices(['buildings', 'cards', 'visits'], { triggeredBy: 'mutation:visit-recovery' })
+    }
+  }, [fetchSlices, syncChangedBuildings])
+
   const territoryRealtime = useMemo(() => ({ sync: syncChangedBuildings, checkpoint: territoryCheckpoint }),
     [syncChangedBuildings, territoryCheckpoint])
 
@@ -799,7 +812,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     [fetchSlices],
   )
   const refetchCardBoundaries = useCallback(
-    // 구역선 그리기·저장 — boundaries만 (가장 가벼움)
+    // Post-write reads must be fresh, but unchanged boundary coordinates stay cached.
     () => fetchSlices(['cardBoundaries'], { triggeredBy: 'mutation:cardBoundaries' }),
     [fetchSlices],
   )
@@ -862,7 +875,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     updateVisitHistory,
     addVisitHistory,
     deleteVisitHistory,
-  } = makeVisitMutations({ fetchAll: refetchVisits, visitHistories, buildings, cards, getRecordServiceSession, getActiveSpecialPeriodIdForDate, patchUnit })
+  } = makeVisitMutations({ refreshUnit: refreshVisitUnit, visitHistories, buildings, cards, getRecordServiceSession, getActiveSpecialPeriodIdForDate, patchUnit })
 
   const {
     createBuilding,

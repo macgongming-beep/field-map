@@ -10,7 +10,7 @@ import { getAuthToken } from '../../lib/authToken'
 import { promptDialog } from '../../lib/confirm'
 
 export function makeVisitMutations(deps: {
-  fetchAll: () => Promise<void>
+  refreshUnit: (unitId: number) => Promise<void>
   visitHistories: VisitHistory[]
   buildings: Building[]
   cards: TerritoryCard[]
@@ -25,7 +25,7 @@ export function makeVisitMutations(deps: {
    */
   patchUnit: (unitId: number, patch: Partial<Unit>) => void
 }) {
-  const { fetchAll, visitHistories, buildings, cards, getRecordServiceSession, getActiveSpecialPeriodIdForDate, patchUnit } = deps
+  const { refreshUnit, visitHistories, buildings, cards, getRecordServiceSession, getActiveSpecialPeriodIdForDate, patchUnit } = deps
 
   /** buildingId 로 카드·건물 컨텍스트 반환 */
   function getBuildingContext(buildingId: number) {
@@ -117,7 +117,7 @@ export function makeVisitMutations(deps: {
       },
     })
 
-    await fetchAll()
+    await refreshUnit(unitId)
   }
 
   // mode: 'direct' = 직접 전달(만남), 'door' = 문 앞에 남김(부재)
@@ -189,7 +189,7 @@ export function makeVisitMutations(deps: {
         return
       }
     }
-    await fetchAll()
+    await refreshUnit(unitId)
   }
 
   const quickLogVisit = async (
@@ -280,7 +280,7 @@ export function makeVisitMutations(deps: {
       },
     })
 
-    await fetchAll()
+    await refreshUnit(unitId)
     showToast(`${slot} ${result} ${historyStatus}`, 'success')
   }
 
@@ -345,7 +345,7 @@ export function makeVisitMutations(deps: {
       },
     })
 
-    await fetchAll()
+    await refreshUnit(unitId)
     return true
   }
 
@@ -390,7 +390,7 @@ export function makeVisitMutations(deps: {
       },
     })
 
-    await fetchAll()
+    await refreshUnit(unitId)
     showToast(msg('최근 입력이 취소됐습니다'))
   }
 
@@ -463,7 +463,7 @@ export function makeVisitMutations(deps: {
       },
     })
 
-    await fetchAll()
+    await refreshUnit(unitId)
     return true
   }
 
@@ -502,7 +502,7 @@ export function makeVisitMutations(deps: {
       if (statusResult.error) {
         reportMutationError(msg('방문 이력은 추가됐지만 호수 대표 상태를 맞추지 못했습니다.'), statusResult.error)
         // 기록 자체는 들어갔다. 화면을 닫아도 된다 — 입력을 다시 시키면 중복이 된다
-        await fetchAll()
+        await refreshUnit(unitId)
         return true
       }
       patchUnit(unitId, { status: input.result })
@@ -527,7 +527,7 @@ export function makeVisitMutations(deps: {
       },
     })
 
-    await fetchAll()
+    await refreshUnit(unitId)
     showToast(msg('방문 기록이 추가됐습니다'))
     return true
   }
@@ -584,7 +584,7 @@ export function makeVisitMutations(deps: {
       })
     }
 
-    await fetchAll()
+    await refreshUnit(unitId)
     showToast(msg('잘못 기록한 방문을 취소했습니다'))
   }
 
