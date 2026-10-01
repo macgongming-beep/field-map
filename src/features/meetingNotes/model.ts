@@ -14,6 +14,12 @@ export type MeetingNote = MeetingNoteMeta & { bodyKo: string; bodyZh: string }
 export type NoteDraft = Pick<MeetingNote, 'titleKo' | 'titleZh' | 'bodyKo' | 'bodyZh'>
 export const meetingNotesEnabled = import.meta.env.VITE_SERVICE_MEETING_NOTES_ENABLED === 'true'
 
+export function meetingDateLabel(date: string, language: AppLanguage): string {
+  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : language === 'en' ? 'en-US' : 'ko-KR', {
+    timeZone: 'UTC', month: 'long', day: 'numeric', weekday: 'short',
+  }).format(new Date(`${date}T00:00:00Z`))
+}
+
 export function koreaDate(now = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
 }

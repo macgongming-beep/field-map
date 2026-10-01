@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { MeetingText } from './MeetingText'
 import { MeetingHome, MeetingSuggestions } from './MeetingHome'
 import { MeetingContext } from './context'
-import { addDays, homeCollectionVisible, koreaDate, localizedMeeting, markNoteRead, readNoteVersion } from './model'
+import { addDays, homeCollectionVisible, koreaDate, localizedMeeting, markNoteRead, readNoteVersion, meetingDateLabel } from './model'
 import type { MeetingCollection, MeetingNoteMeta } from './model'
 
 const group: MeetingCollection = { id: 1, nameKo: '순회방문', nameZh: '', startDate: '2020-01-01', endDate: '2099-01-01', homeVisibleUntil: '2099-01-15', homePosition: 'after_service', collapseSuggestions: true, updatedAt: 'v1' }
@@ -13,6 +13,11 @@ const note: MeetingNoteMeta = { id: 1, eventId: null, collectionId: 1, titleKo: 
 afterEach(() => { cleanup(); localStorage.clear() })
 
 describe('meeting contracts', () => {
+  it('shows localized weekdays without shifting calendar dates', () => {
+    expect(meetingDateLabel('2026-10-01', 'ko')).toBe('10월 1일 (목)')
+    expect(meetingDateLabel('2026-10-01', 'en')).toContain('Thu')
+    expect(meetingDateLabel('2026-10-01', 'zh')).toContain('周四')
+  })
   it('includes start and last home date in Korean calendar time', () => {
     const c = { ...group, startDate: '2026-10-01', homeVisibleUntil: '2026-10-19' }
     expect(homeCollectionVisible(c, '2026-09-30')).toBe(false)
@@ -48,6 +53,11 @@ describe('meeting contracts', () => {
     expect(container.querySelector('details')).toBe(null)
     rerender(renderHome([note]))
     expect(screen.getAllByText('순회방문')).toHaveLength(1)
+    expect(screen.getByText('10월 1일 (목) · 10:00')).toBeTruthy()
+    expect(container.textContent).not.toContain('인도자')
+    expect(container.querySelector('.meeting-dates')).toBe(null)
+    rerender(renderHome([note, { ...note, id: 2, date: '2026-10-02' }]))
+    expect(container.querySelectorAll('.meeting-dates button')).toHaveLength(2)
     expect(screen.getByText('오늘 봉사').compareDocumentPosition(screen.getByText('순회방문')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(container.querySelector('details')?.open).toBe(false)
   })

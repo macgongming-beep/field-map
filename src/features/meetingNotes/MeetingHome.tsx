@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { t } from '../../i18n'
 import type { AppLanguage } from '../../i18n'
 import { useMeetingHome } from './context'
-import { homeCollectionVisible, koreaDate, localizedMeeting, readNoteVersion } from './model'
+import { homeCollectionVisible, koreaDate, localizedMeeting, readNoteVersion, meetingDateLabel } from './model'
 
 export function MeetingHome({ language, position }: { language: AppLanguage; position: 'top' | 'after_service' }) {
   const context = useMeetingHome()
@@ -18,10 +18,10 @@ export function MeetingHome({ language, position }: { language: AppLanguage; pos
       <div className="meeting-heading"><h2>{localizedMeeting(collection.nameKo, collection.nameZh, language)}</h2><button type="button" onClick={() => open()}>{t(language, 'meeting.all')} <span aria-hidden>›</span></button></div>
       <p className="meeting-meta">{t(language, 'meeting.count', { n: notes.length })}{unread.length > 0 && <span> · {t(language, 'meeting.unread', { n: unread.length })}</span>}</p>
       <button className="meeting-latest" type="button" onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.set('meetingCollection', String(collection.id)); next.set('meetingNote', String(notes[0].id)); return next })}>
-        <span className="meeting-meta">{notes[0].date} · {notes[0].time} · {notes[0].leader}</span>
+        <span className="meeting-meta">{meetingDateLabel(notes[0].date, language)} · {notes[0].time}</span>
         <strong>{localizedMeeting(notes[0].titleKo, notes[0].titleZh, language)}</strong>
       </button>
-      <div className="meeting-dates">{[...new Set(notes.map(note => note.date))].sort().map(date => <button type="button" key={date} onClick={() => open(date)}>{date.slice(5)}{unread.some(note => note.date === date) && <span className="meeting-unread" aria-label={t(language, 'meeting.new')} />}</button>)}</div>
+      {new Set(notes.map(note => note.date)).size > 1 && <div className="meeting-dates">{[...new Set(notes.map(note => note.date))].sort().map(date => <button type="button" key={date} onClick={() => open(date)}>{meetingDateLabel(date, language)}{unread.some(note => note.date === date) && <span className="meeting-unread" aria-label={t(language, 'meeting.new')} />}</button>)}</div>}
     </section>
   })}</>
 }

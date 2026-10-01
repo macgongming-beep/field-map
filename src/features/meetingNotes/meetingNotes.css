@@ -1,13 +1,14 @@
-.meeting-home { border-top: 1px solid var(--line-muted); padding-top: 20px; }
+.meeting-home { border-block: 1px solid var(--line-muted); padding-block: 24px; margin-bottom: 28px; }
 .meeting-heading, .meeting-screen-head, .meeting-actions, .meeting-prev-next, .meeting-collection-select { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .meeting-heading h2 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
 .meeting-home button, .meeting-screen button, .meeting-edit-launch { color: var(--ink); background: transparent; border: 1px solid var(--line-muted); border-radius: 6px; padding: 8px 12px; min-height: 40px; font: inherit; cursor: pointer; }
 .meeting-home button:focus-visible, .meeting-screen button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-.meeting-heading > button { white-space: nowrap; flex-shrink: 0; border: 0; }
+.meeting-heading > button { white-space: nowrap; flex-shrink: 0; border: 0; color: var(--muted); font-size: 13px; padding: 4px 0 4px 8px; }
 .meeting-meta { color: var(--muted); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
 .meeting-latest { display: grid; gap: 6px; width: 100%; text-align: left; border: 0 !important; padding: 12px 0 !important; }
 .meeting-latest strong { font-size: 17px; overflow-wrap: anywhere; }
 .meeting-dates { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.meeting-dates button { border: 0; background: var(--bg); font-size: 13px; min-height: 36px; padding: 6px 10px; }
 .meeting-unread { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #b84d43; margin-left: 6px; vertical-align: top; }
 .meeting-suggestions { margin: 24px 0; border-top: 1px solid var(--line-muted); padding-top: 16px; }
 .meeting-suggestions summary { cursor: pointer; font-weight: 600; }
@@ -25,6 +26,9 @@
 .meeting-new { font-size: 12px; color: #a44137; margin-left: 8px; white-space: nowrap; }
 .meeting-language { display: flex; gap: 4px; margin: 16px 0; }
 .meeting-language button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.meeting-language button { font-size: 13px; min-height: 36px; padding: 6px 12px; }
+.meeting-article-title { font-size: 23px; line-height: 1.45; margin: 20px 0 12px; overflow-wrap: anywhere; }
+.meeting-article-title + .meeting-meta { margin-bottom: 28px; }
 .meeting-prose { font-size: 17px; line-height: 1.9; overflow-wrap: anywhere; white-space: pre-wrap; }
 .meeting-prose p { margin: 0; }
 .meeting-prose > * { margin: 0 0 22px; }
@@ -32,6 +36,8 @@
 .meeting-prose blockquote { border-left: 3px solid var(--muted); padding: 8px 18px; color: var(--muted); }
 .meeting-prose ul { padding-left: 24px; }
 .meeting-prev-next { margin-top: 36px; border-top: 1px solid var(--line-muted); padding-top: 20px; }
+.meeting-prev-next button { border: 0; padding-inline: 0; font-size: 14px; display: inline-flex; gap: 8px; align-items: center; }
+.meeting-screen .meeting-edit-launch { border: 0; color: var(--muted); padding-inline: 0; font-size: 13px; }
 .meeting-screen button:disabled { opacity: .45; cursor: default; }
 .meeting-editor { z-index: 1900; }
 .meeting-editor .meeting-scroll { width: 100%; max-width: 1120px; margin: 0 auto; box-sizing: border-box; }
