@@ -29,6 +29,9 @@
 
 ## 새 기록 틀
 
+봉사 모임 정리 준비: [0013 일정 삭제와 게시글 보존 분리](0013-service-meeting-notes.md)
+
+
 ```markdown
 # 제목
 
