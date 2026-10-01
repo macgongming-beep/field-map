@@ -1,6 +1,6 @@
 # Boundary recovery and private subscriptions
 
-- Status: demo verified; not released to production
+- Status: production released
 - Date: 2026-10-01
 
 ## Evidence and decision
@@ -46,7 +46,7 @@ caused seven new regression tests to fail (eleven other focused tests passed).
 Mutations were reverted. Demo smoke also checks that a two-minute foreground
 return fetches the boundary manifest, not the coordinate payload.
 
-No DB schema, grants or policies are changed. Production rollout is separate.
+No DB schema, grants or policies are changed.
 
 ## Demo result (2026-10-01 KST)
 
@@ -63,3 +63,16 @@ No DB schema, grants or policies are changed. Production rollout is separate.
 - Production read-only size comparison: 603 boundaries, summed JSON row sizes
   742,096 bytes with coordinates vs 40,842 with IDs/versions, no null versions.
   This is uncompressed JSON estimation, not billed egress or total-app savings.
+
+## Production rollout (2026-10-01 00:25 KST)
+
+- User approved production release after external GO review.
+- main fast-forwarded from f90103c to adaf5a6; no intervening main commits.
+- Deployment dpl_Ga9Un29HxKmUQvNfWNg31BEqJ46Y reached Ready and was aliased to
+  https://chinese-territory-app.vercel.app.
+- Public alias returned HTTP 200, entry index-C5uCMaiY.js. Store chunk
+  TerritoryReportView-CrSSR37N.js contains the boundary manifest and full fallback
+  projections. PlaceChangeRequests-9fQHCo17.js contains get_my_notifications RPC.
+- No DB migration, grants, business-data writes or billing changes were made.
+- Production-wide billed egress reduction still needs a comparable post-release
+  observation window; the per-query JSON ratio is not an overall savings claim.

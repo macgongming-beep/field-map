@@ -10,18 +10,81 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   from: (table: string) => {
     const chain: Record<string, unknown> = {}
     let lookup = false
+    let writing = false
     for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq']) chain[name] = () => chain
+    for (const name of ['insert', 'update', 'upsert', 'delete']) chain[name] = () => { writing = true; return chain }
     chain.select = (columns: string) => { if (table === 'card_boundaries') state.boundaryColumns.push(columns); return chain }
     chain.limit = () => { lookup = true; return chain }
     chain.then = async (resolve: (r: unknown) => void) => {
       state.reads.push(table)
       if (table === 'buildings') await state.block
-      return resolve({ data: lookup ? [{ id: 1 }] : [], error: null })
+      return resolve({ data: writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
     }
     return chain
   },
 } }))
-afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllEnvs(); state.reads = []; state.boundaryColumns = []; state.block = null })
+afterEach(() => { cleanup(); vi.clearAllMocks(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
+
+test('boundary save and delete use fresh manifests, not all coordinates', async () => {
+  const { result } = renderHook(() => useStore(true))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.boundaryColumns = []
+  await act(async () => {
+    await result.current.saveCardBoundary(1, [{ lat: 1, lng: 1 }, { lat: 2, lng: 1 }, { lat: 2, lng: 2 }])
+  })
+  expect(state.boundaryColumns).toEqual(['card_id', 'card_id, updated_at'])
+  state.boundaryColumns = []
+  await act(async () => { await result.current.deleteCardBoundary(1) })
+  expect(state.boundaryColumns).toEqual(['card_id', 'card_id, updated_at'])
+})
+
+test('failed post-save targeted read falls back to authoritative buildings and visits', async () => {
+  const { result } = renderHook(() => useStore(true))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const one = testBuilding(1, 1, 'kept')
+  state.changed.mockResolvedValueOnce({ buildings: [one], histories: [] })
+  await act(async () => { await result.current.syncChangedBuildings([1]) })
+  state.changed.mockRejectedValueOnce(new Error('offline'))
+  state.reads = []
+  await act(async () => { await result.current.updateUnitFlags(one.units[0].id, { memo: 'saved' }) })
+  expect(state.reads).toContain('buildings')
+  expect(state.reads).toContain('visit_histories')
+  expect(state.reads).toContain('service_sessions')
+})
+
+test.each(['status', 'quick', 'add', 'edit', 'delete', 'undo', 'flags', 'invitation'] as const)(
+  '%s refreshes only the affected building and histories, not all service sessions', async (action) => {
+    localStorage.setItem('currentVisitor', 'tester')
+    localStorage.setItem('auth_token', 'test-token')
+    const { result } = renderHook(() => useStore(true))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const one = testBuilding(1, 1, 'changed')
+    const two = testBuilding(2, 2, 'untouched')
+    const unitId = one.units[0].id
+    const visit = { id: 10, buildingId: 1, unitId, visitor: 'tester', result: '부재', timeSlot: '오전', visitedAt: '2026-09-30', createdAt: '2026-09-30T10:00:00Z' }
+    state.changed.mockResolvedValueOnce({ buildings: [one, two], histories: [visit] })
+    await act(async () => { await result.current.syncChangedBuildings([1, 2]) })
+    state.changed.mockClear()
+    state.changed.mockResolvedValueOnce({ buildings: [one], histories: [] })
+    state.reads = []
+    await act(async () => {
+      const input = { result: '부재' as const, timeSlot: '오전' as const, memo: '', visitedAt: '2026-09-30' }
+      if (action === 'status') await result.current.updateUnitStatus(1, unitId, '부재')
+      if (action === 'quick') await result.current.quickLogVisit(1, unitId, '부재')
+      if (action === 'add') await result.current.addVisitHistory(1, unitId, input)
+      if (action === 'edit') await result.current.updateVisitHistory(10, unitId, input)
+      if (action === 'delete') await result.current.deleteVisitHistory(10, unitId)
+      if (action === 'undo') await result.current.undoLatestVisit(1, unitId)
+      if (action === 'flags') await result.current.updateUnitFlags(unitId, { memo: 'changed' })
+      if (action === 'invitation') await result.current.toggleInvitationLeft(1, unitId, 'door')
+    })
+    expect(state.changed).toHaveBeenCalledExactlyOnceWith([1])
+    expect(state.reads).not.toContain('service_sessions')
+    expect(state.reads).not.toContain('buildings')
+    expect(result.current.buildings.find((b) => b.id === 2)).toEqual(two)
+    expect(result.current.visitHistories).toEqual([])
+  },
+)
 
 test('store recovery reads only boundary versions; manual refresh still reads points', async () => {
   const { result } = renderHook(() => useStore(true))
