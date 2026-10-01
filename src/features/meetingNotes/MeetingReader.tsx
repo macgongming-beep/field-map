@@ -59,8 +59,8 @@ export function MeetingReader({ language, userId, revision = 0 }: { language: Ap
     <header className="meeting-screen-head"><button autoFocus type="button" aria-label={t(language, 'meeting.back')} onClick={() => noteId ? setParams(previous => { const next = new URLSearchParams(previous); next.delete('meetingNote'); return next }, { replace: true }) : close()}>‹</button><h1>{collection?.id === collectionId ? localizedMeeting(collection.nameKo, collection.nameZh, language) : t(language, 'meeting.title')}</h1><button type="button" aria-label={t(language, 'meeting.close')} onClick={close}>×</button></header>
     <div className="meeting-scroll" ref={bodyRef}>
       {error ? <p role="alert">{t(language, 'meeting.failed')} <button onClick={() => setRetry(n => n + 1)}>{t(language, 'meeting.retry')}</button></p> : noteId ? current ? <article>
-        <div className="meeting-language" role="group" aria-label={t(language, 'meeting.title')}><button aria-pressed={bodyLanguage !== 'zh'} onClick={() => setBodyLanguage('ko')}>한국어</button><button aria-pressed={bodyLanguage === 'zh'} onClick={() => setBodyLanguage('zh')}>中文</button></div>
-        <h2 className="meeting-article-title">{localizedMeeting(current.titleKo, current.titleZh, bodyLanguage)}</h2><p className="meeting-meta">{meetingDateLabel(current.date, bodyLanguage)} · {current.time}</p>
+        {current.bodyZh.trim() && <div className="meeting-language" role="group" aria-label={t(language, 'meeting.title')}><button aria-pressed={bodyLanguage !== 'zh'} onClick={() => setBodyLanguage('ko')}>한국어</button><button aria-pressed={bodyLanguage === 'zh'} onClick={() => setBodyLanguage('zh')}>中文</button></div>}
+        <h2 className="meeting-article-title">{localizedMeeting(current.titleKo, current.titleZh, bodyLanguage)}</h2><p className="meeting-meta">{meetingDateLabel(current.date, current.bodyZh.trim() ? bodyLanguage : language)}{current.time && ` · ${current.time}`}</p>
         <MeetingText text={localizedMeeting(current.bodyKo, current.bodyZh, bodyLanguage)} />
         <MeetingEditor eventId={current.eventId} noteId={current.id} language={language} />
         <nav className="meeting-prev-next"><button disabled={index <= 0} onClick={() => openNote(sorted[index - 1].id)}><span aria-hidden>‹</span> {t(language, 'meeting.previous')}</button><button disabled={index < 0 || index >= sorted.length - 1} onClick={() => openNote(sorted[index + 1].id)}>{t(language, 'meeting.next')} <span aria-hidden>›</span></button></nav>
@@ -68,8 +68,8 @@ export function MeetingReader({ language, userId, revision = 0 }: { language: Ap
         {notes.filter(n => n.collectionId === collectionId && (!date || n.date === date)).length === 0 && <p>{t(language, 'meeting.empty')}</p>}
         {[...new Set(notes.filter(n => n.collectionId === collectionId && (!date || n.date === date)).map(n => n.date))].map(day => <section className="meeting-list-day" key={day}><h2>{meetingDateLabel(day, language)}</h2>{notes.filter(n => n.date === day && n.collectionId === collectionId).map(n => <button className="meeting-list-row" key={n.id} onClick={() => openNote(n.id)}>
           <strong>{localizedMeeting(n.titleKo, n.titleZh, language)}</strong>{readNoteVersion(userId, n.id) !== n.updatedAt && <span className="meeting-new">{t(language, 'meeting.new')}</span>}
-          <span className="meeting-meta">{n.time}</span>
-          <span className="meeting-excerpt">{localizedMeeting(n.excerptKo, n.excerptZh, language)}</span>
+          {n.time && <span className="meeting-meta">{n.time}</span>}
+          <span className="meeting-row-arrow" aria-hidden>›</span>
         </button>)}</section>)}
       </>}
     </div>

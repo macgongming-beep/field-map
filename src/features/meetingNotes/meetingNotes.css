@@ -1,4 +1,10 @@
 .meeting-home { border-block: 1px solid var(--line-muted); padding-block: 24px; margin-bottom: 28px; }
+.meeting-home .meeting-collection-entry { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; border: 0; padding: 0; text-align: left; }
+.meeting-collection-entry strong { display: block; font-size: 18px; line-height: 1.5; overflow-wrap: anywhere; }
+.meeting-collection-entry .meeting-meta { display: block; margin-top: 6px; }
+.meeting-entry-end { display: flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 24px; }
+.meeting-list-row { position: relative; padding-right: 24px !important; }
+.meeting-row-arrow { position: absolute; right: 0; top: 18px; font-size: 22px; color: var(--muted); }
 .meeting-heading, .meeting-screen-head, .meeting-actions, .meeting-prev-next, .meeting-collection-select { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .meeting-heading h2 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
 .meeting-home button, .meeting-screen button, .meeting-edit-launch { color: var(--ink); background: transparent; border: 1px solid var(--line-muted); border-radius: 6px; padding: 8px 12px; min-height: 40px; font: inherit; cursor: pointer; }
