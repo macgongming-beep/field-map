@@ -13,7 +13,7 @@ export const en = {
     'meeting.retry': "Retry",
     'meeting.empty': "No notes yet.",
     'meeting.edit': "Edit note",
-    'meeting.write': "Write or edit meeting notes",
+    'meeting.launchEditor': "Write or edit meeting notes",
     'meeting.save': "Save",
     'meeting.saved': "Saved",
     'meeting.archive': "Archive",

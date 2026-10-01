@@ -16,7 +16,7 @@ export function MeetingEditor({ eventId, noteId, language }: { eventId: number |
   const context = useMeetingHome()
   const [open, setOpen] = useState(false)
   if (!meetingNotesEnabled || !context?.canManage) return null
-  return <><button type="button" className="meeting-edit-launch" onClick={() => setOpen(true)}>{t(language, noteId ? 'meeting.edit' : 'meeting.write')}</button>{open && <NoteEditor eventId={eventId} noteId={noteId} language={language} onClose={() => setOpen(false)} onSaved={context.refresh} />}</>
+  return <><button type="button" className="meeting-edit-launch" onClick={() => setOpen(true)}>{t(language, noteId ? 'meeting.edit' : 'meeting.launchEditor')}</button>{open && <NoteEditor eventId={eventId} noteId={noteId} language={language} onClose={() => setOpen(false)} onSaved={context.refresh} />}</>
 }
 function NoteEditor({ eventId, noteId, language, onClose, onSaved }: { eventId: number | null; noteId?: number; language: AppLanguage; onClose: () => void; onSaved: () => void }) {
   const [note, setNote] = useState<MeetingNote | null>(null)

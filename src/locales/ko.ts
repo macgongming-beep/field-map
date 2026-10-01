@@ -13,7 +13,7 @@ export const ko = {
     'meeting.retry': "다시 시도",
     'meeting.empty': "등록된 글이 없습니다.",
     'meeting.edit': "글 수정",
-    'meeting.write': "모임 정리 작성·수정",
+    'meeting.launchEditor': "모임 정리 작성·수정",
     'meeting.save': "저장",
     'meeting.saved': "저장했습니다",
     'meeting.archive': "보관",
