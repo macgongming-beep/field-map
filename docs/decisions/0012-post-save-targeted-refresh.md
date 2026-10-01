@@ -1,6 +1,6 @@
 # Post-save targeted refresh
 
-- Status: demo validation
+- Status: production released
 - Date: 2026-10-01
 
 Visit mutations previously refreshed the global one-year visit history and all
@@ -61,3 +61,23 @@ query/cache tests cover pagination, invalidation, errors and response ordering.
 - This verifies propagation between two active browser clients, not physical
   phones or permissions between distinct participant accounts. It does not
   measure billed egress. Production was not changed during these checks.
+
+## Production rollout (2026-10-01 23:26 KST)
+
+- User approved release after the demo follow-up. Production main fast-forwarded
+  from adaf5a6 to 2587ed4; no intervening main commits or DB changes.
+- Pre-release production backup succeeded: 40 tables / 22,772 rows and private
+  merge audit SQL; the absent app_sessions table was skipped, zero failures.
+  Backup metadata is in backups/2026-10-01/_meta.json (not committed).
+- Focused store regression tests were rerun: 21 passed. The earlier full-suite,
+  lint/build and independent mutation checks remain the release evidence.
+- Deployment dpl_83h7YrrBofgfHcACwTc5xRq5hu9x reached Ready. At
+  2026-10-01T14:26:32Z the production alias returned HTTP 200 with entry
+  index-x0qL149u.js and store chunk TerritoryReportView-DEuf2SiY.js. The served
+  chunk contains the targeted visit recovery and boundary mutation paths.
+- No production test visits, schema changes, grant changes or billing changes.
+- Compare the first complete post-release KST day (October 2) with October 1,
+  using identical billing categories and matching log start/end timestamps.
+  Note active usage and old-client adoption; do not attribute changes to this
+  release solely from aggregate totals. The backup itself also transfers data.
+  Post-release billed egress and fallback frequency have not yet been measured.
