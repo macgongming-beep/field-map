@@ -43,3 +43,21 @@ query/cache tests cover pagination, invalidation, errors and response ordering.
 - These checks establish query scope and local save/undo behavior, not a billed
   egress percentage. Two-device live propagation was not repeated this turn.
 - Production main, production DB and billing were not changed.
+
+## Follow-up propagation verification
+
+- Two independent Chrome windows, both signed into the same demo administrator
+  account, observed building 73. Window A marked unit 101 absent and window B
+  received it without refresh; B marked unit 102 absent and A received it.
+  Both reversals propagated, restoring zero active visits.
+- Added synthetic units `동기화검증1001` and `동기화검증1002` and recorded visits
+  immediately after creation. The other window received both units and records.
+  The first network interval included a foreground refresh, so it was not used
+  to attribute full reads to the save. In the isolated second interval, the
+  service_sessions network filter showed 0 of 39 requests; scoped building 73
+  and history reads were observed, with no full-refresh fallback observed.
+- Test visits were invalidated through the UI. The two synthetic units remain
+  in the demo with no active visits; audit history was not permanently deleted.
+- This verifies propagation between two active browser clients, not physical
+  phones or permissions between distinct participant accounts. It does not
+  measure billed egress. Production was not changed during these checks.
