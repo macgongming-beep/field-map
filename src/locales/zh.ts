@@ -13,7 +13,7 @@ export const zh = {
     'meeting.retry': "重试",
     'meeting.empty': "暂无文章。",
     'meeting.edit': "编辑摘要",
-    'meeting.manage': "撰写或编辑聚会摘要",
+    'meeting.write': "撰写或编辑聚会摘要",
     'meeting.save': "保存",
     'meeting.saved': "已保存",
     'meeting.archive': "归档",
