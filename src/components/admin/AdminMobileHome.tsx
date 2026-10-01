@@ -54,6 +54,7 @@ function timeBlock(time: string, lang: AppLanguage) {
 }
 
 import { ServiceSuggestionsSection } from '../ServiceSuggestionsSection'
+import { MeetingHome } from '../../features/meetingNotes/MeetingHome'
 
 export function AdminMobileHome({
   language,
@@ -72,6 +73,7 @@ export function AdminMobileHome({
 
   return (
     <div className="mh-page">
+      <MeetingHome language={language} position="top" />
 
       {/* ── 오늘의 봉사 ──────────────────── */}
       <section className="mobile-home-section">
@@ -132,6 +134,7 @@ export function AdminMobileHome({
         )}
       </section>
 
+      <MeetingHome language={language} position="after_service" />
       <ServiceSuggestionsSection language={language} />
 
       {/* ── 운영 현황 ────────────────────── */}

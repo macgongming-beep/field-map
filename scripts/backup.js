@@ -81,6 +81,8 @@ const TABLES = [
 
   // 캘린더/일정
   'calendar_events',
+  'service_meeting_collections',
+  'service_meeting_notes',
   'event_participants',
   'event_card_assignments',
   'event_card_assignment_cards',

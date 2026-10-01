@@ -5,6 +5,7 @@ import { t, formatPeriod, formatLeadSub, formatLeaderOf, formatApplied } from '.
 
 import { compareTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
 import { ServiceSuggestionsSection } from './ServiceSuggestionsSection'
+import { MeetingHome } from '../features/meetingNotes/MeetingHome'
 
 export function UserMobileHome({
   language,
@@ -28,6 +29,7 @@ export function UserMobileHome({
 
   return (
     <div className="mh-page">
+      <MeetingHome language={language} position="top" />
 
       {/* ─── 오늘 봉사 — 디자인 24/25 ─── */}
       <section className="mobile-home-section">
@@ -104,6 +106,7 @@ export function UserMobileHome({
         )}
       </section>
 
+      <MeetingHome language={language} position="after_service" />
       <ServiceSuggestionsSection language={language} />
 
       {/* ─── 인도자 전용 — 담당 카드 진행 (미니 카드 그리드) ─── */}

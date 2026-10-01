@@ -65,6 +65,7 @@ const RESTORE_ORDER = [
   'buildings', 'units',
   // 4. 일정 (봉사 세션이 참조한다)
   'calendar_events',
+  'service_meeting_collections', 'service_meeting_notes',
   'service_sessions',
   // 5. 방문 (세대·세션을 참조한다)
   'visit_histories', 'building_access_events', 'regular_visits', 'return_visits', 'return_visit_logs',

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { MeetingEditor } from '../features/meetingNotes/MeetingEditor'
 import { askNotifyOnEventEdit } from '../lib/askNotify'
 import { countEventNotifyTargets, countEventNotifyTargetsMany } from '../utils/eventNotify'
 import { useSearchParams } from 'react-router-dom'
@@ -1068,6 +1069,7 @@ function EventDetailCard({
 
   return (
     <article className="detail-card" id={`event-card-${event.id}`}>
+      <MeetingEditor eventId={event.id} language={language} />
       {/* 헤더: ⋮ 메뉴 (admin/leader) */}
       <div className="detail-title-row" style={{ marginBottom: 0 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>

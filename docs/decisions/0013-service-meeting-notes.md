@@ -1,9 +1,9 @@
 # 봉사 모임 정리: 일정 삭제와 게시글 보존 분리
 
-- 상태: 보존 규칙 승인, 구현 설계 제안
+- 상태: 1차 구현, 데모 검증 중
 - 결정일: 2026-10-01
 - 작업 브랜치: codex/service-meeting-notes
-- 운영 상태: 미구현, DB 변경 및 배포 없음
+- 운영 상태: 변경 없음. DB 마이그레이션은 데모에만 적용.
 
 ## 목적과 화면
 
@@ -34,7 +34,7 @@ FK, 생성 동작, 기간 판정 로직을 공유하지 않는다. 모음 생성
 special_period_id, 특별봉사 배너, 지도, 캘린더 시즌 표시에 영향을 주지 않는다.
 
 모음 필드: id, name_ko, name_zh, start_date, end_date, home_visible_until,
-created_at, updated_at, archived_at. 날짜는 서울 기준 달력 날짜이며 시작일과
+home_position, collapse_suggestions, created_at, updated_at, archived_at. 날짜는 서울 기준 달력 날짜이며 시작일과
 표시 종료일은 포함한다. start_date <= end_date <= home_visible_until을 검증한다.
 모음은 영구 삭제 대신 보관하며, 글이 연결된 모음을 CASCADE 삭제하지 않는다.
 
@@ -127,4 +127,22 @@ DesktopStats.tsx의 regular 범위는 specialPeriodId가 없는 기록만 포함
    저장 시 알림 미발송, 일정 삭제 후 글 접근을 확인.
 7. 외부 리뷰와 사용자 확인 후 운영 배포 여부를 별도로 결정.
 
-현재 문서는 준비 단계 산출물이다. 구현·데모 검증이 끝났다는 의미가 아니다.
+## 1차 구현 및 검증 기록
+
+- 전용 feature API/Provider를 사용한다. useStore/fetchAll에는 추가하지 않았다.
+- VITE_SERVICE_MEETING_NOTES_ENABLED=true인 배포에서만 활성화한다. 운영 기본값은 꺼짐.
+- PC 일정 상세의 '모임 내용'에서 모음 관리 및 한·중 작성·미리보기를 연다.
+  일정이 삭제된 글은 게시글 화면에서 관리자가 수정할 수 있다.
+- 기존 rename RPC를 private로 이동하고 인증을 그대로 수행하는 public wrapper에서
+  글 스냅샷을 추가 갱신한다. private 원본은 PUBLIC/anon/authenticated 실행권한을 회수했다.
+- 데모 DB 적용 전 public/private 전체 custom dump를 확보했다.
+  백업: backups/meeting-demo-2026-10-01T14-39-27.260Z/before.dump (비공개, 커밋 제외).
+- 실제 PostgreSQL 트랜잭션 시험: 관리자 작성, 작성자 위조 방지, 동시 수정 충돌,
+  일정 수정/삭제 후 보존, 연결 해제 및 보관 글 이름 정정, 사용자 삭제 후 보존,
+  무인증 읽기/쓰기 차단, 일반 사용자 쓰기 차단 및 읽기 허용, 알림 미발송.
+  시험 후 ROLLBACK으로 fixtures/DDL을 모두 되돌렸다.
+- DB 변형 시험: SET NULL→CASCADE, 관리자 검사 제거, 충돌 검사 제거 각각 실패 확인.
+  앱 변형 시험: 중국어 공백 대체 제거 시 해당 시험만 실패(나머지 4개 통과).
+- 로컬 앱 + 실제 데모 DB에서 UI 작성/저장 및 모바일 한·중 읽기 확인.
+  390×844, 아주 크게에서 dialog 390×844 및 가로 넘침 요소 0개 확인.
+- 보관 복원 UI는 2차 범위이며, 운영 반영은 외부 리뷰/사용자 확인 전 진행하지 않는다.

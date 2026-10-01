@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Toast } from './components/Toast'
+import { MeetingProvider } from './features/meetingNotes/MeetingProvider'
 import { AppLoading } from './components/AppLoading'
 import { AppUpdateNotice } from './components/AppUpdateNotice'
 import { ConfirmDialog } from './components/ConfirmDialog'
@@ -354,6 +355,7 @@ function App() {
           ⚠ 이 팝업이 보인다는 것 자체가 '헤더를 보내는 새 버전' 이라는 뜻이다. */}
       <MaintenanceNotice userId={user.id} language={language} />
       <PwaInstallBanner language={language} />
+      <MeetingProvider key={user.id} userId={user.id} canManage={user.role === 'admin' || user.role === 'developer'} language={language}>
       {/* 지도 화면에서는 바텀시트 드래그와 충돌하므로 비활성화 */}
       {location.pathname !== '/map' && <PullToRefresh onRefresh={refetchAll} />}
       <Suspense
@@ -589,6 +591,7 @@ function App() {
         )}
         </TerritoryRealtimeContext.Provider>
       </Suspense>
+      </MeetingProvider>
     </>
   )
 }

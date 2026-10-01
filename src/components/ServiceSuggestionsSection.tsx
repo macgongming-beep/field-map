@@ -4,6 +4,7 @@ import type { AppLanguage } from '../i18n'
 import { t } from '../i18n'
 import type { ServiceSuggestion, SuggestionBlock } from '../types'
 import { sanitizeRichText } from '../lib/richText'
+import { MeetingSuggestions } from '../features/meetingNotes/MeetingHome'
 
 // DB에서 오는 block.type 값 번역 맵
 const BLOCK_TYPE_ZH: Record<string, string> = {
@@ -55,6 +56,7 @@ export function ServiceSuggestionsSection({ language = 'ko' }: { language?: AppL
   if (!currentSuggestion || currentSuggestion.content.length === 0) return null
 
   return (
+    <MeetingSuggestions language={language}>
     <section className="mobile-home-section" style={{ marginTop: 24 }}>
       <div className="mh-sec-head" style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: 12 }}>
         <h2>{t(language, 'suggestion.sectionTitle')}</h2>
@@ -67,6 +69,7 @@ export function ServiceSuggestionsSection({ language = 'ko' }: { language?: AppL
         ))}
       </div>
     </section>
+    </MeetingSuggestions>
   )
 }
 
