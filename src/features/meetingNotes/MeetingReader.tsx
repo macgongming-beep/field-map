@@ -61,7 +61,7 @@ export function MeetingReader({ language, userId, revision = 0 }: { language: Ap
   const sorted = [...notes].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`) || a.id - b.id)
   const index = sorted.findIndex(n => n.id === noteId)
   return createPortal(<section ref={dialogRef} className="meeting-screen" role="dialog" aria-modal="true" aria-label={t(language, 'meeting.title')}>
-    <MeetingHeader language={language} title={collection?.id === collectionId ? localizedMeeting(collection.nameKo, collection.nameZh, language) : t(language, 'meeting.title')} onBack={() => noteId ? setParams(previous => { const next = new URLSearchParams(previous); next.delete('meetingNote'); return next }, { replace: true }) : close()} />
+    <MeetingHeader language={language} title={collection?.id === collectionId ? localizedMeeting(collection.nameKo, collection.nameZh, preferredBodyLanguage) : t(language, 'meeting.title')} onBack={() => noteId ? setParams(previous => { const next = new URLSearchParams(previous); next.delete('meetingNote'); return next }, { replace: true }) : close()} />
     <div className="meeting-scroll" ref={bodyRef}>
       {error ? <p role="alert">{t(language, 'meeting.failed')} <button onClick={() => setRetry(n => n + 1)}>{t(language, 'meeting.retry')}</button></p> : noteId ? current ? <article>
         {current.bodyZh.trim() && <div className="meeting-language" role="group" aria-label={t(language, 'meeting.title')}>{languageOptions.map(option => <button key={option} aria-pressed={option === 'zh' ? bodyLanguage === 'zh' : bodyLanguage !== 'zh'} onClick={() => setBodyLanguage(option)}>{option === 'zh' ? '中文' : '한국어'}</button>)}</div>}
@@ -70,8 +70,9 @@ export function MeetingReader({ language, userId, revision = 0 }: { language: Ap
         <MeetingEditor eventId={current.eventId} noteId={current.id} language={language} />
         <nav className="meeting-prev-next"><button disabled={index <= 0} onClick={() => openNote(sorted[index - 1].id)}><span aria-hidden>‹</span> {t(language, 'meeting.previous')}</button><button disabled={index < 0 || index >= sorted.length - 1} onClick={() => openNote(sorted[index + 1].id)}>{t(language, 'meeting.next')} <span aria-hidden>›</span></button></nav>
       </article> : <p>{collection?.id === collectionId && !notes.some(n => n.id === noteId) ? t(language, 'meeting.empty') : t(language, 'meeting.loading')}</p> : <>
+        <div className="meeting-language" role="group" aria-label={t(language, 'meeting.title')}>{languageOptions.map(option => <button key={option} aria-pressed={option === 'zh' ? preferredBodyLanguage === 'zh' : preferredBodyLanguage !== 'zh'} onClick={() => setBodyLanguage(option)}>{option === 'zh' ? '中文' : '한국어'}</button>)}</div>
         {notes.filter(n => n.collectionId === collectionId && (!date || n.date === date)).length === 0 && <p>{t(language, 'meeting.empty')}</p>}
-        <MeetingDateList notes={notes.filter(n => n.collectionId === collectionId && (!date || n.date === date))} language={language} userId={userId} onOpen={openNote} />
+        <MeetingDateList notes={notes.filter(n => n.collectionId === collectionId && (!date || n.date === date))} language={preferredBodyLanguage} userId={userId} onOpen={openNote} />
       </>}
     </div>
   </section>, root)
