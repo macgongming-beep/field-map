@@ -6,10 +6,11 @@ import { confirmDialog } from '../../lib/confirm'
 import { getOverlayRoot } from '../../lib/overlayRoot'
 import { useMeetingHome } from './context'
 import { fetchEventMeetingNote, fetchMeetingCollections, fetchMeetingNote, MeetingConflict, saveMeetingCollection, saveMeetingNote } from './api'
-import { addDays, koreaDate, localizedMeeting, meetingNotesEnabled } from './model'
+import { addDays, koreaDate, localizedMeeting, meetingNotesEnabled, meetingDateLabel } from './model'
 import type { MeetingCollection, MeetingNote, NoteDraft } from './model'
 import { MeetingText } from './MeetingText'
 import { useMeetingDialog } from './useMeetingDialog'
+import { MeetingHeader } from './MeetingHeader'
 
 const emptyDraft: NoteDraft = { titleKo: '', titleZh: '', bodyKo: '', bodyZh: '', listTitleKo: '', listTitleZh: '' }
 export function MeetingEditor({ eventId, noteId, language }: { eventId: number | null; noteId?: number; language: AppLanguage }) {
@@ -28,7 +29,7 @@ function NoteEditor({ eventId, noteId, language, onClose, onSaved }: { eventId: 
   const [error, setError] = useState('')
   const [conflict, setConflict] = useState(false)
   const [preview, setPreview] = useState(false)
-  const [manage, setManage] = useState(false)
+  const [editingLanguage, setEditingLanguage] = useState<'Ko' | 'Zh'>(language === 'zh' ? 'Zh' : 'Ko')
   const [revision, setRevision] = useState(0)
   useEffect(() => {
     let active = true
@@ -54,18 +55,18 @@ function NoteEditor({ eventId, noteId, language, onClose, onSaved }: { eventId: 
     finally { setBusy(false) }
   }
   return createPortal(<section ref={dialogRef} className="meeting-screen meeting-editor" role="dialog" aria-modal="true" aria-label={t(language, 'meeting.edit')}>
-    <header className="meeting-screen-head"><h1>{t(language, 'meeting.edit')}</h1><button type="button" autoFocus disabled={busy} aria-label={t(language, 'meeting.close')} onClick={() => void close()}>×</button></header>
+    <MeetingHeader language={language} title={t(language, 'meeting.edit')} disabled={busy} onBack={() => void close()} />
     <div className="meeting-scroll">
       {error && <p role="alert">{error}{(!ready || conflict) && <button type="button" onClick={async () => { if (!dirty || await confirmDialog({ message: t(language, 'meeting.discard') })) setRevision(n => n + 1) }}>{t(language, 'meeting.reload')}</button>}</p>}
       {!ready ? !error && <p>{t(language, 'meeting.loading')}</p> : note?.archivedAt ? <p>{t(language, 'meeting.archived')}</p> : <>
-        {note && <p className="meeting-meta">{note.date} · {note.time} · {note.leader}{note.eventId === null && ` · ${t(language, 'meeting.detached')}`}</p>}
-        <div className="meeting-collection-select"><label>{t(language, 'meeting.collection')}<select value={collectionId} disabled={busy} onChange={e => setCollectionId(Number(e.target.value))}><option value={0}>—</option>{collections.map(c => <option key={c.id} value={c.id}>{localizedMeeting(c.nameKo, c.nameZh, language)}</option>)}</select></label><button type="button" disabled={busy} onClick={() => setManage(!manage)}>{t(language, 'meeting.manage')}</button></div>
-        {manage && <CollectionEditor language={language} collections={collections} onSaved={async () => { setCollections(await fetchMeetingCollections()); onSaved() }} />}
+        {note ? <p className="meeting-meta">{[meetingDateLabel(note.date, language), note.time, collections.filter(c => c.id === collectionId).map(c => localizedMeeting(c.nameKo, c.nameZh, language)).join('')].filter(Boolean).join(' · ')}</p>
+          : <div className="meeting-collection-select"><label>{t(language, 'meeting.collection')}<select value={collectionId} disabled={busy} onChange={e => setCollectionId(Number(e.target.value))}><option value={0}>—</option>{collections.map(c => <option key={c.id} value={c.id}>{localizedMeeting(c.nameKo, c.nameZh, language)}</option>)}</select></label></div>}
+        <div className="meeting-language meeting-editor-tabs" role="group" aria-label={t(language, 'meeting.edit')}><button type="button" aria-pressed={editingLanguage === 'Ko'} onClick={() => setEditingLanguage('Ko')}>한국어</button><button type="button" aria-pressed={editingLanguage === 'Zh'} onClick={() => setEditingLanguage('Zh')}>中文</button></div>
         <div className="meeting-language"><button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>{t(language, 'meeting.write')}</button><button type="button" aria-pressed={preview} onClick={() => setPreview(true)}>{t(language, 'meeting.preview')}</button></div>
-        <div className="meeting-bilingual">{(['Ko', 'Zh'] as const).map(lang => <section key={lang}>{preview ? <><h2>{draft[`title${lang}`]}</h2><MeetingText text={draft[`body${lang}`]} /></> : <>
+        <div className="meeting-bilingual meeting-editor-fields">{(['Ko', 'Zh'] as const).map(lang => <section key={lang} className={editingLanguage === lang ? 'is-active' : ''}>{preview ? <><h2>{draft[`title${lang}`]}</h2><MeetingText text={draft[`body${lang}`]} /></> : <>
           <label>{t(language, lang === 'Ko' ? 'meeting.titleKo' : 'meeting.titleZh')}<input disabled={busy} maxLength={200} value={draft[`title${lang}`]} onChange={e => setDraft({ ...draft, [`title${lang}`]: e.target.value })} /></label>
-          <label>{t(language, lang === 'Ko' ? 'meeting.listTitleKo' : 'meeting.listTitleZh')}<input disabled={busy} maxLength={200} value={draft[`listTitle${lang}`] ?? ''} onChange={e => setDraft({ ...draft, [`listTitle${lang}`]: e.target.value })} /></label>
           <label>{t(language, lang === 'Ko' ? 'meeting.bodyKo' : 'meeting.bodyZh')}<textarea disabled={busy} maxLength={30000} rows={18} value={draft[`body${lang}`]} onChange={e => setDraft({ ...draft, [`body${lang}`]: e.target.value })} /></label>
+          <details className="meeting-list-title-option"><summary>{t(language, lang === 'Ko' ? 'meeting.listTitleKo' : 'meeting.listTitleZh')}</summary><label>{t(language, lang === 'Ko' ? 'meeting.listTitleKo' : 'meeting.listTitleZh')}<input disabled={busy} maxLength={200} value={draft[`listTitle${lang}`] ?? ''} onChange={e => setDraft({ ...draft, [`listTitle${lang}`]: e.target.value })} /></label></details>
         </>}</section>)}</div>
         <footer className="meeting-actions">{note && <button type="button" disabled={busy || conflict} onClick={() => void save(true)}>{t(language, 'meeting.archive')}</button>}<button className="meeting-primary" type="button" disabled={busy || conflict} onClick={() => void save()}>{busy ? t(language, 'meeting.loading') : t(language, 'meeting.save')}</button></footer>
       </>}

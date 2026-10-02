@@ -9,6 +9,7 @@ import { localizedMeeting, markNoteRead, readNoteVersion, meetingDateLabel, meet
 import type { MeetingCollection, MeetingNote, MeetingNoteMeta } from './model'
 import { MeetingText } from './MeetingText'
 import { MeetingEditor } from './MeetingEditor'
+import { MeetingHeader } from './MeetingHeader'
 import { useMeetingDialog } from './useMeetingDialog'
 
 export function MeetingReader({ language, userId, revision = 0 }: { language: AppLanguage; userId: number; revision?: number }) {
@@ -56,7 +57,7 @@ export function MeetingReader({ language, userId, revision = 0 }: { language: Ap
   const sorted = [...notes].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`) || a.id - b.id)
   const index = sorted.findIndex(n => n.id === noteId)
   return createPortal(<section ref={dialogRef} className="meeting-screen" role="dialog" aria-modal="true" aria-label={t(language, 'meeting.title')}>
-    <header className="meeting-screen-head"><button autoFocus type="button" aria-label={t(language, 'meeting.back')} onClick={() => noteId ? setParams(previous => { const next = new URLSearchParams(previous); next.delete('meetingNote'); return next }, { replace: true }) : close()}>‹</button><h1>{collection?.id === collectionId ? localizedMeeting(collection.nameKo, collection.nameZh, language) : t(language, 'meeting.title')}</h1><button type="button" aria-label={t(language, 'meeting.close')} onClick={close}>×</button></header>
+    <MeetingHeader language={language} title={collection?.id === collectionId ? localizedMeeting(collection.nameKo, collection.nameZh, language) : t(language, 'meeting.title')} onBack={() => noteId ? setParams(previous => { const next = new URLSearchParams(previous); next.delete('meetingNote'); return next }, { replace: true }) : close()} />
     <div className="meeting-scroll" ref={bodyRef}>
       {error ? <p role="alert">{t(language, 'meeting.failed')} <button onClick={() => setRetry(n => n + 1)}>{t(language, 'meeting.retry')}</button></p> : noteId ? current ? <article>
         {current.bodyZh.trim() && <div className="meeting-language" role="group" aria-label={t(language, 'meeting.title')}><button aria-pressed={bodyLanguage !== 'zh'} onClick={() => setBodyLanguage('ko')}>한국어</button><button aria-pressed={bodyLanguage === 'zh'} onClick={() => setBodyLanguage('zh')}>中文</button></div>}

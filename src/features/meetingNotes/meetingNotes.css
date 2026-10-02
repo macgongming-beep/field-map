@@ -57,6 +57,17 @@
 .meeting-screen .meeting-edit-launch { border: 0; color: var(--muted); padding-inline: 0; font-size: 13px; }
 .meeting-screen button:disabled { opacity: .45; cursor: default; }
 .meeting-editor { z-index: 1900; }
+.meeting-header { flex-shrink: 0; }
+.meeting-header .app-header__left { width: 100%; }
+.meeting-header .app-header__title { white-space: normal; overflow-wrap: anywhere; letter-spacing: 0; flex-shrink: 1; }
+.meeting-screen .meeting-header .app-header__back { width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 10px; font-size: 22px; line-height: 1; background: var(--gray-50); border-color: var(--border-default); color: var(--gray-700); }
+.meeting-editor-tabs { display: none; }
+.meeting-list-title-option { margin-top: 16px; font-size: 13px; color: var(--muted); }
+.meeting-list-title-option summary { cursor: pointer; padding-block: 8px; }
+@media (max-width: 700px) {
+  .meeting-editor-tabs { display: flex; }
+  .meeting-editor-fields > section:not(.is-active) { display: none; }
+}
 .meeting-editor .meeting-scroll { width: 100%; max-width: 1120px; margin: 0 auto; box-sizing: border-box; }
 :is(.meeting-screen, .meeting-settings) label { display: grid; gap: 6px; font-size: 14px; margin: 10px 0; }
 :is(.meeting-screen, .meeting-settings) :is(input, select, textarea) { box-sizing: border-box; width: 100%; min-width: 0; font: inherit; background: #fff; color: var(--ink); border: 1px solid var(--line-muted); border-radius: 6px; padding: 10px 12px; }

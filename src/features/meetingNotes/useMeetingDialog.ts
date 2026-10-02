@@ -14,7 +14,7 @@ export function useMeetingDialog(active: boolean, onClose: () => void) {
       if (dialog.parentElement?.lastElementChild !== dialog) return
       if (event.key === 'Escape') { event.preventDefault(); close.current(); return }
       if (event.key !== 'Tab') return
-      const items = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex="0"]')].filter(el => el.getClientRects().length > 0)
+      const items = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex="0"]')].filter(el => el.getClientRects().length > 0)
       const first = items[0], last = items.at(-1)
       if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) { event.preventDefault(); last?.focus() }
       else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) { event.preventDefault(); first?.focus() }
