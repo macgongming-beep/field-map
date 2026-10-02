@@ -194,7 +194,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
   ]
 
   // 각 slice를 독립적으로 fetch. 페이로드 크기 누적 반환.
-  const fetchSlice = useCallback(async (slice: Slice, recovery = false): Promise<number> => {
+  const fetchSlice = useCallback(async (slice: Slice, recovery = false, historiesRecovered = false): Promise<number> => {
     let approxBytes = 0
     // ⚠ 운영에서는 측정하지 않는다 — 숫자 하나 얻으려고 440KB 를 통째로
     //   문자열로 바꾸는 비용이 구형 기기에서 그대로 체감된다
@@ -300,7 +300,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
         //   숫자가 조용히 줄어든다. 반드시 끝까지 받는다.
         //   (예전에는 봉사 세션을 100개만 받아 누적 시간이 절반만 나왔다)
         const [visitsRes, sessionsRes] = await Promise.all([
-          fetchAllPages((from, to) => supabase
+          historiesRecovered ? Promise.resolve({ data: [], error: null }) : fetchAllPages((from, to) => supabase
             .from('visit_histories')
             .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, service_session_id, special_period_id, invitation_left, created_at, created_by_user_id')
             .is('invalidated_at', null)
@@ -321,7 +321,13 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
         measure(visitsRes.data)
         measure(sessionsRes.data)
 
-        setVisitHistories((visitsRes.data as RawVisitHistory[]).map(toVisitHistory))
+        if (historiesRecovered) {
+          // Match the full/targeted SQL created_at >= cutoff contract (NULL is excluded).
+          setVisitHistories((current) => current.filter((history) =>
+            history.createdAt != null && Date.parse(history.createdAt) >= Date.parse(oneYearAgo)))
+        } else {
+          setVisitHistories((visitsRes.data as RawVisitHistory[]).map(toVisitHistory))
+        }
         setServiceSessions(sessionsRes.error
           ? []
           : (sessionsRes.data as RawServiceSession[]).map(toServiceSession))
@@ -481,7 +487,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
-  const recoveryReads = useRef(new Map<Slice, { promise: Promise<number>; delta: boolean }>()).current
+  const recoveryReads = useRef(new Map<Slice, { promise: Promise<number>; delta: boolean; historiesRecovered?: boolean }>()).current
   const fetchSlices = useCallback((
     slices: Slice[],
     options?: { triggeredBy?: string },
@@ -491,25 +497,41 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     const recovery = options?.triggeredBy === 'foreground' || options?.triggeredBy?.startsWith('realtime:')
     const share = options?.triggeredBy === 'fetchAll' || recovery
     let reusedTerritoryRead = false
+    let historiesRecovered = false
     const read = (slice: Slice) => {
       if (!share) return fetchSlice(slice, slice === 'cardBoundaries' && options?.triggeredBy === 'mutation:cardBoundaries')
       const existing = recoveryReads.get(slice)
-      if (existing && (recovery || !existing.delta)) {
+      // A sessions-only visits read cannot replace histories unless this caller recovered them.
+      if (existing && (recovery || !existing.delta)
+        && !(slice === 'visits' && existing.delta && !historiesRecovered)) {
         if (slice === 'buildings' || slice === 'visits') reusedTerritoryRead = true
-        return existing.promise
+        return existing.promise.then((bytes) => {
+          if (slice === 'buildings') historiesRecovered = existing.historiesRecovered === true
+          return bytes
+        })
       }
       const canRecoverBuildings = slice === 'buildings' && recovery
         && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
         && territoryCheckpoint.baseline && syncBuildingsRef.current
       if (canRecoverBuildings) reusedTerritoryRead = true
+      const entry: { promise: Promise<number>; delta: boolean; historiesRecovered?: boolean } = {
+        promise: Promise.resolve(0),
+        delta: Boolean(canRecoverBuildings || (recovery && slice === 'cardBoundaries') || (slice === 'visits' && historiesRecovered)),
+      }
       const promise = canRecoverBuildings
         ? recoverTerritoryBuildings(territoryCheckpoint, buildingsRef.current.map((b) => b.id), syncBuildingsRef.current!)
+          .then((bytes) => {
+            entry.historiesRecovered = true
+            historiesRecovered = true
+            return bytes
+          })
           .catch(() => {
             console.warn('[territory recovery] delta unavailable; loading full buildings')
             return fetchSlice(slice)
           })
-        : fetchSlice(slice, Boolean(recovery))
-      recoveryReads.set(slice, { promise, delta: Boolean(canRecoverBuildings || (recovery && slice === 'cardBoundaries')) })
+        : fetchSlice(slice, Boolean(recovery), Boolean(recovery && historiesRecovered))
+      entry.promise = promise
+      recoveryReads.set(slice, entry)
       const clear = () => { if (recoveryReads.get(slice)?.promise === promise) recoveryReads.delete(slice) }
       void promise.then(clear, clear)
       return promise
@@ -527,7 +549,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
         }) : null
 
       // buildings와 cards가 둘 다 요청되면 buildings 먼저 fetch (의존성)
-      if (slices.includes('buildings') && slices.includes('cards')) {
+      if (slices.includes('buildings') && (slices.includes('cards') || slices.includes('visits'))) {
         const buildingsBytes = await read('buildings')
         totalBytes += buildingsBytes
         const remaining = slices.filter((s) => s !== 'buildings')
@@ -693,6 +715,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       ...updated.flatMap((b) => b.units.map((u) => u.id)),
     ])
     const updatedById = new Map(updated.map((b) => [b.id, b]))
+    // A destination can arrive before the old building's removal snapshot.
+    const incomingUnitIds = new Set(updated.flatMap((b) => b.units.map((u) => u.id)))
+    const unaffectedUnitIds = new Set(buildingsRef.current.filter((b) => !ids.has(b.id))
+      .flatMap((b) => b.units.map((u) => u.id)))
     applyBuildingsChange((current) => {
       const existing = new Set(current.map((b) => b.id))
       return [
@@ -700,7 +726,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
         ...updated.filter((b) => !existing.has(b.id)),
       ]
     })
-    setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)), ...data.histories.filter((h) => unitIds.has(h.unitId))]
+    setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)
+      || (!incomingUnitIds.has(h.unitId) && unaffectedUnitIds.has(h.unitId))),
+    ...data.histories.filter((h) => incomingUnitIds.has(h.unitId))]
       .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
   }, [applyBuildingsChange])
 
