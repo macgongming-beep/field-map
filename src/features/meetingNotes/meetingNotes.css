@@ -6,7 +6,9 @@
 .meeting-list-row { position: relative; padding-right: 24px !important; }
 .meeting-row-arrow { position: absolute; right: 0; top: 18px; font-size: 22px; color: var(--muted); }
 .meeting-topic-list { max-width: 700px; margin: 0 auto; }
-.meeting-screen .meeting-topic-row { display: grid; grid-template-columns: 60px minmax(0, 1fr) 16px; align-items: center; gap: 18px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line-muted); border-radius: 0; padding: 22px 0; }
+.meeting-screen .meeting-topic-row { display: grid; grid-template-columns: minmax(0, 1fr) 16px; align-items: center; gap: 18px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line-muted); border-radius: 0; padding: 18px 0; }
+.meeting-date-group + .meeting-date-group { margin-top: 32px; }
+.meeting-date-group > h2 { margin: 8px 0 4px; color: var(--muted); font-size: 14px; font-weight: 600; line-height: 1.5; }
 .meeting-topic-date { display: grid; gap: 4px; text-align: center; color: var(--muted); font-size: 13px; }
 .meeting-topic-date strong { font-size: 19px; font-weight: 600; color: var(--ink); }
 .meeting-topic-main { min-width: 0; }
