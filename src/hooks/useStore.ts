@@ -322,6 +322,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
         measure(sessionsRes.data)
 
         if (historiesRecovered) {
+          // Match the full/targeted SQL created_at >= cutoff contract (NULL is excluded).
           setVisitHistories((current) => current.filter((history) =>
             history.createdAt != null && Date.parse(history.createdAt) >= Date.parse(oneYearAgo)))
         } else {
@@ -500,6 +501,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
     const read = (slice: Slice) => {
       if (!share) return fetchSlice(slice, slice === 'cardBoundaries' && options?.triggeredBy === 'mutation:cardBoundaries')
       const existing = recoveryReads.get(slice)
+      // A sessions-only visits read cannot replace histories unless this caller recovered them.
       if (existing && (recovery || !existing.delta)
         && !(slice === 'visits' && existing.delta && !historiesRecovered)) {
         if (slice === 'buildings' || slice === 'visits') reusedTerritoryRead = true

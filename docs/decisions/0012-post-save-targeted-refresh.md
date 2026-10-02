@@ -239,3 +239,16 @@ unattributed because request causes are not included in the logs.
 - Existing pre-commit timestamp/30-second-overlap limitations remain. No exact
   billed-byte savings are claimed; compare matching production windows after
   review and deployment. A fresh two-device demo check remains before rollout.
+
+### Review follow-up: build flag and nullable dates
+
+- Checked both Vercel projects' Production environment values directly:
+  `VITE_TERRITORY_REALTIME_ENABLED` is exactly `true` in production and demo.
+  Temporary environment exports were deleted. This checks configuration, not
+  the flag embedded in an already-built deployment; confirm the request path
+  after the next demo build.
+- Retain exclusion of NULL created_at locally: both full and targeted SQL reads
+  use `created_at >= cutoff`, which already excludes NULL. Keeping NULL only in
+  the local recovery path would make reload and recovery disagree.
+- Added comments explaining this contract and why a sessions-only shared read
+  cannot satisfy a caller that has not successfully recovered histories.
