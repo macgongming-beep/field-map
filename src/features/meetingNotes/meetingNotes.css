@@ -56,15 +56,19 @@
 .meeting-screen button:disabled { opacity: .45; cursor: default; }
 .meeting-editor { z-index: 1900; }
 .meeting-editor .meeting-scroll { width: 100%; max-width: 1120px; margin: 0 auto; box-sizing: border-box; }
-.meeting-screen label { display: grid; gap: 6px; font-size: 14px; margin: 10px 0; }
-.meeting-screen input, .meeting-screen select, .meeting-screen textarea { box-sizing: border-box; width: 100%; min-width: 0; font: inherit; background: #fff; color: var(--ink); border: 1px solid var(--line-muted); border-radius: 6px; padding: 10px 12px; }
+:is(.meeting-screen, .meeting-settings) label { display: grid; gap: 6px; font-size: 14px; margin: 10px 0; }
+:is(.meeting-screen, .meeting-settings) :is(input, select, textarea) { box-sizing: border-box; width: 100%; min-width: 0; font: inherit; background: #fff; color: var(--ink); border: 1px solid var(--line-muted); border-radius: 6px; padding: 10px 12px; }
+.meeting-settings button { color: var(--ink); background: transparent; border: 1px solid var(--line-muted); border-radius: 6px; padding: 8px 16px; min-height: 40px; font: inherit; cursor: pointer; }
+.meeting-settings button:disabled { opacity: .45; cursor: default; }
+.meeting-settings button[type="submit"] { background: var(--ink); color: white; }
+.meeting-settings { min-width: 0; letter-spacing: 0; }
 .meeting-screen textarea { resize: vertical; line-height: 1.8; }
 .meeting-bilingual { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .meeting-collection-select > label { flex: 1; }
 .meeting-collection-editor { border-block: 1px solid var(--line-muted); padding: 16px 0; margin: 16px 0; }
 .meeting-dates-form { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
-.meeting-screen .meeting-checkbox { display: flex; align-items: center; }
-.meeting-checkbox input { width: 18px; height: 18px; }
+:is(.meeting-screen, .meeting-settings) .meeting-checkbox { display: flex; align-items: center; }
+:is(.meeting-screen, .meeting-settings) .meeting-checkbox input { width: 18px; height: 18px; padding: 0; }
 .meeting-actions { justify-content: flex-end; padding: 16px 0; }
 .meeting-screen .meeting-primary { background: var(--ink); color: #fff; min-width: 96px; }
 .meeting-edit-launch { margin: 12px 0; }

@@ -72,7 +72,7 @@ function NoteEditor({ eventId, noteId, language, onClose, onSaved }: { eventId: 
     </div>
   </section>, root)
 }
-function CollectionEditor({ language, collections, onSaved }: { language: AppLanguage; collections: MeetingCollection[]; onSaved: () => Promise<void> }) {
+export function CollectionEditor({ language, collections, onSaved }: { language: AppLanguage; collections: MeetingCollection[]; onSaved: () => Promise<void> }) {
   const [selected, setSelected] = useState<MeetingCollection | undefined>()
   const [draft, setDraft] = useState<Omit<MeetingCollection, 'id' | 'updatedAt'>>({ nameKo: '', nameZh: '', startDate: koreaDate(), endDate: koreaDate(), homeVisibleUntil: addDays(koreaDate(), 14), homePosition: 'after_service', collapseSuggestions: true })
   const [busy, setBusy] = useState(false)

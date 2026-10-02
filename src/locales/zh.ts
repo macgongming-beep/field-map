@@ -2,6 +2,7 @@
 export const zh = {
     'meeting.title': "聚会摘要",
     'meeting.homeEnabled': "在首页显示",
+    'meeting.settings': '传道聚会摘要',
     'meeting.listTitleKo': "列表主题 · 韩语（选填）",
     'meeting.listTitleZh': "列表主题 · 中文（选填）",
     'meeting.all': "查看全部",

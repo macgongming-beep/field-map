@@ -945,6 +945,7 @@ export function DesktopApp({
                 />
               : <Navigate to="/settings/profile" replace />
           } />
+          <Route path="meeting-notes" element={<MeetingSettings language={language} />} />
           <Route path="special-periods" element={
             (viewMode === 'admin' || viewMode === 'developer')
               ? <DesktopSpecialPeriods
@@ -992,3 +993,4 @@ export function DesktopApp({
     </main>
   )
 }
+import { MeetingSettings } from '../features/meetingNotes/MeetingSettings'

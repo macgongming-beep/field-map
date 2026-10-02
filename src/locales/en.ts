@@ -2,6 +2,7 @@
 export const en = {
     'meeting.title': "Meeting Notes",
     'meeting.homeEnabled': "Show on home",
+    'meeting.settings': 'Service meeting notes',
     'meeting.listTitleKo': "List topic · Korean (optional)",
     'meeting.listTitleZh': "List topic · Chinese (optional)",
     'meeting.all': "View all",

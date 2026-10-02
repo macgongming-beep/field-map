@@ -3,6 +3,7 @@ import type { ReturnVisit, Role } from '../types'
 import { useAdminAttentionCounts } from '../hooks/useAdminAttentionCounts'
 import type { AttentionUser } from '../utils/adminAttention'
 import { msg } from '../lib/msg'
+import { meetingNotesEnabled } from '../features/meetingNotes/model'
 
 
 function isAdminLike(role: Role): boolean {
@@ -117,6 +118,11 @@ export function DesktopSettings({
               icon={<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>}
               label="지역 관리"
             />
+            {meetingNotesEnabled && <SidebarLink
+              to="/settings/meeting-notes"
+              icon={<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 3h14v18H5zM8 7h8M8 11h8M8 15h5" /></svg>}
+              label="봉사 모임 정리"
+            />}
             <SidebarLink
               to="/settings/special-periods"
               icon={<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>}

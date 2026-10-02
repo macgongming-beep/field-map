@@ -1296,6 +1296,14 @@ export function MobileHome({
               ) : <Navigate to="/settings" replace />
             } />
 
+            <Route path="/settings/meeting-notes" element={
+              (actualRole === 'admin' || actualRole === 'developer') ? <div className="mobile-settings-page">
+                <AppHeader pageTitle={t(language, 'meeting.settings')} language={language} showBack
+                  onBack={() => navigate('/settings')} userId={currentUser.id} userName={currentVisitor}
+                  role={role} chatUsers={headerChatUsers} onOpenMenu={() => navigate('/settings')} />
+                <MeetingSettings language={language} />
+              </div> : <Navigate to="/settings" replace />
+            } />
             {/* 특별 봉사 시즌 관리 */}
             <Route path="/special-periods" element={
               (actualRole === 'admin' || actualRole === 'developer') ? (
@@ -1628,6 +1636,11 @@ export function MobileHome({
                           <span className="mobile-settings-chevron" aria-hidden="true">›</span>
                         </button>
                       )}
+                      {meetingNotesEnabled && <button onClick={() => navigate('/settings/meeting-notes')} type="button">
+                        <span className="mobile-settings-icon mobile-settings-icon-neutral" aria-hidden="true"><SettingsIcon name="season" /></span>
+                        <span className="mobile-settings-row-text"><strong>{t(language, 'meeting.settings')}</strong></span>
+                        <span className="mobile-settings-chevron" aria-hidden="true">›</span>
+                      </button>}
                       <button onClick={() => navigate('/special-periods')} type="button">
                         <span className="mobile-settings-icon mobile-settings-icon-season" aria-hidden="true">
                           <SettingsIcon name="season" />
@@ -1692,3 +1705,5 @@ export function MobileHome({
     </Routes>
   )
 }
+import { MeetingSettings } from '../features/meetingNotes/MeetingSettings'
+import { meetingNotesEnabled } from '../features/meetingNotes/model'
