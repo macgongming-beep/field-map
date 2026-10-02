@@ -27,7 +27,7 @@ function CollectionSettings({ language, refresh }: { language: AppLanguage; refr
     return () => { active = false }
   }, [attempt])
   return <section className="meeting-settings" style={{ padding: 24 }}>
-    <h1 className="page-header-title">{t(language, 'meeting.settings')}</h1>
+    <h1 className="page-header-title meeting-settings-title">{t(language, 'meeting.settings')}</h1>
     {error ? <p role="alert">{t(language, 'meeting.failed')} <button type="button" onClick={() => setAttempt(n => n + 1)}>{t(language, 'meeting.reload')}</button></p>
       : !ready ? <p>{t(language, 'meeting.loading')}</p>
       : <CollectionEditor language={language} collections={collections} onSaved={async () => {

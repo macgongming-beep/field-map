@@ -28,6 +28,8 @@
 .meeting-dates button { border: 0; background: var(--bg); font-size: 13px; min-height: 36px; padding: 6px 10px; }
 .meeting-unread { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #b84d43; margin-left: 6px; vertical-align: top; }
 .meeting-suggestions { margin: 24px 0; border-top: 1px solid var(--line-muted); padding-top: 16px; }
+.meeting-home:has(+ .meeting-suggestions) { margin-bottom: 0; }
+.meeting-home + .meeting-suggestions { margin-top: 0; border-top: 0; }
 .meeting-suggestions summary { cursor: pointer; font-weight: 600; }
 .meeting-screen { position: fixed; inset: 0; z-index: 1800; background: var(--bg, #fafafa); color: var(--ink); display: flex; flex-direction: column; letter-spacing: 0; }
 .meeting-screen-head { flex-shrink: 0; padding: 14px 20px; border-bottom: 1px solid var(--line-muted); background: #fff; }
@@ -76,6 +78,10 @@
 .meeting-settings button:disabled { opacity: .45; cursor: default; }
 .meeting-settings button[type="submit"] { background: var(--ink); color: white; }
 .meeting-settings { min-width: 0; letter-spacing: 0; }
+.meeting-collection-archive { margin: 16px 0 24px; }
+@media (max-width: 767px) {
+  .meeting-settings-title { display: none; }
+}
 .meeting-screen textarea { resize: vertical; line-height: 1.8; }
 .meeting-bilingual { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .meeting-collection-select > label { flex: 1; }

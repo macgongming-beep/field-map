@@ -1638,7 +1638,7 @@ export function MobileHome({
                       )}
                       {meetingNotesEnabled && <button onClick={() => navigate('/settings/meeting-notes')} type="button">
                         <span className="mobile-settings-icon mobile-settings-icon-neutral" aria-hidden="true"><SettingsIcon name="season" /></span>
-                        <span className="mobile-settings-row-text"><strong>{t(language, 'meeting.settings')}</strong></span>
+                        <span className="mobile-settings-row-text"><strong>{t(language, 'meeting.settings')}</strong><small>{t(language, 'meeting.settingsDesc')}</small></span>
                         <span className="mobile-settings-chevron" aria-hidden="true">›</span>
                       </button>}
                       <button onClick={() => navigate('/special-periods')} type="button">
