@@ -64,7 +64,7 @@ describe('meeting contracts', () => {
     const renderHome = (notes: MeetingNoteMeta[]) => <MemoryRouter><MeetingContext.Provider value={{ userId: 7, canManage: false, refresh: () => {}, data: { collections: [group], notes } }}><MeetingHome language="ko" position="top" /><span>오늘 봉사</span><MeetingHome language="ko" position="after_service" /><MeetingSuggestions language="ko"><p>제안 본문</p></MeetingSuggestions></MeetingContext.Provider></MemoryRouter>
     const { container, rerender } = render(renderHome([]))
     expect(screen.queryByText('순회방문')).toBe(null)
-    expect(container.querySelector('details')).toBe(null)
+    expect(container.querySelector('details')?.open).toBe(true)
     rerender(renderHome([note]))
     expect(screen.getAllByText('순회방문')).toHaveLength(1)
     expect(screen.queryByText('따뜻한 대화')).toBe(null)

@@ -52,23 +52,17 @@ export function ServiceSuggestionsSection({ language = 'ko' }: { language?: AppL
     setCurrentSuggestion(visibleOnes[0])
   }, [suggestions, loading])
 
-  if (loading) return null
-  if (!currentSuggestion || currentSuggestion.content.length === 0) return null
-
   return (
     <MeetingSuggestions language={language}>
+    {loading ? <p>{t(language, 'meeting.loading')}</p> : !currentSuggestion || currentSuggestion.content.length === 0 ? <p>{t(language, 'suggestion.empty')}</p> :
     <section className="mobile-home-section" style={{ marginTop: 24 }}>
-      <div className="mh-sec-head" style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: 12 }}>
-        <h2>{t(language, 'suggestion.sectionTitle')}</h2>
-
-      </div>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {currentSuggestion.content.map((block: SuggestionBlock, idx: number) => (
           <SuggestionCard key={idx} block={block} language={language} />
         ))}
       </div>
-    </section>
+    </section>}
     </MeetingSuggestions>
   )
 }

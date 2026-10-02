@@ -28,5 +28,5 @@ export function MeetingHome({ language, position }: { language: AppLanguage; pos
 export function MeetingSuggestions({ language, children }: { language: AppLanguage; children: ReactNode }) {
   const context = useMeetingHome()
   const collapse = context?.data.collections.some(c => c.collapseSuggestions && homeCollectionVisible(c, koreaDate()) && context.data.notes.some(n => n.collectionId === c.id))
-  return collapse ? <details className="meeting-suggestions"><summary>{t(language, 'suggestion.sectionTitle')}</summary>{children}</details> : children
+  return <details key={String(Boolean(collapse))} open={!collapse} className="meeting-suggestions"><summary>{t(language, 'suggestion.sectionTitle')}</summary>{children}</details>
 }
