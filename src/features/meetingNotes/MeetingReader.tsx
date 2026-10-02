@@ -22,7 +22,9 @@ export function MeetingReader({ language, userId, revision = 0 }: { language: Ap
   const [note, setNote] = useState<MeetingNote | null>(null)
   const [error, setError] = useState(false)
   const [retry, setRetry] = useState(0)
-  const [bodyLanguage, setBodyLanguage] = useState<AppLanguage>(language)
+  const [languageChoice, setLanguageChoice] = useState<{ preference: AppLanguage; userId: number; value: AppLanguage } | null>(null)
+  const preferredBodyLanguage = languageChoice?.preference === language && languageChoice.userId === userId ? languageChoice.value : language
+  const setBodyLanguage = (value: AppLanguage) => setLanguageChoice({ preference: language, userId, value })
   const cache = useRef(new Map<number, MeetingNote>())
   const bodyRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -54,13 +56,15 @@ export function MeetingReader({ language, userId, revision = 0 }: { language: Ap
   if (!root) return null
   const openNote = (id: number) => setParams(previous => { const next = new URLSearchParams(previous); next.set('meetingNote', String(id)); return next })
   const current = note?.id === noteId && note.collectionId === collectionId ? note : null
+  const bodyLanguage = current?.bodyZh.trim() ? preferredBodyLanguage : 'ko'
+  const languageOptions: AppLanguage[] = language === 'zh' ? ['zh', 'ko'] : ['ko', 'zh']
   const sorted = [...notes].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`) || a.id - b.id)
   const index = sorted.findIndex(n => n.id === noteId)
   return createPortal(<section ref={dialogRef} className="meeting-screen" role="dialog" aria-modal="true" aria-label={t(language, 'meeting.title')}>
     <MeetingHeader language={language} title={collection?.id === collectionId ? localizedMeeting(collection.nameKo, collection.nameZh, language) : t(language, 'meeting.title')} onBack={() => noteId ? setParams(previous => { const next = new URLSearchParams(previous); next.delete('meetingNote'); return next }, { replace: true }) : close()} />
     <div className="meeting-scroll" ref={bodyRef}>
       {error ? <p role="alert">{t(language, 'meeting.failed')} <button onClick={() => setRetry(n => n + 1)}>{t(language, 'meeting.retry')}</button></p> : noteId ? current ? <article>
-        {current.bodyZh.trim() && <div className="meeting-language" role="group" aria-label={t(language, 'meeting.title')}><button aria-pressed={bodyLanguage !== 'zh'} onClick={() => setBodyLanguage('ko')}>한국어</button><button aria-pressed={bodyLanguage === 'zh'} onClick={() => setBodyLanguage('zh')}>中文</button></div>}
+        {current.bodyZh.trim() && <div className="meeting-language" role="group" aria-label={t(language, 'meeting.title')}>{languageOptions.map(option => <button key={option} aria-pressed={option === 'zh' ? bodyLanguage === 'zh' : bodyLanguage !== 'zh'} onClick={() => setBodyLanguage(option)}>{option === 'zh' ? '中文' : '한국어'}</button>)}</div>}
         <h2 className="meeting-article-title">{localizedMeeting(current.titleKo, current.titleZh, bodyLanguage)}</h2><p className="meeting-meta">{meetingDateLabel(current.date, current.bodyZh.trim() ? bodyLanguage : language)}{current.time && ` · ${current.time}`}</p>
         <MeetingText text={localizedMeeting(current.bodyKo, current.bodyZh, bodyLanguage)} />
         <MeetingEditor eventId={current.eventId} noteId={current.id} language={language} />
