@@ -1,5 +1,15 @@
 // 한국어 번역 (i18n.ts 에서 분리)
 export const ko = {
+    'meeting.viewContent': "내용 보기",
+    'meeting.deleteCollection': "모음 삭제",
+    'meeting.trash': "휴지통",
+    'meeting.trashEmpty': "휴지통이 비어 있습니다.",
+    'meeting.restore': "복원",
+    'meeting.purge': "완전 삭제",
+    'meeting.trashConfirm': "모음과 글을 휴지통으로 이동할까요? 나중에 복원할 수 있습니다.",
+    'meeting.trashHelp': "삭제한 모음과 글은 휴지통에서 복원할 수 있습니다.",
+    'meeting.purgeConfirm': "이 모음과 포함된 모든 글을 완전히 삭제합니다. 되돌릴 수 없습니다. 계속할까요?",
+    'meeting.toggleHelp': "날짜와 관계없이 ON이면 홈에 표시합니다. OFF여도 내용 보기로 확인할 수 있습니다.",
     'meeting.title': "모임 정리",
     'meeting.homeEnabled': "홈에 표시",
     'meeting.settings': '봉사 모임 정리',

@@ -30,6 +30,7 @@
 ## 새 기록 틀
 
 봉사 모임 정리 준비: [0013 일정 삭제와 게시글 보존 분리](0013-service-meeting-notes.md)
+후속 변경: [0014 수동 홈 표시와 모음 휴지통](0014-meeting-toggle-and-trash.md)
 
 
 ```markdown

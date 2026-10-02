@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { t } from '../../i18n'
 import type { AppLanguage } from '../../i18n'
 import { confirmDialog } from '../../lib/confirm'
 import { getOverlayRoot } from '../../lib/overlayRoot'
 import { useMeetingHome } from './context'
-import { fetchEventMeetingNote, fetchMeetingCollections, fetchMeetingNote, MeetingConflict, saveMeetingCollection, saveMeetingNote } from './api'
+import { changeMeetingCollection, fetchEventMeetingNote, fetchMeetingCollections, fetchMeetingNote, MeetingConflict, saveMeetingCollection, saveMeetingNote } from './api'
 import { addDays, koreaDate, localizedMeeting, meetingNotesEnabled, meetingDateLabel } from './model'
 import type { MeetingCollection, MeetingNote, NoteDraft } from './model'
 import { MeetingText } from './MeetingText'
@@ -74,25 +75,26 @@ function NoteEditor({ eventId, noteId, language, onClose, onSaved }: { eventId: 
   </section>, root)
 }
 export function CollectionEditor({ language, collections, onSaved }: { language: AppLanguage; collections: MeetingCollection[]; onSaved: () => Promise<void> }) {
+  const [, setParams] = useSearchParams()
   const [selected, setSelected] = useState<MeetingCollection | undefined>()
   const [draft, setDraft] = useState<Omit<MeetingCollection, 'id' | 'updatedAt'>>({ nameKo: '', nameZh: '', startDate: koreaDate(), endDate: koreaDate(), homeVisibleUntil: addDays(koreaDate(), 14), homePosition: 'after_service', collapseSuggestions: true })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const save = async (archive = false) => {
     if (busy) return
-    if (archive && !await confirmDialog({ message: t(language, 'meeting.archiveConfirm'), danger: true })) return
+    if (archive && (!selected || !await confirmDialog({ message: t(language, 'meeting.trashConfirm'), danger: true }))) return
     setBusy(true); setError('')
-    try { await saveMeetingCollection(draft, selected, archive); await onSaved(); setSelected(undefined); setDraft({ ...draft, nameKo: '', nameZh: '' }) }
+    try { if (archive && selected) await changeMeetingCollection(selected, 'trash'); else await saveMeetingCollection(draft, selected); await onSaved(); setSelected(undefined); setDraft({ ...draft, nameKo: '', nameZh: '' }) }
     catch (cause) { setError(t(language, cause instanceof MeetingConflict ? 'meeting.conflict' : 'meeting.failed')) }
     finally { setBusy(false) }
   }
   return <form className="meeting-collection-editor" onSubmit={e => { e.preventDefault(); void save() }}>
     <label>{t(language, 'meeting.manage')}<select disabled={busy} value={selected?.id ?? 0} onChange={e => { const found = collections.find(c => c.id === Number(e.target.value)); setSelected(found); setDraft(found ?? { ...draft, nameKo: '', nameZh: '' }); setError('') }}><option value={0}>{t(language, 'meeting.newCollection')}</option>{collections.map(c => <option key={c.id} value={c.id}>{localizedMeeting(c.nameKo, c.nameZh, language)}</option>)}</select></label>
     <p className="meeting-meta">{t(language, 'meeting.collectionHelp')}</p>
-    {selected && <div className="meeting-collection-archive"><button type="button" disabled={busy} onClick={() => void save(true)}>{t(language, 'meeting.archiveCollection')}</button><p className="meeting-meta">{t(language, 'meeting.archiveHelp')}</p></div>}
+    {selected && <div className="meeting-collection-archive"><button type="button" disabled={busy} onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.set('meetingCollection', String(selected.id)); next.delete('meetingNote'); next.delete('meetingDate'); return next })}>{t(language, 'meeting.viewContent')}</button> <button type="button" disabled={busy} onClick={() => void save(true)}>{t(language, 'meeting.deleteCollection')}</button><p className="meeting-meta">{t(language, 'meeting.trashHelp')}</p></div>}
     <div className="meeting-bilingual"><label>{t(language, 'meeting.nameKo')}<input required maxLength={160} disabled={busy} value={draft.nameKo} onChange={e => setDraft({ ...draft, nameKo: e.target.value })} /></label><label>{t(language, 'meeting.nameZh')}<input maxLength={160} disabled={busy} value={draft.nameZh} onChange={e => setDraft({ ...draft, nameZh: e.target.value })} /></label></div>
     <label className="meeting-checkbox"><input role="switch" type="checkbox" disabled={busy} checked={draft.homeEnabled !== false} onChange={e => setDraft({ ...draft, homeEnabled: e.target.checked })} />{t(language, 'meeting.homeEnabled')}</label>
-    <div className="meeting-dates-form"><label>{t(language, 'meeting.start')}<input type="date" required disabled={busy} max={draft.endDate} value={draft.startDate} onChange={e => setDraft({ ...draft, startDate: e.target.value })} /></label><label>{t(language, 'meeting.end')}<input type="date" required disabled={busy} min={draft.startDate} value={draft.endDate} onChange={e => setDraft({ ...draft, endDate: e.target.value, homeVisibleUntil: e.target.value ? addDays(e.target.value, 14) : '' })} /></label><label>{t(language, 'meeting.until')}<input type="date" required disabled={busy} min={draft.endDate} value={draft.homeVisibleUntil} onChange={e => setDraft({ ...draft, homeVisibleUntil: e.target.value })} /></label></div>
+    <p className="meeting-meta">{t(language, 'meeting.toggleHelp')}</p>
     <label>{t(language, 'meeting.position')}<select disabled={busy} value={draft.homePosition} onChange={e => setDraft({ ...draft, homePosition: e.target.value as MeetingCollection['homePosition'] })}><option value="after_service">{t(language, 'meeting.after')}</option><option value="top">{t(language, 'meeting.top')}</option></select></label>
     <label className="meeting-checkbox"><input type="checkbox" disabled={busy} checked={draft.collapseSuggestions} onChange={e => setDraft({ ...draft, collapseSuggestions: e.target.checked })} />{t(language, 'meeting.collapse')}</label>
     {error && <p role="alert">{error}</p>}<div className="meeting-actions"><button type="submit" disabled={busy}>{t(language, 'meeting.save')}</button></div>

@@ -5,7 +5,7 @@ import type { AppLanguage } from '../../i18n'
 import { fetchMeetingCollections, fetchMeetingNoteMetas } from './api'
 import { MeetingContext } from './context'
 import type { MeetingHomeData } from './context'
-import { koreaDate, meetingNotesEnabled } from './model'
+import { meetingNotesEnabled } from './model'
 import { MeetingReader } from './MeetingReader'
 import './meetingNotes.css'
 
@@ -20,7 +20,7 @@ export function MeetingProvider({ userId, canManage, language, children }: { use
     let active = true
     // One metadata request per home entry; StrictMode shares the in-flight request.
     if (!inFlight.current) {
-      inFlight.current = fetchMeetingCollections(koreaDate()).then(async collections => ({ collections, notes: await fetchMeetingNoteMetas(collections.map(c => c.id)) }))
+      inFlight.current = fetchMeetingCollections('home').then(async collections => ({ collections, notes: await fetchMeetingNoteMetas(collections.map(c => c.id)) }))
       void inFlight.current.finally(() => { inFlight.current = null }).catch(() => {})
     }
     void inFlight.current.then(result => { if (active) setData(result) }).catch(() => {

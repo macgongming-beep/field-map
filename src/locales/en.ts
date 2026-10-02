@@ -1,5 +1,15 @@
 // English 번역 (i18n.ts 에서 분리)
 export const en = {
+    'meeting.viewContent': "View content",
+    'meeting.deleteCollection': "Delete collection",
+    'meeting.trash': "Trash",
+    'meeting.trashEmpty': "Trash is empty.",
+    'meeting.restore': "Restore",
+    'meeting.purge': "Delete permanently",
+    'meeting.trashConfirm': "Move this collection and its articles to Trash? You can restore them later.",
+    'meeting.trashHelp': "Deleted collections and articles can be restored from Trash.",
+    'meeting.purgeConfirm': "Permanently delete this collection and all its articles? This cannot be undone.",
+    'meeting.toggleHelp': "ON shows this collection on home regardless of dates. You can preview content while OFF.",
     'meeting.title': "Meeting Notes",
     'meeting.homeEnabled': "Show on home",
     'meeting.settings': 'Service meeting notes',

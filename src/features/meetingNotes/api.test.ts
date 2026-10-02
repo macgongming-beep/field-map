@@ -2,9 +2,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const calls = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }))
 vi.mock('../../lib/supabase', () => ({ supabase: calls }))
-import { fetchMeetingNoteMetas, MeetingConflict, NOTE_META_COLUMNS, saveMeetingNote } from './api'
+import { fetchMeetingCollections, fetchMeetingNoteMetas, MeetingConflict, NOTE_META_COLUMNS, saveMeetingNote } from './api'
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
 describe('meeting requests', () => {
+  it('home filters only the switch while trash uses archived state', async () => {
+    const query = { select: vi.fn(), is: vi.fn(), not: vi.fn(), eq: vi.fn(), order: vi.fn(), then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }) }
+    for (const fn of [query.select, query.is, query.not, query.eq, query.order]) fn.mockReturnValue(query)
+    calls.from.mockReturnValue(query)
+    await fetchMeetingCollections('home')
+    expect(query.eq).toHaveBeenCalledWith('home_enabled', true)
+    expect(query.is).toHaveBeenCalledWith('archived_at', null)
+    await fetchMeetingCollections('trash')
+    expect(query.not).toHaveBeenCalledWith('archived_at', 'is', null)
+  })
   it('does not load notes when no active collections exist', async () => {
     expect(await fetchMeetingNoteMetas([])).toEqual([])
     expect(calls.from).not.toHaveBeenCalled()

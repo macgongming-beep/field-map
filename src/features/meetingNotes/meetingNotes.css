@@ -79,6 +79,9 @@
 .meeting-settings button[type="submit"] { background: var(--ink); color: white; }
 .meeting-settings { min-width: 0; letter-spacing: 0; }
 .meeting-collection-archive { margin: 16px 0 24px; }
+.meeting-trash-row { padding: 20px 0; border-bottom: 1px solid var(--line-muted); }
+.meeting-trash-row h2 { font-size: 17px; overflow-wrap: anywhere; }
+.meeting-settings [role="tab"][aria-selected="true"] { background: var(--ink); color: white; }
 @media (max-width: 767px) {
   .meeting-settings-title { display: none; }
 }

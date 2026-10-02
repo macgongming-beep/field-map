@@ -21,11 +21,12 @@ describe('meeting contracts', () => {
     expect(n.titleKo).toBe('따뜻한 대화')
     expect(meetingDayParts('2026-10-01','ko')).toEqual({day:'10/1',weekday:'목'})
   })
-  it('home off overrides dates and on still respects the display window', () => {
+  it('home visibility uses only the switch and trash, never dates', () => {
     const c = { ...group, startDate: '2026-09-29', endDate: '2026-10-04', homeVisibleUntil: '2026-10-18' }
-    expect(homeCollectionVisible({...c, homeEnabled:false}, '2026-10-01')).toBe(false)
-    expect(homeCollectionVisible({...c, homeEnabled:true}, '2026-10-01')).toBe(true)
-    expect(homeCollectionVisible({...c, homeEnabled:true}, '2026-10-19')).toBe(false)
+    expect(homeCollectionVisible({...c, homeEnabled:false})).toBe(false)
+    expect(homeCollectionVisible({...c, homeEnabled:true, homeVisibleUntil: '2000-01-01'})).toBe(true)
+    expect(homeCollectionVisible({...c, homeEnabled:true, startDate: '2099-01-01'})).toBe(true)
+    expect(homeCollectionVisible({...c, homeEnabled:true, archivedAt:'2026-10-01'})).toBe(false)
   })
   it('shows localized weekdays without shifting calendar dates', () => {
     expect(meetingDateLabel('2026-10-01', 'ko')).toBe('10월 1일 (목)')
@@ -33,11 +34,6 @@ describe('meeting contracts', () => {
     expect(meetingDateLabel('2026-10-01', 'zh')).toContain('周四')
   })
   it('includes start and last home date in Korean calendar time', () => {
-    const c = { ...group, startDate: '2026-10-01', homeVisibleUntil: '2026-10-19' }
-    expect(homeCollectionVisible(c, '2026-09-30')).toBe(false)
-    expect(homeCollectionVisible(c, '2026-10-01')).toBe(true)
-    expect(homeCollectionVisible(c, '2026-10-19')).toBe(true)
-    expect(homeCollectionVisible(c, '2026-10-20')).toBe(false)
     expect(koreaDate(new Date('2026-09-30T15:00:00Z'))).toBe('2026-10-01')
     expect(addDays('2026-12-25', 14)).toBe('2027-01-08')
   })

@@ -5,6 +5,7 @@ export type MeetingCollection = {
   homeVisibleUntil: string; homePosition: 'top' | 'after_service'; collapseSuggestions: boolean
   updatedAt: string
   homeEnabled?: boolean
+  archivedAt?: string | null
 }
 export type MeetingNoteMeta = {
   id: number; eventId: number | null; collectionId: number; titleKo: string; titleZh: string
@@ -25,8 +26,8 @@ export function meetingDateLabel(date: string, language: AppLanguage): string {
 export function koreaDate(now = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
 }
-export function homeCollectionVisible(collection: MeetingCollection, date: string) {
-  return collection.homeEnabled !== false && collection.startDate <= date && date <= collection.homeVisibleUntil
+export function homeCollectionVisible(collection: MeetingCollection) {
+  return collection.homeEnabled !== false && !collection.archivedAt
 }
 export function meetingListTitle(note: MeetingNoteMeta, language: AppLanguage) {
   return language === 'zh'

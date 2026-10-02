@@ -1,5 +1,15 @@
 // 简体中文 번역 (i18n.ts 에서 분리)
 export const zh = {
+    'meeting.viewContent': "查看内容",
+    'meeting.deleteCollection': "删除合集",
+    'meeting.trash': "回收站",
+    'meeting.trashEmpty': "回收站为空。",
+    'meeting.restore': "恢复",
+    'meeting.purge': "永久删除",
+    'meeting.trashConfirm': "要将合集和文章移至回收站吗？之后可以恢复。",
+    'meeting.trashHelp': "删除的合集和文章可以从回收站恢复。",
+    'meeting.purgeConfirm': "将永久删除此合集及其中所有文章，无法撤销。确定继续吗？",
+    'meeting.toggleHelp': "开启后显示在首页，不受日期限制。关闭时仍可查看内容。",
     'meeting.title': "聚会摘要",
     'meeting.homeEnabled': "在首页显示",
     'meeting.settings': '传道聚会摘要',
