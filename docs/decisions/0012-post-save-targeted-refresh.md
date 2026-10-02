@@ -252,3 +252,18 @@ unattributed because request causes are not included in the logs.
   the local recovery path would make reload and recovery disagree.
 - Added comments explaining this contract and why a sessions-only shared read
   cannot satisfy a caller that has not successfully recovered histories.
+
+### October 2 deployment verification
+
+- Demo bf3e50a deployed as dpl_A3AKMCnW8n7nsaTSXSkLmhGgwnkg, READY.
+- Updated the existing PWA through its update prompt. Two Chrome clients using
+  the demo administrator observed synthetic Han-dong building 1 / unit 102.
+  A added an absent visit; B displayed it without reload. B invalidated it;
+  both clients returned to zero active histories. Audit history remains.
+  This is same-account browser-client verification, not two physical phones.
+- After an over-two-minute background interval and page focus, Chrome Network
+  showed the full service_sessions projection and time-filtered change signals
+  (`changed_at=gte...`); visit_histories filter showed 0 of 81 requests.
+  These rows include service-worker/preflight activity, so 81 is not an API
+  request count or a billed-egress metric. No percentage savings inferred.
+- Production release uses a fast-forward only; no schema or data migration.
