@@ -48,6 +48,7 @@
 .meeting-article-title + .meeting-meta { margin-bottom: 28px; }
 .meeting-prose { font-size: 17px; line-height: 1.9; overflow-wrap: anywhere; white-space: pre-wrap; }
 .meeting-prose p { margin: 0; }
+.meeting-prose a { color: var(--primary-600, #1E5BD0); text-decoration: underline; overflow-wrap: anywhere; }
 .meeting-prose > * { margin: 0 0 22px; }
 .meeting-prose h2 { font-size: 20px; line-height: 1.5; margin: 24px 0 10px; }
 .meeting-prose blockquote { border-left: 3px solid var(--muted); padding: 8px 18px; color: var(--muted); }
