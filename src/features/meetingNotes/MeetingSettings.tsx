@@ -20,13 +20,13 @@ function CollectionSettings({ language, refresh }: { language: AppLanguage; refr
   const [error, setError] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [trash, setTrash] = useState(false)
+  const [trashCollections, setTrashCollections] = useState<MeetingCollection[]>([])
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     let active = true
-    // Management must include collections hidden from home or outside their dates.
-    setReady(false)
-    void fetchMeetingCollections(trash ? 'trash' : undefined).then(rows => {
-      if (active) { setCollections(rows); setReady(true); setError(false) }
+    // Keep the editor mounted when opening trash so unsaved input survives.
+    void Promise.all([fetchMeetingCollections(undefined), trash ? fetchMeetingCollections('trash') : Promise.resolve([])]).then(([rows, deleted]) => {
+      if (active) { setCollections(rows); setTrashCollections(deleted); setReady(true); setError(false) }
     }).catch(() => { if (active) setError(true) })
     return () => { active = false }
   }, [attempt, trash])
@@ -34,18 +34,20 @@ function CollectionSettings({ language, refresh }: { language: AppLanguage; refr
     if (busy) return
     if (action === 'purge' && !await confirmDialog({ message: `${localizedMeeting(collection.nameKo, collection.nameZh, language)}\n${t(language, 'meeting.purgeConfirm')}`, danger: true })) return
     setBusy(true); setError(false)
-    try { await changeMeetingCollection(collection, action); setCollections(await fetchMeetingCollections('trash')); refresh() }
+    try { await changeMeetingCollection(collection, action); setAttempt(n => n + 1); refresh() }
     catch { setError(true) }
     finally { setBusy(false) }
   }
   return <section className="meeting-settings" style={{ padding: 24 }}>
     <h1 className="page-header-title meeting-settings-title">{t(language, 'meeting.settings')}</h1>
-    <div className="meeting-language" role="tablist"><button role="tab" aria-selected={!trash} disabled={busy} onClick={() => setTrash(false)}>{t(language, 'meeting.manage')}</button><button role="tab" aria-selected={trash} disabled={busy} onClick={() => setTrash(true)}>{t(language, 'meeting.trash')}</button></div>
-    {error ? <p role="alert">{t(language, 'meeting.failed')} <button type="button" onClick={() => setAttempt(n => n + 1)}>{t(language, 'meeting.reload')}</button></p>
-      : !ready ? <p>{t(language, 'meeting.loading')}</p>
-      : trash ? <div>{collections.length === 0 && <p>{t(language, 'meeting.trashEmpty')}</p>}{collections.map(collection => <section key={collection.id} className="meeting-trash-row"><h2>{localizedMeeting(collection.nameKo, collection.nameZh, language)}</h2><div className="meeting-actions"><button disabled={busy} onClick={() => void change(collection, 'restore')}>{t(language, 'meeting.restore')}</button><button disabled={busy} onClick={() => void change(collection, 'purge')}>{t(language, 'meeting.purge')}</button></div></section>)}</div>
+    {error && <p role="alert">{t(language, 'meeting.failed')} <button type="button" onClick={() => setAttempt(n => n + 1)}>{t(language, 'meeting.reload')}</button></p>}
+    {!ready ? <p>{t(language, 'meeting.loading')}</p>
       : <CollectionEditor language={language} collections={collections} onSaved={async () => {
-        setCollections(await fetchMeetingCollections()); refresh()
+        setCollections(await fetchMeetingCollections()); if (trash) setTrashCollections(await fetchMeetingCollections('trash')); refresh()
       }} />}
+    <details className="meeting-trash" open={trash} onToggle={event => setTrash(event.currentTarget.open)}>
+      <summary>{t(language, 'meeting.trash')}</summary>
+      {trash && ready && <div>{trashCollections.length === 0 && <p>{t(language, 'meeting.trashEmpty')}</p>}{trashCollections.map(collection => <section key={collection.id} className="meeting-trash-row"><h2>{localizedMeeting(collection.nameKo, collection.nameZh, language)}</h2><div className="meeting-actions"><button disabled={busy} onClick={() => void change(collection, 'restore')}>{t(language, 'meeting.restore')}</button><button disabled={busy} onClick={() => void change(collection, 'purge')}>{t(language, 'meeting.purge')}</button></div></section>)}</div>}
+    </details>
   </section>
 }
