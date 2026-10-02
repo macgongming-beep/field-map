@@ -1,6 +1,9 @@
 // English 번역 (i18n.ts 에서 분리)
 export const en = {
     'meeting.title': "Meeting Notes",
+    'meeting.homeEnabled': "Show on home",
+    'meeting.listTitleKo': "List topic · Korean (optional)",
+    'meeting.listTitleZh': "List topic · Chinese (optional)",
     'meeting.all': "View all",
     'meeting.new': "New",
     'meeting.count': "{n} notes",

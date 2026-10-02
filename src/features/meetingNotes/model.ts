@@ -4,14 +4,16 @@ export type MeetingCollection = {
   id: number; nameKo: string; nameZh: string; startDate: string; endDate: string
   homeVisibleUntil: string; homePosition: 'top' | 'after_service'; collapseSuggestions: boolean
   updatedAt: string
+  homeEnabled?: boolean
 }
 export type MeetingNoteMeta = {
   id: number; eventId: number | null; collectionId: number; titleKo: string; titleZh: string
   excerptKo: string; excerptZh: string; readingMinutesKo: number; readingMinutesZh: number
   date: string; time: string; place: string; leader: string; updatedAt: string; archivedAt: string | null
+  listTitleKo?: string; listTitleZh?: string
 }
 export type MeetingNote = MeetingNoteMeta & { bodyKo: string; bodyZh: string }
-export type NoteDraft = Pick<MeetingNote, 'titleKo' | 'titleZh' | 'bodyKo' | 'bodyZh'>
+export type NoteDraft = Pick<MeetingNote, 'titleKo' | 'titleZh' | 'bodyKo' | 'bodyZh' | 'listTitleKo' | 'listTitleZh'>
 export const meetingNotesEnabled = import.meta.env.VITE_SERVICE_MEETING_NOTES_ENABLED === 'true'
 
 export function meetingDateLabel(date: string, language: AppLanguage): string {
@@ -24,7 +26,16 @@ export function koreaDate(now = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
 }
 export function homeCollectionVisible(collection: MeetingCollection, date: string) {
-  return collection.startDate <= date && date <= collection.homeVisibleUntil
+  return collection.homeEnabled !== false && collection.startDate <= date && date <= collection.homeVisibleUntil
+}
+export function meetingListTitle(note: MeetingNoteMeta, language: AppLanguage) {
+  return language === 'zh'
+    ? note.listTitleZh?.trim() || note.titleZh?.trim() || note.listTitleKo?.trim() || note.titleKo
+    : note.listTitleKo?.trim() || note.titleKo
+}
+export function meetingDayParts(date: string, language: AppLanguage) {
+  const value = new Date(`${date}T00:00:00Z`)
+  return { day: `${value.getUTCMonth() + 1}/${value.getUTCDate()}`, weekday: new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : language === 'en' ? 'en-US' : 'ko-KR', { weekday: 'short', timeZone: 'UTC' }).format(value) }
 }
 export function localizedMeeting(ko: string, zh: string, language: AppLanguage) {
   return language === 'zh' && zh.trim() ? zh : ko

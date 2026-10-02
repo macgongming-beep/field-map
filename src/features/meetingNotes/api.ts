@@ -2,18 +2,18 @@ import { supabase } from '../../lib/supabase'
 import { getAuthToken } from '../../lib/authToken'
 import type { MeetingCollection, MeetingNote, MeetingNoteMeta, NoteDraft } from './model'
 
-export const NOTE_META_COLUMNS = 'id,event_id,collection_id,title_ko,title_zh,excerpt_ko,excerpt_zh,reading_minutes_ko,reading_minutes_zh,event_date_snapshot,event_time_snapshot,event_place_snapshot,event_leader_snapshot,updated_at,archived_at'
+export const NOTE_META_COLUMNS = 'id,event_id,collection_id,title_ko,title_zh,list_title_ko,list_title_zh,excerpt_ko,excerpt_zh,reading_minutes_ko,reading_minutes_zh,event_date_snapshot,event_time_snapshot,event_place_snapshot,event_leader_snapshot,updated_at,archived_at'
 type Row = Record<string, unknown>
 function collection(row: Row): MeetingCollection {
-  return { id: Number(row.id), nameKo: String(row.name_ko), nameZh: String(row.name_zh), startDate: String(row.start_date), endDate: String(row.end_date), homeVisibleUntil: String(row.home_visible_until), homePosition: row.home_position as MeetingCollection['homePosition'], collapseSuggestions: Boolean(row.collapse_suggestions), updatedAt: String(row.updated_at) }
+  return { id: Number(row.id), nameKo: String(row.name_ko), nameZh: String(row.name_zh), startDate: String(row.start_date), endDate: String(row.end_date), homeVisibleUntil: String(row.home_visible_until), homePosition: row.home_position as MeetingCollection['homePosition'], homeEnabled: row.home_enabled !== false, collapseSuggestions: Boolean(row.collapse_suggestions), updatedAt: String(row.updated_at) }
 }
 function meta(row: Row): MeetingNoteMeta {
-  return { id: Number(row.id), eventId: row.event_id == null ? null : Number(row.event_id), collectionId: Number(row.collection_id), titleKo: String(row.title_ko), titleZh: String(row.title_zh), excerptKo: String(row.excerpt_ko), excerptZh: String(row.excerpt_zh), readingMinutesKo: Number(row.reading_minutes_ko), readingMinutesZh: Number(row.reading_minutes_zh), date: String(row.event_date_snapshot), time: String(row.event_time_snapshot), place: String(row.event_place_snapshot), leader: String(row.event_leader_snapshot), updatedAt: String(row.updated_at), archivedAt: row.archived_at as string | null }
+  return { id: Number(row.id), eventId: row.event_id == null ? null : Number(row.event_id), collectionId: Number(row.collection_id), titleKo: String(row.title_ko), titleZh: String(row.title_zh), listTitleKo: String(row.list_title_ko ?? ''), listTitleZh: String(row.list_title_zh ?? ''), excerptKo: String(row.excerpt_ko), excerptZh: String(row.excerpt_zh), readingMinutesKo: Number(row.reading_minutes_ko), readingMinutesZh: Number(row.reading_minutes_zh), date: String(row.event_date_snapshot), time: String(row.event_time_snapshot), place: String(row.event_place_snapshot), leader: String(row.event_leader_snapshot), updatedAt: String(row.updated_at), archivedAt: row.archived_at as string | null }
 }
 function full(row: Row): MeetingNote { return { ...meta(row), bodyKo: String(row.body_ko), bodyZh: String(row.body_zh) } }
 export async function fetchMeetingCollections(date?: string): Promise<MeetingCollection[]> {
-  let query = supabase.from('service_meeting_collections').select('id,name_ko,name_zh,start_date,end_date,home_visible_until,home_position,collapse_suggestions,updated_at').is('archived_at', null).order('start_date', { ascending: false })
-  if (date) query = query.lte('start_date', date).gte('home_visible_until', date)
+  let query = supabase.from('service_meeting_collections').select('id,name_ko,name_zh,start_date,end_date,home_visible_until,home_position,home_enabled,collapse_suggestions,updated_at').is('archived_at', null).order('start_date', { ascending: false })
+  if (date) query = query.eq('home_enabled', true).lte('start_date', date).gte('home_visible_until', date)
   const { data, error } = await query
   if (error) throw error
   return (data ?? []).map(collection)
@@ -46,9 +46,9 @@ async function saveResult(name: string, args: Row): Promise<number> {
 }
 export function saveMeetingCollection(draft: Omit<MeetingCollection, 'id' | 'updatedAt'>, existing?: MeetingCollection, archive = false) {
   return saveResult('save_service_meeting_collection', { p_id: existing?.id ?? null, p_expected_updated_at: existing?.updatedAt ?? null,
-    p_data: { name_ko: draft.nameKo, name_zh: draft.nameZh, start_date: draft.startDate, end_date: draft.endDate, home_visible_until: draft.homeVisibleUntil, home_position: draft.homePosition, collapse_suggestions: draft.collapseSuggestions, archive } })
+    p_data: { name_ko: draft.nameKo, name_zh: draft.nameZh, start_date: draft.startDate, end_date: draft.endDate, home_visible_until: draft.homeVisibleUntil, home_position: draft.homePosition, home_enabled: draft.homeEnabled ?? true, collapse_suggestions: draft.collapseSuggestions, archive } })
 }
 export function saveMeetingNote(eventId: number | null, collectionId: number, draft: NoteDraft, existing?: MeetingNote | null, archive = false) {
   return saveResult('save_service_meeting_note', { p_id: existing?.id ?? null, p_event_id: eventId, p_collection_id: collectionId, p_expected_updated_at: existing?.updatedAt ?? null,
-    p_data: { title_ko: draft.titleKo, title_zh: draft.titleZh, body_ko: draft.bodyKo, body_zh: draft.bodyZh, archive } })
+    p_data: { title_ko: draft.titleKo, title_zh: draft.titleZh, list_title_ko: draft.listTitleKo, list_title_zh: draft.listTitleZh, body_ko: draft.bodyKo, body_zh: draft.bodyZh, archive } })
 }

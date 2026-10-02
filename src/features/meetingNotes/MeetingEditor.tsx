@@ -11,7 +11,7 @@ import type { MeetingCollection, MeetingNote, NoteDraft } from './model'
 import { MeetingText } from './MeetingText'
 import { useMeetingDialog } from './useMeetingDialog'
 
-const emptyDraft: NoteDraft = { titleKo: '', titleZh: '', bodyKo: '', bodyZh: '' }
+const emptyDraft: NoteDraft = { titleKo: '', titleZh: '', bodyKo: '', bodyZh: '', listTitleKo: '', listTitleZh: '' }
 export function MeetingEditor({ eventId, noteId, language }: { eventId: number | null; noteId?: number; language: AppLanguage }) {
   const context = useMeetingHome()
   const [open, setOpen] = useState(false)
@@ -64,6 +64,7 @@ function NoteEditor({ eventId, noteId, language, onClose, onSaved }: { eventId: 
         <div className="meeting-language"><button type="button" aria-pressed={!preview} onClick={() => setPreview(false)}>{t(language, 'meeting.write')}</button><button type="button" aria-pressed={preview} onClick={() => setPreview(true)}>{t(language, 'meeting.preview')}</button></div>
         <div className="meeting-bilingual">{(['Ko', 'Zh'] as const).map(lang => <section key={lang}>{preview ? <><h2>{draft[`title${lang}`]}</h2><MeetingText text={draft[`body${lang}`]} /></> : <>
           <label>{t(language, lang === 'Ko' ? 'meeting.titleKo' : 'meeting.titleZh')}<input disabled={busy} maxLength={200} value={draft[`title${lang}`]} onChange={e => setDraft({ ...draft, [`title${lang}`]: e.target.value })} /></label>
+          <label>{t(language, lang === 'Ko' ? 'meeting.listTitleKo' : 'meeting.listTitleZh')}<input disabled={busy} maxLength={200} value={draft[`listTitle${lang}`] ?? ''} onChange={e => setDraft({ ...draft, [`listTitle${lang}`]: e.target.value })} /></label>
           <label>{t(language, lang === 'Ko' ? 'meeting.bodyKo' : 'meeting.bodyZh')}<textarea disabled={busy} maxLength={30000} rows={18} value={draft[`body${lang}`]} onChange={e => setDraft({ ...draft, [`body${lang}`]: e.target.value })} /></label>
         </>}</section>)}</div>
         <footer className="meeting-actions">{note && <button type="button" disabled={busy || conflict} onClick={() => void save(true)}>{t(language, 'meeting.archive')}</button>}<button className="meeting-primary" type="button" disabled={busy || conflict} onClick={() => void save()}>{busy ? t(language, 'meeting.loading') : t(language, 'meeting.save')}</button></footer>
@@ -87,6 +88,7 @@ function CollectionEditor({ language, collections, onSaved }: { language: AppLan
   return <form className="meeting-collection-editor" onSubmit={e => { e.preventDefault(); void save() }}>
     <label>{t(language, 'meeting.manage')}<select disabled={busy} value={selected?.id ?? 0} onChange={e => { const found = collections.find(c => c.id === Number(e.target.value)); setSelected(found); setDraft(found ?? { ...draft, nameKo: '', nameZh: '' }); setError('') }}><option value={0}>{t(language, 'meeting.newCollection')}</option>{collections.map(c => <option key={c.id} value={c.id}>{localizedMeeting(c.nameKo, c.nameZh, language)}</option>)}</select></label>
     <div className="meeting-bilingual"><label>{t(language, 'meeting.nameKo')}<input required maxLength={160} disabled={busy} value={draft.nameKo} onChange={e => setDraft({ ...draft, nameKo: e.target.value })} /></label><label>{t(language, 'meeting.nameZh')}<input maxLength={160} disabled={busy} value={draft.nameZh} onChange={e => setDraft({ ...draft, nameZh: e.target.value })} /></label></div>
+    <label className="meeting-checkbox"><input role="switch" type="checkbox" disabled={busy} checked={draft.homeEnabled !== false} onChange={e => setDraft({ ...draft, homeEnabled: e.target.checked })} />{t(language, 'meeting.homeEnabled')}</label>
     <div className="meeting-dates-form"><label>{t(language, 'meeting.start')}<input type="date" required disabled={busy} max={draft.endDate} value={draft.startDate} onChange={e => setDraft({ ...draft, startDate: e.target.value })} /></label><label>{t(language, 'meeting.end')}<input type="date" required disabled={busy} min={draft.startDate} value={draft.endDate} onChange={e => setDraft({ ...draft, endDate: e.target.value, homeVisibleUntil: e.target.value ? addDays(e.target.value, 14) : '' })} /></label><label>{t(language, 'meeting.until')}<input type="date" required disabled={busy} min={draft.endDate} value={draft.homeVisibleUntil} onChange={e => setDraft({ ...draft, homeVisibleUntil: e.target.value })} /></label></div>
     <label>{t(language, 'meeting.position')}<select disabled={busy} value={draft.homePosition} onChange={e => setDraft({ ...draft, homePosition: e.target.value as MeetingCollection['homePosition'] })}><option value="after_service">{t(language, 'meeting.after')}</option><option value="top">{t(language, 'meeting.top')}</option></select></label>
     <label className="meeting-checkbox"><input type="checkbox" disabled={busy} checked={draft.collapseSuggestions} onChange={e => setDraft({ ...draft, collapseSuggestions: e.target.checked })} />{t(language, 'meeting.collapse')}</label>

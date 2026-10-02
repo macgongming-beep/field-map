@@ -1,6 +1,9 @@
 // 한국어 번역 (i18n.ts 에서 분리)
 export const ko = {
     'meeting.title': "모임 정리",
+    'meeting.homeEnabled': "홈에 표시",
+    'meeting.listTitleKo': "목록 주제 · 한국어 (선택)",
+    'meeting.listTitleZh': "목록 주제 · 中文 (선택)",
     'meeting.all': "전체 보기",
     'meeting.new': "새 글",
     'meeting.count': "{n}개 글",

@@ -5,7 +5,7 @@ import type { AppLanguage } from '../../i18n'
 import { t } from '../../i18n'
 import { getOverlayRoot } from '../../lib/overlayRoot'
 import { fetchMeetingCollections, fetchMeetingNote, fetchMeetingNoteMetas } from './api'
-import { localizedMeeting, markNoteRead, readNoteVersion, meetingDateLabel } from './model'
+import { localizedMeeting, markNoteRead, readNoteVersion, meetingDateLabel, meetingDayParts, meetingListTitle } from './model'
 import type { MeetingCollection, MeetingNote, MeetingNoteMeta } from './model'
 import { MeetingText } from './MeetingText'
 import { MeetingEditor } from './MeetingEditor'
@@ -66,11 +66,14 @@ export function MeetingReader({ language, userId, revision = 0 }: { language: Ap
         <nav className="meeting-prev-next"><button disabled={index <= 0} onClick={() => openNote(sorted[index - 1].id)}><span aria-hidden>‹</span> {t(language, 'meeting.previous')}</button><button disabled={index < 0 || index >= sorted.length - 1} onClick={() => openNote(sorted[index + 1].id)}>{t(language, 'meeting.next')} <span aria-hidden>›</span></button></nav>
       </article> : <p>{collection?.id === collectionId && !notes.some(n => n.id === noteId) ? t(language, 'meeting.empty') : t(language, 'meeting.loading')}</p> : <>
         {notes.filter(n => n.collectionId === collectionId && (!date || n.date === date)).length === 0 && <p>{t(language, 'meeting.empty')}</p>}
-        {[...new Set(notes.filter(n => n.collectionId === collectionId && (!date || n.date === date)).map(n => n.date))].map(day => <section className="meeting-list-day" key={day}><h2>{meetingDateLabel(day, language)}</h2>{notes.filter(n => n.date === day && n.collectionId === collectionId).map(n => <button className="meeting-list-row" key={n.id} onClick={() => openNote(n.id)}>
-          <strong>{localizedMeeting(n.titleKo, n.titleZh, language)}</strong>{readNoteVersion(userId, n.id) !== n.updatedAt && <span className="meeting-new">{t(language, 'meeting.new')}</span>}
-          {n.time && <span className="meeting-meta">{n.time}</span>}
-          <span className="meeting-row-arrow" aria-hidden>›</span>
-        </button>)}</section>)}
+        <div className="meeting-topic-list">{notes.filter(n => n.collectionId === collectionId && (!date || n.date === date)).map(n => {
+          const parts = meetingDayParts(n.date, language)
+          return <button className="meeting-topic-row" key={n.id} onClick={() => openNote(n.id)}>
+            <time dateTime={n.date} className="meeting-topic-date"><strong>{parts.day}</strong><span>{parts.weekday}</span></time>
+            <span className="meeting-topic-main"><strong>{meetingListTitle(n, language)}</strong>{n.time && <span className="meeting-meta">{n.time}</span>}{readNoteVersion(userId, n.id) !== n.updatedAt && <span className="meeting-new">{t(language, 'meeting.new')}</span>}</span>
+            <span aria-hidden className="meeting-topic-chevron">›</span>
+          </button>
+        })}</div>
       </>}
     </div>
   </section>, root)

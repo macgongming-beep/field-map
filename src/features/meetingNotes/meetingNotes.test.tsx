@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { MeetingText } from './MeetingText'
 import { MeetingHome, MeetingSuggestions } from './MeetingHome'
 import { MeetingContext } from './context'
-import { addDays, homeCollectionVisible, koreaDate, localizedMeeting, markNoteRead, readNoteVersion, meetingDateLabel } from './model'
+import { addDays, homeCollectionVisible, koreaDate, localizedMeeting, markNoteRead, readNoteVersion, meetingDateLabel, meetingListTitle, meetingDayParts } from './model'
 import type { MeetingCollection, MeetingNoteMeta } from './model'
 
 const group: MeetingCollection = { id: 1, nameKo: '순회방문', nameZh: '', startDate: '2020-01-01', endDate: '2099-01-01', homeVisibleUntil: '2099-01-15', homePosition: 'after_service', collapseSuggestions: true, updatedAt: 'v1' }
@@ -13,6 +13,20 @@ const note: MeetingNoteMeta = { id: 1, eventId: null, collectionId: 1, titleKo: 
 afterEach(() => { cleanup(); localStorage.clear() })
 
 describe('meeting contracts', () => {
+  it('shows a separate list topic without changing article titles', () => {
+    const n = { ...note, listTitleKo: '열망 유지', listTitleZh: '保持热心' }
+    expect(meetingListTitle(n, 'ko')).toBe('열망 유지')
+    expect(meetingListTitle(n, 'zh')).toBe('保持热心')
+    expect(meetingListTitle(note, 'ko')).toBe(note.titleKo)
+    expect(n.titleKo).toBe('따뜻한 대화')
+    expect(meetingDayParts('2026-10-01','ko')).toEqual({day:'10/1',weekday:'목'})
+  })
+  it('home off overrides dates and on still respects the display window', () => {
+    const c = { ...group, startDate: '2026-09-29', endDate: '2026-10-04', homeVisibleUntil: '2026-10-18' }
+    expect(homeCollectionVisible({...c, homeEnabled:false}, '2026-10-01')).toBe(false)
+    expect(homeCollectionVisible({...c, homeEnabled:true}, '2026-10-01')).toBe(true)
+    expect(homeCollectionVisible({...c, homeEnabled:true}, '2026-10-19')).toBe(false)
+  })
   it('shows localized weekdays without shifting calendar dates', () => {
     expect(meetingDateLabel('2026-10-01', 'ko')).toBe('10월 1일 (목)')
     expect(meetingDateLabel('2026-10-01', 'en')).toContain('Thu')

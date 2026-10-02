@@ -1,6 +1,9 @@
 // 简体中文 번역 (i18n.ts 에서 분리)
 export const zh = {
     'meeting.title': "聚会摘要",
+    'meeting.homeEnabled': "在首页显示",
+    'meeting.listTitleKo': "列表主题 · 韩语（选填）",
+    'meeting.listTitleZh': "列表主题 · 中文（选填）",
     'meeting.all': "查看全部",
     'meeting.new': "新文章",
     'meeting.count': "{n}篇",
