@@ -74,12 +74,32 @@ function NoteEditor({ eventId, noteId, language, onClose, onSaved }: { eventId: 
     </div>
   </section>, root)
 }
-export function CollectionEditor({ language, collections, onSaved }: { language: AppLanguage; collections: MeetingCollection[]; onSaved: () => Promise<void> }) {
+export function CollectionEditor({ language, collections, onSaved }: { language: AppLanguage; collections: MeetingCollection[]; onSaved: () => Promise<MeetingCollection[]> }) {
   const [, setParams] = useSearchParams()
   const [selected, setSelected] = useState<MeetingCollection | undefined>()
   const [draft, setDraft] = useState<Omit<MeetingCollection, 'id' | 'updatedAt'>>({ nameKo: '', nameZh: '', startDate: koreaDate(), endDate: koreaDate(), homeVisibleUntil: addDays(koreaDate(), 14), homePosition: 'after_service', collapseSuggestions: true })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const toggleHome = async (homeEnabled: boolean) => {
+    if (busy) return
+    const previous = draft.homeEnabled
+    setDraft(current => ({ ...current, homeEnabled }))
+    if (!selected) return
+    setBusy(true); setError('')
+    let saved = false
+    try {
+      // Only persist the switch; leave other unsaved fields in the editor.
+      await saveMeetingCollection({ ...selected, homeEnabled }, selected)
+      saved = true
+      const rows = await onSaved()
+      const latest = rows.find(row => row.id === selected.id)
+      if (!latest) throw new Error('Missing collection after save')
+      setSelected(latest)
+    } catch (cause) {
+      if (!saved) setDraft(current => ({ ...current, homeEnabled: previous }))
+      setError(t(language, cause instanceof MeetingConflict ? 'meeting.conflict' : 'meeting.failed'))
+    } finally { setBusy(false) }
+  }
   const save = async (archive = false) => {
     if (busy) return
     if (archive && (!selected || !await confirmDialog({ message: t(language, 'meeting.trashConfirm'), danger: true }))) return
@@ -93,7 +113,7 @@ export function CollectionEditor({ language, collections, onSaved }: { language:
     <p className="meeting-meta">{t(language, 'meeting.collectionHelp')}</p>
     {selected && <div className="meeting-collection-archive"><button type="button" disabled={busy} onClick={() => setParams(previous => { const next = new URLSearchParams(previous); next.set('meetingCollection', String(selected.id)); next.delete('meetingNote'); next.delete('meetingDate'); return next })}>{t(language, 'meeting.viewContent')}</button> <button type="button" disabled={busy} onClick={() => void save(true)}>{t(language, 'meeting.deleteCollection')}</button><p className="meeting-meta">{t(language, 'meeting.trashHelp')}</p></div>}
     <div className="meeting-bilingual"><label>{t(language, 'meeting.nameKo')}<input required maxLength={160} disabled={busy} value={draft.nameKo} onChange={e => setDraft({ ...draft, nameKo: e.target.value })} /></label><label>{t(language, 'meeting.nameZh')}<input maxLength={160} disabled={busy} value={draft.nameZh} onChange={e => setDraft({ ...draft, nameZh: e.target.value })} /></label></div>
-    <label className="meeting-checkbox"><input role="switch" type="checkbox" disabled={busy} checked={draft.homeEnabled !== false} onChange={e => setDraft({ ...draft, homeEnabled: e.target.checked })} />{t(language, 'meeting.homeEnabled')}</label>
+    <label className="meeting-checkbox"><input role="switch" type="checkbox" disabled={busy} checked={draft.homeEnabled !== false} onChange={e => void toggleHome(e.target.checked)} />{t(language, 'meeting.homeEnabled')}</label>
     <p className="meeting-meta">{t(language, 'meeting.toggleHelp')}</p>
     <label>{t(language, 'meeting.position')}<select disabled={busy} value={draft.homePosition} onChange={e => setDraft({ ...draft, homePosition: e.target.value as MeetingCollection['homePosition'] })}><option value="after_service">{t(language, 'meeting.after')}</option><option value="top">{t(language, 'meeting.top')}</option></select></label>
     <label className="meeting-checkbox"><input type="checkbox" disabled={busy} checked={draft.collapseSuggestions} onChange={e => setDraft({ ...draft, collapseSuggestions: e.target.checked })} />{t(language, 'meeting.collapse')}</label>

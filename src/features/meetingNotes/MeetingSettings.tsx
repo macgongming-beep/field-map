@@ -43,7 +43,11 @@ function CollectionSettings({ language, refresh }: { language: AppLanguage; refr
     {error && <p role="alert">{t(language, 'meeting.failed')} <button type="button" onClick={() => setAttempt(n => n + 1)}>{t(language, 'meeting.reload')}</button></p>}
     {!ready ? <p>{t(language, 'meeting.loading')}</p>
       : <CollectionEditor language={language} collections={collections} onSaved={async () => {
-        setCollections(await fetchMeetingCollections()); if (trash) setTrashCollections(await fetchMeetingCollections('trash')); refresh()
+        refresh()
+        const rows = await fetchMeetingCollections()
+        setCollections(rows)
+        if (trash) setTrashCollections(await fetchMeetingCollections('trash'))
+        return rows
       }} />}
     <details className="meeting-trash" open={trash} onToggle={event => setTrash(event.currentTarget.open)}>
       <summary>{t(language, 'meeting.trash')}</summary>
