@@ -8,8 +8,8 @@ import { RecipientPreview } from './RecipientPreview'
 
 const mocks = vi.hoisted(() => ({ assignments: vi.fn(), prefetch: vi.fn(), dispose: vi.fn() }))
 vi.mock('../lib/recipientPreview', () => ({ createRecipientPreview: () => ({ assignments: mocks.assignments, reader: { prefetch: mocks.prefetch }, dispose: mocks.dispose }) }))
-vi.mock('./MapCanvas', () => ({ MapCanvas: ({ buildings, cards }: { buildings: { id: number }[]; cards: { id: number }[] }) =>
-  <div data-testid="preview-map">{JSON.stringify({ buildings: buildings.map((b) => b.id), cards: cards.map((c) => c.id) })}</div> }))
+vi.mock('./MapCanvas', () => ({ MapCanvas: ({ buildings, cards, highlightedCardIds }: { buildings: { id: number }[]; cards: { id: number }[]; highlightedCardIds?: Set<number> }) =>
+  <div data-testid="preview-map" data-fit-cards={JSON.stringify([...(highlightedCardIds ?? [])])}>{JSON.stringify({ buildings: buildings.map((b) => b.id), cards: cards.map((c) => c.id) })}</div> }))
 
 const event = { id: 10, date: '2026-10-05', time: '10:00', title: 'Service', cardAssignments: [{ userName: 'Volunteer', assignedCardIds: [1, 2], cardScope: '상가' }] } as CalendarEvent
 const summaries = [1, 2].map((id) => ({ id, name: `Card ${id}`, buildings: 1, units: 6, completed: 0, progress: 0, houseUnits: 2, shopUnits: 4, houseBuildings: 1, shopBuildings: 1, houseCompleted: 0, shopCompleted: 0 })) as CardSummary[]
@@ -34,9 +34,11 @@ describe('read-only recipient demo', () => {
     expect(screen.queryByTestId('preview-map')).toBeNull()
     await act(async () => resolveDetails(details))
     expect(screen.getByTestId('preview-map').textContent).toBe('{"buildings":[11,12],"cards":[1,2]}')
+    expect(screen.getByTestId('preview-map').getAttribute('data-fit-cards')).toBe('[1,2]')
     fireEvent.click(screen.getByRole('button', { name: '목록' }))
     fireEvent.click(screen.getByText('Card 2'))
     expect(screen.getByTestId('preview-map').textContent).toBe('{"buildings":[12],"cards":[2]}')
+    expect(screen.getByTestId('preview-map').getAttribute('data-fit-cards')).toBe('[2]')
     expect(mocks.prefetch).toHaveBeenCalledTimes(1)
     expect(mocks.prefetch).toHaveBeenCalledWith([1, 2])
   })

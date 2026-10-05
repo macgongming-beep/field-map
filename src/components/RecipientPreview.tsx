@@ -46,6 +46,7 @@ function AssignmentPreview({ event, userName }: { event: CalendarEvent; userName
     .map((row) => ({ ...row, type: '전체', regularVisitPoints: [], assignedUsers: [], assignedLeader: null })), [summaries, cardId])
   const boundaries = useMemo(() => (details?.boundaries ?? []).filter((row) => cardId == null || row.card_id === cardId)
     .map(toCardBoundary).filter((row): row is CardBoundary => row != null), [details, cardId])
+  const highlightedCardIds = useMemo(() => new Set(cards.map((card) => card.id)), [cards])
   const selected = buildings.find((building) => building.id === selectedBuildingId)
   function openMap(id: number | null) { setCardId(id); setSelectedBuildingId(0); setView('map') }
   return <>
@@ -73,7 +74,7 @@ function AssignmentPreview({ event, userName }: { event: CalendarEvent; userName
         {details == null ? <p className="recipient-preview-state" role="status">{msg('불러오는 중…')}</p> : <>
           <MapCanvas key={cardId ?? 'all'} buildings={buildings} cards={cards} cardBoundaries={boundaries}
             selectedBuildingId={selectedBuildingId} selectedCardId={cardId ?? '전체'} onSelectBuilding={setSelectedBuildingId}
-            hideActionButton isMobile bottomPadding={selected ? 200 : 0} />
+            highlightedCardIds={highlightedCardIds} hideActionButton isMobile bottomPadding={selected ? 200 : 0} />
           {selected && <BuildingPreview building={selected} />}
         </>}
       </section>}
