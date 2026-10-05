@@ -7,6 +7,7 @@ import type { RecipientCardDetails } from '../lib/recipientCardPrefetch'
 import { RecipientPreview } from './RecipientPreview'
 
 const mocks = vi.hoisted(() => ({ assignments: vi.fn(), prefetch: vi.fn(), dispose: vi.fn() }))
+vi.mock('../hooks/useTerritoryRealtime', () => ({ useTerritoryRealtime: vi.fn() }))
 vi.mock('../lib/recipientPreview', () => ({ createRecipientPreview: () => ({ assignments: mocks.assignments, reader: { prefetch: mocks.prefetch }, dispose: mocks.dispose }) }))
 vi.mock('./MapCanvas', () => ({ MapCanvas: ({ buildings, cards, highlightedCardIds }: { buildings: { id: number }[]; cards: { id: number }[]; highlightedCardIds?: Set<number> }) =>
   <div data-testid="preview-map" data-fit-cards={JSON.stringify([...(highlightedCardIds ?? [])])}>{JSON.stringify({ buildings: buildings.map((b) => b.id), cards: cards.map((c) => c.id) })}</div> }))

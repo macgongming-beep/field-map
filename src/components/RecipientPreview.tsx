@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { createRecipientPreview } from '../lib/recipientPreview'
 import type { CardSummary } from '../lib/cardSummaries'
 import type { RecipientCardDetails } from '../lib/recipientCardPrefetch'
-import { toBuilding, toCardBoundary } from '../hooks/storeTransforms'
+import { toCardBoundary } from '../hooks/storeTransforms'
 import type { Building, CalendarEvent, CardBoundary, TerritoryCard } from '../types'
 import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '../utils/cardServiceScope'
 import { msg } from '../lib/msg'
 import { MapCanvas } from './MapCanvas'
+import { RecipientPreviewLive } from '../hooks/useRecipientPreviewLive'
 import './RecipientPreview.css'
 
 function PreviewIcon({ kind }: { kind: 'back' | 'map' | 'list' | 'refresh' }) {
@@ -37,19 +38,18 @@ function AssignmentPreview({ event, userName }: { event: CalendarEvent; userName
     }).catch(() => { if (!disposed) setError(true) })
     return () => { disposed = true; api?.dispose() }
   }, [scopeKey, userName])
-  const buildings = useMemo(() => {
-    const selection = assignedServiceScope(event, userName, cardId ?? undefined)
-    return scopeServiceBuildings((details?.buildings ?? []).map(toBuilding), selection.ids, selection.scope, { includeEmptyOfScopeType: true })
-  }, [details, event, userName, cardId])
   const cards = useMemo<TerritoryCard[]>(() => (summaries ?? []).filter((row) => cardId == null || row.id === cardId)
     // This read-only map uses names and IDs; it never exposes detailed regular-visit points.
     .map((row) => ({ ...row, type: '전체', regularVisitPoints: [], assignedUsers: [], assignedLeader: null })), [summaries, cardId])
   const boundaries = useMemo(() => (details?.boundaries ?? []).filter((row) => cardId == null || row.card_id === cardId)
     .map(toCardBoundary).filter((row): row is CardBoundary => row != null), [details, cardId])
   const highlightedCardIds = useMemo(() => new Set(cards.map((card) => card.id)), [cards])
-  const selected = buildings.find((building) => building.id === selectedBuildingId)
   function openMap(id: number | null) { setCardId(id); setSelectedBuildingId(0); setView('map') }
-  return <>
+  function renderContent(allBuildings: Building[]) {
+    const selection = assignedServiceScope(event, userName, cardId ?? undefined)
+    const buildings = scopeServiceBuildings(allBuildings, selection.ids, selection.scope, { includeEmptyOfScopeType: true })
+    const selected = buildings.find((building) => building.id === selectedBuildingId)
+    return <>
     <div className="recipient-preview-tools">
       <strong>{cardServiceLabel(scope)}</strong>
       <span>{msg('카드 {n}개', { n: ids.length })}</span>
@@ -79,6 +79,11 @@ function AssignmentPreview({ event, userName }: { event: CalendarEvent; userName
         </>}
       </section>}
   </>
+  }
+  return details ? <RecipientPreviewLive details={details} cardIds={ids} onSummaries={(rows) => setSummaries((current) =>
+    (current ?? []).map((card) => rows.find((row) => row.id === card.id) ?? card))}>
+    {(snapshot) => renderContent(snapshot.buildings)}
+  </RecipientPreviewLive> : renderContent([])
 }
 
 function BuildingPreview({ building }: { building: Building }) {
