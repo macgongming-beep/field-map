@@ -19,6 +19,7 @@ import type { Role } from './types'
 import type { AppLanguage } from './i18n'
 import { isAppLanguage, setCurrentLang } from './i18n'
 import { chooseAppScreen } from './utils/appScreen'
+import { recipientPreviewEnabled } from './lib/recipientPreview'
 import { syncLanguageToServiceWorker } from './lib/swLanguage'
 import './App.css'
 
@@ -31,6 +32,7 @@ const MobileHome = lazy(() =>
 const Login = lazy(() =>
   import('./components/Login').then((module) => ({ default: module.Login }))
 )
+const RecipientPreview = lazy(() => import('./components/RecipientPreview').then((module) => ({ default: module.RecipientPreview })))
 
 const DESKTOP_MEDIA_QUERY = '(min-width: 980px)'
 const ROLE_VALUES: Role[] = ['admin', 'leader', 'user']
@@ -66,6 +68,8 @@ function App() {
   const location = useLocation()
   const { user, login, signup, logout, changePin, updateMyProfile, loading: authLoading, allUsers, fetchMyLoginLogs } = useAuth()
   const actualRole: Role = user?.role ?? 'user'
+  const recipientPreview = recipientPreviewEnabled(location.pathname, import.meta.env.VITE_DEMO_MODE)
+  const storeEnabled = Boolean(user) && !recipientPreview
   const [mobileViewMode, setMobileViewMode] = useState<Role>(actualRole)
   const [language, setLanguage] = useState<AppLanguage>(getInitialLanguage)
   const [translatePlaceNames, setTranslatePlaceNames] = useState(false)
@@ -196,13 +200,13 @@ function App() {
     registerRestaurant,
     approveRestaurantRequest,
     rejectRestaurantRequest,
-  } = useStore(Boolean(user), actualRole)
+  } = useStore(storeEnabled, actualRole)
 
   // Phase 2: 캘린더/배정 Realtime → calendar slice만 refetch
   // (useUserChats가 이 책임을 갖고 있었으나 전체 fetchAll 호출하던 증폭점 제거)
   useCalendarRealtime(() => {
     void refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' })
-  }, { enabled: Boolean(user) })   // 로그인 전에는 웹소켓을 열지 않는다
+  }, { enabled: storeEnabled })   // 로그인 전에는 웹소켓을 열지 않는다
 
   // 다른 사용자가 장소 삭제를 승인해도 전체 화면을 새로고침하지 않는다.
   // 삭제로 함께 바뀌는 구역 자료만 백그라운드에서 다시 받아 현재 화면을 유지한다.
@@ -211,7 +215,7 @@ function App() {
     { triggeredBy: 'realtime:place-deletion-recovery' },
   ), [refetchSlices])
   usePlaceDeletionRealtime(applyPlaceDeletionSignal, {
-    enabled: Boolean(user),
+    enabled: storeEnabled,
     onRecover: () => {
       void recoverDeletedPlaces().catch((error) => {
       console.warn('[place deletion realtime] sync failed:', error)
@@ -230,7 +234,7 @@ function App() {
       void recoverCreatedUnits()
     })
   }, {
-    enabled: Boolean(user) && !(import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
+    enabled: storeEnabled && !(import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
       && (location.pathname === '/map' || (location.pathname === '/zone' && new URLSearchParams(location.search).get('view') === 'map'))),
     onRecover: () => { void recoverCreatedUnits() },
   })
@@ -307,7 +311,7 @@ function App() {
   }
 
   // 무엇을 그릴지는 utils/appScreen 이 정한다 (순서가 미묘해 시험을 붙였다).
-  const screen = chooseAppScreen({ user, authLoading, loading, error })
+  const screen = chooseAppScreen({ user, authLoading, loading: recipientPreview ? false : loading, error: recipientPreview ? null : error })
 
   if (screen === 'login') {
     return (
@@ -337,7 +341,7 @@ function App() {
   }
 
 
-  if (error) {
+  if (error && !recipientPreview) {
     return (
       <AppLoading failed />
     )
@@ -345,6 +349,10 @@ function App() {
 
   // 여기 오면 screen === 'app' 이라 user 가 있다. 타입이 그걸 모르므로 한 줄 둔다.
   if (!user) return null
+
+  if (recipientPreview) return <><Toast /><AppUpdateNotice /><Suspense fallback={<AppLoading kind="screen" />}>
+    <RecipientPreview key={user.id} userName={user.name} />
+  </Suspense></>
 
   return (
     <>
