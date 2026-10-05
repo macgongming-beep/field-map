@@ -2,7 +2,6 @@ import { supabase } from './supabase'
 import { getAuthToken } from './authToken'
 import { createRecipientPreview } from './recipientPreview'
 import { assignedServiceScope } from '../utils/cardServiceScope'
-import { normalizeVisitorName } from '../utils/returnVisits'
 
 /** Only the real recipient workflow opts in; unsupported views retain the full store. */
 export function recipientStoreEnabled(role: string, pathname: string, search: string, demo: string | undefined) {
@@ -32,23 +31,19 @@ export function createRecipientStoreReader(userName: string) {
   }
   async function load() {
     check()
-    const [events, assigned, sessions, regular, visits, restaurantBuildings, restaurantUnits, restaurantAssignments] = await Promise.all([
+    const [events, assigned, sessions, returnVisitScope, restaurantBuildings, restaurantUnits, restaurantAssignments] = await Promise.all([
       api.assignments(),
       pages<{ card_id: number }>((from, to) => supabase.from('card_assignments').select('card_id').eq('user_name', userName).order('card_id').range(from, to)),
       pages<{ primary_card_id: number | null }>((from, to) => supabase.from('service_sessions').select('primary_card_id').eq('user_name', userName).eq('status', 'active').is('ended_at', null).order('id').range(from, to)),
-      pages<{ visitor_name: string }>((from, to) => supabase.from('regular_visits').select('id,visitor_name').order('id').range(from, to)),
-      pages<{ assigned_user_name: string; created_by: string }>((from, to) => supabase.from('return_visits').select('id,assigned_user_name,created_by').is('ended_at', null).order('id').range(from, to)),
+      supabase.rpc('get_recipient_return_visit_card_ids', { p_token: token }),
       pages<{ card_id: number }>((from, to) => supabase.from('buildings').select('id,card_id').eq('is_restaurant', true).order('id').range(from, to)),
       pages<{ building_id: number }>((from, to) => supabase.from('units').select('id,building_id').eq('is_restaurant', true).order('id').range(from, to)),
       pages<{ building_id: number }>((from, to) => supabase.from('event_restaurant_assignments').select('id,building_id').eq('user_name', userName).order('id').range(from, to)),
     ])
-    const me = normalizeVisitorName(userName)
-    // The current inline return-visit editor resolves stale links by address against all buildings.
-    // Preserve that contract until its own targeted resolver has been implemented and tested.
-    if (regular.some((row) => normalizeVisitorName(row.visitor_name) === me)
-      || visits.some((row) => (normalizeVisitorName(row.assigned_user_name) || normalizeVisitorName(row.created_by)) === me)) {
-      allowed = null
-      return null
+    check()
+    if (returnVisitScope.error) throw returnVisitScope.error
+    if (!Array.isArray(returnVisitScope.data) || returnVisitScope.data.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+      throw new Error('Invalid return-visit scope response')
     }
     const restaurantCardIds = restaurantBuildings.map((row) => row.card_id)
     const buildingIds = [...new Set([...restaurantUnits, ...restaurantAssignments].map((row) => row.building_id))]
@@ -61,6 +56,7 @@ export function createRecipientStoreReader(userName: string) {
       ...events.flatMap((event) => assignedServiceScope(event, userName).ids),
       ...assigned.map((row) => row.card_id), ...sessions.flatMap((row) => row.primary_card_id == null ? [] : [row.primary_card_id]),
       ...restaurantCardIds,
+      ...returnVisitScope.data as number[],
     ])].sort((a, b) => a - b)
     const details = await api.reader.prefetch(ids).details
     check()

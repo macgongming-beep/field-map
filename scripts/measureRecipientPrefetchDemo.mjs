@@ -3,6 +3,10 @@ import { parseEnv } from 'node:util'
 import https from 'node:https'
 import { gunzipSync, brotliDecompressSync, inflateSync } from 'node:zlib'
 import { performance } from 'node:perf_hooks'
+import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
+import { rolldown } from 'rolldown'
+import { deepStrictEqual } from 'node:assert'
 import ts from 'typescript'
 import { createClient } from '@supabase/supabase-js'
 
@@ -19,11 +23,12 @@ const origin = 'https://itjlykpjmlcvanqpmkmc.supabase.co'
 if (config.VITE_SUPABASE_URL !== origin) throw new Error('Demo allowlist mismatch')
 const idsArgument = process.argv.find((value) => value.startsWith('--card-ids='))
 const selectedIds = idsArgument?.slice('--card-ids='.length).split(',').filter(Boolean).map(Number)
-if (!selectedIds && !process.argv.includes('--inspect')) throw new Error('Provide --card-ids=1,2 or --inspect')
+if (!selectedIds && !process.argv.includes('--inspect') && !process.argv.includes('--store-scope')) throw new Error('Provide --card-ids=1,2, --store-scope or --inspect')
 
 let phase = 'setup'
 const samples = []
 const agent = new https.Agent({ keepAlive: true })
+let cleanupFixture
 async function measuredFetch(input, init = {}) {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url)
   if (url.origin !== origin) throw new Error('Cross-project request rejected')
@@ -107,7 +112,86 @@ try {
     }
   }
 
-  if (process.argv.includes('--inspect')) {
+  if (process.argv.includes('--store-scope')) {
+    if (process.argv.includes('--fixture-return-visit')) {
+      const target = await client.from('buildings').select('address').neq('card_id', 1).order('id').limit(1).single()
+      if (target.error) throw target.error
+      const made = await client.rpc('create_return_visit_tx', { p_token: user.token,
+        p_display_name: `scope-measurement-${Date.now()}`, p_address: target.data.address, p_unit_id: null })
+      if (made.error || !made.data?.created) throw made.error ?? new Error('Fixture was not created')
+      cleanupFixture = async () => {
+        phase = 'fixture-cleanup'
+        const ended = await client.rpc('end_return_visit_tx', { p_token: user.token,
+          p_return_visit_id: made.data.id, p_reason: 'no_longer_assigned' })
+        if (ended.error || !ended.data?.ok) throw ended.error ?? new Error('Fixture cleanup failed')
+        console.log('Measurement-only return visit ended.')
+      }
+    }
+    // Bundle the real reader twice, replacing only its client/session dependencies.
+    globalThis.__recipientMeasurement = { client, token: user.token }
+    async function readerAt(old) {
+      const entry = resolve('src/lib/recipientStore.ts')
+      const bundle = await rolldown({ input: entry, plugins: [{
+        name: 'measurement-session',
+        resolveId(id) {
+          if (id === './supabase' || id === './authToken') return '\0measurement:' + id
+        },
+        load(id) {
+          if (id === '\0measurement:./supabase') return 'export const supabase = globalThis.__recipientMeasurement.client'
+          if (id === '\0measurement:./authToken') return 'export const getAuthToken = () => globalThis.__recipientMeasurement.token'
+          if (old && id === entry) return { code: execFileSync('git', ['show', '073b6a1:src/lib/recipientStore.ts'], { encoding: 'utf8' }), moduleType: 'ts' }
+        },
+      }] })
+      try {
+        const { output } = await bundle.generate({ format: 'esm' })
+        const module = await import(`data:text/javascript;base64,${Buffer.from(output[0].code).toString('base64')}`)
+        return module.createRecipientStoreReader(user.name)
+      } finally { await bundle.close() }
+    }
+    phase = 'common-card-metadata'
+    const metadata = await pages((from, to) => client.from('cards').select('id').order('id').range(from, to))
+    const results = []
+    let baselineDetails
+    for (const old of [true, false]) {
+      const reader = await readerAt(old)
+      phase = old ? 'before-073b6a1' : 'after-return-visit-scope'
+      const started = performance.now()
+      try {
+        let details = await reader.read()
+        const fallback = details == null
+        if (fallback) {
+          const [buildings, boundaries] = await Promise.all([
+            pages((from, to) => client.from('buildings').select(`${RECIPIENT_BUILDING_COLUMNS}, units(${RECIPIENT_UNIT_COLUMNS})`).order('id').range(from, to)),
+            pages((from, to) => client.from('card_boundaries').select('card_id,points,updated_at').order('card_id').range(from, to)),
+          ])
+          details = { buildings, boundaries }
+        } else {
+          // useStore additionally requests summaries for all cards, not just loaded cards.
+          for (let i = 0; i < metadata.length; i += 200) {
+            const result = await client.rpc('get_card_summaries', { p_token: user.token, p_card_ids: metadata.slice(i, i + 200).map((c) => c.id) })
+            if (result.error) throw result.error
+          }
+        }
+        if (old) baselineDetails = details
+        else {
+          const stable = (rows, key) => [...rows].sort((a, b) => a[key] - b[key])
+          const buildings = (rows) => stable(rows.map((b) => ({ ...b, units: stable(b.units, 'id') })), 'id')
+          deepStrictEqual(buildings(details.buildings), buildings(baselineDetails.buildings.filter((b) => reader.allowsCard(b.card_id))))
+          deepStrictEqual(stable(details.boundaries, 'card_id'), stable(baselineDetails.boundaries.filter((b) => reader.allowsCard(b.card_id)), 'card_id'))
+        }
+        const requests = samples.filter((s) => s.phase === phase)
+        results.push({ phase, fallback, buildings: details.buildings.length, boundaries: details.boundaries.length,
+          requests: requests.length, compressedBodyBytes: requests.reduce((n, s) => n + s.compressedBodyBytes, 0),
+          readyMs: Math.round(performance.now() - started) })
+      } finally { reader.dispose() }
+    }
+    console.log(JSON.stringify({ project: 'demo', accountRole: user.role, measuredAt: new Date().toISOString(), results, parity: 'all fields of scoped buildings, units and boundaries match baseline',
+      samples: samples.filter((s) => s.phase.startsWith('before-') || s.phase.startsWith('after-')),
+      limitations: ['Actual reader requests including scope detection and summary overhead; unchanged global histories/sessions and other app slices excluded.',
+        'Compressed HTTP body bytes, not billing egress or browser rendering speed. Small demo data is not a monthly production forecast.'],
+    }, null, 2))
+    delete globalThis.__recipientMeasurement
+  } else if (process.argv.includes('--inspect')) {
     const cards = await pages((from, to) => client.from('cards').select('id,name').order('id').range(from, to))
     console.log(JSON.stringify({ accountRole: user.role, cards }, null, 2))
   } else {
@@ -182,4 +266,6 @@ try {
       ],
     }, null, 2))
   }
-} finally { agent.destroy() }
+} finally {
+  try { await cleanupFixture?.() } finally { agent.destroy() }
+}

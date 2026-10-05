@@ -1,10 +1,10 @@
 import { beforeEach, expect, test, vi } from 'vitest'
-const state = vi.hoisted(() => ({ token: 'session', rows: {} as Record<string, Record<string, unknown>[]>, prefetch: vi.fn(), assignments: vi.fn(), invalidate: vi.fn() }))
+const state = vi.hoisted(() => ({ token: 'session', rows: {} as Record<string, Record<string, unknown>[]>, prefetch: vi.fn(), assignments: vi.fn(), invalidate: vi.fn(), rpc: vi.fn() }))
 vi.mock('./authToken', () => ({ getAuthToken: () => state.token }))
 vi.mock('./recipientPreview', () => ({ createRecipientPreview: () => ({
   assignments: state.assignments, reader: { prefetch: state.prefetch, invalidate: state.invalidate }, dispose: vi.fn(),
 }) }))
-vi.mock('./supabase', () => ({ supabase: { from: (table: string) => {
+vi.mock('./supabase', () => ({ supabase: { rpc: state.rpc, from: (table: string) => {
   let rows = state.rows[table] ?? []
   const q = {
     select: () => q, order: () => q,
@@ -20,6 +20,7 @@ import { createRecipientStoreReader, recipientStoreEnabled } from './recipientSt
 beforeEach(() => {
   vi.clearAllMocks(); state.token = 'session'; state.rows = {}
   state.assignments.mockResolvedValue([])
+  state.rpc.mockResolvedValue({ data: [], error: null })
   state.prefetch.mockImplementation((ids: number[]) => ({ details: Promise.resolve({ buildings: ids.map((card_id) => ({ card_id })), boundaries: [], histories: [], baseline: null }) }))
 })
 
@@ -59,12 +60,20 @@ test('unassignment refresh removes old scope, including the last card', async ()
   expect(reader.scoped).toBe(true)
 })
 
-test.each(['regular', 'return'])('%s visit compatibility uses the complete store for address resolution', async (kind) => {
-  if (kind === 'regular') state.rows.regular_visits = [{ visitor_name: ' m e ' }]
-  else state.rows.return_visits = [{ assigned_user_name: ' ', created_by: 'me' }]
+test('return-visit cards join the scoped read without forcing a full store', async () => {
+  state.rpc.mockResolvedValue({ data: [3, 4], error: null })
   const reader = createRecipientStoreReader('me')
-  expect(await reader.read()).toBeNull()
-  expect(reader.scoped).toBe(false)
+  await reader.read()
+  expect(state.rpc).toHaveBeenCalledWith('get_recipient_return_visit_card_ids', { p_token: 'session' })
+  expect(state.prefetch).toHaveBeenCalledWith([3, 4])
+  expect(reader.scoped).toBe(true)
+  expect(reader.allowsCard(99)).toBe(false)
+})
+
+test.each([{ data: null, error: new Error('RPC unavailable') }, { data: [0], error: null }])('a failed resolver never silently excludes return visits or expands to all buildings', async (response) => {
+  state.rpc.mockResolvedValue(response)
+  const reader = createRecipientStoreReader('me')
+  await expect(reader.read()).rejects.toThrow()
   expect(state.prefetch).not.toHaveBeenCalled()
 })
 
