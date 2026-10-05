@@ -20,6 +20,7 @@ import type { AppLanguage } from './i18n'
 import { isAppLanguage, setCurrentLang } from './i18n'
 import { chooseAppScreen } from './utils/appScreen'
 import { recipientPreviewEnabled } from './lib/recipientPreview'
+import { recipientStoreEnabled } from './lib/recipientStore'
 import { syncLanguageToServiceWorker } from './lib/swLanguage'
 import './App.css'
 
@@ -65,8 +66,17 @@ function isRole(value: unknown): value is Role {
 }
 
 function App() {
+  const auth = useAuth()
   const location = useLocation()
-  const { user, login, signup, logout, changePin, updateMyProfile, loading: authLoading, allUsers, fetchMyLoginLogs } = useAuth()
+  const recipient = Boolean(auth.user) && recipientStoreEnabled(auth.user!.role, location.pathname,
+    location.search, import.meta.env.VITE_DEMO_MODE)
+  return <AppSession key={`${auth.user?.id ?? 'guest'}:${recipient ? 'recipient' : 'full'}`}
+    auth={auth} recipientUser={recipient ? auth.user!.name : undefined} />
+}
+
+function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>; recipientUser?: string }) {
+  const location = useLocation()
+  const { user, login, signup, logout, changePin, updateMyProfile, loading: authLoading, allUsers, fetchMyLoginLogs } = auth
   const actualRole: Role = user?.role ?? 'user'
   const recipientPreview = recipientPreviewEnabled(location.pathname, import.meta.env.VITE_DEMO_MODE)
   const storeEnabled = Boolean(user) && !recipientPreview
@@ -200,7 +210,7 @@ function App() {
     registerRestaurant,
     approveRestaurantRequest,
     rejectRestaurantRequest,
-  } = useStore(storeEnabled, actualRole)
+  } = useStore(storeEnabled, actualRole, recipientUser)
 
   // Phase 2: 캘린더/배정 Realtime → calendar slice만 refetch
   // (useUserChats가 이 책임을 갖고 있었으나 전체 fetchAll 호출하던 증폭점 제거)

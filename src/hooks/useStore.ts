@@ -4,6 +4,8 @@ import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
 import { createCardBoundaryReader } from './cardBoundaryRecovery'
+import { createRecipientStoreReader } from '../lib/recipientStore'
+import { fetchCardSummaries } from '../lib/cardSummaries'
 import { supabase } from '../lib/supabase'
 import { trackFetch } from '../lib/perfTracker'
 import { withLoadDeadline } from '../lib/loadDeadline'
@@ -115,7 +117,13 @@ async function fetchAllPages<T>(
  * 예전에는 로그인 화면에서도 전부 받았다 (App.tsx 는 인증 판단보다 먼저
  * useStore() 를 호출한다). 실측으로 API 만 약 2.2MB · 47개 요청이었다.
  */
-export function useStore(enabled: boolean = true, role: Role = 'user') {
+export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string) {
+  // App keys this store by account/read mode. Never mix partial and full snapshots.
+  const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
+  useEffect(() => {
+    recipientReader?.resume()
+    return () => recipientReader?.dispose()
+  }, [recipientReader])
   const [cards, setCards] = useState<TerritoryCard[]>([])
   const [buildings, setBuildings] = useState<Building[]>([])
   // buildings는 cards transform에서 참조됨. fetchSlice가 useCallback([])이라
@@ -205,6 +213,13 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
 
     switch (slice) {
       case 'buildings': {
+        const scoped = await recipientReader?.read()
+        if (scoped) {
+          const next = scoped.buildings.map(toBuilding)
+          buildingsRef.current = next
+          setBuildings(next)
+          return 0
+        }
         // Phase 5 projection: 필요한 컬럼만 명시. created_at 등 메타 제외.
         // (is_forbidden은 DB 컬럼 미존재, 타입상 optional이라 제외 안전)
         // Supabase/PostgREST는 기본적으로 최대 1,000행만 반환한다.
@@ -282,11 +297,21 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
         measure(cardsRes.data)
         // cards transform은 buildings 의존 — buildingsRef로 항상 최신 buildings 사용
         const transformedCards = (cardsRes.data as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
-        setCards(transformedCards)
+        if (recipientReader?.scoped) {
+          const summaries = await fetchCardSummaries(transformedCards.map((card) => card.id))
+          const byId = new Map(summaries.map((card) => [card.id, card]))
+          if (byId.size !== transformedCards.length) throw new Error('Missing recipient card summary')
+          setCards(transformedCards.map((card) => ({ ...card, ...byId.get(card.id)! })))
+        } else setCards(transformedCards)
         return approxBytes
       }
 
       case 'cardBoundaries': {
+        const scoped = await recipientReader?.read()
+        if (scoped) {
+          setCardBoundaries(scoped.boundaries.map(toCardBoundary).filter((row): row is CardBoundary => row != null))
+          return 0
+        }
         const rows = await boundaryReader.current(recovery, measure)
         if (rows) setCardBoundaries(rows.map(toCardBoundary).filter(Boolean) as CardBoundary[])
         return approxBytes
@@ -483,15 +508,42 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
         return approxBytes
       }
     }
-  }, [])
+  }, [recipientReader])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
   const recoveryReads = useRef(new Map<Slice, { promise: Promise<number>; delta: boolean; historiesRecovered?: boolean }>()).current
+  const recipientQueue = useRef<Promise<void>>(Promise.resolve())
   const fetchSlices = useCallback((
     slices: Slice[],
     options?: { triggeredBy?: string },
   ): Promise<void> => {
+    if (recipientReader) {
+      const work = async () => {
+        const baseline = slices.includes('visits')
+          ? await fetchTerritoryClock().catch(() => null) : null
+        const requested = new Set(slices)
+        // Calendar changes include unassignment/cancellation, not only newly granted cards.
+        if (slices.some((slice) => ['calendar', 'resources', 'returnVisits', 'buildings', 'cards', 'cardBoundaries'].includes(slice))) {
+          recipientReader.refresh()
+          for (const slice of ['buildings', 'cards', 'cardBoundaries'] as const) requested.add(slice)
+          await fetchSlice('buildings')
+          requested.delete('buildings')
+        }
+        await Promise.all([...requested].map((slice) => fetchSlice(slice)))
+        if (baseline && slices.includes('buildings')) {
+          territoryCheckpoint.baseline = baseline
+          territoryCheckpoint.cards.clear()
+          territoryCheckpoint.applied.clear()
+        }
+      }
+      const next = recipientQueue.current.catch(() => {}).then(work)
+      recipientQueue.current = next
+      territoryCheckpoint.snapshot = next
+      const clear = () => { if (territoryCheckpoint.snapshot === next) territoryCheckpoint.snapshot = null }
+      void next.then(clear, clear)
+      return next
+    }
     // Only recovery callers share reads. A post-mutation refresh must not join a
     // query that started before the write and could return an older snapshot.
     const recovery = options?.triggeredBy === 'foreground' || options?.triggeredBy?.startsWith('realtime:')
@@ -582,7 +634,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       void promise.then(clear, clear)
     }
     return promise
-  }, [fetchSlice, territoryCheckpoint, recoveryReads])
+  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader])
 
   // 기존 fetchAll: 모든 slice + auto_close 부수효과 유지 (100% 후방호환)
   const fetchAll = useCallback(async (recovery = false) => {
@@ -696,8 +748,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       buildingsRef.current = next
       return next
     })
-    setCards((prevCards) => prevCards.map((card) => recomputeCardStats(card, buildingsRef.current)))
-  }, [])
+    setCards((prevCards) => prevCards.map((card) => recipientReader && !recipientReader.allowsCard(card.id)
+      ? card : recomputeCardStats(card, buildingsRef.current)))
+  }, [recipientReader])
 
   // Realtime updates only the affected buildings and their visit histories.
   const syncChangedBuildings = useCallback(async (buildingIds: number[]) => {
@@ -714,7 +767,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       ...buildingsRef.current.filter((b) => ids.has(b.id)).flatMap((b) => b.units.map((u) => u.id)),
       ...updated.flatMap((b) => b.units.map((u) => u.id)),
     ])
-    const updatedById = new Map(updated.map((b) => [b.id, b]))
+    const visible = updated.filter((b) => !recipientReader || recipientReader.allowsCard(b.cardId))
+    const updatedById = new Map(visible.map((b) => [b.id, b]))
     // A destination can arrive before the old building's removal snapshot.
     const incomingUnitIds = new Set(updated.flatMap((b) => b.units.map((u) => u.id)))
     const unaffectedUnitIds = new Set(buildingsRef.current.filter((b) => !ids.has(b.id))
@@ -723,14 +777,14 @@ export function useStore(enabled: boolean = true, role: Role = 'user') {
       const existing = new Set(current.map((b) => b.id))
       return [
         ...current.flatMap((b) => ids.has(b.id) ? (updatedById.has(b.id) ? [updatedById.get(b.id)!] : []) : [b]),
-        ...updated.filter((b) => !existing.has(b.id)),
+        ...visible.filter((b) => !existing.has(b.id)),
       ]
     })
     setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)
       || (!incomingUnitIds.has(h.unitId) && unaffectedUnitIds.has(h.unitId))),
     ...data.histories.filter((h) => incomingUnitIds.has(h.unitId))]
       .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
-  }, [applyBuildingsChange])
+  }, [applyBuildingsChange, recipientReader])
 
   useEffect(() => { syncBuildingsRef.current = syncChangedBuildings }, [syncChangedBuildings])
 

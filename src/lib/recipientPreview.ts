@@ -9,13 +9,13 @@ export function recipientPreviewEnabled(pathname: string, demoMode: string | und
   return demoMode === 'true' && pathname === '/recipient-preview'
 }
 
-export function createRecipientPreview(userName: string) {
+export function createRecipientPreview(userName: string, options: { includeHistories?: boolean } = {}) {
   const token = getAuthToken()
   if (!token) throw new Error('로그인이 필요합니다.')
   let active = true
   const isCurrent = () => active && getAuthToken() === token
   const check = () => { if (!isCurrent()) throw new Error('Recipient preview session changed') }
-  const reader = createRecipientCardPrefetch(supabase, { token, isCurrent })
+  const reader = createRecipientCardPrefetch(supabase, { token, isCurrent }, options)
 
   async function pages<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>) {
     const rows: T[] = []

@@ -29,6 +29,7 @@ function normalizeIds(ids: number[]) {
 export function createRecipientCardPrefetch(
   client: Pick<SupabaseClient, 'from' | 'rpc'>,
   session: { token: string; isCurrent: () => boolean },
+  options: { includeHistories?: boolean } = {},
 ) {
   let generation = 0
   const entries = new Map<string, { ids: number[]; load: RecipientCardLoad }>()
@@ -103,7 +104,7 @@ export function createRecipientCardPrefetch(
       const [unitRows, historyRows] = await Promise.all([
         pages<RawUnit>(requestGeneration, (start, end) => client.from('units')
           .select(RECIPIENT_UNIT_COLUMNS).in('building_id', batch).order('id').range(start, end)),
-        pages<RawVisitHistory & { units: { building_id: number } }>(requestGeneration, (start, end) => client.from('visit_histories')
+        options.includeHistories === false ? Promise.resolve([]) : pages<RawVisitHistory & { units: { building_id: number } }>(requestGeneration, (start, end) => client.from('visit_histories')
           .select(`${RECIPIENT_HISTORY_COLUMNS}, units!inner(building_id)`)
           .in('units.building_id', batch).is('invalidated_at', null).gte('created_at', cutoff).order('id').range(start, end)),
       ])
