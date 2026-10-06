@@ -12,6 +12,49 @@ beforeEach(() => {
 })
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear() })
 
+async function storedSnapshots() {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('field-map-boundary-cache-v1', 1)
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+  try {
+    return await new Promise<unknown[]>((resolve, reject) => {
+      const request = db.transaction('snapshots').objectStore('snapshots').getAll()
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+  } finally { db.close() }
+}
+
+test('reading a new session physically prunes expired old keys but keeps fresh project and session keys', async () => {
+  const start = Date.now()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(start)
+  await (await createBoundaryDeviceCache('demo', 'old-session', () => true))!.write(rows)
+  clock.mockReturnValue(start + 8 * 86400000)
+  const cache = await createBoundaryDeviceCache('demo', 'new-session', () => true)
+  const other = await createBoundaryDeviceCache('other-project', 'session', () => true)
+  await cache!.write(rows)
+  await other!.write(rows)
+  expect(await storedSnapshots()).toHaveLength(3)
+  expect(await cache!.read()).toEqual(rows)
+  expect(await storedSnapshots()).toHaveLength(2)
+  expect(await other!.read()).toEqual(rows)
+  expect(await (await createBoundaryDeviceCache('demo', 'old-session', () => true))!.read()).toBeNull()
+})
+
+test('prunes invalid and future timestamps, including when the requested key is absent', async () => {
+  const start = Date.now()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(NaN)
+  await (await createBoundaryDeviceCache('demo', 'invalid', () => true))!.write(rows)
+  clock.mockReturnValue(start + 10000)
+  await (await createBoundaryDeviceCache('demo', 'future', () => true))!.write(rows)
+  clock.mockReturnValue(start)
+  expect(await storedSnapshots()).toHaveLength(2)
+  expect(await (await createBoundaryDeviceCache('demo', 'missing', () => true))!.read()).toBeNull()
+  expect(await storedSnapshots()).toHaveLength(0)
+})
+
 test('persists across readers but isolates project and login session without storing the token', async () => {
   const cache = await createBoundaryDeviceCache('demo', 'secret-session', () => true)
   await cache!.write(rows)

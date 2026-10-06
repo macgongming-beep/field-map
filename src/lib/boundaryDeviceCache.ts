@@ -6,6 +6,12 @@ const MAX_AGE = 7 * 24 * 60 * 60 * 1000
 
 function epoch() { return localStorage.getItem(EPOCH) ?? '' }
 
+function freshSnapshot(value: unknown, now: number): value is { savedAt: number; rows: unknown } {
+  return value != null && typeof value === 'object' && 'savedAt' in value && 'rows' in value
+    && typeof value.savedAt === 'number' && Number.isFinite(value.savedAt)
+    && value.savedAt <= now && now - value.savedAt <= MAX_AGE
+}
+
 async function database(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1)
@@ -44,13 +50,23 @@ export async function createBoundaryDeviceCache(project: string, token: string, 
           db = await database()
           if (!current()) return null
           const value = await new Promise<unknown>((resolve, reject) => {
-            const request = db!.transaction(STORE).objectStore(STORE).get(key)
-            request.onsuccess = () => resolve(request.result)
-            request.onerror = () => reject(request.error)
+            const tx = db!.transaction(STORE, 'readwrite')
+            const request = tx.objectStore(STORE).openCursor()
+            const now = Date.now()
+            let snapshot: unknown
+            // Old session keys are never read again; prune them on cache access too.
+            request.onsuccess = () => {
+              const cursor = request.result
+              if (!cursor) return
+              if (!freshSnapshot(cursor.value, now)) cursor.delete()
+              else if (cursor.key === key) snapshot = cursor.value
+              cursor.continue()
+            }
+            tx.oncomplete = () => resolve(snapshot)
+            tx.onerror = () => reject(tx.error)
+            tx.onabort = () => reject(tx.error)
           })
-          if (!current() || !value || typeof value !== 'object' || !('savedAt' in value) || !('rows' in value)
-            || typeof value.savedAt !== 'number' || Date.now() - value.savedAt > MAX_AGE
-            || value.savedAt > Date.now() || !validRows(value.rows)) return null
+          if (!current() || !freshSnapshot(value, Date.now()) || !validRows(value.rows)) return null
           return value.rows
         } catch { return null } finally { db?.close() }
       },
