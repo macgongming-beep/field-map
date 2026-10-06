@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase'
 import type { RawCardBoundary } from './storeTransforms'
+import { getAuthToken } from '../lib/authToken'
+import { createBoundaryDeviceCache } from '../lib/boundaryDeviceCache'
 
 type BoundaryRow = RawCardBoundary & { updated_at?: string | null }
 type BoundaryVersion = Pick<BoundaryRow, 'card_id' | 'updated_at'>
@@ -21,15 +23,30 @@ async function readRows<T>(columns: string, ids?: number[]): Promise<T[]> {
 export function createCardBoundaryReader() {
   let cached: BoundaryRow[] | null = null
   let generation = 0
+  let initialized = false
+  let device: Awaited<ReturnType<typeof createBoundaryDeviceCache>> = null
+  let session: string | null = null
   return async (recovery: boolean, measure: (data: unknown) => void): Promise<BoundaryRow[] | null> => {
     const request = ++generation
+    let restored = false
+    if (!initialized) {
+      initialized = true
+      session = getAuthToken()
+      if (import.meta.env.VITE_DEMO_MODE === 'true' && session && import.meta.env.VITE_SUPABASE_URL) {
+        const token = session
+        device = await createBoundaryDeviceCache(import.meta.env.VITE_SUPABASE_URL, token, () => getAuthToken() === token)
+        const snapshot = await device?.read()
+        if (request !== generation || getAuthToken() !== token) return null
+        if (snapshot) { cached = snapshot; restored = true }
+      }
+    }
     const full = async () => {
       const rows = await readRows<BoundaryRow>('card_id, points, updated_at')
       measure(rows)
       return rows
     }
     let rows: BoundaryRow[]
-    if (!recovery || !cached) rows = await full()
+    if ((!recovery && !restored) || !cached) rows = await full()
     else {
       try {
         const index = await readRows<BoundaryVersion>('card_id, updated_at')
@@ -56,8 +73,10 @@ export function createCardBoundaryReader() {
         rows = await full()
       }
     }
-    if (request !== generation) return null
+    if (request !== generation || (session && getAuthToken() !== session)) return null
     cached = rows
+    await device?.write(rows)
+    if (request !== generation || (session && getAuthToken() !== session)) return null
     return rows
   }
 }

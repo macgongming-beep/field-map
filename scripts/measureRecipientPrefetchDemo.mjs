@@ -124,7 +124,7 @@ try {
   if (process.argv.includes('--store-lifecycle')) {
     const { measureStoreLifecycle } = await import('./recipientStoreLifecycle.mjs')
     try {
-      await measureStoreLifecycle({ client, user, samples, setPhase: (next) => { phase = next } })
+      await measureStoreLifecycle({ client, user, samples, setPhase: (next) => { phase = next }, boundaryCache: process.argv.includes('--boundary-cache'), project: origin })
     } catch (error) {
       // Bundled data-URL stack traces are huge; never dump data-bearing assertion objects.
       console.error(`Lifecycle measurement failed: ${String(error.message).split('\n')[0].slice(0, 250)}`)

@@ -2,9 +2,11 @@ import { resolve } from 'node:path'
 import { deepStrictEqual } from 'node:assert'
 import { rolldown } from 'rolldown'
 import { JSDOM } from 'jsdom'
+import { IDBFactory } from 'fake-indexeddb'
+import { webcrypto } from 'node:crypto'
 
 // Execute the real React store with a demo-only measured client. No UI/browser automation.
-export async function measureStoreLifecycle({ client, user, samples, setPhase }) {
+export async function measureStoreLifecycle({ client, user, samples, setPhase, boundaryCache = false, project }) {
   if (user.role !== 'user') throw new Error('An actual volunteer account is required')
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/' })
   const previous = new Map()
@@ -13,12 +15,18 @@ export async function measureStoreLifecycle({ client, user, samples, setPhase })
     Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] })
   }
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  if (boundaryCache) {
+    for (const [key, value] of [['indexedDB', new IDBFactory()], ['crypto', webcrypto]]) {
+      previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
+      Object.defineProperty(globalThis, key, { configurable: true, value })
+    }
+  }
   globalThis.__storeMeasurementClient = client
   localStorage.setItem('auth_token', user.token)
   localStorage.setItem('currentVisitor', user.name)
   const { renderHook, act, waitFor, cleanup } = await import('@testing-library/react')
   const build = await rolldown({ input: resolve('src/hooks/useStore.ts'),
-    transform: { define: { 'import.meta.env': JSON.stringify({ DEV: false, VITE_TERRITORY_REALTIME_ENABLED: 'true' }) } },
+    transform: { define: { 'import.meta.env': JSON.stringify({ DEV: false, VITE_TERRITORY_REALTIME_ENABLED: 'true', VITE_DEMO_MODE: boundaryCache ? 'true' : 'false', VITE_SUPABASE_URL: project }) } },
     plugins: [{ name: 'measured-demo-store', resolveId(id) {
       if (id.endsWith('/supabase')) return '\0measured-client'
       if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('\0')) {
@@ -35,7 +43,7 @@ export async function measureStoreLifecycle({ client, user, samples, setPhase })
     const globalKeys = ['visitHistories', 'serviceSessions', 'calendarEvents', 'notices', 'returnVisits', 'returnVisitLogs', 'informalAssets', 'eventRestaurantAssignments', 'restaurantRequests']
     const results = []
     let fullSnapshot
-    for (const mode of ['full', 'recipient']) {
+    for (const mode of boundaryCache ? ['full', 'cached-full'] : ['full', 'recipient']) {
       setPhase(`${mode}:initial`)
       let hook
       try {
@@ -77,6 +85,7 @@ export async function measureStoreLifecycle({ client, user, samples, setPhase })
     console.log(JSON.stringify({ project: 'demo', accountRole: user.role, measuredAt: new Date().toISOString(), results,
       parity: 'Global slices and loaded building/boundary contents match',
       limitations: ['Real useStore network reads under React test harness, not whole app or browser Transferred.',
+        ...(boundaryCache ? ['IndexedDB is emulated; cached-full is a new full-store instance using the same session and saved coordinates.'] : []),
         'Header notifications, chat, map tiles, realtime subscriptions and static assets excluded.',
         'Compressed HTTPS response body only. No monthly production extrapolation.',
         'Session auto-close suppressed; no visit writes. Foreground invokes the real recovery dispatcher, not mobile backgrounding.'] }, null, 2))

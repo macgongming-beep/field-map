@@ -1,4 +1,6 @@
-import { beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { IDBFactory } from 'fake-indexeddb'
+import { webcrypto } from 'node:crypto'
 import { createCardBoundaryReader } from './cardBoundaryRecovery'
 
 const db = vi.hoisted(() => ({ rows: [] as Array<{ card_id: number; points: unknown[]; updated_at: string | null }>, reads: [] as Array<{ columns: string; ids?: number[] }>, fail: 0, pause: null as Promise<void> | null }))
@@ -23,6 +25,47 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: () => ({
 }) } }))
 const row = (id: number, version = 'v1') => ({ card_id: id, updated_at: version, points: [id, 2, 3] })
 beforeEach(() => { db.rows = [row(1), row(2)]; db.reads = []; db.fail = 0; db.pause = null })
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); localStorage.clear() })
+
+function enableDeviceCache() {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_SUPABASE_URL', 'https://demo.example')
+  vi.stubGlobal('indexedDB', new IDBFactory())
+  vi.stubGlobal('crypto', webcrypto)
+  localStorage.setItem('auth_token', 'demo-session')
+  db.rows = db.rows.map((r) => ({ ...r, points: [{ lat: 37, lng: r.card_id }, { lat: 38, lng: r.card_id }, { lat: 39, lng: r.card_id }] }))
+}
+
+test('demo cold restart verifies manifest before reusing saved coordinates; manual refresh stays full', async () => {
+  enableDeviceCache()
+  await createCardBoundaryReader()(false, vi.fn())
+  db.reads = []
+  const restarted = createCardBoundaryReader()
+  expect(await restarted(false, vi.fn())).toEqual(db.rows)
+  expect(db.reads).toEqual([{ columns: 'card_id, updated_at', ids: undefined }])
+  await restarted(false, vi.fn())
+  expect(db.reads.at(-1)?.columns).toContain('points')
+})
+
+test('restart removes deleted coordinates and fetches changed coordinates; never displays cache offline', async () => {
+  enableDeviceCache()
+  await createCardBoundaryReader()(false, vi.fn())
+  db.rows = [{ ...db.rows[0], updated_at: 'v2' }]
+  db.reads = []
+  expect(await createCardBoundaryReader()(false, vi.fn())).toEqual(db.rows)
+  expect(db.reads).toEqual([{ columns: 'card_id, updated_at', ids: undefined }, { columns: 'card_id, points, updated_at', ids: [1] }])
+  db.fail = 2
+  await expect(createCardBoundaryReader()(false, vi.fn())).rejects.toThrow('offline')
+})
+
+test('production never restores device coordinates even when a cache exists', async () => {
+  enableDeviceCache()
+  await createCardBoundaryReader()(false, vi.fn())
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  db.reads = []
+  expect(await createCardBoundaryReader()(false, vi.fn())).toEqual(db.rows)
+  expect(db.reads).toEqual([{ columns: 'card_id, points, updated_at', ids: undefined }])
+})
 
 test('late snapshot cannot overwrite a newer mutation refresh', async () => {
   const read = createCardBoundaryReader()
