@@ -35,10 +35,54 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: 'test', type: '주택', lat: 1, lng: 1, warning: false, memo: null,
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
+  state.changed.mockReset()
   state.buildings = [building]; state.allowed = [1]; state.reads = []
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
-afterEach(() => { cleanup(); vi.clearAllMocks() })
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); localStorage.clear() })
+
+test('foreground refresh replaces scoped data and retains global statistics without reading all buildings', async () => {
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.allowed = [2]
+  state.buildings = [{ ...building, id: 20, card_id: 2 }]
+  state.reads = []
+  state.refresh.mockClear()
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 125_000)
+  await act(async () => { window.dispatchEvent(new Event('focus')) })
+  await waitFor(() => expect(result.current.buildings.map((b) => b.id)).toEqual([20]))
+  expect(result.current.cardBoundaries.map((b) => b.cardId)).toEqual([2])
+  expect(state.refresh).toHaveBeenCalledTimes(1)
+  expect(state.reads).not.toContain('buildings')
+  expect(state.reads).not.toContain('card_boundaries')
+  expect(state.reads).toContain('visit_histories')
+  expect(state.reads).toContain('service_sessions')
+  await act(async () => { window.dispatchEvent(new Event('focus')) })
+  expect(state.refresh).toHaveBeenCalledTimes(1)
+})
+
+test('scoped visit save and undo refresh only that building and preserve unrelated history', async () => {
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings[0]
+  const history = { id: 901, unitId: 100, visitor: 'Volunteer', result: '부재', timeSlot: '오전', visitedAt: '2026-10-06', createdAt: '2026-10-06T00:00:00Z' }
+  state.changed.mockResolvedValueOnce({ buildings: [{ ...before, units: before.units.map((u) => ({ ...u, status: '부재' })) }], histories: [history] })
+  state.reads = []; state.refresh.mockClear(); state.changed.mockClear()
+  await act(async () => { await result.current.updateUnitStatus(10, 100, '부재') })
+  expect(state.changed).toHaveBeenCalledExactlyOnceWith([10])
+  expect(result.current.buildings[0].units[0].status).toBe('부재')
+  expect(result.current.visitHistories.map((h) => h.id)).toEqual(expect.arrayContaining([900, 901]))
+  expect(state.reads).not.toContain('service_sessions')
+  expect(state.refresh).not.toHaveBeenCalled()
+  state.changed.mockClear()
+  state.changed.mockResolvedValueOnce({ buildings: [before], histories: [] })
+  await act(async () => { await result.current.undoLatestVisit(10, 100) })
+  expect(state.changed).toHaveBeenCalledExactlyOnceWith([10])
+  expect(result.current.buildings[0].units[0].status).toBe('미방문')
+  expect(result.current.visitHistories.map((h) => h.id)).toEqual([900])
+})
 
 test('missing assigned cards still fail instead of silently disappearing without subset summaries', async () => {
   state.allowed = [99]
