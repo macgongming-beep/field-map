@@ -34,6 +34,14 @@ test('only the real demo volunteer workflow opts in; general maps and administra
   expect(recipientStoreEnabled('user', '/territory', '', 'false')).toBe(false)
 })
 
+test('production explicitly opts in while a false flag overrides demo and roles stay restricted', () => {
+  expect(recipientStoreEnabled('user', '/territory', '', undefined, 'true')).toBe(true)
+  expect(recipientStoreEnabled('user', '/map', '?assignmentMap=51', 'false', 'true')).toBe(true)
+  expect(recipientStoreEnabled('admin', '/territory', '', undefined, 'true')).toBe(false)
+  expect(recipientStoreEnabled('user', '/map', '?scope=regularVisits', undefined, 'true')).toBe(false)
+  expect(recipientStoreEnabled('user', '/territory', '', 'true', 'false')).toBe(false)
+})
+
 test('includes multi-card assignments, active sessions and restaurant links without loading unrelated cards', async () => {
   state.assignments.mockResolvedValue([{ cardAssignments: [{ userName: 'me', assignedCardIds: [1, 2] }] }])
   state.rows = {

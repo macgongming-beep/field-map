@@ -5,8 +5,8 @@ import { assignedServiceScope } from '../utils/cardServiceScope'
 import type { CalendarEvent } from '../types'
 
 /** Only the real recipient workflow opts in; unsupported views retain the full store. */
-export function recipientStoreEnabled(role: string, pathname: string, search: string, demo: string | undefined) {
-  if (demo !== 'true' || role !== 'user') return false
+export function recipientStoreEnabled(role: string, pathname: string, search: string, demo: string | undefined, enabled?: string) {
+  if ((enabled ?? demo) !== 'true' || role !== 'user') return false
   if (['/', '/home', '/territory', '/calendar'].includes(pathname)) return true
   return pathname === '/map' && new URLSearchParams(search).has('assignmentMap')
 }

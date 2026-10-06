@@ -69,7 +69,7 @@ function App() {
   const auth = useAuth()
   const location = useLocation()
   const recipient = Boolean(auth.user) && recipientStoreEnabled(auth.user!.role, location.pathname,
-    location.search, import.meta.env.VITE_DEMO_MODE)
+    location.search, import.meta.env.VITE_DEMO_MODE, import.meta.env.VITE_RECIPIENT_STORE_ENABLED)
   return <AppSession key={`${auth.user?.id ?? 'guest'}:${recipient ? 'recipient' : 'full'}`}
     auth={auth} recipientUser={recipient ? auth.user!.name : undefined} />
 }

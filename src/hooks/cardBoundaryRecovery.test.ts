@@ -67,6 +67,21 @@ test('production never restores device coordinates even when a cache exists', as
   expect(db.reads).toEqual([{ columns: 'card_id, points, updated_at', ids: undefined }])
 })
 
+test('production cache flag enables manifest reuse and explicit false disables demo caching', async () => {
+  enableDeviceCache()
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_BOUNDARY_DEVICE_CACHE_ENABLED', 'true')
+  await createCardBoundaryReader()(false, vi.fn())
+  db.reads = []
+  expect(await createCardBoundaryReader()(false, vi.fn())).toEqual(db.rows)
+  expect(db.reads).toEqual([{ columns: 'card_id, updated_at', ids: undefined }])
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_BOUNDARY_DEVICE_CACHE_ENABLED', 'false')
+  db.reads = []
+  expect(await createCardBoundaryReader()(false, vi.fn())).toEqual(db.rows)
+  expect(db.reads).toEqual([{ columns: 'card_id, points, updated_at', ids: undefined }])
+})
+
 test('late snapshot cannot overwrite a newer mutation refresh', async () => {
   const read = createCardBoundaryReader()
   let release!: () => void

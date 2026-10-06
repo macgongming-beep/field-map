@@ -32,7 +32,8 @@ export function createCardBoundaryReader() {
     if (!initialized) {
       initialized = true
       session = getAuthToken()
-      if (import.meta.env.VITE_DEMO_MODE === 'true' && session && import.meta.env.VITE_SUPABASE_URL) {
+      if ((import.meta.env.VITE_BOUNDARY_DEVICE_CACHE_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
+        && session && import.meta.env.VITE_SUPABASE_URL) {
         const token = session
         device = await createBoundaryDeviceCache(import.meta.env.VITE_SUPABASE_URL, token, () => getAuthToken() === token)
         const snapshot = await device?.read()

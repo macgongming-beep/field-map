@@ -30,6 +30,8 @@
 
 ## 새 기록 틀
 
+운영 전환: [0017 범위 조회와 구역선 기기 캐시](0017-production-recipient-and-boundary-cache.md)
+
 구역선 재실행 비용: [0016 데모 구역선 기기 보관](0016-demo-boundary-device-cache.md)
 
 봉사 모임 정리 준비: [0013 일정 삭제와 게시글 보존 분리](0013-service-meeting-notes.md)
