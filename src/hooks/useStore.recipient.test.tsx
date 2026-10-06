@@ -5,6 +5,7 @@ import { useStore } from './useStore'
 import type { RawBuilding } from './storeTransforms'
 
 const state = vi.hoisted(() => ({
+  failedTable: '',
   buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
 }))
 vi.mock('../lib/recipientStore', () => ({ createRecipientStoreReader: () => ({
@@ -28,7 +29,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       state.reads.push(table)
       const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z' }] : []
-      return resolve({ data, error: null })
+      return resolve({ data, error: table === state.failedTable ? new Error('offline') : null })
     }
     return q
   },
@@ -37,12 +38,38 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: 'test', type: '주택', lat: 1, lng: 1, warning: false, memo: null,
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
+  state.failedTable = ''
   state.changed.mockReset()
   state.unchanged.mockResolvedValue(null); state.recover.mockReset(); state.boundaries.mockResolvedValue([])
   state.buildings = [building]; state.allowed = [1]; state.reads = []
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test('shares only a freshly completed calendar with recipient scope resolution', async () => {
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.refresh).toHaveBeenLastCalledWith([])
+  for (const table of ['calendar_events', 'event_card_assignments', 'event_card_assignment_cards']) {
+    expect(state.reads.filter((name) => name === table)).toHaveLength(1)
+  }
+  state.unchanged.mockResolvedValue([1])
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'foreground' }) })
+  expect(state.unchanged).toHaveBeenLastCalledWith([])
+  await act(async () => { await result.current.refetchSlices(['buildings']) })
+  expect(state.refresh).toHaveBeenLastCalledWith(undefined)
+})
+
+test.each(['event_card_assignments', 'event_card_assignment_cards'])('failed %s does not publish empty scope or discard existing buildings', async (table) => {
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear()
+  state.failedTable = table
+  await act(async () => { await expect(result.current.refetchSlices(['calendar'])).rejects.toThrow('assignments load failed') })
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(result.current.buildings.map((b) => b.id)).toEqual([10])
+})
 
 test('unchanged scoped recovery skips detail prefetch, keeps global histories, and falls back on failure', async () => {
   vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')

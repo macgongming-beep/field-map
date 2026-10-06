@@ -16,6 +16,7 @@ vi.mock('./supabase', () => ({ supabase: { rpc: state.rpc, from: (table: string)
   return q
 } } }))
 import { createRecipientStoreReader, recipientStoreEnabled } from './recipientStore'
+import type { CalendarEvent } from '../types'
 
 beforeEach(() => {
   vi.clearAllMocks(); state.token = 'session'; state.rows = {}
@@ -64,6 +65,25 @@ test('unassignment refresh removes old scope, including the last card', async ()
   expect((await reader.read())?.buildings).toEqual([])
   expect(reader.allowsCard(1)).toBe(false)
   expect(reader.scoped).toBe(true)
+})
+
+test('fresh calendar sharing skips personal queries, filters the recipient, and never reuses stale scope', async () => {
+  const calendar = [{ cardAssignments: [{ userName: 'me', assignedCardIds: [1, 2] }, { userName: 'other', assignedCardIds: [99] }] }] as CalendarEvent[]
+  const reader = createRecipientStoreReader('me')
+  reader.refresh(calendar)
+  await reader.read()
+  expect(state.prefetch).toHaveBeenLastCalledWith([1, 2])
+  expect(await reader.unchangedScope(calendar)).toEqual([1, 2])
+  expect(await reader.unchangedScope([])).toBeNull()
+  expect(state.assignments).not.toHaveBeenCalled()
+  reader.refresh([])
+  await reader.read()
+  expect(state.prefetch).toHaveBeenLastCalledWith([])
+  state.assignments.mockResolvedValue([{ cardAssignments: [{ userName: 'me', assignedCardIds: [3] }] }])
+  reader.refresh()
+  await reader.read()
+  expect(state.assignments).toHaveBeenCalledTimes(1)
+  expect(state.prefetch).toHaveBeenLastCalledWith([3])
 })
 
 test('new assignments and return-visit scope changes force a fresh snapshot', async () => {

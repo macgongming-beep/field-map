@@ -136,6 +136,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const [visitHistories, setVisitHistories] = useState<VisitHistory[]>([])
   const [serviceSessions, setServiceSessions] = useState<ServiceSession[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
+  const recipientCalendarRef = useRef<CalendarEvent[] | undefined>(undefined)
   const [cardBoundaries, setCardBoundaries] = useState<CardBoundary[]>([])
   const boundaryReader = useRef(createCardBoundaryReader())
   const [notices, setNotices] = useState<Notice[]>([])
@@ -380,6 +381,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         if (eventsRes.error) {
           throw new Error('Calendar data load failed', { cause: eventsRes.error })
         }
+        if (recipientReader && (eventCardAssignmentsRes.error || eventAssignmentCardsRes.error)) {
+          throw new Error('Recipient calendar assignments load failed', { cause: eventCardAssignmentsRes.error || eventAssignmentCardsRes.error })
+        }
 
         measure(eventsRes.data)
         measure(eventCardAssignmentsRes.data)
@@ -395,6 +399,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           toCalendarEvent(event, merged.filter((a) => a.eventId === event.id)),
         )
         setCalendarEvents(transformedEvents)
+        recipientCalendarRef.current = transformedEvents
 
         if (eventCardAssignmentsRes.error) {
           console.warn('일정별 카드 배정 로드 실패.', eventCardAssignmentsRes.error)
@@ -525,13 +530,20 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const baseline = slices.includes('visits')
           ? await fetchTerritoryClock().catch(() => null) : null
         const requested = new Set(slices)
+        // Reuse only this operation's complete calendar; stale state could retain revoked cards.
+        let freshCalendar: CalendarEvent[] | undefined
+        if (requested.has('calendar')) {
+          await fetchSlice('calendar')
+          freshCalendar = recipientCalendarRef.current
+          requested.delete('calendar')
+        }
         const refreshTerritory = slices.some((slice) => ['calendar', 'resources', 'returnVisits', 'buildings', 'cards', 'cardBoundaries'].includes(slice))
         if (refreshTerritory) for (const slice of ['buildings', 'cards', 'cardBoundaries'] as const) requested.add(slice)
         const recovery = options?.triggeredBy === 'foreground' || options?.triggeredBy?.startsWith('realtime:')
         if (refreshTerritory && recovery && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
           && territoryCheckpoint.baseline && syncBuildingsRef.current) {
           try {
-            const ids = await recipientReader.unchangedScope()
+            const ids = await recipientReader.unchangedScope(freshCalendar)
             if (ids != null) {
               await recoverRecipientBuildings(ids, buildingsRef.current.map((b) => b.id), territoryCheckpoint, syncBuildingsRef.current)
               if (requested.has('cardBoundaries')) setCardBoundaries(await readRecipientBoundaries(ids))
@@ -547,7 +559,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         }
         // Calendar changes include unassignment/cancellation, not only newly granted cards.
         if (refreshTerritory) {
-          recipientReader.refresh()
+          recipientReader.refresh(freshCalendar)
           await fetchSlice('buildings')
           requested.delete('buildings')
         }

@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { getAuthToken } from './authToken'
 import { createRecipientPreview } from './recipientPreview'
 import { assignedServiceScope } from '../utils/cardServiceScope'
+import type { CalendarEvent } from '../types'
 
 /** Only the real recipient workflow opts in; unsupported views retain the full store. */
 export function recipientStoreEnabled(role: string, pathname: string, search: string, demo: string | undefined) {
@@ -16,6 +17,7 @@ export function createRecipientStoreReader(userName: string) {
   let active = true
   let pending: ReturnType<typeof load> | undefined
   let allowed: Set<number> | null = null
+  let calendarSnapshot: CalendarEvent[] | undefined
   const check = () => { if (!active || !token || getAuthToken() !== token) throw new Error('Recipient store session changed') }
   async function pages<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>) {
     const result: T[] = []
@@ -29,10 +31,10 @@ export function createRecipientStoreReader(userName: string) {
       if (response.data.length < 1000) return result
     }
   }
-  async function scopeIds() {
+  async function scopeIds(calendar?: CalendarEvent[]) {
     check()
     const [events, assigned, sessions, returnVisitScope, restaurantBuildings, restaurantUnits, restaurantAssignments] = await Promise.all([
-      api.assignments(),
+      calendar ?? api.assignments(),
       pages<{ card_id: number }>((from, to) => supabase.from('card_assignments').select('card_id').eq('user_name', userName).order('card_id').range(from, to)),
       pages<{ primary_card_id: number | null }>((from, to) => supabase.from('service_sessions').select('primary_card_id').eq('user_name', userName).eq('status', 'active').is('ended_at', null).order('id').range(from, to)),
       supabase.rpc('get_recipient_return_visit_card_ids', { p_token: token }),
@@ -61,7 +63,7 @@ export function createRecipientStoreReader(userName: string) {
     return ids
   }
   async function load() {
-    const ids = await scopeIds()
+    const ids = await scopeIds(calendarSnapshot)
     const details = await api.reader.prefetch(ids).details
     check()
     allowed = new Set(ids)
@@ -69,13 +71,13 @@ export function createRecipientStoreReader(userName: string) {
   }
   return {
     read() { return pending ??= load() },
-    async unchangedScope() {
-      const ids = await scopeIds()
+    async unchangedScope(calendar?: CalendarEvent[]) {
+      const ids = await scopeIds(calendar)
       check()
       return allowed != null && ids.length === allowed.size && ids.every((id) => allowed!.has(id)) ? ids : null
     },
     resume() {
-      if (!active) { api = createRecipientPreview(userName, { includeHistories: false, includeSummaries: false }); pending = undefined; allowed = null; active = true }
+      if (!active) { api = createRecipientPreview(userName, { includeHistories: false, includeSummaries: false }); pending = undefined; allowed = null; calendarSnapshot = undefined; active = true }
     },
     allowsCard(id: number) { return allowed == null || allowed.has(id) },
     validateCards(cardIds: number[]) {
@@ -84,7 +86,7 @@ export function createRecipientStoreReader(userName: string) {
       if (allowed && [...allowed].some((id) => !available.has(id))) throw new Error('A requested card is unavailable')
     },
     get scoped() { return allowed != null },
-    refresh() { check(); pending = undefined; api.reader.invalidate() },
+    refresh(calendar?: CalendarEvent[]) { check(); calendarSnapshot = calendar; pending = undefined; api.reader.invalidate() },
     dispose() { active = false; api.dispose() },
   }
 }
