@@ -25,7 +25,7 @@ const idsArgument = process.argv.find((value) => value.startsWith('--card-ids=')
 const selectedIds = idsArgument?.slice('--card-ids='.length).split(',').filter(Boolean).map(Number)
 const baseline = process.argv.find((value) => value.startsWith('--baseline='))?.slice('--baseline='.length) ?? '073b6a1'
 if (!/^[a-f0-9]{7,40}$/.test(baseline)) throw new Error('Baseline must be a commit hash')
-if (!selectedIds && !process.argv.includes('--inspect') && !process.argv.includes('--store-scope')) throw new Error('Provide --card-ids=1,2, --store-scope or --inspect')
+if (!selectedIds && !process.argv.includes('--inspect') && !process.argv.includes('--store-scope') && !process.argv.includes('--store-lifecycle')) throw new Error('Provide --card-ids=1,2, --store-scope, --store-lifecycle or --inspect')
 
 let phase = 'setup'
 const samples = []
@@ -34,6 +34,12 @@ let cleanupFixture
 async function measuredFetch(input, init = {}) {
   const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url)
   if (url.origin !== origin) throw new Error('Cross-project request rejected')
+  if (process.argv.includes('--store-lifecycle') && (init.method || 'GET') !== 'GET') {
+    // Lifecycle measurement must not close sessions or create missing fixture cards.
+    if (url.pathname === '/rest/v1/rpc/auto_close_stale_sessions') return new Response('null', { status: 200 })
+    const allowed = ['auth_login', 'territory_sync_clock', 'get_card_summaries', 'get_recipient_return_visit_card_ids']
+    if (!allowed.some((name) => url.pathname === `/rest/v1/rpc/${name}`)) throw new Error('Lifecycle measurement rejected a data write')
+  }
   const headers = new Headers(init.headers)
   headers.set('accept-encoding', 'gzip')
   const started = performance.now()
@@ -51,6 +57,7 @@ async function measuredFetch(input, init = {}) {
             : encoding === 'br' ? brotliDecompressSync(compressed)
               : encoding === 'deflate' ? inflateSync(compressed) : compressed
           samples.push({ phase: label, endpoint: url.pathname.split('/').pop(), status: response.statusCode,
+            initialLookup: url.pathname === '/rest/v1/cards' && url.searchParams.get('name') === 'eq.미배정 건물' && url.searchParams.get('limit') === '1',
             encoding, compressedBodyBytes: compressed.length, decodedBodyBytes: body.length, durationMs: Math.round(performance.now() - started) })
           const resultHeaders = new Headers()
           for (const [key, value] of Object.entries(response.headers)) {
@@ -114,7 +121,16 @@ try {
     }
   }
 
-  if (process.argv.includes('--store-scope')) {
+  if (process.argv.includes('--store-lifecycle')) {
+    const { measureStoreLifecycle } = await import('./recipientStoreLifecycle.mjs')
+    try {
+      await measureStoreLifecycle({ client, user, samples, setPhase: (next) => { phase = next } })
+    } catch (error) {
+      // Bundled data-URL stack traces are huge; never dump data-bearing assertion objects.
+      console.error(`Lifecycle measurement failed: ${String(error.message).split('\n')[0].slice(0, 250)}`)
+      process.exitCode = 1
+    }
+  } else if (process.argv.includes('--store-scope')) {
     if (process.argv.includes('--fixture-return-visit')) {
       const target = await client.from('buildings').select('address').neq('card_id', 1).order('id').limit(1).single()
       if (target.error) throw target.error
