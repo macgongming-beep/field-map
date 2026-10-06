@@ -29,7 +29,7 @@ function normalizeIds(ids: number[]) {
 export function createRecipientCardPrefetch(
   client: Pick<SupabaseClient, 'from' | 'rpc'>,
   session: { token: string; isCurrent: () => boolean },
-  options: { includeHistories?: boolean } = {},
+  options: { includeHistories?: boolean; includeSummaries?: boolean } = {},
 ) {
   let generation = 0
   const entries = new Map<string, { ids: number[]; load: RecipientCardLoad }>()
@@ -86,25 +86,36 @@ export function createRecipientCardPrefetch(
     const histories: RawVisitHistory[] = []
     for (let from = 0; from < ids.length; from += 100) {
       const batch = ids.slice(from, from + 100)
-      const [buildingRows, boundaryRows] = await Promise.all([
+      const [buildingRows, boundaryRows, unitRows] = await Promise.all([
         pages<RawBuilding>(requestGeneration, (start, end) => client.from('buildings')
           .select(RECIPIENT_BUILDING_COLUMNS).in('card_id', batch).order('id').range(start, end)),
         pages<BoundaryRow>(requestGeneration, (start, end) => client.from('card_boundaries')
           .select('card_id,points,updated_at').in('card_id', batch).order('card_id').range(start, end)),
+        // The real store already owns global histories. Read units by card in parallel,
+        // but keep top-level pagination so large buildings cannot truncate their units.
+        options.includeHistories === false ? pages<RawUnit & { buildings: { card_id: number } }>(requestGeneration, (start, end) => client.from('units')
+          .select(`${RECIPIENT_UNIT_COLUMNS}, buildings!inner(card_id)`)
+          .in('buildings.card_id', batch).order('id').range(start, end)) : Promise.resolve([]),
       ])
       if (buildingRows.some((row) => !batch.includes(row.card_id)) || boundaryRows.some((row) => !batch.includes(row.card_id))) {
         throw new Error('Out-of-scope recipient detail response')
       }
       buildings.push(...buildingRows)
       boundaries.push(...boundaryRows)
+      if (unitRows.some((row) => !batch.includes(row.buildings?.card_id))) throw new Error('Out-of-scope recipient child response')
+      units.push(...unitRows.map((row) => {
+        const { buildings: parent, ...unit } = row
+        void parent
+        return unit as RawUnit
+      }))
     }
     const cutoff = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
-    for (let from = 0; from < buildings.length; from += 100) {
+    for (let from = 0; options.includeHistories !== false && from < buildings.length; from += 100) {
       const batch = buildings.slice(from, from + 100).map((building) => building.id)
       const [unitRows, historyRows] = await Promise.all([
         pages<RawUnit>(requestGeneration, (start, end) => client.from('units')
           .select(RECIPIENT_UNIT_COLUMNS).in('building_id', batch).order('id').range(start, end)),
-        options.includeHistories === false ? Promise.resolve([]) : pages<RawVisitHistory & { units: { building_id: number } }>(requestGeneration, (start, end) => client.from('visit_histories')
+        pages<RawVisitHistory & { units: { building_id: number } }>(requestGeneration, (start, end) => client.from('visit_histories')
           .select(`${RECIPIENT_HISTORY_COLUMNS}, units!inner(building_id)`)
           .in('units.building_id', batch).is('invalidated_at', null).gte('created_at', cutoff).order('id').range(start, end)),
       ])
@@ -152,7 +163,8 @@ export function createRecipientCardPrefetch(
       return load
     }
     const key = ids.join(',')
-    const summaries = readSummaries(ids, requestGeneration)
+    // useStore validates the full card summary set itself; do not fetch a subset twice.
+    const summaries = options.includeSummaries === false ? Promise.resolve([]) : readSummaries(ids, requestGeneration)
     const details = summaries.then(() => readDetails(ids, requestGeneration))
     const load = { summaries, details }
     entries.set(key, { ids, load })

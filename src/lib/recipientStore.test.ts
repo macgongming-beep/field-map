@@ -1,9 +1,9 @@
 import { beforeEach, expect, test, vi } from 'vitest'
-const state = vi.hoisted(() => ({ token: 'session', rows: {} as Record<string, Record<string, unknown>[]>, prefetch: vi.fn(), assignments: vi.fn(), invalidate: vi.fn(), rpc: vi.fn() }))
+const state = vi.hoisted(() => ({ token: 'session', rows: {} as Record<string, Record<string, unknown>[]>, prefetch: vi.fn(), assignments: vi.fn(), invalidate: vi.fn(), rpc: vi.fn(), previewOptions: [] as unknown[] }))
 vi.mock('./authToken', () => ({ getAuthToken: () => state.token }))
-vi.mock('./recipientPreview', () => ({ createRecipientPreview: () => ({
+vi.mock('./recipientPreview', () => ({ createRecipientPreview: (_name: string, options: unknown) => { state.previewOptions.push(options); return ({
   assignments: state.assignments, reader: { prefetch: state.prefetch, invalidate: state.invalidate }, dispose: vi.fn(),
-}) }))
+}) } }))
 vi.mock('./supabase', () => ({ supabase: { rpc: state.rpc, from: (table: string) => {
   let rows = state.rows[table] ?? []
   const q = {
@@ -19,6 +19,7 @@ import { createRecipientStoreReader, recipientStoreEnabled } from './recipientSt
 
 beforeEach(() => {
   vi.clearAllMocks(); state.token = 'session'; state.rows = {}
+  state.previewOptions = []
   state.assignments.mockResolvedValue([])
   state.rpc.mockResolvedValue({ data: [], error: null })
   state.prefetch.mockImplementation((ids: number[]) => ({ details: Promise.resolve({ buildings: ids.map((card_id) => ({ card_id })), boundaries: [], histories: [], baseline: null }) }))
@@ -45,6 +46,8 @@ test('includes multi-card assignments, active sessions and restaurant links with
   await reader.read()
   expect(state.prefetch).toHaveBeenCalledExactlyOnceWith([1, 2, 3, 4, 5, 6, 7])
   expect(reader.allowsCard(99)).toBe(false)
+  expect(() => reader.validateCards([1, 2, 3, 4, 5, 6, 7])).not.toThrow()
+  expect(() => reader.validateCards([1, 2, 3, 4, 5, 6])).toThrow('unavailable')
   await reader.read()
   expect(state.prefetch).toHaveBeenCalledTimes(1)
 })
@@ -82,6 +85,9 @@ test('session changes reject reads and StrictMode can resume the same account', 
   reader.dispose()
   await expect(reader.read()).rejects.toThrow('session changed')
   reader.resume()
+  expect(state.previewOptions).toEqual([
+    { includeHistories: false, includeSummaries: false }, { includeHistories: false, includeSummaries: false },
+  ])
   await reader.read()
   state.token = 'another-account'
   expect(() => reader.refresh()).toThrow('session changed')

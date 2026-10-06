@@ -9,7 +9,7 @@ export function recipientPreviewEnabled(pathname: string, demoMode: string | und
   return demoMode === 'true' && pathname === '/recipient-preview'
 }
 
-export function createRecipientPreview(userName: string, options: { includeHistories?: boolean } = {}) {
+export function createRecipientPreview(userName: string, options: { includeHistories?: boolean; includeSummaries?: boolean } = {}) {
   const token = getAuthToken()
   if (!token) throw new Error('로그인이 필요합니다.')
   let active = true

@@ -298,6 +298,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         // cards transform은 buildings 의존 — buildingsRef로 항상 최신 buildings 사용
         const transformedCards = (cardsRes.data as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
         if (recipientReader?.scoped) {
+          recipientReader.validateCards(transformedCards.map((card) => card.id))
           const summaries = await fetchCardSummaries(transformedCards.map((card) => card.id))
           const byId = new Map(summaries.map((card) => [card.id, card]))
           if (byId.size !== transformedCards.length) throw new Error('Missing recipient card summary')

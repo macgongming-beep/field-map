@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock('../lib/recipientStore', () => ({ createRecipientStoreReader: () => ({
   resume: vi.fn(), dispose: vi.fn(), refresh: state.refresh,
+  validateCards: (ids: number[]) => { if (state.allowed.some((id) => !ids.includes(id))) throw new Error('A requested card is unavailable') },
   read: async () => ({ buildings: state.buildings, boundaries: state.allowed.map((card_id) => ({ card_id, points: [{ lat: 1, lng: 1 }, { lat: 2, lng: 1 }, { lat: 2, lng: 2 }] })) }),
   get scoped() { return true }, allowsCard: (id: number) => state.allowed.includes(id),
 }) }))
@@ -38,6 +39,14 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks() })
+
+test('missing assigned cards still fail instead of silently disappearing without subset summaries', async () => {
+  state.allowed = [99]
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeTruthy()
+  expect(state.summaries).not.toHaveBeenCalled()
+})
 
 test('real store uses scoped buildings and boundaries, keeps global statistics, and does not zero unloaded cards', async () => {
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'), { wrapper: StrictMode })

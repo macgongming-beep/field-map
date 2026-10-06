@@ -22,7 +22,12 @@ function fixture() {
     let selected = rows[table] ?? []
     const filters: [string, unknown][] = []
     const builder = {
-      select: vi.fn(() => builder),
+      select: vi.fn((columns: string) => {
+        if (table === 'units' && columns.includes('buildings!inner')) selected = selected.map((unit) => ({
+          ...unit, buildings: { card_id: rows.buildings.find((building) => building.id === unit.building_id)?.card_id },
+        }))
+        return builder
+      }),
       in: vi.fn((key: string, values: number[]) => {
         filters.push([key, values])
         selected = selected.filter((row) => {
@@ -49,6 +54,35 @@ function fixture() {
 }
 
 describe('recipient card prefetch', () => {
+  it('lets the store own summaries and starts paginated units before buildings finish', async () => {
+    const f = fixture()
+    f.rows.units = Array.from({ length: 1005 }, (_, i) => ({ id: i + 1, building_id: 11 }))
+    let release!: (value: { data: Row[]; error: null }) => void
+    f.response.mockImplementationOnce(() => new Promise((resolve) => { release = resolve }))
+    const reader = createRecipientCardPrefetch(f.client, f.session, { includeHistories: false, includeSummaries: false })
+    const load = reader.prefetch([1])
+    await vi.waitFor(() => expect(f.calls.filter((c) => c.table === 'units')).toHaveLength(2))
+    expect(f.calls.find((c) => c.table === 'units')?.filters).toContainEqual(['buildings.card_id', [1]])
+    expect(f.rpc.mock.calls.map(([name]) => name)).toEqual(['territory_sync_clock'])
+    release({ data: [{ id: 11, card_id: 1 }], error: null })
+    const details = await load.details
+    expect(details.buildings[0].units).toHaveLength(1005)
+    expect(details.buildings[0].units[0]).toEqual({ id: 1, building_id: 11 })
+    expect(details.histories).toEqual([])
+    expect(f.calls.some((c) => c.table === 'visit_histories')).toBe(false)
+    expect(await load.summaries).toEqual([])
+    await reader.prefetch([1]).details
+    expect(f.calls).toHaveLength(4)
+  })
+
+  it('rejects foreign parent cards in the parallel units response', async () => {
+    const f = fixture()
+    const original = f.response.getMockImplementation()!
+    f.response.mockImplementation((rows) => original(rows.map((row) => 'buildings' in row
+      ? { ...row, buildings: { card_id: 99 } } : row)))
+    const reader = createRecipientCardPrefetch(f.client, f.session, { includeHistories: false, includeSummaries: false })
+    await expect(reader.prefetch([1]).details).rejects.toThrow('Out-of-scope recipient child response')
+  })
   it('starts detail prefetch after summaries, with every request restricted to the assigned cards', async () => {
     const f = fixture()
     const load = f.reader.prefetch([2, 1, 1])

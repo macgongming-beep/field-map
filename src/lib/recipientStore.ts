@@ -12,7 +12,7 @@ export function recipientStoreEnabled(role: string, pathname: string, search: st
 
 export function createRecipientStoreReader(userName: string) {
   const token = getAuthToken()
-  let api = createRecipientPreview(userName, { includeHistories: false })
+  let api = createRecipientPreview(userName, { includeHistories: false, includeSummaries: false })
   let active = true
   let pending: ReturnType<typeof load> | undefined
   let allowed: Set<number> | null = null
@@ -66,9 +66,14 @@ export function createRecipientStoreReader(userName: string) {
   return {
     read() { return pending ??= load() },
     resume() {
-      if (!active) { api = createRecipientPreview(userName, { includeHistories: false }); pending = undefined; allowed = null; active = true }
+      if (!active) { api = createRecipientPreview(userName, { includeHistories: false, includeSummaries: false }); pending = undefined; allowed = null; active = true }
     },
     allowsCard(id: number) { return allowed == null || allowed.has(id) },
+    validateCards(cardIds: number[]) {
+      check()
+      const available = new Set(cardIds)
+      if (allowed && [...allowed].some((id) => !available.has(id))) throw new Error('A requested card is unavailable')
+    },
     get scoped() { return allowed != null },
     refresh() { check(); pending = undefined; api.reader.invalidate() },
     dispose() { active = false; api.dispose() },

@@ -1,0 +1,176 @@
+{
+  "parity": "passed",
+  "results": [
+    {
+      "name": "whole-territory",
+      "scenario": "initial",
+      "ms": 131,
+      "requests": 3,
+      "bodyBytes": 287476,
+      "wireBytes": 288097
+    },
+    {
+      "round": 1,
+      "name": "before",
+      "scenario": "initial",
+      "ms": 63,
+      "requests": 16,
+      "bodyBytes": 6533,
+      "wireBytes": 9809
+    },
+    {
+      "round": 1,
+      "name": "before",
+      "scenario": "cached-map",
+      "ms": 0,
+      "requests": 0,
+      "bodyBytes": 0,
+      "wireBytes": 0
+    },
+    {
+      "round": 1,
+      "name": "before",
+      "scenario": "scope-refresh",
+      "ms": 53,
+      "requests": 16,
+      "bodyBytes": 6533,
+      "wireBytes": 9809
+    },
+    {
+      "round": 1,
+      "name": "after",
+      "scenario": "initial",
+      "ms": 25,
+      "requests": 15,
+      "bodyBytes": 6395,
+      "wireBytes": 9466
+    },
+    {
+      "round": 1,
+      "name": "after",
+      "scenario": "cached-map",
+      "ms": 0,
+      "requests": 0,
+      "bodyBytes": 0,
+      "wireBytes": 0
+    },
+    {
+      "round": 1,
+      "name": "after",
+      "scenario": "scope-refresh",
+      "ms": 23,
+      "requests": 15,
+      "bodyBytes": 6395,
+      "wireBytes": 9466
+    },
+    {
+      "round": 2,
+      "name": "after",
+      "scenario": "initial",
+      "ms": 22,
+      "requests": 15,
+      "bodyBytes": 6395,
+      "wireBytes": 9466
+    },
+    {
+      "round": 2,
+      "name": "after",
+      "scenario": "cached-map",
+      "ms": 0,
+      "requests": 0,
+      "bodyBytes": 0,
+      "wireBytes": 0
+    },
+    {
+      "round": 2,
+      "name": "after",
+      "scenario": "scope-refresh",
+      "ms": 21,
+      "requests": 15,
+      "bodyBytes": 6395,
+      "wireBytes": 9466
+    },
+    {
+      "round": 2,
+      "name": "before",
+      "scenario": "initial",
+      "ms": 21,
+      "requests": 16,
+      "bodyBytes": 6533,
+      "wireBytes": 9809
+    },
+    {
+      "round": 2,
+      "name": "before",
+      "scenario": "cached-map",
+      "ms": 0,
+      "requests": 0,
+      "bodyBytes": 0,
+      "wireBytes": 0
+    },
+    {
+      "round": 2,
+      "name": "before",
+      "scenario": "scope-refresh",
+      "ms": 21,
+      "requests": 16,
+      "bodyBytes": 6533,
+      "wireBytes": 9809
+    },
+    {
+      "round": 3,
+      "name": "before",
+      "scenario": "initial",
+      "ms": 20,
+      "requests": 16,
+      "bodyBytes": 6533,
+      "wireBytes": 9809
+    },
+    {
+      "round": 3,
+      "name": "before",
+      "scenario": "cached-map",
+      "ms": 0,
+      "requests": 0,
+      "bodyBytes": 0,
+      "wireBytes": 0
+    },
+    {
+      "round": 3,
+      "name": "before",
+      "scenario": "scope-refresh",
+      "ms": 20,
+      "requests": 16,
+      "bodyBytes": 6533,
+      "wireBytes": 9809
+    },
+    {
+      "round": 3,
+      "name": "after",
+      "scenario": "initial",
+      "ms": 19,
+      "requests": 15,
+      "bodyBytes": 6395,
+      "wireBytes": 9466
+    },
+    {
+      "round": 3,
+      "name": "after",
+      "scenario": "cached-map",
+      "ms": 0,
+      "requests": 0,
+      "bodyBytes": 0,
+      "wireBytes": 0
+    },
+    {
+      "round": 3,
+      "name": "after",
+      "scenario": "scope-refresh",
+      "ms": 20,
+      "requests": 15,
+      "bodyBytes": 6395,
+      "wireBytes": 9466
+    }
+  ],
+  "limitations": "Local synthetic response bytes including HTTP/1.1 headers, not Supabase billing, HTTP/2, complete app traffic, or actual save/foreground UI."
+}

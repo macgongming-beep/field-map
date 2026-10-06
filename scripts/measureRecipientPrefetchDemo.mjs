@@ -23,6 +23,8 @@ const origin = 'https://itjlykpjmlcvanqpmkmc.supabase.co'
 if (config.VITE_SUPABASE_URL !== origin) throw new Error('Demo allowlist mismatch')
 const idsArgument = process.argv.find((value) => value.startsWith('--card-ids='))
 const selectedIds = idsArgument?.slice('--card-ids='.length).split(',').filter(Boolean).map(Number)
+const baseline = process.argv.find((value) => value.startsWith('--baseline='))?.slice('--baseline='.length) ?? '073b6a1'
+if (!/^[a-f0-9]{7,40}$/.test(baseline)) throw new Error('Baseline must be a commit hash')
 if (!selectedIds && !process.argv.includes('--inspect') && !process.argv.includes('--store-scope')) throw new Error('Provide --card-ids=1,2, --store-scope or --inspect')
 
 let phase = 'setup'
@@ -139,7 +141,7 @@ try {
         load(id) {
           if (id === '\0measurement:./supabase') return 'export const supabase = globalThis.__recipientMeasurement.client'
           if (id === '\0measurement:./authToken') return 'export const getAuthToken = () => globalThis.__recipientMeasurement.token'
-          if (old && id === entry) return { code: execFileSync('git', ['show', '073b6a1:src/lib/recipientStore.ts'], { encoding: 'utf8' }), moduleType: 'ts' }
+          if (old && id.startsWith(resolve('src') + '/')) return { code: execFileSync('git', ['show', `${baseline}:${id.slice(process.cwd().length + 1)}`], { encoding: 'utf8' }), moduleType: 'ts' }
         },
       }] })
       try {
@@ -154,7 +156,7 @@ try {
     let baselineDetails
     for (const old of [true, false]) {
       const reader = await readerAt(old)
-      phase = old ? 'before-073b6a1' : 'after-return-visit-scope'
+      phase = old ? `before-${baseline}` : 'after-return-visit-scope'
       const started = performance.now()
       try {
         let details = await reader.read()
