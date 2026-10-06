@@ -29,7 +29,7 @@ export function createRecipientStoreReader(userName: string) {
       if (response.data.length < 1000) return result
     }
   }
-  async function load() {
+  async function scopeIds() {
     check()
     const [events, assigned, sessions, returnVisitScope, restaurantBuildings, restaurantUnits, restaurantAssignments] = await Promise.all([
       api.assignments(),
@@ -58,6 +58,10 @@ export function createRecipientStoreReader(userName: string) {
       ...restaurantCardIds,
       ...returnVisitScope.data as number[],
     ])].sort((a, b) => a - b)
+    return ids
+  }
+  async function load() {
+    const ids = await scopeIds()
     const details = await api.reader.prefetch(ids).details
     check()
     allowed = new Set(ids)
@@ -65,6 +69,11 @@ export function createRecipientStoreReader(userName: string) {
   }
   return {
     read() { return pending ??= load() },
+    async unchangedScope() {
+      const ids = await scopeIds()
+      check()
+      return allowed != null && ids.length === allowed.size && ids.every((id) => allowed!.has(id)) ? ids : null
+    },
     resume() {
       if (!active) { api = createRecipientPreview(userName, { includeHistories: false, includeSummaries: false }); pending = undefined; allowed = null; active = true }
     },

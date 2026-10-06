@@ -56,11 +56,25 @@ test('unassignment refresh removes old scope, including the last card', async ()
   state.rows.card_assignments = [{ card_id: 1, user_name: 'me' }]
   const reader = createRecipientStoreReader('me')
   await reader.read()
+  expect(await reader.unchangedScope()).toEqual([1])
+  expect(state.prefetch).toHaveBeenCalledTimes(1)
   state.rows.card_assignments = []
+  expect(await reader.unchangedScope()).toBeNull()
   reader.refresh()
   expect((await reader.read())?.buildings).toEqual([])
   expect(reader.allowsCard(1)).toBe(false)
   expect(reader.scoped).toBe(true)
+})
+
+test('new assignments and return-visit scope changes force a fresh snapshot', async () => {
+  state.rows.card_assignments = [{ card_id: 1, user_name: 'me' }]
+  const reader = createRecipientStoreReader('me')
+  await reader.read()
+  state.rpc.mockResolvedValue({ data: [2], error: null })
+  expect(await reader.unchangedScope()).toBeNull()
+  reader.refresh()
+  await reader.read()
+  expect(state.prefetch).toHaveBeenLastCalledWith([1, 2])
 })
 
 test('return-visit cards join the scoped read without forcing a full store', async () => {

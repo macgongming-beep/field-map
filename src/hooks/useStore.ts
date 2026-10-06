@@ -3,6 +3,7 @@ import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
+import { recoverRecipientBuildings, readRecipientBoundaries } from './recipientRecovery'
 import { createCardBoundaryReader } from './cardBoundaryRecovery'
 import { createRecipientStoreReader } from '../lib/recipientStore'
 import { fetchCardSummaries } from '../lib/cardSummaries'
@@ -524,10 +525,29 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const baseline = slices.includes('visits')
           ? await fetchTerritoryClock().catch(() => null) : null
         const requested = new Set(slices)
+        const refreshTerritory = slices.some((slice) => ['calendar', 'resources', 'returnVisits', 'buildings', 'cards', 'cardBoundaries'].includes(slice))
+        if (refreshTerritory) for (const slice of ['buildings', 'cards', 'cardBoundaries'] as const) requested.add(slice)
+        const recovery = options?.triggeredBy === 'foreground' || options?.triggeredBy?.startsWith('realtime:')
+        if (refreshTerritory && recovery && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
+          && territoryCheckpoint.baseline && syncBuildingsRef.current) {
+          try {
+            const ids = await recipientReader.unchangedScope()
+            if (ids != null) {
+              await recoverRecipientBuildings(ids, buildingsRef.current.map((b) => b.id), territoryCheckpoint, syncBuildingsRef.current)
+              if (requested.has('cardBoundaries')) setCardBoundaries(await readRecipientBoundaries(ids))
+              requested.delete('buildings')
+              requested.delete('cardBoundaries')
+              // Histories remain global for statistics; scoped recovery cannot replace them.
+              await Promise.all([...requested].map((slice) => fetchSlice(slice)))
+              return
+            }
+          } catch {
+            // Scope/metadata/delta failures fall back to a fresh scoped snapshot, never all buildings.
+          }
+        }
         // Calendar changes include unassignment/cancellation, not only newly granted cards.
-        if (slices.some((slice) => ['calendar', 'resources', 'returnVisits', 'buildings', 'cards', 'cardBoundaries'].includes(slice))) {
+        if (refreshTerritory) {
           recipientReader.refresh()
-          for (const slice of ['buildings', 'cards', 'cardBoundaries'] as const) requested.add(slice)
           await fetchSlice('buildings')
           requested.delete('buildings')
         }

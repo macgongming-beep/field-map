@@ -5,15 +5,17 @@ import { useStore } from './useStore'
 import type { RawBuilding } from './storeTransforms'
 
 const state = vi.hoisted(() => ({
-  buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), refresh: vi.fn(),
+  buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
 }))
 vi.mock('../lib/recipientStore', () => ({ createRecipientStoreReader: () => ({
   resume: vi.fn(), dispose: vi.fn(), refresh: state.refresh,
+  unchangedScope: state.unchanged,
   validateCards: (ids: number[]) => { if (state.allowed.some((id) => !ids.includes(id))) throw new Error('A requested card is unavailable') },
   read: async () => ({ buildings: state.buildings, boundaries: state.allowed.map((card_id) => ({ card_id, points: [{ lat: 1, lng: 1 }, { lat: 2, lng: 1 }, { lat: 2, lng: 2 }] })) }),
   get scoped() { return true }, allowsCard: (id: number) => state.allowed.includes(id),
 }) }))
 vi.mock('../lib/cardSummaries', () => ({ fetchCardSummaries: state.summaries }))
+vi.mock('./recipientRecovery', () => ({ recoverRecipientBuildings: state.recover, readRecipientBoundaries: state.boundaries }))
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: async () => '2026-10-05T00:00:00Z' }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: () => Promise.resolve({ error: null }),
@@ -36,10 +38,33 @@ const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: '
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
   state.changed.mockReset()
+  state.unchanged.mockResolvedValue(null); state.recover.mockReset(); state.boundaries.mockResolvedValue([])
   state.buildings = [building]; state.allowed = [1]; state.reads = []
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
-afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); localStorage.clear() })
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test('unchanged scoped recovery skips detail prefetch, keeps global histories, and falls back on failure', async () => {
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.unchanged.mockResolvedValue([1])
+  state.refresh.mockClear(); state.reads = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'cards', 'cardBoundaries', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.recover).toHaveBeenCalledTimes(1)
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(state.reads).toContain('visit_histories')
+  expect(state.reads).toContain('service_sessions')
+  expect(result.current.buildings.map((b) => b.id)).toEqual([10])
+  state.recover.mockRejectedValueOnce(new Error('offline'))
+  await act(async () => { await result.current.refetchSlices(['buildings', 'cards'], { triggeredBy: 'foreground' }) })
+  expect(state.refresh).toHaveBeenCalledTimes(1)
+  expect(state.reads).not.toContain('buildings')
+  state.unchanged.mockResolvedValue(null); state.allowed = []; state.buildings = []
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' }) })
+  expect(result.current.buildings).toEqual([])
+  expect(result.current.cardBoundaries).toEqual([])
+})
 
 test('foreground refresh replaces scoped data and retains global statistics without reading all buildings', async () => {
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
