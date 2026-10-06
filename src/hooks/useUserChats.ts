@@ -303,10 +303,19 @@ export function useUserChats(
       pending = setTimeout(() => fetchAll({ force: true }), 1500)  // 800→1500ms 디바운스 강화
     }
 
+    const onMessage = (payload: { new: { event_id?: unknown } }) => {
+      const eventId = payload.new.event_id
+      const known = getCachedUserChats(cacheKey)
+      // Only skip proven unrelated rooms. Membership events and recovery still refresh the list.
+      if (known && typeof eventId === 'number' && Number.isSafeInteger(eventId)
+        && eventId > 0 && !known.chats.some((chat) => chat.eventId === eventId)) return
+      trigger()
+    }
+
     let channel = supabase
       .channel(`user_chats:user:${userId}:${channelIdRef.current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_participants', filter: `user_name=eq.${userName}` }, trigger)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_message_signals' }, trigger)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_message_signals' }, onMessage)
     if (CART_APPLICATIONS_ENABLED) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'event_cart_applications', filter: `user_id=eq.${userId}` }, trigger)
     }
@@ -324,7 +333,7 @@ export function useUserChats(
       window.clearInterval(interval)
       supabase.removeChannel(channel)
     }
-  }, [userId, userName, realtimeEnabled, fetchAll])
+  }, [cacheKey, userId, userName, realtimeEnabled, fetchAll])
 
   // 총 안 읽음 수
   const totalUnread = useMemo(

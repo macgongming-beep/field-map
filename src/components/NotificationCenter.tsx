@@ -198,15 +198,13 @@ export function NotificationCenter({
 }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { chats: userChats } = useUserChats(userId, userName ?? null, { realtime: false })
+  const { groups: chatGroups, others } = groupChatNotifications(notifications)
+  const { chats: userChats } = useUserChats(chatGroups.length > 0 ? userId : null, userName ?? null, { realtime: false })
 
   const chatInfoMap = new Map<number, { title: string; participantCount: number; eventDate: string; eventTime: string | null }>()
   userChats.forEach((c) =>
     chatInfoMap.set(c.eventId, { title: c.eventTitle, participantCount: c.participantCount, eventDate: c.eventDate, eventTime: c.eventTime })
   )
-
-  // 카톡 스타일: 채팅 알림 그룹화, 나머지는 그대로
-  const { groups: chatGroups, others } = groupChatNotifications(notifications)
 
   // 표시 순서: 채팅 그룹 → 기타 알림 (안 읽음 우선)
   const unreadOthers = others.filter((n) => !n.isRead)
