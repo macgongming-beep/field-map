@@ -42,6 +42,29 @@ test('production explicitly opts in while a false flag overrides demo and roles 
   expect(recipientStoreEnabled('user', '/territory', '', 'true', 'false')).toBe(false)
 })
 
+test.each([
+  '/settings', '/profile', '/privacy', '/notification-settings',
+  '/location-permission-settings', '/settings/profile',
+  '/settings/notification', '/settings/location-permission',
+])('personal page %s retains the volunteer store mode without widening role access', (path) => {
+  for (const [demo, enabled] of [['true', undefined], [undefined, 'true']]) {
+    const mode = (pathname: string) => recipientStoreEnabled('user', pathname, '', demo, enabled)
+    expect([mode('/territory'), mode(path), mode('/territory')]).toEqual([true, true, true])
+    for (const role of ['admin', 'developer', 'conductor']) {
+      expect(recipientStoreEnabled(role, path, '', demo, enabled)).toBe(false)
+    }
+  }
+  expect(recipientStoreEnabled('user', path, '', 'true', 'false')).toBe(false)
+})
+
+test.each([
+  '/service-logs', '/regular-visits', '/settings/service-logs',
+  '/settings/regular-visits', '/settings/data-management',
+  '/settings/meeting-notes', '/settings/territory-regions', '/settings/unknown',
+])('data-dependent or unknown page %s still requires the full store', (path) => {
+  expect(recipientStoreEnabled('user', path, '', 'true', 'true')).toBe(false)
+})
+
 test('includes multi-card assignments, active sessions and restaurant links without loading unrelated cards', async () => {
   state.assignments.mockResolvedValue([{ cardAssignments: [{ userName: 'me', assignedCardIds: [1, 2] }] }])
   state.rows = {

@@ -335,11 +335,16 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
             .gte('created_at', oneYearAgo)
             .order('created_at', { ascending: false })
             .range(from, to)),
-          fetchAllPages((from, to) => supabase
+          fetchAllPages((from, to) => {
+            let query = supabase
             .from('service_sessions')
             .select('id, user_name, role, calendar_event_id, started_at, ended_at, service_date, time_slot, status, primary_card_id, assigned_card_id, assignment_id, source, memo, created_at')
-            .order('started_at', { ascending: false })
-            .range(from, to)),
+            // Only personal recipient views opt in. Statistics still mount a full store.
+            if (import.meta.env.VITE_DEMO_MODE === 'true' && role === 'user' && recipientReader && recipientUser) {
+              query = query.eq('user_name', recipientUser)
+            }
+            return query.order('started_at', { ascending: false }).range(from, to)
+          }),
         ])
 
         if (visitsRes.error) {
@@ -515,7 +520,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
     }
-  }, [recipientReader])
+  }, [recipientReader, recipientUser, role])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.

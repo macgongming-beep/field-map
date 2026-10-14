@@ -7,7 +7,14 @@ import type { CalendarEvent } from '../types'
 /** Only the real recipient workflow opts in; unsupported views retain the full store. */
 export function recipientStoreEnabled(role: string, pathname: string, search: string, demo: string | undefined, enabled?: string) {
   if ((enabled ?? demo) !== 'true' || role !== 'user') return false
-  if (['/', '/home', '/territory', '/calendar'].includes(pathname)) return true
+  // Personal settings need no full territory snapshot. Switching modes here
+  // remounts AppSession and reloads every slice on both legs of navigation.
+  if ([
+    '/', '/home', '/territory', '/calendar',
+    '/settings', '/profile', '/privacy',
+    '/notification-settings', '/location-permission-settings',
+    '/settings/profile', '/settings/notification', '/settings/location-permission',
+  ].includes(pathname)) return true
   return pathname === '/map' && new URLSearchParams(search).has('assignmentMap')
 }
 

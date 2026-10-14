@@ -6,6 +6,7 @@ import type { RawBuilding } from './storeTransforms'
 
 const state = vi.hoisted(() => ({
   failedTable: '',
+  sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
   buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
 }))
 vi.mock('../lib/recipientStore', () => ({ createRecipientStoreReader: () => ({
@@ -22,13 +23,19 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: () => Promise.resolve({ error: null }),
   from: (table: string) => {
     let lookup = false
+    let range: [number, number] = [0, 999]
+    const filters: [string, unknown][] = []
     const q: Record<string, unknown> = {}
     for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'insert']) q[name] = () => q
+    q.eq = (key: string, value: unknown) => { filters.push([key, value]); return q }
+    q.range = (from: number, to: number) => { range = [from, to]; return q }
     q.limit = () => { lookup = true; return q }
     q.then = async (resolve: (value: unknown) => void) => {
       state.reads.push(table)
+      if (table === 'service_sessions') state.sessionFilters.push(filters)
       const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
-        : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z' }] : []
+        : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z' }]
+        : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []
       return resolve({ data, error: table === state.failedTable ? new Error('offline') : null })
     }
     return q
@@ -39,12 +46,42 @@ const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: '
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
   state.failedTable = ''
+  state.sessions = []; state.sessionFilters = []
   state.changed.mockReset()
   state.unchanged.mockResolvedValue(null); state.recover.mockReset(); state.boundaries.mockResolvedValue([])
   state.buildings = [building]; state.allowed = [1]; state.reads = []
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test('demo recipient sessions are filtered on the server on initial, recovery and mutation reads without truncating history', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  state.sessions = Array.from({ length: 1001 }, (_, id) => ({ id, user_name: 'Volunteer', service_date: '2020-01-01', status: 'ended' }))
+  state.sessions.push({ id: 2000, user_name: 'other' })
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  for (const triggeredBy of ['foreground', 'mutation:visits']) {
+    await act(async () => { await result.current.refetchSlices(['visits'], { triggeredBy }) })
+  }
+  expect(result.current.serviceSessions).toHaveLength(1001)
+  expect(result.current.serviceSessions.every((session) => session.userName === 'Volunteer')).toBe(true)
+  expect(state.sessionFilters).toHaveLength(6)
+  expect(state.sessionFilters.every((filters) => JSON.stringify(filters) === JSON.stringify([['user_name', 'Volunteer']]))).toBe(true)
+  expect(result.current.visitHistories.map((history) => history.id)).toContain(900)
+})
+
+test.each([
+  ['false', 'user', 'Volunteer'],
+  ['true', 'user', undefined],
+  ['true', 'admin', undefined],
+] as const)('full/statistics and production sessions stay global (%s, %s, %s)', async (demo, role, recipient) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  state.sessions = [{ id: 1, user_name: 'Volunteer' }, { id: 2, user_name: 'other' }]
+  const { result } = renderHook(() => useStore(true, role, recipient))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.serviceSessions.map((session) => session.userName)).toEqual(['Volunteer', 'other'])
+  expect(state.sessionFilters).toEqual([[]])
+})
 
 test('shares only a freshly completed calendar with recipient scope resolution', async () => {
   vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
