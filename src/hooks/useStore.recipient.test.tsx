@@ -54,8 +54,12 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
 
-test('demo recipient sessions are filtered on the server on initial, recovery and mutation reads without truncating history', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each([
+  ['true', undefined],
+  [undefined, 'true'],
+] as const)('enabled recipient sessions stay scoped across initial, recovery and mutation reads (%s, %s)', async (demo, enabled) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_PERSONAL_SESSIONS_ENABLED', enabled)
   state.sessions = Array.from({ length: 1001 }, (_, id) => ({ id, user_name: 'Volunteer', service_date: '2020-01-01', status: 'ended' }))
   state.sessions.push({ id: 2000, user_name: 'other' })
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
@@ -71,11 +75,18 @@ test('demo recipient sessions are filtered on the server on initial, recovery an
 })
 
 test.each([
-  ['false', 'user', 'Volunteer'],
-  ['true', 'user', undefined],
-  ['true', 'admin', undefined],
-] as const)('full/statistics and production sessions stay global (%s, %s, %s)', async (demo, role, recipient) => {
+  ['false', undefined, 'user', 'Volunteer'],
+  [undefined, undefined, 'user', 'Volunteer'],
+  ['true', 'false', 'user', 'Volunteer'],
+  [undefined, 'false', 'user', 'Volunteer'],
+  ['true', 'true', 'user', undefined],
+  ['true', 'true', 'user', ''],
+  ['true', 'true', 'admin', 'Volunteer'],
+  ['true', 'true', 'developer', 'Volunteer'],
+  ['true', 'true', 'leader', 'Volunteer'],
+] as const)('disabled/full/privileged sessions stay global (%s, %s, %s, %s)', async (demo, enabled, role, recipient) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_PERSONAL_SESSIONS_ENABLED', enabled)
   state.sessions = [{ id: 1, user_name: 'Volunteer' }, { id: 2, user_name: 'other' }]
   const { result } = renderHook(() => useStore(true, role, recipient))
   await waitFor(() => expect(result.current.loading).toBe(false))

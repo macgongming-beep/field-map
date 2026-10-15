@@ -37,3 +37,16 @@ server permissions and the application's name-based session identity stay intact
 - No database/schema/policy changes. No monthly byte reduction is claimed.
 - Phone testing of start/end session and statistics navigation remains required
   before production. Calendar range loading is separate future work.
+
+## Production opt-in (not activated)
+
+`VITE_PERSONAL_SESSIONS_ENABLED` explicitly controls the session optimization.
+Unset falls back to `VITE_DEMO_MODE`; explicit `false` disables it even in demo.
+Only the exact value `true` enables it. The actual `user` role, recipient reader,
+and nonempty recipient user name are still required. Full/statistics stores and
+admin/developer/leader roles retain global reads even when the flag is enabled.
+
+This is a Vite build-time flag, not a live runtime switch. Changing it requires
+a rebuild/redeployment; clients must receive the new bundle. A prior deployment
+can also be restored. No production environment or deployment was changed when
+adding this opt-in. The earlier demo-only description refers to the first patch.

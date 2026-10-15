@@ -340,7 +340,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
             .from('service_sessions')
             .select('id, user_name, role, calendar_event_id, started_at, ended_at, service_date, time_slot, status, primary_card_id, assigned_card_id, assignment_id, source, memo, created_at')
             // Only personal recipient views opt in. Statistics still mount a full store.
-            if (import.meta.env.VITE_DEMO_MODE === 'true' && role === 'user' && recipientReader && recipientUser) {
+            if ((import.meta.env.VITE_PERSONAL_SESSIONS_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
+              && role === 'user' && recipientReader && recipientUser) {
               query = query.eq('user_name', recipientUser)
             }
             return query.order('started_at', { ascending: false }).range(from, to)
