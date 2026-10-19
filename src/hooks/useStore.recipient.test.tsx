@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   returnRows: [] as Record<string, unknown>[], returnLogs: [] as Record<string, unknown>[],
   failedTable: '',
   requests: [] as Record<string, unknown>[],
+  requestFilters: [] as unknown[][],
   unitParent: 20, insertError: false, unitLookupError: false,
   historyColumns: [] as string[],
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
@@ -45,11 +46,12 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     q.then = async (resolve: (value: unknown) => void) => {
       state.reads.push(writing ? `${table}:insert` : table)
       if (table === 'service_sessions') state.sessionFilters.push(filters)
+      if (table === 'restaurant_requests' && !writing) state.requestFilters.push(filters)
       const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
         : table === 'return_visits' ? state.returnRows
         : table === 'return_visit_logs' ? state.returnLogs
-        : table === 'restaurant_requests' ? state.requests
+        : table === 'restaurant_requests' ? writing ? [{ id: 61 }] : state.requests.filter(row => filters.every(([key, value]) => row[key] === value))
         : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []
       return resolve({ data, error: (!writing && table === state.failedTable) || (writing && state.insertError) ? new Error('offline') : null })
     }
@@ -63,6 +65,7 @@ beforeEach(() => {
   state.returnRows = []; state.returnLogs = []
   state.failedTable = ''
   state.requests = []
+  state.requestFilters = []
   state.unitParent = 20; state.insertError = false; state.unitLookupError = false; state.historyColumns = []
   state.sessions = []; state.sessionFilters = []
   state.changed.mockReset()
@@ -71,6 +74,24 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test.each((['true', 'false'] as const).flatMap(demo =>
+  (['user', 'admin', 'developer'] as const).map(role => ({ demo, role }))))('pending request query preserves production and removes reviewed rows on refresh ($demo, $role)', async ({ demo, role }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  state.requests = [
+    { id: 61, name: 'pending', status: 'pending' },
+    { id: 62, name: 'approved', status: 'approved' },
+    { id: 63, name: 'rejected', status: 'rejected' },
+  ]
+  const { result } = renderHook(() => useStore(true, role, role === 'user' ? 'Volunteer' : undefined))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.requestFilters).toEqual([demo === 'true' ? [['status', 'pending']] : []])
+  expect(result.current.restaurantRequests.map(r => r.id)).toEqual(demo === 'true' ? [61] : [61, 62, 63])
+  state.requests[0] = { ...state.requests[0], status: 'rejected' }
+  await act(async () => { await result.current.refetchSlices(['restaurantRequests']) })
+  expect(result.current.restaurantRequests.map(r => r.id)).toEqual(demo === 'true' ? [] : [61, 62, 63])
+  expect(state.requestFilters).toEqual(Array.from({ length: 2 }, () => demo === 'true' ? [['status', 'pending']] : []))
+})
 
 test.each((['true', 'false'] as const).flatMap(demo =>
   (['user', 'leader', 'admin', 'developer'] as const).flatMap(role =>

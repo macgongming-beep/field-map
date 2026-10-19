@@ -518,7 +518,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       }
 
       case 'restaurantRequests': {
-        const res = await supabase.from('restaurant_requests').select('*').order('requested_at', { ascending: false })
+        let query = supabase.from('restaurant_requests').select('*')
+        if (import.meta.env.VITE_DEMO_MODE === 'true') query = query.eq('status', 'pending')
+        const res = await query.order('requested_at', { ascending: false })
         if (res.error) throw new Error('Restaurant requests load failed', { cause: res.error })
         measure(res.data)
         setRestaurantRequests((res.data as RawRestaurantRequest[]).map(toRestaurantRequest))
