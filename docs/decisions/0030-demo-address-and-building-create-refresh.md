@@ -65,3 +65,8 @@ placement and other-pin preservation. Recipient tests call the actual mutation
 with both flags enabled and verify a changed scope removes old buildings instead
 of arbitrary-ID sync. Reverting flag support failed six matrix tests; removing
 !recipientReader failed all three new scope tests. Both mutations were restored.
+
+Flag commit e22022e deployed to demo as dpl_fvNTuSRYZ55H8sefZcLDXLg9neZt (Ready).
+With both flags unset, the demo build retains the previously verified behavior
+and identical entry asset index-Dxa6sWnb.js. Production remains the separate
+0296f78 release documented in decision 0029; these opt-ins are not enabled there.
