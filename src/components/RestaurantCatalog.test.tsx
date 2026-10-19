@@ -11,8 +11,11 @@ const props = { search: '', cards: [{ id: 1, region: 'A', area: 'A1' }] as Terri
 beforeEach(() => { vi.clearAllMocks(); api.page.mockResolvedValue({ items: [item(1)], more: false }) })
 afterEach(() => { cleanup(); vi.useRealTimers() })
 test('opening performs no query; a region loads one page and a rerender does not reload', async () => {
+  vi.useFakeTimers()
   const view = render(<RestaurantCatalog {...props} />)
+  await act(async () => { vi.advanceTimersByTime(500) })
   expect(api.page).not.toHaveBeenCalled()
+  vi.useRealTimers()
   fireEvent.change(screen.getByLabelText('지역 선택'), { target: { value: 'A' } })
   await screen.findByText('Cafe 1')
   expect(api.page).toHaveBeenCalledExactlyOnceWith({ search: '', region: 'A', area: null, all: false }, undefined)

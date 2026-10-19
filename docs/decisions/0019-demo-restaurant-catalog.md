@@ -51,6 +51,8 @@ claim to eliminate every broad query in the application.
   rejection, no overlapping next-page requests, detail selection and retry.
 - Recipient test preserves personal assignments and excludes unrelated restaurants.
   Mutating the demo gate to false fails that test (1 failed / 26 passed); restored.
+  Mutating the catalog idle gate to always render fails the opening-without-query
+  test (1 failed / 3 passed); restored. The idle assertion advances fake time 500 ms.
 - Full suite: 1,285 tests / 178 files passed; lint and production build passed.
 - Actual demo volunteer reader, compared with `2faae76`, same data/session:
 
@@ -72,6 +74,11 @@ Demo DB `itjlykpjmlcvanqpmkmc` only: backup created and archive listing checked,
 then migration applied with `psql --single-transaction`. No production SQL or
 environment variable change. Forward migration and separate rollback are retained.
 Disable/revert the demo client before dropping the RPC.
+
+Demo app `09a92d9` deployed directly to Vercel, deployment
+`dpl_ETAkEYnDqA8LUbev37gWH1XEV49d`, alias
+`https://chinese-territory-app-demo.vercel.app`. GitHub branch push was rejected
+by an expired/invalid Git credential; local commits are retained. No main push.
 
 Local 390px browser: region and neighborhood queries, selected restaurant detail
 and existing service-start card verified. Real mobile-network testing and the
