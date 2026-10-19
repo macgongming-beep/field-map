@@ -238,6 +238,20 @@ describe('연결된 정기방문 주소 계약', () => {
     expect(screen.queryByRole('button', { name: '주소 수정' })).not.toBeInTheDocument()
   })
 
+  test('UTC보다 느린 지역에서도 날짜 전용 값은 현지 날짜를 유지한다', () => {
+    vi.stubEnv('TZ', 'America/Los_Angeles')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-20T00:40:00-07:00'))
+    try {
+      renderIt({ returnVisits: [{ ...visit(null), lastVisitedAt: '2026-10-20' }] })
+      fireEvent.click(screen.getByRole('button', { name: /정기 방문 1/ }))
+      expect(screen.getByText('마지막 방문 · 오늘')).toBeVisible()
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllEnvs()
+    }
+  })
+
   test('세대에 연결되지 않은 항목은 주소를 고칠 수 있다', () => {
     renderIt({ returnVisits: [visit(null)] })
     openVisitMenu()

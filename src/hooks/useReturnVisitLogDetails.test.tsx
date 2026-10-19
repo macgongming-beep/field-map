@@ -57,3 +57,18 @@ test('late response cannot cross targets or accounts', async () => {
   await act(async () => finish([row]))
   expect(result.current.logs[0]?.returnVisitId).toBe(8)
 })
+
+test('same target with a new account refetches and rejects the old response', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  let finish!: (rows: ReturnVisitLog[]) => void
+  state.read.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    .mockResolvedValueOnce([{ ...row, memo: 'account-b memo' }])
+  const { result, rerender } = renderHook(() => useReturnVisitLogDetails(7, index))
+  state.token = 'account-b'
+  rerender()
+  expect(result.current.logs).toEqual([])
+  await waitFor(() => expect(result.current.logs[0]?.memo).toBe('account-b memo'))
+  await act(async () => finish([row]))
+  expect(result.current.logs[0]?.memo).toBe('account-b memo')
+  expect(state.read).toHaveBeenCalledTimes(2)
+})

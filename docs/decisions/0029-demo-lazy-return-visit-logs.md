@@ -54,3 +54,22 @@ production reads are unchanged. No DB/schema/permission changes.
   by this commit; retain as a separate follow-up, not a lazy-load regression.
 - No claim about monthly bill or total percentage savings; index/extra detail
   request costs must be included in any later measurement.
+
+## Date follow-up and combined review (2026-10-20)
+
+- 4279870 fixes the list's UTC truncation: timestamps keep their instant before
+  local-day comparison; date-only values are parsed as local midnight. No DB
+  values or relative-label thresholds change.
+- Demo deployment dpl_6zCdQRcyuzgAXqC4yAyoaL5BHRXy is Ready. A new test-only
+  absent log on visit 22 showed yesterday before update and today after update;
+  detail also showed today and both stored memo bodies. Production unchanged.
+- Independent Codex review of 820882e plus the date fix found no confirmed
+  actionable regressions. It independently ran 167 focused tests. This was
+  not a Claude review or independent live-browser verification.
+- Both suggested coverage gaps were added: same-target account switching and
+  date-only values in America/Los_Angeles. Removing the relevant protections
+  failed exactly those two tests. Restoring UTC truncation separately failed
+  the three KST midnight/month/year-boundary cases.
+- Final full suite: 1,442 tests / 187 files passed; lint/build passed. Browser
+  proof: scratch/demo-return-visit-date-4279870.png. Desktop/offline live checks
+  remain outside this verification; no monthly savings estimate is claimed.
