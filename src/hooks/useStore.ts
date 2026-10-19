@@ -330,7 +330,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const [visitsRes, sessionsRes] = await Promise.all([
           historiesRecovered ? Promise.resolve({ data: [], error: null }) : fetchAllPages((from, to) => supabase
             .from('visit_histories')
-            .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, service_session_id, special_period_id, invitation_left, created_at, created_by_user_id')
+            .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, service_session_id, special_period_id, invitation_left, created_at, created_by_user_id, visit_type')
             .is('invalidated_at', null)
             .gte('created_at', oneYearAgo)
             .order('created_at', { ascending: false })
@@ -967,6 +967,23 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     [fetchSlices],
   )
 
+  const refreshRestaurantVisit = useCallback(async (unitId: number) => {
+    try {
+      // Catalog details are not in the recipient store. Resolve the current parent
+      // on the server, also covering a unit moved since the sheet was opened.
+      const { data, error } = await supabase.from('units')
+        .select('id, building_id').eq('id', unitId).single()
+      if (error) throw error
+      if (data?.id !== unitId || !Number.isSafeInteger(data.building_id) || data.building_id <= 0) {
+        throw new Error('Restaurant unit is unavailable')
+      }
+      await syncChangedBuildings([data.building_id])
+    } catch {
+      // The insert has committed; recover through the existing authoritative path.
+      await refetchRestaurantRequests()
+    }
+  }, [refetchRestaurantRequests, syncChangedBuildings])
+
   // ── Mutations ─────────────────────────────────────────────
   const { getRecordServiceSession, startServiceSession, endServiceSession } =
     makeServiceSessionMutations({ fetchAll: refetchVisits, serviceSessions, buildings })
@@ -1085,7 +1102,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     updateRestaurantRequestMemo,
     approveRestaurantRequest,
     rejectRestaurantRequest,
-  } = makeRestaurantServiceMutations({ fetchAll: refetchRestaurantRequests, buildings, cardBoundaries })
+  } = makeRestaurantServiceMutations({
+    fetchAll: refetchRestaurantRequests, buildings, cardBoundaries,
+    refreshVisit: import.meta.env.VITE_DEMO_MODE === 'true' ? refreshRestaurantVisit : undefined,
+  })
 
   // app_settings 키/값 서버 저장 (기기 간 공유). 캘린더 프리셋 등에 사용.
   const upsertGlobalSetting = async (key: string, value: string): Promise<boolean> => {

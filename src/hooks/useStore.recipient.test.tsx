@@ -6,6 +6,8 @@ import type { RawBuilding } from './storeTransforms'
 
 const state = vi.hoisted(() => ({
   failedTable: '',
+  unitParent: 20, insertError: false, unitLookupError: false,
+  historyColumns: [] as string[],
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
   buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
 }))
@@ -23,20 +25,27 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: () => Promise.resolve({ error: null }),
   from: (table: string) => {
     let lookup = false
+    let writing = false
     let range: [number, number] = [0, 999]
     const filters: [string, unknown][] = []
     const q: Record<string, unknown> = {}
     for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'insert']) q[name] = () => q
+    q.select = (columns: string) => { if (table === 'visit_histories') state.historyColumns.push(columns); return q }
+    q.insert = () => { writing = true; return q }
+    q.single = () => {
+      state.reads.push(table)
+      return Promise.resolve({ data: { id: filters.find(([key]) => key === 'id')?.[1], building_id: state.unitParent }, error: state.unitLookupError ? new Error('offline') : null })
+    }
     q.eq = (key: string, value: unknown) => { filters.push([key, value]); return q }
     q.range = (from: number, to: number) => { range = [from, to]; return q }
     q.limit = () => { lookup = true; return q }
     q.then = async (resolve: (value: unknown) => void) => {
-      state.reads.push(table)
+      state.reads.push(writing ? `${table}:insert` : table)
       if (table === 'service_sessions') state.sessionFilters.push(filters)
       const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
-        : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z' }]
+        : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
         : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []
-      return resolve({ data, error: table === state.failedTable ? new Error('offline') : null })
+      return resolve({ data, error: table === state.failedTable || (writing && state.insertError) ? new Error('offline') : null })
     }
     return q
   },
@@ -46,6 +55,7 @@ const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: '
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
   state.failedTable = ''
+  state.unitParent = 20; state.insertError = false; state.unitLookupError = false; state.historyColumns = []
   state.sessions = []; state.sessionFilters = []
   state.changed.mockReset()
   state.unchanged.mockResolvedValue(null); state.recover.mockReset(); state.boundaries.mockResolvedValue([])
@@ -53,6 +63,66 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test('demo restaurant save refreshes an out-of-scope building without expanding the recipient map', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.historyColumns[0].split(', ')).toContain('visit_type')
+  expect(result.current.visitHistories[0].visitType).toBe('restaurant')
+  const restaurant = { ...result.current.buildings[0], id: 20, cardId: 2,
+    units: [{ ...result.current.buildings[0].units[0], id: 200 }] }
+  const history = { id: 901, unitId: 200, visitor: 'Volunteer', result: '만남', timeSlot: '오전',
+    visitedAt: '2026-10-19', createdAt: '2026-10-19T00:00:00Z', visitType: 'restaurant' }
+  state.changed.mockResolvedValue({ buildings: [restaurant], histories: [history] })
+  state.reads = []
+  await act(async () => { await result.current.addRestaurantVisit(200, 'saved') })
+  expect(state.changed).toHaveBeenCalledExactlyOnceWith([20])
+  expect(state.reads).toEqual(['visit_histories:insert', 'units'])
+  expect(result.current.buildings.map((b) => b.id)).toEqual([10])
+  expect(result.current.visitHistories.map((h) => h.id)).toEqual([901, 900])
+  expect(result.current.visitHistories[0].visitType).toBe('restaurant')
+  expect(result.current.cards.find((card) => card.id === 2)?.units).toBe(50)
+})
+
+test.each(['parent', 'sync', 'invalid-parent'])('restaurant %s failure recovers without inserting twice', async (failure) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.unitLookupError = failure === 'parent'
+  if (failure === 'invalid-parent') state.unitParent = 0
+  state.changed.mockRejectedValue(new Error('offline'))
+  state.reads = []
+  await act(async () => { await result.current.addRestaurantVisit(200, 'saved') })
+  expect(state.reads.filter((name) => name === 'visit_histories:insert')).toHaveLength(1)
+  expect(state.reads).toContain('visit_histories')
+  expect(state.reads).toContain('restaurant_requests')
+  expect(state.reads).toContain('service_sessions')
+  expect(state.refresh).toHaveBeenCalled()
+  expect(state.changed).toHaveBeenCalledTimes(failure === 'sync' ? 1 : 0)
+})
+
+test('production restaurant save retains the existing refresh until separately approved', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  await act(async () => { await result.current.addRestaurantVisit(200, 'saved') })
+  expect(state.changed).not.toHaveBeenCalled()
+  expect(state.reads).toContain('visit_histories')
+  expect(state.reads).toContain('restaurant_requests')
+  expect(state.reads).toContain('service_sessions')
+})
+
+test('failed restaurant insert does not refresh or claim a successful save', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.insertError = true; state.reads = []
+  await act(async () => { await result.current.addRestaurantVisit(200, 'failed') })
+  expect(state.reads).toEqual(['visit_histories:insert'])
+  expect(state.changed).not.toHaveBeenCalled()
+})
 
 test.each([
   ['true', undefined],

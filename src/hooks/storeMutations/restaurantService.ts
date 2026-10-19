@@ -22,6 +22,7 @@ async function geocodeRestaurantAddress(address: string) {
 
 export function makeRestaurantServiceMutations(deps: {
   fetchAll: () => Promise<void>
+  refreshVisit?: (unitId: number) => Promise<void>
   buildings: Building[]
   cardBoundaries: CardBoundary[]
 }) {
@@ -91,7 +92,8 @@ export function makeRestaurantServiceMutations(deps: {
       reportMutationError(msg('식당봉사 기록을 추가하지 못했습니다.'), result.error)
       return
     }
-    await fetchAll()
+    if (deps.refreshVisit) await deps.refreshVisit(unitId)
+    else await fetchAll()
     showToast(msg('식당봉사 기록이 저장됐습니다 🍜'))
   }
 

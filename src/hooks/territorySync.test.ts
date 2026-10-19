@@ -31,6 +31,8 @@ test('fetches only requested buildings/units/history and includes an empty build
   expect(mock.calls).toContainEqual(['units', 'in', 'building_id', [7]])
   expect(mock.calls).toContainEqual(['visit_histories', 'in', 'units.building_id', [7]])
   expect(mock.calls).toContainEqual(['visit_histories', 'is', 'invalidated_at', null])
+  const projection = mock.calls.find(([table, op]) => table === 'visit_histories' && op === 'select')?.[2] as string
+  expect(projection.split(', ')).toContain('visit_type')
 })
 test('does not silently truncate large buildings at the PostgREST row limit', async () => {
   mock.units = Array.from({ length: 1001 }, (_, id) => ({ id: id + 1, building_id: 7, number: String(id + 1), status: '미방문', is_chinese: false, memo: null, regular_visits: [] }))
