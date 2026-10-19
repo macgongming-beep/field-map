@@ -81,5 +81,42 @@ Demo app `09a92d9` deployed directly to Vercel, deployment
 by an expired/invalid Git credential; local commits are retained. No main push.
 
 Local 390px browser: region and neighborhood queries, selected restaurant detail
-and existing service-start card verified. Real mobile-network testing and the
-record-save round trip remain separate checks before production activation.
+and existing service-start card verified.
+
+Deployed demo, 2026-10-19: in the demo leader account at 390px, searched for
+restaurant 2, opened its detail, started service and saved a unique test memo.
+Reopening the same restaurant displayed that memo in previous records; the DB
+confirmed history 70 for unit 163 with visit_type restaurant. After verification,
+the existing invalidation RPC successfully invalidated that test history. Unit
+163 retained its original status (unvisited). Screenshot retained in scratch.
+The same deployed 390px flow was then repeated after logging in as the actual
+demo volunteer (role user, not a leader's volunteer view). Search, detail, start,
+save and reopening previous records passed. DB history 71 identified the demo
+volunteer and unit 163. The test history was invalidated using the existing RPC;
+the original unvisited unit status was verified afterward. Screenshot:
+`scratch/restaurant-catalog-volunteer-save.jpg`.
+Real mobile-network testing remains separate from desktop mobile emulation.
+
+Release preflight: origin/main still points to e0a49c8. The catalog client remains
+demo-gated and its RPC has only been applied to the demo DB. Production activation
+requires a reviewed production gate and backed-up production RPC installation
+before deploying an enabled client; these UI checks do not imply deployment.
+
+## Production opt-in (2026-10-19)
+
+`VITE_RESTAURANT_BROWSE_ENABLED` overrides the demo fallback. Only literal `true`
+enables the catalog; explicit `false` disables it even in demo. Missing both flags
+retains legacy reads. The same helper gates the recipient scope and catalog UI,
+so disabling the feature restores both together. Recipient role/view eligibility,
+personal assignments and save/visit refresh contracts are unchanged.
+
+Verification: 1,292 tests / 179 files passed, lint and build passed. Reverting the
+helper to the old demo-only condition made three new flag tests fail. Production
+installation uses a strict project allowlist, a permission-restricted pg_dump of
+public/private schemas checked with pg_restore --list, then a single-transaction
+migration. It refuses to overwrite an already installed function.
+
+This is a build-time switch, not a runtime kill switch. Turning it off requires a
+new build/deployment and client update. During rollback, keep the RPC installed
+while any enabled PWA clients may still be running; do not drop it immediately.
+No monthly saving or attribution of the reported 230 MB/day is claimed.
