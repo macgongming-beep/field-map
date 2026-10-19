@@ -142,7 +142,7 @@ export function MobileTerritory({
   visitHistories?: VisitHistory[]
   onAddRestaurantVisit?: (unitId: number, memo: string) => Promise<void>
   onSubmitRestaurantRequest?: import('../types/restaurantRegistration').SubmitRestaurantRequest
-  onUpdateRestaurantRequestMemo?: (requestId: number, memo: string) => Promise<void>
+  onUpdateRestaurantRequestMemo?: (requestId: number, memo: string) => Promise<boolean>
   restaurantRequests?: import('../types').RestaurantRequest[]
   onOpenMap: (cardId: number) => void
   onOpenAssignmentMap?: (eventId: number, cardId?: number) => void
@@ -204,17 +204,22 @@ export function MobileTerritory({
   }
 
   const handleSaveSessionResult = async () => {
-    if (!activeRestaurantSession) return
+    if (!activeRestaurantSession || sessionSaving) return
     setSessionSaving(true)
-    if (activeRestaurantSession.kind === 'building' && onAddRestaurantVisit) {
-      await onAddRestaurantVisit(activeRestaurantSession.unitId, sessionMemo)
-    } else if (activeRestaurantSession.kind === 'request' && onUpdateRestaurantRequestMemo) {
-      await onUpdateRestaurantRequestMemo(activeRestaurantSession.requestId, sessionMemo)
+    try {
+      if (activeRestaurantSession.kind === 'building' && onAddRestaurantVisit) {
+        await onAddRestaurantVisit(activeRestaurantSession.unitId, sessionMemo)
+      } else if (activeRestaurantSession.kind === 'request' && onUpdateRestaurantRequestMemo) {
+        if (!await onUpdateRestaurantRequestMemo(activeRestaurantSession.requestId, sessionMemo)) return
+      } else return
+      saveSession(null)
+      setShowSessionMemo(false)
+      setSessionMemo('')
+    } catch {
+      showToast(msg('저장 결과를 확인하지 못했습니다. 입력 내용은 유지됩니다. 연결을 확인해 주세요.'), 'error')
+    } finally {
+      setSessionSaving(false)
     }
-    setSessionSaving(false)
-    saveSession(null)
-    setShowSessionMemo(false)
-    setSessionMemo('')
   }
 
   const [colorPickId, setColorPickId] = useState<number | null>(null)

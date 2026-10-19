@@ -5,6 +5,7 @@ import type { Building, CardBoundary, Unit, RestaurantRequest, Role, TerritoryCa
 import { RestaurantRegistrationModal } from './RestaurantRegistrationModal'
 import type { RegisterRestaurant } from '../types/restaurantRegistration'
 import { msg } from '../lib/msg'
+import { showToast } from '../lib/toast'
 import { normalizeCardSearch } from '../utils/cardSearch'
 import { translateKoreanAddress, type AppLanguage } from '../i18n'
 import {
@@ -352,22 +353,30 @@ function PendingRequestCard({
     ?? buildingSearchResults.find((b) => b.id === selectedMatchId)
 
   const handleApprove = async () => {
+    if (processing) return
     setProcessing('approve')
-    await onApprove(req.id, {
+    try { await onApprove(req.id, {
       name,
       address,
       reviewer: currentVisitor,
       existingBuildingId: selectedMatchId === 'new' ? null : (selectedMatchId as number),
       lat: coords?.lat,
       lng: coords?.lng,
-    })
-    setProcessing(null)
+    }) } catch {
+      showToast(msg('처리 결과를 확인하지 못했습니다. 새로고침 후 확인해 주세요.'), 'error')
+    } finally {
+      setProcessing(null)
+    }
   }
 
   const handleReject = async () => {
+    if (processing) return
     setProcessing('reject')
-    await onReject(req.id, currentVisitor)
-    setProcessing(null)
+    try { await onReject(req.id, currentVisitor) } catch {
+      showToast(msg('처리 결과를 확인하지 못했습니다. 새로고침 후 확인해 주세요.'), 'error')
+    } finally {
+      setProcessing(null)
+    }
   }
 
   const sharedInputStyle: React.CSSProperties = {

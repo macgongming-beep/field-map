@@ -128,7 +128,7 @@ export function makeRestaurantServiceMutations(deps: {
   const updateRestaurantRequestMemo = async (
     requestId: number,
     memo: string,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const result = await supabase
       .from('restaurant_requests')
       .update({ memo: memo.trim() || null })
@@ -136,15 +136,16 @@ export function makeRestaurantServiceMutations(deps: {
       .select('id')
     if (result.error) {
       reportMutationError(msg('메모를 저장하지 못했습니다.'), result.error)
-      return
+      return false
     }
     // 남의 신청이면 RLS 로 0행이 온다 — 오류가 아니므로 행 수로 봐야 한다
-    if (!ensureAffectedRows(result.data, msg('메모를 저장하지 못했습니다.'))) return
+    if (!ensureAffectedRows(result.data, msg('메모를 저장하지 못했습니다.'))) return false
     try { await (deps.refreshRequests ?? fetchAll)() } catch (error) {
       reportMutationError(msg('메모는 저장됐지만 목록을 새로 불러오지 못했습니다.'), error)
-      return
+      return true
     }
     showToast(msg('메모가 저장됐습니다 🍜'))
+    return true
   }
 
   /** 관리자: 식당 신청 승인. 건물·세대·이력·신청 상태를 DB 한 트랜잭션에서 처리한다. */
@@ -189,7 +190,10 @@ export function makeRestaurantServiceMutations(deps: {
       return
     }
 
-    await fetchAll()
+    try { await fetchAll() } catch (error) {
+      reportMutationError(msg('승인은 완료됐지만 목록을 새로 불러오지 못했습니다. 새로고침 후 확인해 주세요.'), error)
+      return
+    }
     showToast(msg('식당 신청이 승인됐습니다.'))
   }
 
@@ -212,7 +216,10 @@ export function makeRestaurantServiceMutations(deps: {
       return
     }
     if (!ensureAffectedRows(result.data, msg('신청 거절에 실패했습니다.'))) return
-    await fetchAll()
+    try { await fetchAll() } catch (error) {
+      reportMutationError(msg('거절은 완료됐지만 목록을 새로 불러오지 못했습니다. 새로고침 후 확인해 주세요.'), error)
+      return
+    }
     showToast(msg('식당 신청이 거절됐습니다.'))
   }
 

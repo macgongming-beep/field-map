@@ -443,7 +443,7 @@ export function MobileHome({
   onSetRegularVisitor?: (unitId: number, visitorName: string, registeredAt?: string) => Promise<void>
   onAddRestaurantVisit?: (unitId: number, memo: string) => Promise<void>
   onSubmitRestaurantRequest?: import('../types/restaurantRegistration').SubmitRestaurantRequest
-  onUpdateRestaurantRequestMemo?: (requestId: number, memo: string) => Promise<void>
+  onUpdateRestaurantRequestMemo?: (requestId: number, memo: string) => Promise<boolean>
   restaurantRequests?: import('../types').RestaurantRequest[]
   onRegisterRestaurant?: import('../types/restaurantRegistration').RegisterRestaurant
   onApproveRestaurantRequest?: (id: number, opts: { name: string; address: string; reviewer: string; existingBuildingId?: number | null; lat?: number; lng?: number }) => Promise<void>

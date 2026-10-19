@@ -140,7 +140,7 @@ test.each((['true', 'false'] as const).flatMap(demo =>
   const requests = result.current.restaurantRequests
   state.failedTable = 'restaurant_requests'; state.reads = []
   await act(async () => {
-    if (kind === 'memo') await expect(result.current.updateRestaurantRequestMemo(61, 'edited')).resolves.toBeUndefined()
+    if (kind === 'memo') await expect(result.current.updateRestaurantRequestMemo(61, 'edited')).resolves.toBe(true)
     else expect(await result.current.submitRestaurantRequest({ name: 'test', address: 'test', memo: '', isChinese: true, initialState: '미방문', regularVisitor: null })).toBe(true)
   })
   expect(result.current.restaurantRequests).toBe(requests)

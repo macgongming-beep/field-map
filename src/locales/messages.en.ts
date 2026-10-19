@@ -1020,4 +1020,8 @@ export const messagesEn: Record<string, string> = {
   "포인트 삭제": "Delete point",
   "{v1} 포인트를 정말 삭제할까요?": "Delete the {v1} point?",
   "{v1} 핀을 끌거나 지도를 눌러 옮기세요": "Drag the {v1} pin or tap the map to move it",
+"저장 결과를 확인하지 못했습니다. 입력 내용은 유지됩니다. 연결을 확인해 주세요.": "Could not confirm the save. Your input is retained. Please check your connection.",
+"처리 결과를 확인하지 못했습니다. 새로고침 후 확인해 주세요.": "Could not confirm the result. Please refresh to check.",
+"승인은 완료됐지만 목록을 새로 불러오지 못했습니다. 새로고침 후 확인해 주세요.": "Approved, but the list could not refresh. Please refresh to check.",
+"거절은 완료됐지만 목록을 새로 불러오지 못했습니다. 새로고침 후 확인해 주세요.": "Rejected, but the list could not refresh. Please refresh to check.",
 }
