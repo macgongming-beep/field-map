@@ -15,11 +15,35 @@ const events = [
   { id: 4, date: '2026-10-21', time: '10:00', title: 'Future', applicants: ['A'], hasMeeting: true },
 ] as CalendarEvent[]
 
+test('visit exclusion is inclusive across months, changes denominators and matches print and CSV without mutating events', () => {
+  const source = ['2026-09-22', '2026-09-29', '2026-09-30', '2026-10-03', '2026-10-10'].map((date, index) => ({
+    id: index + 20, date, time: '18:30', title: 'Meeting', hasMeeting: true,
+    applicants: Array.from({ length: index === 0 ? 2 : 10 }, (_, i) => `Person${i}`),
+  })) as CalendarEvent[]
+  const snapshot = JSON.stringify(source)
+  render(<ServiceAttendanceStats events={source} language="ko" now={new Date(2026, 9, 20)} />)
+  expect(document.querySelector('.attendance-day:nth-child(6) strong')?.textContent).toBe('10')
+  fireEvent.change(screen.getByLabelText('집계 월'), { target: { value: '2026-09' } })
+  expect(document.querySelector('.attendance-day:nth-child(2) strong')?.textContent).toBe('2')
+  expect(document.querySelector('.attendance-day:nth-child(3) strong')).toBeNull()
+  expect(document.querySelector('.attendance-summary')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'PDF 출력 설정' }))
+  const paper = document.querySelector('.attendance-print-root')!
+  expect(paper.textContent).toContain('2026-09-29 ~ 2026-10-03')
+  expect(paper.querySelector('.attendance-day:nth-child(2) strong')?.textContent).toBe('2')
+  fireEvent.click(screen.getByRole('button', { name: '참여 통계 CSV 다운로드' }))
+  expect(downloadCSV).toHaveBeenLastCalledWith(expect.any(String), expect.stringContaining('"2026-09","18:30","—","2","—"'))
+  fireEvent.click(screen.getByLabelText('순회 방문 기간 제외'))
+  expect(document.querySelector('.attendance-day:nth-child(2) strong')?.textContent).toBe('6')
+  expect(paper.querySelector('.attendance-day:nth-child(3) strong')?.textContent).toBe('10')
+  expect(paper.textContent).not.toContain('2026-09-29 ~ 2026-10-03')
+  expect(JSON.stringify(source)).toBe(snapshot)
+})
+
 test('weekday, average/date switch, month and export use the same filtered meetings', () => {
   render(<ServiceAttendanceStats events={events} language="ko" now={new Date(2026, 9, 20, 12)} />)
-  const matrixRows = within(screen.getByRole('table')).getAllByRole('row')
-  expect(within(matrixRows[0]).getAllByRole('columnheader').map(cell => cell.textContent)).toEqual(['시작 시각', '월', '화', '수', '목', '금', '토', '일'])
-  expect(within(matrixRows[1]).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['—', '—', '1', '—', '—', '—', '—'])
+  expect([...document.querySelectorAll('.attendance-day h3')].map(node => node.textContent)).toEqual(['월', '화', '수', '목', '금', '토', '일'])
+  expect([...document.querySelectorAll('.attendance-day:nth-child(3) strong')].map(node => node.textContent)).toEqual(['1', '1'])
   expect(screen.queryByText('누적 참석 (명)')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '참여 통계 CSV 다운로드' }))
   expect(downloadCSV).toHaveBeenCalledWith('attendance-2026-10-all-overview.csv', expect.stringContaining('"월","화","수","목","금","토","일"'))
@@ -80,8 +104,8 @@ test('overview distinguishes zero attendance from no meeting and keeps weekdays 
     { id: 5, date: '2026-10-05', time: '10:00', title: 'Monday', applicants: [], hasMeeting: true } as CalendarEvent,
     { id: 6, date: '2026-10-06', time: '10:00', title: 'Tuesday', applicants: ['A', 'B', 'C'], hasMeeting: true } as CalendarEvent,
   ]} language="ko" now={new Date(2026, 9, 20, 12)} />)
-  const row = within(screen.getByRole('table')).getAllByRole('row')[1]
-  expect(within(row).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['0', '3', '1', '—', '—', '—', '—'])
+  expect([...document.querySelectorAll('.attendance-day')].map(node => node.querySelector('strong')?.textContent ?? 'none')).toEqual(['0', '3', '1', 'none', 'none', 'none', 'none'])
+  expect(document.querySelector('.attendance-day:nth-child(2) .attendance-bar-track span')?.getAttribute('style')).toContain('100%')
 })
 
 test('language can switch without changing month or participation data', () => {
@@ -89,8 +113,7 @@ test('language can switch without changing month or participation data', () => {
   fireEvent.change(screen.getByLabelText('언어'), { target: { value: 'zh' } })
   expect(screen.getByRole('button', { name: '每周总览' })).toBeTruthy()
   expect(screen.getByLabelText('统计月份').getAttribute('value')).toBe('2026-10')
-  const rows = within(screen.getByRole('table')).getAllByRole('row')
-  expect(within(rows[1]).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['—', '—', '1', '—', '—', '—', '—'])
+  expect([...document.querySelectorAll('.attendance-day:nth-child(3) strong')].map(node => node.textContent)).toEqual(['1', '1'])
   fireEvent.change(screen.getByLabelText('语言'), { target: { value: 'ko' } })
   expect(screen.getByRole('button', { name: '요일 한눈에' })).toBeTruthy()
 })

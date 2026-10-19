@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom'
 import { t, type AppLanguage } from '../i18n'
 import { attendanceAverages, type AttendanceMeeting } from '../utils/serviceAttendance'
 import { AttendanceCalendar } from './AttendanceCalendar'
+import { AttendanceOverview } from './AttendanceOverview'
 
 type View = 'daily' | 'overview' | 'average'
 const views: View[] = ['daily', 'overview', 'average']
 
-export function AttendancePrint({ month, meetings, today, language, initialView, onClose }: {
+export function AttendancePrint({ month, meetings, today, language, initialView, onClose, exclusion }: {
   month: string; meetings: AttendanceMeeting[]; today: string; language: AppLanguage;
-  initialView: View; onClose: () => void
+  initialView: View; onClose: () => void; exclusion?: string
 }) {
   const [languages, setLanguages] = useState<('ko' | 'zh')[]>([language === 'zh' ? 'zh' : 'ko'])
   const [selected, setSelected] = useState<View[]>([initialView])
@@ -34,13 +35,13 @@ export function AttendancePrint({ month, meetings, today, language, initialView,
     </section>
     {createPortal(<div className="attendance-print-root" aria-hidden="true">
       {(['ko', 'zh'] as const).filter(lang => languages.includes(lang)).flatMap(lang => views.filter(view => selected.includes(view)).map(view =>
-        <AttendancePrintPage key={`${lang}-${view}`} month={month} meetings={meetings} today={today} language={lang} view={view} />))}
+        <AttendancePrintPage key={`${lang}-${view}`} month={month} meetings={meetings} exclusion={exclusion} today={today} language={lang} view={view} />))}
     </div>, document.body)}
   </>
 }
 
-export function AttendancePrintPage({ month, meetings, today, language, view }: {
-  month: string; meetings: AttendanceMeeting[]; today: string; language: AppLanguage; view: View
+export function AttendancePrintPage({ month, meetings, today, language, view, exclusion }: {
+  month: string; meetings: AttendanceMeeting[]; today: string; language: AppLanguage; view: View; exclusion?: string
 }) {
   const days = [1, 2, 3, 4, 5, 6, 0]
   const locale = language === 'zh' ? 'zh-CN' : 'ko-KR'
@@ -50,12 +51,9 @@ export function AttendancePrintPage({ month, meetings, today, language, view }: 
   const groups = days.map(day => new Map(attendanceAverages(meetings.filter(meeting => meeting.weekday === day)).map(row => [row.time, row])))
   return <article className="attendance-print-page" lang={language} data-view={view}>
     <header><h1>{t(language, 'attendance.tab.attendance')}</h1><p>{month} · {t(language, `attendance.${view}`)}</p></header>
+    {exclusion && <p className="attendance-exclusion-note">{t(language, 'attendance.excluded')}: {exclusion}</p>}
     {view === 'daily' ? <AttendanceCalendar month={month} meetings={meetings} today={today} language={language} printOnly />
-      : view === 'overview' ? <table className="attendance-table attendance-matrix">
-        <caption>{t(language, 'attendance.overviewHeading')}</caption>
-        <thead><tr><th>{t(language, 'attendance.time')}</th>{days.map(day => <th key={day}>{label(day)}</th>)}</tr></thead>
-        <tbody>{attendanceAverages(meetings).map(row => <tr key={row.time}><th>{timeLabel(row.time)}</th>{groups.map((group, index) => <td key={days[index]}>{group.has(row.time) ? format(group.get(row.time)!.average) : '—'}</td>)}</tr>)}</tbody>
-      </table> : <table className="attendance-table">
+      : view === 'overview' ? <><h2 className="attendance-heading">{t(language, 'attendance.overviewHeading')}</h2><AttendanceOverview meetings={meetings} language={language} /></> : <table className="attendance-table">
         <thead><tr>{(['weekday', 'time', 'averageCount', 'meetings'] as const).map(key => <th key={key}>{t(language, `attendance.${key}`)}</th>)}</tr></thead>
         <tbody>{days.flatMap((day, index) => [...groups[index].values()].map(row => <tr key={`${day}-${row.time}`}><th>{label(day)}</th><td>{timeLabel(row.time)}</td><td>{format(row.average)}</td><td>{row.meetings}</td></tr>))}</tbody>
       </table>}

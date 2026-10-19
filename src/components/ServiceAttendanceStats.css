@@ -67,6 +67,24 @@
 .attendance-print-actions button:first-child { background:#207358; color:white; border-color:#207358; }
 .attendance-print-actions button:disabled { opacity:.4; cursor:default; }
 .attendance-print-root { display:none; }
+.attendance-exclusion { display:flex; gap:16px; align-items:center; flex-wrap:wrap; padding:20px 0 0; }
+.attendance-exclusion label { display:flex; gap:8px; align-items:center; font-size:13px; flex-wrap:wrap; }
+.attendance-exclusion input[type=date] { min-width:0; max-width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font:inherit; background:white; color:#222; }
+.attendance-exclusion-note { font-size:12px; color:#666; margin:12px 0; }
+.attendance-overview { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:0; }
+.attendance-day { min-width:0; padding:0 12px; border-left:1px solid #ddd; }
+.attendance-day:first-child { border-left:0; padding-left:0; }
+.attendance-day h3 { font-size:15px; margin:0 0 20px; }
+.attendance-bar-row { margin-bottom:20px; font-variant-numeric:tabular-nums; }
+.attendance-bar-row > div:first-child { display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; font-size:12px; }
+.attendance-bar-row strong { color:#207358; }
+.attendance-bar-track { height:6px; background:#eee; margin-top:8px; }
+.attendance-bar-track span { display:block; height:100%; background:#207358; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+.attendance-no-meeting { font-size:12px; color:#888; }
+@media(max-width:600px) {
+  .attendance-overview { grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px 0; }
+  .attendance-day:nth-child(odd) { border-left:0; padding-left:0; }
+}
 @page attendance { size:A4 landscape; margin:10mm; }
 @media print {
   html:has(body.attendance-print-active) { page:attendance; height:auto !important; min-height:0 !important; overflow:visible !important; }
@@ -75,6 +93,8 @@
   body.attendance-print-active > .attendance-print-root { display:block !important; color:#111; font-family:Arial,sans-serif; }
   .attendance-print-page { page:attendance; break-before:page; }
   .attendance-print-page:first-child { break-before:auto; }
+  .attendance-print-page .attendance-overview { grid-template-columns:repeat(7,minmax(0,1fr)); }
+  .attendance-print-page .attendance-day { break-inside:avoid; }
   .attendance-print-page h1 { font-size:20px; margin:0 0 4px; }
   .attendance-print-page header p { font-size:12px; margin:0 0 12px; }
   .attendance-print-page caption { text-align:left; font-size:12px; padding:8px 0; }

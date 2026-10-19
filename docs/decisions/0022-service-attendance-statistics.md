@@ -88,3 +88,21 @@ VITE_DEMO_MODE setting. The reviewed source passed 1,319 tests, lint and build
 before demo deployment; the production build also succeeded. Production alias and
 build verification do not constitute a new authenticated printing smoke test.
 Existing PWA clients must apply the update to see the new participation views.
+
+## Circuit visit comparison follow-up (2026-10-19, demo)
+
+The user confirmed September 29 through October 3, 2026 as the circuit visit.
+Default the report-only exclusion to that inclusive date range, with a checkbox
+to restore all meetings and editable dates. This is local component state, reset
+to the confirmed default on remount, not a shared calendar edit. Filter meetings
+before averaging so excluded meetings affect neither numerator nor denominator.
+Apply the same filtered collection to calendar, overview, details, CSV and PDF;
+annotate exported reports with the exclusion. No writes or additional DB reads.
+Replace the sparse matrix with seven weekday columns of time/average bars using
+one shared maximum, with numeric zero retained and missing meetings labelled once.
+Remove the overall meeting-count/average summary. Narrow screens use two columns;
+paper retains all seven. Screen and PDF reuse the same chart component.
+Regression tests cover inclusive cross-month filtering, denominator changes,
+restoring all meetings, source immutability, CSV and print consistency. Removing
+the filter makes the exclusion test fail (expected 2, received 6). Full suite:
+1,320 tests / 181 files passed; lint and build passed.
