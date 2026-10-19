@@ -311,4 +311,38 @@ describe('비공식 그룹 쓰기 결과 계약', () => {
     expect(state.toast).toHaveBeenCalledWith('연결된 자료가 있어 삭제 요청으로 접수했습니다')
     expect(fetchAll).toHaveBeenCalledOnce()
   })
+
+  test.each(['deleted', 'requested', 'error', 'throw'])('세대 삭제 뒤 빈 건물 결과가 %s여도 해당 건물을 갱신한다', async (outcome) => {
+    state.rpc.mockResolvedValueOnce({ data: { action: 'deleted' }, error: null })
+    if (outcome === 'throw') state.rpc.mockRejectedValueOnce(new Error('offline'))
+    else state.rpc.mockResolvedValueOnce({ data: { action: outcome }, error: outcome === 'error' ? new Error('denied') : null })
+    const fetchAll = vi.fn()
+    const refreshRestaurantBuildings = vi.fn().mockResolvedValue(undefined)
+    const mutations = makeV2AssignmentMutations({ fetchAll, refreshRestaurantBuildings })
+    const operation = mutations.removeRestaurantUnit(17, 3, 'place', true)
+    if (outcome === 'throw') await expect(operation).rejects.toThrow('offline')
+    else await operation
+    expect(refreshRestaurantBuildings).toHaveBeenCalledExactlyOnceWith([3])
+    expect(fetchAll).not.toHaveBeenCalled()
+  })
+
+  test('삭제 요청만 접수되면 건물을 숨기거나 부분 삭제로 처리하지 않는다', async () => {
+    state.rpc.mockResolvedValueOnce({ data: { action: 'requested' }, error: null })
+    const fetchAll = vi.fn()
+    const refreshRestaurantBuildings = vi.fn()
+    await makeV2AssignmentMutations({ fetchAll, refreshRestaurantBuildings }).removeRestaurantUnit(17, 3, 'place', true)
+    expect(refreshRestaurantBuildings).not.toHaveBeenCalled()
+    expect(fetchAll).toHaveBeenCalledOnce()
+  })
+
+  test('목록 해제와 세대 없는 건물 해제는 건물 갱신 경로를 쓴다', async () => {
+    state.result = { data: [{ id: 17 }], error: null }
+    const fetchAll = vi.fn()
+    const refreshRestaurantBuildings = vi.fn()
+    const mutations = makeV2AssignmentMutations({ fetchAll, refreshRestaurantBuildings })
+    await mutations.removeRestaurantUnit(17, 3)
+    await mutations.toggleBuildingRestaurant(4, false)
+    expect(refreshRestaurantBuildings.mock.calls).toEqual([[[3]], [[4]]])
+    expect(fetchAll).not.toHaveBeenCalled()
+  })
 })

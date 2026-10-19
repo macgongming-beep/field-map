@@ -9,8 +9,12 @@ import { msg } from '../../lib/msg'
 import { ensureAffectedRows, reportMutationError } from './shared'
 import type { InformalKind } from '../../types'
 
-export function makeV2AssignmentMutations(deps: { fetchAll: () => Promise<void> }) {
+export function makeV2AssignmentMutations(deps: {
+  fetchAll: () => Promise<void>
+  refreshRestaurantBuildings?: (buildingIds: number[]) => Promise<void>
+}) {
   const { fetchAll } = deps
+  const refreshRestaurants = deps.refreshRestaurantBuildings ?? fetchAll
 
   // ── 비공식 자료 풀 ────────────────────────────────
   /**
@@ -438,16 +442,20 @@ export function makeV2AssignmentMutations(deps: { fetchAll: () => Promise<void> 
         return
       }
 
-      if (deleteEmptyBuilding) {
-        const buildingAction = await deleteTarget('building', buildingId)
-        if (!buildingAction) return
-        showToast(buildingAction === 'requested'
-          ? msg('세대는 삭제했고 빈 건물은 삭제 요청으로 접수했습니다')
-          : msg('식당 세대와 빈 건물을 삭제했습니다'))
-      } else {
-        showToast(msg('식당 세대를 삭제했습니다'))
+      // The unit may already be deleted even if empty-building cleanup fails.
+      try {
+        if (deleteEmptyBuilding) {
+          const buildingAction = await deleteTarget('building', buildingId)
+          if (!buildingAction) return
+          showToast(buildingAction === 'requested'
+            ? msg('세대는 삭제했고 빈 건물은 삭제 요청으로 접수했습니다')
+            : msg('식당 세대와 빈 건물을 삭제했습니다'))
+        } else {
+          showToast(msg('식당 세대를 삭제했습니다'))
+        }
+      } finally {
+        await refreshRestaurants([buildingId])
       }
-      await fetchAll()
       return
     }
 
@@ -466,9 +474,8 @@ export function makeV2AssignmentMutations(deps: { fetchAll: () => Promise<void> 
     }
     if (!ensureAffectedRows(unitResult.data, msg('식당 목록에서 제거하지 못했습니다.'))) return
     // 건물의 식당 표시는 DB 트리거가 세대에 맞춰 자동으로 맞춘다
-    void buildingId
     showToast(msg('식당 목록에서 제거됐습니다.'))
-    await fetchAll()
+    await refreshRestaurants([buildingId])
   }
 
   // ── 식당 마킹 (buildings.is_restaurant) ────────────
@@ -481,7 +488,7 @@ export function makeV2AssignmentMutations(deps: { fetchAll: () => Promise<void> 
     if (result.error) showToast(msg('식당 표시 변경 실패: {message}', { message: result.error.message }), 'error')
     else if (ensureAffectedRows(result.data, msg('식당 표시를 변경하지 못했습니다.'))) {
       showToast(msg(isRestaurant ? '식당 목록에 추가됐습니다.' : '식당 목록에서 제거됐습니다.'))
-      await fetchAll()
+      await refreshRestaurants([buildingId])
     }
   }
 
@@ -511,7 +518,7 @@ export function makeV2AssignmentMutations(deps: { fetchAll: () => Promise<void> 
       )
     }
 
-    await fetchAll()
+    await refreshRestaurants(buildingIds)
   }
 
   return {

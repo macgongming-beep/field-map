@@ -980,6 +980,14 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     () => fetchSlices(['resources'], { triggeredBy: 'mutation:resources' }),
     [fetchSlices],
   )
+  const refreshRestaurantBuildings = useCallback(async (buildingIds: number[]) => {
+    try {
+      await syncChangedBuildings(buildingIds)
+      await refetchResources()
+    } catch {
+      await fetchSlices(['buildings', 'cards', 'visits', 'resources'], { triggeredBy: 'mutation:restaurantBuildings' })
+    }
+  }, [syncChangedBuildings, refetchResources, fetchSlices])
   const refetchRestaurantRequests = useCallback(
     () => fetchSlices(['restaurantRequests', 'buildings', 'visits'], { triggeredBy: 'mutation:restaurantRequests' }),
     [fetchSlices],
@@ -1124,7 +1132,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     toggleBuildingRestaurant,
     removeRestaurantUnit,
     bulkSetRestaurantFlag,
-  } = makeV2AssignmentMutations({ fetchAll: refetchResources })
+  } = makeV2AssignmentMutations({ fetchAll: refetchResources, refreshRestaurantBuildings })
 
   const {
     addRestaurantVisit,

@@ -3,10 +3,10 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import { testBuilding } from '../test/territoryFixture'
 
-const state = vi.hoisted(() => ({ changed: vi.fn(), clock: vi.fn(), index: vi.fn(), reads: [] as string[], boundaryColumns: [] as string[], block: null as null | Promise<void> }))
+const state = vi.hoisted(() => ({ rpc: vi.fn(), changed: vi.fn(), clock: vi.fn(), index: vi.fn(), reads: [] as string[], boundaryColumns: [] as string[], block: null as null | Promise<void> }))
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock, fetchBuildingRecoveryIndex: state.index }))
 vi.mock('../lib/supabase', () => ({ supabase: {
-  rpc: () => Promise.resolve({ error: null }),
+  rpc: (...args: unknown[]) => state.rpc(...args) ?? Promise.resolve({ error: null }),
   from: (table: string) => {
     const chain: Record<string, unknown> = {}
     let lookup = false
@@ -18,12 +18,37 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     chain.then = async (resolve: (r: unknown) => void) => {
       state.reads.push(table)
       if (table === 'buildings') await state.block
-      return resolve({ data: writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
+      return resolve({ data: writing && table === 'units' ? [{ id: 1 }] : writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
     }
     return chain
   },
 } }))
-afterEach(() => { cleanup(); vi.clearAllMocks(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
+afterEach(() => { cleanup(); vi.clearAllMocks(); state.rpc.mockReset(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
+
+test.each(['list', 'place'] as const)('restaurant %s removal immediately updates store without realtime or reload', async (mode) => {
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(false))
+  const restaurant = { ...testBuilding(1, 1, 'restaurant'), isRestaurant: true }
+  const other = testBuilding(2, 2, 'unchanged')
+  state.changed.mockResolvedValueOnce({ buildings: [restaurant, other], histories: [] })
+  await act(async () => { await result.current.syncChangedBuildings([1, 2]) })
+  const remaining = mode === 'place' ? [] : [{ ...restaurant, isRestaurant: false, units: restaurant.units.map((u) => ({ ...u, isRestaurant: false })) }]
+  state.changed.mockResolvedValueOnce({ buildings: remaining, histories: [] })
+  state.rpc.mockResolvedValue({ data: { action: 'deleted' }, error: null })
+  await act(async () => { await result.current.removeRestaurantUnit(restaurant.units[0].id, 1, mode, true) })
+  expect(state.changed).toHaveBeenLastCalledWith([1])
+  expect(result.current.buildings.find((b) => b.id === 1)).toEqual(remaining[0])
+  expect(result.current.buildings.find((b) => b.id === 2)).toEqual(other)
+  expect(state.reads).not.toContain('buildings')
+  expect(state.reads).toContain('event_restaurant_assignments')
+})
+
+test('restaurant refresh failure falls back to buildings, cards, histories and assignments', async () => {
+  const { result } = renderHook(() => useStore(false))
+  state.changed.mockRejectedValueOnce(new Error('offline'))
+  await act(async () => { await result.current.removeRestaurantUnit(1, 1) })
+  expect(state.reads).toEqual(expect.arrayContaining(['buildings', 'cards', 'visit_histories', 'event_restaurant_assignments']))
+})
 
 test('successful building recovery skips global histories but keeps sessions and expires old records', async () => {
   vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
