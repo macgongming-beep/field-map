@@ -68,10 +68,14 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
 
-test.each(['nickname', 'log'] as const)('demo return visit %s refresh keeps buildings and histories', async (kind) => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(
+  (['true', 'false'] as const).flatMap(demo =>
+    (['user', 'developer'] as const).flatMap(role =>
+      (['nickname', 'log'] as const).map(kind => ({ demo, role, kind })))),
+)('return visit $kind refresh keeps buildings and histories (demo=$demo, $role)', async ({ demo, role, kind }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
   localStorage.setItem('currentVisitor', 'Volunteer')
-  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  const { result } = renderHook(() => useStore(true, role, role === 'user' ? 'Volunteer' : undefined))
   await waitFor(() => expect(result.current.loading).toBe(false))
   const buildings = result.current.buildings
   const histories = result.current.visitHistories
@@ -93,8 +97,8 @@ test.each(['nickname', 'log'] as const)('demo return visit %s refresh keeps buil
   expect(result.current.returnVisitLogs[0].memo).toBe('new log')
 })
 
-test('failed return visit refresh preserves both snapshots', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(['true', 'false'])('failed return visit refresh preserves both snapshots (demo=%s)', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
   state.returnRows = [{ id: 51, nickname: 'old name' }]
   state.returnLogs = [{ id: 52, return_visit_id: 51, memo: 'old log' }]
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
@@ -106,16 +110,6 @@ test('failed return visit refresh preserves both snapshots', async () => {
   })
   expect(result.current.returnVisits).toBe(visits)
   expect(result.current.returnVisitLogs).toBe(logs)
-})
-
-test('production nickname save retains building refresh', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'false')
-  const { result } = renderHook(() => useStore(true, 'developer'))
-  await waitFor(() => expect(result.current.loading).toBe(false))
-  state.reads = []
-  await act(async () => { await result.current.updateReturnVisitNickname(51, 'name') })
-  expect(state.reads).toContain('buildings')
-  expect(state.reads).toContain('return_visits')
 })
 
 test.each(['user', 'developer'] as const)('demo session end refreshes sessions without histories (%s)', async (role) => {

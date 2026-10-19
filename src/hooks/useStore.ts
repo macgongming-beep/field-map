@@ -1096,7 +1096,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     reassignReturnVisit,
   } = makeRegularVisitMutations({
     fetchAll: refetchReturnVisits,
-    refreshDetails: import.meta.env.VITE_DEMO_MODE === 'true' ? refetchReturnVisitDetails : refetchReturnVisits,
+    refreshDetails: refetchReturnVisitDetails,
     buildings, cards, returnVisits,
   })
 

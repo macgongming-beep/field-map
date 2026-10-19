@@ -1,14 +1,14 @@
 # Return visit detail-only refresh
 
 - Date: 2026-10-19
-- Status: demo only
+- Status: production activation approved on 2026-10-19
 
 Reachable callers include DesktopMyService log submission and
 MobileRegularVisitDetail/MobileTerritory log and nickname submission. Unlike the
 unused manual session controls in 0021, these are live UI paths.
 
 Add an optional refreshDetails dependency to regular visit mutations, defaulting
-to the existing full callback. Demo injects a returnVisitDetails slice for adding
+to the existing full callback. Both environments inject a returnVisitDetails slice for adding
 a log (including a partially failed summary update) and changing a nickname only.
 It reuses the authoritative return_visits and return_visit_logs reads/transforms.
 No optimistic editing, DB migration, permissions or notification changes.
@@ -21,8 +21,8 @@ Log editing/invalidation, address changes, registration, ending and reassignment
 also retain their previous refresh contracts in this narrow change.
 
 If either details read fails, throw before replacing either snapshot instead of
-clearing it. The saved write is not repeated. Production retains the original
-combined buildings/returnVisits refresh; the new failure preservation is shared.
+clearing it. The saved write is not repeated. Production now uses the same
+detail-only refresh verified in the demo.
 
 Verification: 1,330 tests / 182 files passed, build passed. Integration tests
 verify current nickname/log state, unchanged building/history snapshots, no
@@ -50,3 +50,14 @@ Browser zoom was restored. Production was not modified. Screenshots are local
 scratch/return-visit-live-log-saved.png and return-visit-live-persisted.png.
 No live network-byte measurement was taken; request exclusions remain covered
 by the mocked store regression tests, not inferred from visible success alone.
+
+## Production activation (2026-10-19)
+
+After the live demo check, the user explicitly authorized production release.
+Removed only the return-visit refresh demo gate. The manual service-session
+refresh gate remains demo-only. No database or environment changes are needed.
+Regression coverage now checks both demo settings, user/developer roles, and
+nickname/log operations: fresh details, unchanged building/history snapshots,
+and no recipient scope refresh. Failed reads preserve snapshots in production
+as well. Full suite: 1,336 tests / 182 files; lint and build passed.
+No production test records are created. Monthly savings remain unmeasured.
