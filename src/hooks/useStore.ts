@@ -16,6 +16,7 @@ import { findActivePeriodId } from '../utils/specialPeriod'
 import { getRegionNames, setRegionsFromDatabase } from '../lib/regions'
 import { applyCongregationSettings } from '../lib/congregationProfile'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
+import { lazyReturnVisitLogsEnabled } from './returnVisitLogReader'
 import { isRestaurantAssignmentDeleted, resolvePlaceDeletionScope } from '../utils/placeDeletionSignal'
 import type {
   Building,
@@ -461,7 +462,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       case 'returnVisitDetails': {
         const [returnVisitsRes, returnVisitLogsRes] = await Promise.all([
           supabase.from('return_visits').select('*').is('ended_at', null).order('created_at', { ascending: false }),
-          supabase.from('return_visit_logs').select('*').is('invalidated_at', null).order('visited_at', { ascending: false }),
+          lazyReturnVisitLogsEnabled()
+            ? fetchAllPages((from, to) => supabase.from('return_visit_logs')
+              .select('id,return_visit_id,visited_at').is('invalidated_at', null)
+              .order('visited_at', { ascending: false }).order('id', { ascending: false }).range(from, to))
+            : supabase.from('return_visit_logs').select('*').is('invalidated_at', null).order('visited_at', { ascending: false }),
         ])
 
         measure(returnVisitsRes.data)

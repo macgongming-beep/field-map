@@ -4,6 +4,7 @@ import { useStore } from './useStore'
 import { testBuilding } from '../test/territoryFixture'
 
 const state = vi.hoisted(() => ({ rpc: vi.fn(), changed: vi.fn(), clock: vi.fn(), index: vi.fn(), reads: [] as string[], boundaryColumns: [] as string[], block: null as null | Promise<void> }))
+const logColumns = vi.hoisted(() => [] as string[])
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock, fetchBuildingRecoveryIndex: state.index }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: (...args: unknown[]) => state.rpc(...args) ?? Promise.resolve({ error: null }),
@@ -13,7 +14,11 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     let writing = false
     for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq']) chain[name] = () => chain
     for (const name of ['insert', 'update', 'upsert', 'delete']) chain[name] = () => { writing = true; return chain }
-    chain.select = (columns: string) => { if (table === 'card_boundaries') state.boundaryColumns.push(columns); return chain }
+    chain.select = (columns: string) => {
+      if (table === 'card_boundaries') state.boundaryColumns.push(columns)
+      if (table === 'return_visit_logs') logColumns.push(columns)
+      return chain
+    }
     chain.limit = () => { lookup = true; return chain }
     chain.then = async (resolve: (r: unknown) => void) => {
       state.reads.push(table)
@@ -24,6 +29,16 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   },
 } }))
 afterEach(() => { cleanup(); vi.clearAllMocks(); state.rpc.mockReset(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
+afterEach(() => { logColumns.length = 0 })
+
+test.each(['true', 'false'])('return visit initial and post-save reads honor demo detail gate %s', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const { result } = renderHook(() => useStore(true))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(logColumns).toEqual([demo === 'true' ? 'id,return_visit_id,visited_at' : '*'])
+  await act(async () => { await result.current.refetchSlices(['returnVisitDetails']) })
+  expect(logColumns).toEqual(Array(2).fill(demo === 'true' ? 'id,return_visit_id,visited_at' : '*'))
+})
 
 test('building survey save updates its snapshot without global building or card reads', async () => {
   const { result } = renderHook(() => useStore(false))

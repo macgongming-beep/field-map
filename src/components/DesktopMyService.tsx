@@ -6,6 +6,8 @@ import { getAssignmentTeamMembers } from '../utils/assignmentTeamMembers'
 import { assignedServiceScope, cardServiceLabel } from '../utils/cardServiceScope'
 import { getUserReturnVisits } from '../utils/returnVisits'
 import { msg } from '../lib/msg'
+import { useReturnVisitLogDetails } from '../hooks/useReturnVisitLogDetails'
+import { ReturnVisitLogReadStatus } from './ReturnVisitLogReadStatus'
 
 function assignmentCardIds(assignment?: CalendarEvent['cardAssignments'][number]) {
   if (!assignment) return []
@@ -101,6 +103,7 @@ export function DesktopMyService({
 }) {
   const [expandedEventIds, setExpandedEventIds] = useState<Set<number>>(new Set())
   const [regularLogTarget, setRegularLogTarget] = useState<ReturnVisit | null>(null)
+  const logDetails = useReturnVisitLogDetails(regularLogTarget?.id ?? null, returnVisitLogs)
   const [regularLogResult, setRegularLogResult] = useState<'만남' | '부재' | null>(null)
   const [regularLogMemo, setRegularLogMemo] = useState('')
   const [regularLogSaving, setRegularLogSaving] = useState(false)
@@ -427,7 +430,8 @@ export function DesktopMyService({
               <button onClick={() => setRegularLogTarget(null)} type="button">×</button>
             </header>
             <div className="dms-log-history">
-              {returnVisitLogs.filter((log) => log.returnVisitId === regularLogTarget.id).slice(0, 8).map((log) => (
+              <ReturnVisitLogReadStatus {...logDetails} />
+              {logDetails.logs.slice(0, 8).map((log) => (
                 <p key={log.id}>
                   <span>{formatDateLabel(log.visitedAt)}</span>
                   <b>{log.result ?? '메모'}</b>

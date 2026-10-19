@@ -16,6 +16,8 @@ import { buildingAddressKey, shortAddress } from '../utils/shortAddress'
 import { EndReturnVisitDialog } from './EndReturnVisitDialog'
 import { searchPlacesForCongregation } from '../lib/placeSearch'
 import { canonicalUnitNumber } from '../utils/unitNumber'
+import { useReturnVisitLogDetails } from '../hooks/useReturnVisitLogDetails'
+import { ReturnVisitLogReadStatus } from './ReturnVisitLogReadStatus'
 
 function assignmentCardIds(assignment?: CalendarEvent['cardAssignments'][number]) {
   if (!assignment) return []
@@ -245,6 +247,7 @@ export function MobileTerritory({
   const [addressEditValue, setAddressEditValue] = useState('')
   const [addressSaving, setAddressSaving] = useState(false)
   const [logTarget, setLogTarget] = useState<ReturnVisit | null>(null)
+  const logDetails = useReturnVisitLogDetails(logTarget?.id ?? null, returnVisitLogs)
   const [logResult, setLogResult] = useState<'만남' | '부재' | null>(null)
   const [logMemo, setLogMemo] = useState('')
   const [logSaving, setLogSaving] = useState(false)
@@ -1713,7 +1716,7 @@ export function MobileTerritory({
 
         {/* ── 기록 시트 ── */}
         {logTarget && (() => {
-          const logs = returnVisitLogs
+          const logs = logDetails.logs
             .filter((l) => l.returnVisitId === logTarget.id)
             .slice(0, 12)
           const todayLabel = (() => {
@@ -1742,6 +1745,7 @@ export function MobileTerritory({
                 </div>
 
                 {/* 방문 기록 목록 */}
+                <ReturnVisitLogReadStatus {...logDetails} />
                 {logs.length > 0 && (
                   <div className="rv-log-history">
                     {logs.map((l) => {
@@ -1771,7 +1775,7 @@ export function MobileTerritory({
 
                 {/* 꾹 누르기 액션 팝업 */}
                 {logActionId !== null && (() => {
-                  const targetLog = returnVisitLogs.find((l) => l.id === logActionId)
+                  const targetLog = logDetails.logs.find((l) => l.id === logActionId)
                   if (!targetLog) return null
                   return (
                     <div className="rv-action-backdrop" onClick={() => { setLogActionId(null); setLogEditMode(false) }}>

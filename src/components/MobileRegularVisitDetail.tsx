@@ -11,6 +11,8 @@ import { formatRelativeVisitDate } from '../utils/returnVisits'
 import { confirmDialog } from '../lib/confirm'
 import { msg } from '../lib/msg'
 import { EndReturnVisitDialog } from './EndReturnVisitDialog'
+import { useReturnVisitLogDetails } from '../hooks/useReturnVisitLogDetails'
+import { ReturnVisitLogReadStatus } from './ReturnVisitLogReadStatus'
 
 type Props = {
   language: AppLanguage
@@ -55,6 +57,7 @@ export function MobileRegularVisitDetail({
   const { id } = useParams()
   const rvId = Number(id)
   const rv = returnVisits.find((item) => item.id === rvId)
+  const logDetails = useReturnVisitLogDetails(rv?.id ?? null, returnVisitLogs)
 
   const [logResult, setLogResult] = useState<'만남' | '부재' | null>(null)
   const [logMemo, setLogMemo] = useState('')
@@ -73,20 +76,20 @@ export function MobileRegularVisitDetail({
 
   const myLogs = useMemo(() => {
     if (!rv) return []
-    return returnVisitLogs
+    return logDetails.logs
       .filter((log) => log.returnVisitId === rv.id)
       .sort((a, b) => new Date(b.visitedAt).getTime() - new Date(a.visitedAt).getTime())
-  }, [rv, returnVisitLogs])
+  }, [rv, logDetails.logs])
 
   const latestVisit = useMemo(() => {
     if (!rv) return null
     const candidates = [
       rv.lastVisitedAt,
-      ...myLogs.map((log) => log.visitedAt),
+      ...returnVisitLogs.filter((log) => log.returnVisitId === rv.id).map((log) => log.visitedAt),
     ].filter((value): value is string => !!value)
     candidates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
     return candidates[0] ?? null
-  }, [rv, myLogs])
+  }, [rv, returnVisitLogs])
 
   // 추론: 평균 방문 간격 (3건 이상일 때만)
   const avgIntervalDays = useMemo(() => {
@@ -243,9 +246,10 @@ export function MobileRegularVisitDetail({
         {/* 히스토리 */}
         <section className="mobile-rv-history">
           <h3 className="mobile-rv-section-title">
-            {t(language, 'rv.records')} <span className="rv-count">{myLogs.length}{t(language, 'territory.visitCountSuffix')}</span>
+            {t(language, 'rv.records')} <span className="rv-count">{logDetails.loading || logDetails.error ? returnVisitLogs.filter((log) => log.returnVisitId === rv.id).length : myLogs.length}{t(language, 'territory.visitCountSuffix')}</span>
           </h3>
-          {myLogs.length === 0 ? (
+          <ReturnVisitLogReadStatus {...logDetails} />
+          {logDetails.loading || logDetails.error ? null : myLogs.length === 0 ? (
             <p className="mobile-rv-history-empty">{language === 'ko' ? '아직 기록이 없습니다.' : language === 'zh' ? '暂无记录。' : 'No records yet.'}</p>
           ) : (
             <ul className="mobile-rv-history-list">
