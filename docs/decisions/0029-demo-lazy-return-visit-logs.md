@@ -1,6 +1,6 @@
 # Demo: read return-visit detail bodies only when opened
 
-- Status: demo verification in progress; production behavior unchanged
+- Status: demo deployed and browser-verified; production behavior unchanged
 - Date: 2026-10-20
 
 ## Why
@@ -37,6 +37,19 @@ production reads are unchanged. No DB/schema/permission changes.
 - Hook tests cover closed-screen zero reads, scoped open, memo-only refresh,
   close, account/target races and failed-read retry. API tests cover pagination,
   invalidation filter, wrong parent and mid-read account change.
-- Live demo results will be appended after deployment.
+- Demo code 820882e deployed as dpl_HeQ3UTHcabdKzhPkUT6GZYC2qJMk;
+  canonical demo alias and browser module /assets/index-CTH9fPFC.js verified.
+- Browser fixture DEMO-RV-LAZY-1020 (return visit 22): initial memo loaded on
+  detail entry; same-date memo edit appeared immediately; adding an absent
+  result raised the count from one to two; quick-record sheet showed both
+  bodies; invalidating that test result returned the count to one. Reload
+  retained the edited memo and excluded the invalidated result.
+- Browser checks used the demo administrator's volunteer view. Desktop modal,
+  account races and retry behavior were covered by automated tests, not a
+  separate live desktop/offline exercise. No production data was changed.
+- Existing unrelated date-display issue observed: MobileTerritory fmtDate
+  slices an ISO timestamp before parsing, so a post-midnight KST visit can
+  show yesterday in the list but today in detail. That function is unchanged
+  by this commit; retain as a separate follow-up, not a lazy-load regression.
 - No claim about monthly bill or total percentage savings; index/extra detail
   request costs must be included in any later measurement.
