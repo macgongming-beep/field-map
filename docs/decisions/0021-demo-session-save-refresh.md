@@ -33,3 +33,11 @@ Full verification: 1,308 tests / 179 files passed; lint and build passed.
 
 No billing saving is inferred from a query removed. Physical two-device testing,
 live demo save verification and production activation remain separate steps.
+
+## Demo deployment
+
+Source 4cf9956 deployed to demo project only, deployment
+dpl_9zt8KhJ9oDVeL1Tug5o53mMvPx8u (READY), alias
+https://chinese-territory-app-demo.vercel.app. Remote build passed.
+Production main was not updated. No live session records were created in this
+verification; start/end behavior was exercised by the automated store tests.
