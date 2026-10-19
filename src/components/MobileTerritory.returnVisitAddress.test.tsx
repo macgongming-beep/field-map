@@ -212,6 +212,26 @@ describe('연결된 정기방문 주소 계약', () => {
     fireEvent.click(moreButtons[moreButtons.length - 1])
   }
 
+  test.each([
+    ['2026-10-20T00:40:00+09:00', '2026-10-19T15:32:00Z', '오늘'],
+    ['2026-10-20T00:40:00+09:00', '2026-10-19T14:59:00Z', '어제'],
+    ['2026-11-01T00:40:00+09:00', '2026-10-31T15:32:00Z', '오늘'],
+    ['2027-01-01T00:40:00+09:00', '2026-12-31T15:32:00Z', '오늘'],
+    ['2026-10-20T00:40:00+09:00', '2026-10-20', '오늘'],
+  ])('목록은 현지 날짜를 표시한다: %s / %s', (now, lastVisitedAt, expected) => {
+    vi.stubEnv('TZ', 'Asia/Seoul')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(now))
+    try {
+      renderIt({ returnVisits: [{ ...visit(null), lastVisitedAt }] })
+      fireEvent.click(screen.getByRole('button', { name: /정기 방문 1/ }))
+      expect(screen.getByText(`마지막 방문 · ${expected}`)).toBeVisible()
+    } finally {
+      vi.useRealTimers()
+      vi.unstubAllEnvs()
+    }
+  })
+
   test('세대에 연결됐으면 주소 수정 메뉴를 보여주지 않는다', () => {
     renderIt({ returnVisits: [visit(101)] })
     openVisitMenu()

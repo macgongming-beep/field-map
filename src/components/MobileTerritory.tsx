@@ -46,7 +46,9 @@ function getCurrentTimeSlot(): TimeSlot {
 
 function fmtDate(dateStr: string, language: AppLanguage): string {
   const today = new Date(); today.setHours(0,0,0,0)
-  const d = new Date(dateStr.slice(0, 10)); d.setHours(0,0,0,0)
+  // Preserve the instant before taking its local calendar day; date-only values have no timezone.
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? `${dateStr}T00:00:00` : dateStr)
+  d.setHours(0,0,0,0)
   const diff = Math.round((today.getTime() - d.getTime()) / 86400000)
   if (diff === 0) return t(language, 'territory.today')
   if (diff === 1) return t(language, 'territory.yesterday')
