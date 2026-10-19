@@ -30,3 +30,23 @@ recipient territory refresh, failed read preservation and production's original
 refresh. Replacing refreshDetails with fetchAll fails both new demo tests.
 These are mocked store tests, not evidence of monthly egress savings. Return
 visit tables themselves are still fully read. Live save verification is separate.
+
+## Live demo UI verification (2026-10-19)
+
+Verified cf4585a on the deployed demo as the existing demo volunteer, using
+Chrome zoom to exercise the mobile layout (not a physical phone). Through the
+app UI, created one unlinked synthetic target, ID 20, initially named
+DEMO-UI-20261019-RETURN-VERIFY, with no real address, building or unit.
+Saved an absent result and a clearly labelled test memo through the quick-log
+sheet. The saved log and latest-visit label appeared without a manual refresh.
+Changed the nickname through the detail menu to "데모 저장확인 완료 1019";
+the heading immediately changed and the existing log remained. Reloading the
+detail URL retained both the nickname and the single absent/memo entry.
+
+Finally ended this synthetic target through the normal UI, choosing no longer
+a return-visit target and no place issue. The active list returned to zero.
+This is soft termination: the demo's test history is retained, not hard deleted.
+Browser zoom was restored. Production was not modified. Screenshots are local
+scratch/return-visit-live-log-saved.png and return-visit-live-persisted.png.
+No live network-byte measurement was taken; request exclusions remain covered
+by the mocked store regression tests, not inferred from visible success alone.
