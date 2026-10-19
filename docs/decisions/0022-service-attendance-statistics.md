@@ -29,6 +29,7 @@ snapshot, which has no separate cancellation field. Invalid dates are excluded.
   exclusion, local weekdays, CSV safety, month/day/view changes and separate tabs.
 - Removing future exclusion makes three focused tests fail; restored before full run.
 - Local synthetic UI preview verifies the table, tabs and weekday interaction.
+- Desktop and 390px iframe screenshots verify average and date tables without overlap.
 - No production data writes. Demo verification does not establish historical data
   completeness; totals reflect the calendar snapshot available to the signed-in role.
 
@@ -36,3 +37,7 @@ snapshot, which has no separate cancellation field. Invalid dates are excluded.
 
 Demo only. Existing statistics permission/routing is unchanged. No new mobile menu.
 Review real calendar totals in the demo before authorizing production separately.
+
+Demo deployed from `e89d3f2` on 2026-10-19: deployment
+`dpl_4oVU9TjP2jJg97gPdgonCnkKGbbv` reported READY and was aliased to
+https://chinese-territory-app-demo.vercel.app. Production was not deployed.
