@@ -78,7 +78,7 @@ describe('글씨 크기(zoom) 보정', () => {
 })
 
 describe('확대 범위 밖으로 새지 않는다', () => {
-  test('⚠ document.body 로 포털하지 않는다 — 거기는 zoom 범위 밖이다', () => {
+  test('⚠ 화면 포털은 zoom 범위 안에 둔다 — 인쇄 전용 출력만 예외', () => {
     // zoom 은 #root 에 걸린다. body 로 붙인 알림·채팅·확인창은 큰 글씨로
     // 설정한 분에게 **그것만 작게** 보인다. 리뷰에서 실제로 잡힌 구멍이다.
     const offenders: string[] = []
@@ -95,7 +95,15 @@ describe('확대 범위 밖으로 새지 않는다', () => {
       //   → 포털을 쓰는 파일에서 `document.body` 를 아예 못 쓰게 한다.
       if (code.includes('document.body')) offenders.push(file)
     }
-    expect(offenders).toEqual([])
+    // Paper dimensions must not inherit the reader's screen zoom. This exact
+    // print-only root is invisible on screen; ordinary overlays remain forbidden.
+    expect(offenders).toEqual(['src/components/AttendancePrint.tsx'])
+    const printCss = readFileSync('src/components/ServiceAttendanceStats.css', 'utf8')
+    expect(printCss).toMatch(/\.attendance-print-root\s*\{\s*display:none;\s*\}/)
+    expect(printCss).toMatch(/@media print\s*\{[\s\S]*> \.attendance-print-root\s*\{\s*display:block !important/)
+    const printComponent = readFileSync('src/components/AttendancePrint.tsx', 'utf8')
+    expect(printComponent.match(/createPortal\(/g)).toHaveLength(1)
+    expect(printComponent).toContain('createPortal(<div className="attendance-print-root" aria-hidden="true">')
   })
 
   test('포털이 붙을 자리는 #root 안에 만든다', () => {

@@ -6,11 +6,15 @@ import { attendanceMeetings, attendanceAverages, attendanceCsv } from '../utils/
 import { downloadCSV } from '../hooks/useServiceLogs'
 import './ServiceAttendanceStats.css'
 import { AttendanceCalendar } from './AttendanceCalendar'
+import { AttendancePrint } from './AttendancePrint'
 
-export function ServiceAttendanceStats({ events, language, now = new Date() }: {
+export function ServiceAttendanceStats({ events, language: appLanguage, now = new Date() }: {
   events: CalendarEvent[]; language: AppLanguage; now?: Date
 }) {
   const currentMonth = toLocalDateString(now).slice(0, 7)
+  const [languageOverride, setLanguageOverride] = useState<AppLanguage | null>(null)
+  const language = languageOverride ?? appLanguage
+  const [printOpen, setPrintOpen] = useState(false)
   const [month, setMonth] = useState(currentMonth)
   const [weekday, setWeekday] = useState(1)
   const [mode, setMode] = useState<'overview' | 'average' | 'daily'>('overview')
@@ -43,15 +47,27 @@ export function ServiceAttendanceStats({ events, language, now = new Date() }: {
           if (/^\d{4}-\d{2}$/.test(event.target.value)) setMonth(event.target.value)
         }} />
       </label>
+      <label className="attendance-month">{t(language, 'attendance.language')}
+        <select value={language} onChange={event => setLanguageOverride(event.target.value as AppLanguage)}>
+          <option value="ko">한국어</option><option value="zh">中文</option><option value="en">English</option>
+        </select>
+      </label>
       <div className="attendance-modes" role="group" aria-label={t(language, 'attendance.view')}>
         {(['overview', 'average', 'daily'] as const).map(value => <button type="button" key={value} aria-pressed={mode === value}
           onClick={() => setMode(value)}>{t(language, `attendance.${value}`)}</button>)}
       </div>
-      <button type="button" className="attendance-export" title={t(language, 'attendance.export')} aria-label={t(language, 'attendance.export')}
+      <div className="attendance-tools">
+      <button type="button" className="attendance-export" title={t(language, 'attendance.printOptions')} aria-label={t(language, 'attendance.printOptions')}
+        aria-expanded={printOpen} onClick={() => setPrintOpen(value => !value)}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M6 8V3h12v5M6 17H3V9h18v8h-3M6 14h12v7H6zM17 11h1" /></svg>
+      </button>
+      <button type="button" className="attendance-export attendance-csv" title={t(language, 'attendance.export')} aria-label={t(language, 'attendance.export')}
         disabled={!meetings.length} onClick={exportCsv}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5" /></svg>
       </button>
+      </div>
     </div>
+    {printOpen && <AttendancePrint month={month} meetings={monthMeetings} today={toLocalDateString(now)} language={language} initialView={mode} onClose={() => setPrintOpen(false)} />}
     {mode === 'average' && <div className="attendance-weekdays" role="group" aria-label={t(language, 'attendance.weekday')}>
       {[1, 2, 3, 4, 5, 6, 0].map(day => <button type="button" key={day} aria-pressed={weekday === day}
         onClick={() => setWeekday(day)}>{dayLabel(day)}</button>)}

@@ -1,5 +1,10 @@
 // 简体中文 번역 (i18n.ts 에서 분리)
 export const zh = {
+    'attendance.language': '语言',
+    'attendance.printOptions': 'PDF 打印设置',
+    'attendance.printViews': '打印内容',
+    'attendance.print': 'PDF / 打印',
+    'attendance.close': '关闭',
     'attendance.peopleSuffix': '人',
     'attendance.emptyDate': '此日期没有已统计的传道聚会。',
     'attendance.overview': '每周总览',

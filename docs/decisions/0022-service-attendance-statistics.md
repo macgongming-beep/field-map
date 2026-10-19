@@ -35,6 +35,21 @@ snapshot, which has no separate cancellation field. Invalid dates are excluded.
 
 ## Rollout
 
+Print follow-up (2026-10-19): compact calendar cells (56px minimum rather than
+100px), an independent on-screen language selector, and PDF print options. Choose
+Korean, Chinese, or both, and any subset of calendar / weekday overview / weekday
+details. Details export all weekdays for the selected month. Each selected language
+and view begins on a new A4 landscape page; dense data may span more pages. Use the
+browser's Save as PDF, matching the existing report printing mechanism. No remote
+PDF service or extra data fetch. Close/unmount removes the isolated print root and
+body class. No participant names are printed. Native Chrome print preview verified
+the synthetic two-language, three-view selection as six pages (no blank trailing
+page), including Chinese glyphs. Missing view filtering makes the PDF selection
+test fail. Browser headers/footers remain a user-controlled print setting.
+The screen-zoom portal guard allows exactly this screen-hidden print root outside
+`#root`, so paper dimensions do not inherit user font zoom. All interactive print
+options remain in `#root`; the guard checks the exception's screen-hidden CSS.
+
 Calendar follow-up (2026-10-19): the date view is now a Monday-first monthly
 calendar, independent of the weekday-detail filter. Each date shows meeting times
 and participant counts; selecting it shows meeting titles below. Empty months still

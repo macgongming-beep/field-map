@@ -7,7 +7,7 @@ import { DesktopStats } from './DesktopStats'
 import { downloadCSV } from '../hooks/useServiceLogs'
 
 vi.mock('../hooks/useServiceLogs', () => ({ downloadCSV: vi.fn() }))
-afterEach(() => { cleanup(); vi.clearAllMocks() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.clearAllMocks() })
 const events = [
   { id: 1, date: '2026-10-07', time: '10:00', title: 'Morning', applicants: ['A', 'B'], hasMeeting: true },
   { id: 2, date: '2026-10-14', time: '10:00', title: 'Morning', applicants: [], hasMeeting: true },
@@ -82,4 +82,50 @@ test('overview distinguishes zero attendance from no meeting and keeps weekdays 
   ]} language="ko" now={new Date(2026, 9, 20, 12)} />)
   const row = within(screen.getByRole('table')).getAllByRole('row')[1]
   expect(within(row).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['0', '3', '1', '—', '—', '—', '—'])
+})
+
+test('language can switch without changing month or participation data', () => {
+  render(<ServiceAttendanceStats events={events} language="ko" now={new Date(2026, 9, 20, 12)} />)
+  fireEvent.change(screen.getByLabelText('언어'), { target: { value: 'zh' } })
+  expect(screen.getByRole('button', { name: '每周总览' })).toBeTruthy()
+  expect(screen.getByLabelText('统计月份').getAttribute('value')).toBe('2026-10')
+  const rows = within(screen.getByRole('table')).getAllByRole('row')
+  expect(within(rows[1]).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['—', '—', '1', '—', '—', '—', '—'])
+  fireEvent.change(screen.getByLabelText('语言'), { target: { value: 'ko' } })
+  expect(screen.getByRole('button', { name: '요일 한눈에' })).toBeTruthy()
+})
+
+test('PDF selection prints only chosen languages and views, with no date detail or future rows', () => {
+  const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+  const { unmount } = render(<ServiceAttendanceStats events={events} language="ko" now={new Date(2026, 9, 20, 12)} />)
+  fireEvent.click(screen.getByRole('button', { name: 'PDF 출력 설정' }))
+  const options = screen.getByRole('region', { name: 'PDF 출력 설정' })
+  const pages = () => [...document.querySelectorAll('.attendance-print-page')]
+  expect(pages().map(page => [page.getAttribute('lang'), page.getAttribute('data-view')])).toEqual([['ko', 'overview']])
+  fireEvent.click(within(options).getByRole('checkbox', { name: '中文' }))
+  fireEvent.click(within(options).getByRole('checkbox', { name: '날짜별' }))
+  fireEvent.click(within(options).getByRole('checkbox', { name: '요일별 상세' }))
+  expect(pages()).toHaveLength(6)
+  expect(pages().filter(page => page.getAttribute('lang') === 'zh')).toHaveLength(3)
+  expect(document.querySelectorAll('.attendance-print-root .attendance-calendar')).toHaveLength(2)
+  expect(document.querySelectorAll('.attendance-print-root [aria-live]')).toHaveLength(0)
+  const details = document.querySelector('.attendance-print-page[lang="ko"][data-view="average"]')!
+  expect(details.textContent).toContain('13:30')
+  expect(details.textContent).not.toContain('Future')
+  fireEvent.click(within(options).getByRole('button', { name: 'PDF / 인쇄' }))
+  expect(print).toHaveBeenCalledOnce()
+  fireEvent.click(within(options).getByRole('checkbox', { name: '한국어' }))
+  expect(pages().map(page => page.getAttribute('lang'))).toEqual(['zh', 'zh', 'zh'])
+  fireEvent.click(within(options).getByRole('checkbox', { name: '中文' }))
+  expect((within(options).getByRole('button', { name: 'PDF / 인쇄' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(within(options).getByRole('checkbox', { name: '한국어' }))
+  for (const name of ['날짜별', '요일 한눈에', '요일별 상세']) fireEvent.click(within(options).getByRole('checkbox', { name }))
+  expect(pages()).toHaveLength(0)
+  expect((within(options).getByRole('button', { name: 'PDF / 인쇄' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(within(options).getByRole('button', { name: '닫기' }))
+  expect(document.querySelector('.attendance-print-root')).toBeNull()
+  expect(document.body.classList.contains('attendance-print-active')).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'PDF 출력 설정' }))
+  unmount()
+  expect(document.body.classList.contains('attendance-print-active')).toBe(false)
 })

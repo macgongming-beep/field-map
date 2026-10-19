@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { AttendanceMeeting } from '../utils/serviceAttendance'
 import { t, type AppLanguage } from '../i18n'
 
-export function AttendanceCalendar({ month, meetings, language, today }: {
-  month: string; meetings: AttendanceMeeting[]; language: AppLanguage; today: string
+export function AttendanceCalendar({ month, meetings, language, today, printOnly = false }: {
+  month: string; meetings: AttendanceMeeting[]; language: AppLanguage; today: string; printOnly?: boolean
 }) {
+  const detailId = useId()
   const [selected, setSelected] = useState(meetings[0]?.date ?? `${month}-01`)
   const [year, monthNumber] = month.split('-').map(Number)
   const first = new Date(year, monthNumber - 1, 1)
@@ -24,7 +25,7 @@ export function AttendanceCalendar({ month, meetings, language, today }: {
         const rows = meetings.filter(meeting => meeting.date === date)
         return <button type="button" className="attendance-calendar-date" key={date}
           aria-label={date} aria-pressed={selected === date} aria-current={date === today ? 'date' : undefined}
-          aria-controls="attendance-date-detail" disabled={date > today} onClick={() => setSelected(date)}>
+          aria-controls={printOnly ? undefined : detailId} disabled={date > today} onClick={() => setSelected(date)}>
           <span className="attendance-calendar-number">{day}</span>
           {rows.map(row => <span className="attendance-calendar-meeting" key={row.id}>
             <span>{time(row.time)}</span><strong>{row.count}{t(language, 'attendance.peopleSuffix')}</strong>
@@ -32,13 +33,13 @@ export function AttendanceCalendar({ month, meetings, language, today }: {
         </button>
       })}
     </div>
-    <section id="attendance-date-detail" aria-labelledby="attendance-date-title" aria-live="polite">
-      <h3 id="attendance-date-title" className="attendance-heading">{selected}</h3>
+    {!printOnly && <section id={detailId} aria-labelledby={`${detailId}-title`} aria-live="polite">
+      <h3 id={`${detailId}-title`} className="attendance-heading">{selected}</h3>
       {!detail.length ? <p className="attendance-empty">{t(language, 'attendance.emptyDate')}</p>
         : <table className="attendance-table"><caption className="attendance-sr-only">{selected}</caption>
           <thead><tr>{(['time', 'event', 'count'] as const).map(key => <th scope="col" key={key}>{t(language, `attendance.${key}`)}</th>)}</tr></thead>
           <tbody>{detail.map(row => <tr key={row.id}><th scope="row">{time(row.time)}</th><td className="attendance-event">{row.title}</td><td className="attendance-emphasis">{row.count}</td></tr>)}</tbody>
         </table>}
-    </section>
+    </section>}
   </>
 }

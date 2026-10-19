@@ -1,5 +1,10 @@
 // 한국어 번역 (i18n.ts 에서 분리)
 export const ko = {
+    'attendance.language': '언어',
+    'attendance.printOptions': 'PDF 출력 설정',
+    'attendance.printViews': '출력할 보기',
+    'attendance.print': 'PDF / 인쇄',
+    'attendance.close': '닫기',
     'attendance.peopleSuffix': '명',
     'attendance.emptyDate': '이 날짜에 집계된 봉사 모임이 없습니다.',
     'attendance.statsType': '통계 종류',

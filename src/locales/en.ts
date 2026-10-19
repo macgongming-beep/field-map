@@ -1,5 +1,10 @@
 // English 번역 (i18n.ts 에서 분리)
 export const en = {
+    'attendance.language': 'Language',
+    'attendance.printOptions': 'PDF print settings',
+    'attendance.printViews': 'Views to print',
+    'attendance.print': 'PDF / Print',
+    'attendance.close': 'Close',
     'attendance.peopleSuffix': ' people',
     'attendance.emptyDate': 'No counted service meetings on this date.',
     'attendance.overview': 'Week overview',
