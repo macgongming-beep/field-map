@@ -18,7 +18,7 @@ const events = [
 test('visit exclusion is inclusive across months, changes denominators and matches print and CSV without mutating events', () => {
   const source = ['2026-09-22', '2026-09-29', '2026-09-30', '2026-10-03', '2026-10-10'].map((date, index) => ({
     id: index + 20, date, time: '18:30', title: 'Meeting', hasMeeting: true,
-    applicants: Array.from({ length: index === 0 ? 2 : 10 }, (_, i) => `Person${i}`),
+    applicants: Array.from({ length: index === 0 ? 2 : index === 3 ? 30 : 10 }, (_, i) => `Person${i}`),
   })) as CalendarEvent[]
   const snapshot = JSON.stringify(source)
   render(<ServiceAttendanceStats events={source} language="ko" now={new Date(2026, 9, 20)} />)
