@@ -519,11 +519,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
       case 'restaurantRequests': {
         const res = await supabase.from('restaurant_requests').select('*').order('requested_at', { ascending: false })
+        if (res.error) throw new Error('Restaurant requests load failed', { cause: res.error })
         measure(res.data)
-        setRestaurantRequests(res.error ? [] : (res.data as RawRestaurantRequest[]).map(toRestaurantRequest))
-        if (res.error) {
-          console.warn('식당봉사 신청 로드 실패 (v3_restaurant_service.sql 미적용 가능).', res.error)
-        }
+        setRestaurantRequests((res.data as RawRestaurantRequest[]).map(toRestaurantRequest))
         return approxBytes
       }
 
@@ -993,6 +991,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     [fetchSlices],
   )
 
+  const refetchRestaurantRequestDetails = useCallback(
+    () => fetchSlices(['restaurantRequests'], { triggeredBy: 'mutation:restaurantRequestDetails' }),
+    [fetchSlices],
+  )
+
   const refreshRestaurantVisit = useCallback(async (unitId: number) => {
     try {
       // Catalog details are not in the recipient store. Resolve the current parent
@@ -1097,6 +1100,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   } = makeRegularVisitMutations({
     fetchAll: refetchReturnVisits,
     refreshDetails: refetchReturnVisitDetails,
+    refreshLogEdit: import.meta.env.VITE_DEMO_MODE === 'true' ? refetchReturnVisitDetails : undefined,
     buildings, cards, returnVisits,
   })
 
@@ -1137,6 +1141,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     rejectRestaurantRequest,
   } = makeRestaurantServiceMutations({
     fetchAll: refetchRestaurantRequests, buildings, cardBoundaries,
+    refreshRequests: import.meta.env.VITE_DEMO_MODE === 'true' ? refetchRestaurantRequestDetails : undefined,
     refreshVisit: (import.meta.env.VITE_RESTAURANT_VISIT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
       ? refreshRestaurantVisit : undefined,
   })

@@ -7,6 +7,7 @@ import type { RawBuilding } from './storeTransforms'
 const state = vi.hoisted(() => ({
   returnRows: [] as Record<string, unknown>[], returnLogs: [] as Record<string, unknown>[],
   failedTable: '',
+  requests: [] as Record<string, unknown>[],
   unitParent: 20, insertError: false, unitLookupError: false,
   historyColumns: [] as string[],
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
@@ -23,7 +24,7 @@ vi.mock('../lib/cardSummaries', () => ({ fetchCardSummaries: state.summaries }))
 vi.mock('./recipientRecovery', () => ({ recoverRecipientBuildings: state.recover, readRecipientBoundaries: state.boundaries }))
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: async () => '2026-10-05T00:00:00Z' }))
 vi.mock('../lib/supabase', () => ({ supabase: {
-  rpc: () => Promise.resolve({ error: null }),
+  rpc: () => Promise.resolve({ data: { ok: true }, error: null }),
   from: (table: string) => {
     let lookup = false
     let writing = false
@@ -33,6 +34,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'insert']) q[name] = () => q
     q.select = (columns: string) => { if (table === 'visit_histories') state.historyColumns.push(columns); return q }
     q.insert = () => { writing = true; return q }
+    q.update = () => { writing = true; return q }
     q.single = () => {
       state.reads.push(table)
       return Promise.resolve({ data: table === 'service_sessions' ? { id: 777 } : { id: filters.find(([key]) => key === 'id')?.[1], building_id: state.unitParent }, error: state.unitLookupError ? new Error('offline') : null })
@@ -47,8 +49,9 @@ vi.mock('../lib/supabase', () => ({ supabase: {
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
         : table === 'return_visits' ? state.returnRows
         : table === 'return_visit_logs' ? state.returnLogs
+        : table === 'restaurant_requests' ? state.requests
         : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []
-      return resolve({ data, error: table === state.failedTable || (writing && state.insertError) ? new Error('offline') : null })
+      return resolve({ data, error: (!writing && table === state.failedTable) || (writing && state.insertError) ? new Error('offline') : null })
     }
     return q
   },
@@ -59,6 +62,7 @@ const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: '
 beforeEach(() => {
   state.returnRows = []; state.returnLogs = []
   state.failedTable = ''
+  state.requests = []
   state.unitParent = 20; state.insertError = false; state.unitLookupError = false; state.historyColumns = []
   state.sessions = []; state.sessionFilters = []
   state.changed.mockReset()
@@ -67,6 +71,58 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test.each((['true', 'false'] as const).flatMap(demo =>
+  (['edit', 'delete', 'request', 'memo'] as const).map(kind => ({ demo, kind }))))(
+  'detail changes refresh authoritative state (demo=$demo, $kind)', async ({ demo, kind }) => {
+    vi.stubEnv('VITE_DEMO_MODE', demo)
+    localStorage.setItem('currentVisitor', 'Volunteer')
+    localStorage.setItem('auth_token', '00000000-0000-0000-0000-000000000007')
+    const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const buildings = result.current.buildings, histories = result.current.visitHistories
+    state.returnRows = [{ id: 51, last_result: kind === 'delete' ? null : '만남' }]
+    state.returnLogs = kind === 'delete' ? [] : [{ id: 52, return_visit_id: 51, result: '만남', memo: 'edited' }]
+    state.requests = [{ id: 61, name: 'test', memo: 'edited', status: 'pending' }]
+    state.reads = []; state.refresh.mockClear()
+    await act(async () => {
+      if (kind === 'edit') await result.current.updateReturnVisitLog(52, '만남', 'edited')
+      else if (kind === 'delete') await result.current.deleteReturnVisitLog(52)
+      else if (kind === 'memo') await result.current.updateRestaurantRequestMemo(61, 'edited')
+      else expect(await result.current.submitRestaurantRequest({ name: 'test', address: 'test', memo: 'edited', isChinese: true, initialState: '미방문', regularVisitor: null })).toBe(true)
+    })
+    if (demo === 'true') {
+      expect(state.refresh).not.toHaveBeenCalled()
+      expect(state.reads).not.toContain('buildings')
+      expect(state.reads).not.toContain('visit_histories')
+      expect(result.current.buildings).toBe(buildings)
+      expect(result.current.visitHistories).toBe(histories)
+    } else expect(state.refresh).toHaveBeenCalled()
+    if (kind === 'edit' || kind === 'delete') {
+      expect(state.reads).toContain('return_visit_logs')
+      expect(result.current.returnVisits[0].lastResult).toBe(kind === 'delete' ? null : '만남')
+      expect(result.current.returnVisitLogs).toHaveLength(kind === 'delete' ? 0 : 1)
+    } else {
+      expect(state.reads).toContain('restaurant_requests')
+      expect(result.current.restaurantRequests[0].memo).toBe('edited')
+    }
+  },
+)
+
+test('failed request refresh preserves the list without repeating a committed insert', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  state.requests = [{ id: 61, name: 'test', memo: 'old', status: 'pending' }]
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const requests = result.current.restaurantRequests
+  state.failedTable = 'restaurant_requests'; state.reads = []
+  await act(async () => {
+    expect(await result.current.submitRestaurantRequest({ name: 'test', address: 'test', memo: '', isChinese: true, initialState: '미방문', regularVisitor: null })).toBe(true)
+  })
+  expect(result.current.restaurantRequests).toBe(requests)
+  expect(state.reads.filter(table => table === 'restaurant_requests:insert')).toHaveLength(1)
+  expect(state.reads).not.toContain('visit_histories')
+})
 
 test.each(
   (['true', 'false'] as const).flatMap(demo =>

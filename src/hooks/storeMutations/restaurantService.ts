@@ -23,6 +23,7 @@ async function geocodeRestaurantAddress(address: string) {
 export function makeRestaurantServiceMutations(deps: {
   fetchAll: () => Promise<void>
   refreshVisit?: (unitId: number) => Promise<void>
+  refreshRequests?: () => Promise<void>
   buildings: Building[]
   cardBoundaries: CardBoundary[]
 }) {
@@ -115,7 +116,10 @@ export function makeRestaurantServiceMutations(deps: {
       return false
     }
     if (!ensureAffectedRows(result.data, msg('식당 추가 신청을 하지 못했습니다.'))) return false
-    await fetchAll()
+    try { await (deps.refreshRequests ?? fetchAll)() } catch (error) {
+      reportMutationError(msg('신청은 완료됐지만 목록을 새로 불러오지 못했습니다.'), error)
+      return true
+    }
     showToast(msg('식당 추가 신청이 완료됐습니다. 관리자 승인 후 반영됩니다.'))
     return true
   }
@@ -136,7 +140,7 @@ export function makeRestaurantServiceMutations(deps: {
     }
     // 남의 신청이면 RLS 로 0행이 온다 — 오류가 아니므로 행 수로 봐야 한다
     if (!ensureAffectedRows(result.data, msg('메모를 저장하지 못했습니다.'))) return
-    await fetchAll()
+    await (deps.refreshRequests ?? fetchAll)()
     showToast(msg('메모가 저장됐습니다 🍜'))
   }
 

@@ -7,6 +7,7 @@ import { promptDialog } from '../../lib/confirm'
 export function makeRegularVisitMutations(deps: {
   fetchAll: () => Promise<void>
   refreshDetails?: () => Promise<void>
+  refreshLogEdit?: () => Promise<void>
   buildings: Building[]
   cards: TerritoryCard[]
   returnVisits: ReturnVisit[]
@@ -222,7 +223,7 @@ export function makeRegularVisitMutations(deps: {
       })
     }
     if (res.error || res.data?.ok !== true) { reportMutationError(msg('기록을 수정하지 못했습니다.'), res.error); return }
-    await fetchAll()
+    await (deps.refreshLogEdit ?? fetchAll)()
     showToast(msg('기록이 수정됐습니다'))
   }
 
@@ -239,7 +240,7 @@ export function makeRegularVisitMutations(deps: {
       reportMutationError(msg('기록을 삭제하지 못했습니다.'), res.error)
       return
     }
-    await fetchAll()
+    await (deps.refreshLogEdit ?? fetchAll)()
     showToast(msg('기록이 삭제됐습니다'))
   }
 
