@@ -1,6 +1,6 @@
 # Restaurant visit save refresh
 
-- Status: demo verification; not approved for production activation
+- Status: production enabled on 2026-10-19; original demo decision retained below
 - Date: 2026-10-19
 - Related: 0012, 0019
 
@@ -80,3 +80,24 @@ This is a build-time flag: disabling requires rebuilding/redeploying and users
 applying the PWA update. It is not an immediate runtime rollback. No DB changes
 are involved. Tests cover production opt-in and explicit opt-out; reverting to
 the demo-only gate makes three flag regression cases fail.
+
+## Production deployment completed (2026-10-19)
+
+- Source 3c5491d fast-forwarded to main, including befd5f9. Full suite passed:
+  1,303 tests / 179 files; lint and build passed.
+- Added only VITE_RESTAURANT_VISIT_REFRESH_ENABLED=true to the production
+  project prj_cdo2L78J2YEEaBgxMMnNDfA5BDZs. Before/after comparison of readable
+  VITE settings found only that addition. VITE_PERSONAL_SESSIONS_ENABLED was
+  already true and was not changed. Temporary environment snapshots removed.
+- Git-triggered production deployment dpl_2JpzKyxvNn9S4uRjEbooWzkaaXhy is Ready.
+  https://chinese-territory-app.vercel.app resolves to that deployment; build
+  logs identify main / 3c5491d. No direct deployment or DB migration was needed.
+- Production assets contain an active refreshVisit callback (not undefined).
+  Browser update prompt was applied; calendar loaded normally and its script
+  src matched the new /assets/index-DFmF6CRQ.js entry.
+  Evidence: scratch/restaurant-refresh-production-verified.jpg (untracked).
+- No production visit records were created for verification. Save/reopen was
+  tested in demo, not production. Two physical phones and post-release billing
+  savings remain separate verification; no monthly saving estimate is claimed.
+- Rollback: set VITE_RESTAURANT_VISIT_REFRESH_ENABLED=false, rebuild/redeploy,
+  and apply the client update. Existing broad refresh remains the fallback.
