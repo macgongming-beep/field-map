@@ -1,6 +1,6 @@
 # Demo: read return-visit detail bodies only when opened
 
-- Status: demo deployed and browser-verified; production behavior unchanged
+- Status: production release approved; rollout in progress
 - Date: 2026-10-20
 
 ## Why
@@ -73,3 +73,17 @@ production reads are unchanged. No DB/schema/permission changes.
 - Final full suite: 1,442 tests / 187 files passed; lint/build passed. Browser
   proof: scratch/demo-return-visit-date-4279870.png. Desktop/offline live checks
   remain outside this verification; no monthly savings estimate is claimed.
+
+## Production activation (2026-10-20)
+
+User approved both lazy detail reads and the date fix for production.
+VITE_LAZY_RETURN_VISIT_LOGS_ENABLED overrides VITE_DEMO_MODE: explicit true
+enables the same store and detail-reader behavior in production; false restores
+the old full-body store reads. Unset retains the original demo-only default.
+This is a build-time flag; disabling requires rebuilding/redeploying and clients
+applying the PWA update. No schema, permissions or stored dates are changed.
+
+Store initial/post-save projections and hook opening/memo refresh were tested
+with production mode plus explicit true. Explicit false overrides demo mode.
+Reverting the flag support failed exactly three relevant tests. Final suite:
+1,445 tests / 187 files passed; lint and build passed.

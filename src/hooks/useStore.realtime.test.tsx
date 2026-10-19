@@ -31,13 +31,17 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 afterEach(() => { cleanup(); vi.clearAllMocks(); state.rpc.mockReset(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
 afterEach(() => { logColumns.length = 0 })
 
-test.each(['true', 'false'])('return visit initial and post-save reads honor demo detail gate %s', async (demo) => {
+test.each([
+  ['true', undefined, true], ['false', undefined, false],
+  ['false', 'true', true], ['true', 'false', false], ['false', 'false', false],
+] as const)('return visit reads honor demo=%s explicit=%s', async (demo, flag, enabled) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_LAZY_RETURN_VISIT_LOGS_ENABLED', flag)
   const { result } = renderHook(() => useStore(true))
   await waitFor(() => expect(result.current.loading).toBe(false))
-  expect(logColumns).toEqual([demo === 'true' ? 'id,return_visit_id,visited_at' : '*'])
+  expect(logColumns).toEqual([enabled ? 'id,return_visit_id,visited_at' : '*'])
   await act(async () => { await result.current.refetchSlices(['returnVisitDetails']) })
-  expect(logColumns).toEqual(Array(2).fill(demo === 'true' ? 'id,return_visit_id,visited_at' : '*'))
+  expect(logColumns).toEqual(Array(2).fill(enabled ? 'id,return_visit_id,visited_at' : '*'))
 })
 
 test('building survey save updates its snapshot without global building or card reads', async () => {

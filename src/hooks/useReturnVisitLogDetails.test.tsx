@@ -4,8 +4,8 @@ import { useReturnVisitLogDetails } from './useReturnVisitLogDetails'
 import type { ReturnVisitLog } from '../types'
 
 const state = vi.hoisted(() => ({ read: vi.fn(), token: 'account-a' }))
-vi.mock('./returnVisitLogReader', () => ({
-  lazyReturnVisitLogsEnabled: () => import.meta.env.VITE_DEMO_MODE === 'true',
+vi.mock('./returnVisitLogReader', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./returnVisitLogReader')>(),
   readReturnVisitLogs: state.read,
 }))
 vi.mock('../lib/authToken', () => ({ getAuthToken: () => state.token }))
@@ -20,7 +20,8 @@ test('production uses existing snapshot without any detail request', () => {
   expect(state.read).not.toHaveBeenCalled()
 })
 test('closed details do not fetch; opening and memo-only refresh read only the target', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_LAZY_RETURN_VISIT_LOGS_ENABLED', 'true')
   state.read.mockResolvedValue([row])
   const { result, rerender } = renderHook(({ id, snapshot }) => useReturnVisitLogDetails(id, snapshot),
     { initialProps: { id: null as number | null, snapshot: index } })

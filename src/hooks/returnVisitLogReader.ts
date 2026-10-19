@@ -2,7 +2,8 @@ import { supabase } from '../lib/supabase'
 import { getAuthToken } from '../lib/authToken'
 import type { ReturnVisitLog } from '../types'
 
-export const lazyReturnVisitLogsEnabled = () => import.meta.env.VITE_DEMO_MODE === 'true'
+export const lazyReturnVisitLogsEnabled = () =>
+  (import.meta.env.VITE_LAZY_RETURN_VISIT_LOGS_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
 
 export async function readReturnVisitLogs(returnVisitId: number): Promise<ReturnVisitLog[]> {
   const token = getAuthToken()
