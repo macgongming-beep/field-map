@@ -1,6 +1,6 @@
 # Narrow building edits and restaurant rejection refreshes
 
-- Status: demo deployed; production unchanged
+- Status: production deployed
 - Date: 2026-10-20
 - Code: `2e573a7`
 
@@ -39,3 +39,16 @@ No monthly bandwidth saving is inferred from tests.
   `scratch/demo-rejection-targeted-2e573a7.png` (local, not committed).
 - Live offline testing was not repeated for this change; failure/recovery paths
   were checked with automated tests. No live transfer-byte savings measured.
+
+## Production release
+
+2026-10-20 KST, explicitly authorized by the user. Fast-forwarded main from
+`cd5f6f9` to `a4b07ba`; application change is `2e573a7`, the other commits are
+verification/release documentation. No DB, permissions or environment changes.
+
+Deployment `dpl_CzhCp1D93XbxtZwWgC2ACx1xcfDu` reached Ready and owns the canonical
+`chinese-territory-app.vercel.app` alias. Applied the PWA update and verified the
+loaded `/assets/index-BhSEhMV7.js` matches the current production HTML. Restaurant
+387 and regional groups render normally. Production verification was read-only;
+mutation flows were tested on demo. Screenshot retained locally at
+`scratch/production-targeted-refresh-a4b07ba.png`.
