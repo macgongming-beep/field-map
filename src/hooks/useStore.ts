@@ -1072,7 +1072,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     role, fetchAll: refetchBuildings, buildings, cards, appendUnits, removeUnit,
     refreshBuilding: (buildingId) => syncChangedBuildings([buildingId]),
     // Scoped stores must re-evaluate card access after creation/address changes.
-    refreshCreatedBuilding: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+    refreshCreatedBuilding: (import.meta.env.VITE_BUILDING_CREATE_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? (buildingId) => syncChangedBuildings([buildingId]) : undefined,
   })
 
@@ -1114,7 +1114,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     fetchAll: refetchReturnVisits,
     refreshDetails: refetchReturnVisitDetails,
     refreshLogEdit: refetchReturnVisitDetails,
-    refreshAddress: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+    refreshAddress: (import.meta.env.VITE_RETURN_VISIT_ADDRESS_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? refetchReturnVisitDetails : undefined,
     buildings, cards, returnVisits,
   })

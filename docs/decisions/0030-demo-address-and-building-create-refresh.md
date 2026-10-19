@@ -9,7 +9,7 @@ Building creation and the map's existing-building response supply a server ID;
 the existing targeted sync can insert/replace that building and recompute card
 statistics without loading every building/card. Other pins remain present.
 
-Both new callbacks are wired only for VITE_DEMO_MODE=true and no recipientReader.
+Initially both callbacks were wired only for VITE_DEMO_MODE=true and no recipientReader.
 Recipient-scoped stores deliberately retain full scoped refresh: changing an
 address or creating a building may affect the accessible card scope and linked
 map target. Do not replace that scope calculation with an arbitrary-ID read.
@@ -48,3 +48,20 @@ scratch/demo-new-pin-live-33d999a.png and scratch/demo-existing-pin-33d999a.png.
 This was browser verification, not a two-physical-phone or production test.
 No production deployment was performed. Review before enabling in production.
 No monthly egress savings estimate; scoped volunteer behavior is unchanged.
+
+## Independent production opt-ins (2026-10-20)
+
+Added VITE_RETURN_VISIT_ADDRESS_REFRESH_ENABLED and
+VITE_BUILDING_CREATE_REFRESH_ENABLED. Each independently overrides VITE_DEMO_MODE;
+unset inherits the demo default, explicit false disables even in demo, and true
+permits targeted refresh in production full stores. Both retain !recipientReader:
+scoped stores always re-evaluate their authoritative scope after these writes.
+These are build-time flags; switching requires rebuild/redeploy and PWA update.
+Neither new flag was set on production and this code was not released there.
+
+Verification: 1,467 tests / 187 files passed, lint and build passed. Matrix tests
+cover unset, production true, demo false, independent flags, created/existing
+placement and other-pin preservation. Recipient tests call the actual mutation
+with both flags enabled and verify a changed scope removes old buildings instead
+of arbitrary-ID sync. Reverting flag support failed six matrix tests; removing
+!recipientReader failed all three new scope tests. Both mutations were restored.

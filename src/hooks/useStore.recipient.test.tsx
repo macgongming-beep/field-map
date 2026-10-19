@@ -5,6 +5,7 @@ import { useStore } from './useStore'
 import type { RawBuilding } from './storeTransforms'
 
 const state = vi.hoisted(() => ({
+  creationAction: '' as '' | 'created' | 'existing',
   returnRows: [] as Record<string, unknown>[], returnLogs: [] as Record<string, unknown>[],
   failedTable: '',
   requests: [] as Record<string, unknown>[],
@@ -25,7 +26,8 @@ vi.mock('../lib/cardSummaries', () => ({ fetchCardSummaries: state.summaries }))
 vi.mock('./recipientRecovery', () => ({ recoverRecipientBuildings: state.recover, readRecipientBoundaries: state.boundaries }))
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: async () => '2026-10-05T00:00:00Z' }))
 vi.mock('../lib/supabase', () => ({ supabase: {
-  rpc: () => Promise.resolve({ data: { ok: true }, error: null }),
+  rpc: (name: string) => Promise.resolve({ data: name === 'create_building_tx' && state.creationAction
+    ? { ok: true, action: state.creationAction, building_id: 11 } : { ok: true }, error: null }),
   from: (table: string) => {
     let lookup = false
     let writing = false
@@ -62,6 +64,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: 'test', type: '주택', lat: 1, lng: 1, warning: false, memo: null,
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
+  state.creationAction = ''
   state.returnRows = []; state.returnLogs = []
   state.failedTable = ''
   state.requests = []
@@ -494,6 +497,28 @@ test('building creation refresh keeps the new point inside its assigned card', a
   await act(async () => { await result.current.refetchSlices(['buildings', 'cards'], { triggeredBy: 'mutation:buildings' }) })
   expect(result.current.buildings.map((b) => b.id)).toEqual([10, 11])
   expect(state.reads).not.toContain('buildings')
+})
+
+test.each(['address', 'created', 'existing'] as const)('production opt-ins retain recipient scope refresh for %s', async (action) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_RETURN_VISIT_ADDRESS_REFRESH_ENABLED', 'true')
+  vi.stubEnv('VITE_BUILDING_CREATE_REFRESH_ENABLED', 'true')
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear()
+  state.changed.mockResolvedValue({ buildings: [], histories: [] })
+  // The mutation changes scope; no arbitrary-ID insertion may bypass this read.
+  state.allowed = []; state.buildings = []
+  state.creationAction = action === 'address' ? '' : action
+  await act(async () => {
+    if (action === 'address') await result.current.updateReturnVisitAddress(7, 'new address')
+    else expect(await result.current.createBuildingForPlacement({ cardId: 1, name: 'new', address: 'new', type: '주택', lat: 37, lng: 127 }))
+      .toEqual({ action, buildingId: 11 })
+  })
+  expect(state.refresh).toHaveBeenCalled()
+  expect(state.changed).not.toHaveBeenCalled()
+  expect(result.current.buildings).toEqual([])
 })
 
 test('a moved-out building disappears without dropping its globally retained history', async () => {

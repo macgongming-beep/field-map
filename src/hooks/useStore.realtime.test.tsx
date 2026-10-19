@@ -61,17 +61,28 @@ test('building survey save updates its snapshot without global building or card 
   expect(state.reads).not.toContain('cards')
 })
 
-test.each(['true', 'false'])('address save narrows reads only in full-store demo=%s', async (demo) => {
+const refreshFlagCases = [
+  ['true', undefined, true], ['false', undefined, false],
+  ['false', 'true', true], ['true', 'false', false], ['false', 'false', false],
+] as const
+
+test.each(refreshFlagCases)('address save honors full-store demo=%s explicit=%s', async (demo, flag, enabled) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RETURN_VISIT_ADDRESS_REFRESH_ENABLED', flag)
+  vi.stubEnv('VITE_BUILDING_CREATE_REFRESH_ENABLED', enabled ? 'false' : 'true')
   const { result } = renderHook(() => useStore(false))
   await act(async () => { await result.current.updateReturnVisitAddress(7, 'new address') })
   expect(state.reads).toContain('return_visits')
   expect(state.reads).toContain('return_visit_logs')
-  expect(state.reads.includes('buildings')).toBe(demo !== 'true')
+  expect(state.reads.includes('buildings')).toBe(!enabled)
 })
 
-test.each(['created', 'existing'] as const)('demo placement refreshes only the %s building and keeps other pins', async (action) => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(refreshFlagCases.flatMap(([demo, flag, enabled]) =>
+  (['created', 'existing'] as const).map(action => ({ demo, flag, enabled, action }))))(
+  'placement honors demo=$demo explicit=$flag action=$action', async ({ demo, flag, enabled, action }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_BUILDING_CREATE_REFRESH_ENABLED', flag)
+  vi.stubEnv('VITE_RETURN_VISIT_ADDRESS_REFRESH_ENABLED', enabled ? 'false' : 'true')
   localStorage.setItem('auth_token', 'test-token')
   const { result } = renderHook(() => useStore(false))
   creationCards.enabled = true
@@ -87,10 +98,10 @@ test.each(['created', 'existing'] as const)('demo placement refreshes only the %
     expect(await result.current.createBuildingForPlacement({ cardId: 1, name: 'new', address: 'new', type: '주택', lat: 37, lng: 127 }))
       .toEqual({ action, buildingId: 9 })
   })
-  expect(state.changed).toHaveBeenLastCalledWith([9])
-  expect(result.current.buildings).toEqual([other, added])
-  expect(state.reads).not.toContain('buildings')
-  expect(state.reads).not.toContain('cards')
+  expect(state.changed.mock.calls.some(([ids]) => ids.includes(9))).toBe(enabled)
+  expect(state.reads.includes('buildings')).toBe(!enabled)
+  expect(state.reads.includes('cards')).toBe(!enabled)
+  if (enabled) expect(result.current.buildings).toEqual([other, added])
 })
 
 test('building edit targeted failure uses the existing building and card recovery', async () => {

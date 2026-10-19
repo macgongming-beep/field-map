@@ -1,6 +1,6 @@
 # Demo: read return-visit detail bodies only when opened
 
-- Status: production release approved; deployment blocked by Vercel daily quota
+- Status: production deployed and read-only browser verified
 - Date: 2026-10-20
 
 ## Why
@@ -97,3 +97,20 @@ dpl_CzhCp1D93XbxtZwWgC2ACx1xcfDu (a4b07ba). Its existing behavior is unchanged.
 Rebuild/deploy main after the quota resets, then verify the alias, PWA update,
 and existing return-visit detail read. No production writes were used in smoke
 checks. No automatic retry was scheduled.
+
+## Quota reset and production release completed (2026-10-20)
+
+Deployed a clean git archive of 0296f78, not the newer demo branch. Production
+VITE_LAZY_RETURN_VISIT_LOGS_ENABLED=true was confirmed before deployment; no demo
+mode was configured. Deployment dpl_98ExBKUHAVLrYZwNRrXJi6SRjPcw reached Ready and
+the canonical production alias resolves to it. The browser applied the PWA update
+and loaded assets/index-Cac1pJZO.js, matching the deployed build.
+
+Read-only smoke: the existing account's volunteer view displayed six regular
+visits; opening an existing quick-record detail loaded its two historical entries
+and memo. Closed without saving and restored the prior administrator view.
+Screenshot: scratch/production-return-visit-0296f78.png (local only).
+No production records, schema or permissions were modified. The midnight date
+boundary remains covered by automated tests and the earlier demo fixture, not a
+new production record. The address/building-creation experiment is NOT in this
+release. Future clients must accept the PWA update to use the new bundle.
