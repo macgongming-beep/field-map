@@ -873,6 +873,7 @@ export function DesktopApp({
         } />
         <Route path="/stats" element={
           <DesktopStats
+            currentUserId={currentUserId}
             calendarEvents={calendarEvents}
             language={language}
             cards={cards}

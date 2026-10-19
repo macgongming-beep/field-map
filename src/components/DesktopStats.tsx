@@ -121,6 +121,7 @@ export function DesktopStats({
   actualRole,
   calendarEvents,
   language,
+  currentUserId,
 }: {
   cards: TerritoryCard[]
   buildings: Building[]
@@ -130,6 +131,7 @@ export function DesktopStats({
   actualRole: Role
   calendarEvents: CalendarEvent[]
   language: AppLanguage
+  currentUserId?: number
 }) {
   const navigate = useNavigate()
   const [statsView, setStatsView] = useState<'activity' | 'attendance'>('activity')
@@ -482,7 +484,7 @@ export function DesktopStats({
           onClick={() => setStatsView(view)}>{t(language, `attendance.tab.${view}`)}</button>)}
       </div>
       {statsView === 'attendance' ? <div role="tabpanel" id="stats-panel-attendance" aria-labelledby="stats-tab-attendance">
-        <ServiceAttendanceStats events={calendarEvents} language={language} />
+        <ServiceAttendanceStats key={currentUserId ?? 'anonymous'} userId={currentUserId} events={calendarEvents} language={language} />
       </div> : <div role="tabpanel" id="stats-panel-activity" aria-labelledby="stats-tab-activity">
 
       {/* ── 분석 범위 ── */}

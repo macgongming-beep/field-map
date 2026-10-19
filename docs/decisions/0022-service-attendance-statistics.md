@@ -106,3 +106,17 @@ Regression tests cover inclusive cross-month filtering, denominator changes,
 restoring all meetings, source immutability, CSV and print consistency. Removing
 the filter makes the exclusion test fail (expected 2, received 6). Full suite:
 1,320 tests / 181 files passed; lint and build passed.
+
+## Exclusion persistence and screenshot heading (2026-10-19)
+
+The user corrected the visit end date to October 4. Default to September 29 through
+October 4 inclusive. Save valid exclusion dates and enabled state in localStorage,
+namespaced by Supabase project URL and actual user ID. Preferences are per browser,
+not a shared schedule change. Remount the attendance component on account changes;
+malformed or unavailable storage falls back to defaults without blocking the view.
+Incomplete/invalid ranges do not overwrite the last valid saved preference.
+The selected reporting month appears immediately above the chart heading, with
+localized year/month formatting, so cropped screenshots retain their context.
+Regression tests cover language/month changes, remount persistence, account isolation,
+invalid dates and storage failures. Disabling restoration fails the remount test;
+using the current month instead of selected month fails the screenshot-heading test.

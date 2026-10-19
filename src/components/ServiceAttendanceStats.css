@@ -27,6 +27,9 @@
 .attendance-summary dd { margin:8px 0 0; font-size:28px; font-weight:650; font-variant-numeric:tabular-nums; }
 .attendance-summary div:last-child dd { color:#207358; }
 .attendance-heading { font-size:16px; margin:28px 0 16px; }
+.attendance-report-heading { margin:28px 0 16px; }
+.attendance-report-month { display:block; font-size:22px; font-weight:700; margin-bottom:8px; }
+.attendance-report-heading .attendance-heading { margin:0; }
 .attendance-table-wrap { overflow-x:auto; }
 .attendance-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:14px; font-variant-numeric:tabular-nums; }
 .attendance-table th,.attendance-table td { padding:15px 10px; text-align:right; border-bottom:1px solid #e5e5e3; overflow-wrap:anywhere; }

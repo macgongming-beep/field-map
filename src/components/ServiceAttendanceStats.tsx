@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CalendarEvent } from '../types'
 import { t, type AppLanguage } from '../i18n'
 import { toLocalDateString } from '../utils/dateUtils'
@@ -8,22 +8,28 @@ import './ServiceAttendanceStats.css'
 import { AttendanceCalendar } from './AttendanceCalendar'
 import { AttendancePrint } from './AttendancePrint'
 import { AttendanceOverview } from './AttendanceOverview'
+import { readAttendancePreferences, saveAttendancePreferences } from '../lib/attendancePreferences'
 
-export function ServiceAttendanceStats({ events, language: appLanguage, now = new Date() }: {
-  events: CalendarEvent[]; language: AppLanguage; now?: Date
+export function ServiceAttendanceStats({ events, language: appLanguage, now = new Date(), userId }: {
+  events: CalendarEvent[]; language: AppLanguage; now?: Date; userId?: number
 }) {
   const currentMonth = toLocalDateString(now).slice(0, 7)
   const [languageOverride, setLanguageOverride] = useState<AppLanguage | null>(null)
   const language = languageOverride ?? appLanguage
   const [printOpen, setPrintOpen] = useState(false)
-  const [excludeVisit, setExcludeVisit] = useState(true)
-  const [excludeStart, setExcludeStart] = useState('2026-09-29')
-  const [excludeEnd, setExcludeEnd] = useState('2026-10-03')
+  const [savedPreferences] = useState(() => readAttendancePreferences(userId))
+  const [excludeVisit, setExcludeVisit] = useState(savedPreferences.enabled)
+  const [excludeStart, setExcludeStart] = useState(savedPreferences.start)
+  const [excludeEnd, setExcludeEnd] = useState(savedPreferences.end)
+  useEffect(() => {
+    saveAttendancePreferences(userId, { enabled: excludeVisit, start: excludeStart, end: excludeEnd })
+  }, [userId, excludeVisit, excludeStart, excludeEnd])
   const exclusion = excludeVisit && excludeStart && excludeEnd && excludeStart <= excludeEnd ? `${excludeStart} ~ ${excludeEnd}` : undefined
   const [month, setMonth] = useState(currentMonth)
   const [weekday, setWeekday] = useState(1)
   const [mode, setMode] = useState<'overview' | 'average' | 'daily'>('overview')
   const locale = language === 'zh' ? 'zh-CN' : language === 'ko' ? 'ko-KR' : 'en-US'
+  const monthLabel = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'long' }).format(new Date(`${month}-01T12:00:00`))
   const dayLabel = (day: number) => new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(new Date(2026, 9, 4 + day))
   const monthMeetings = attendanceMeetings(events, month, now).filter(meeting => !exclusion || meeting.date < excludeStart || meeting.date > excludeEnd)
   const days = [1, 2, 3, 4, 5, 6, 0]
@@ -83,7 +89,10 @@ export function ServiceAttendanceStats({ events, language: appLanguage, now = ne
       {[1, 2, 3, 4, 5, 6, 0].map(day => <button type="button" key={day} aria-pressed={weekday === day}
         onClick={() => setWeekday(day)}>{dayLabel(day)}</button>)}
     </div>}
-    <h2 className="attendance-heading">{mode === 'overview' ? t(language, 'attendance.overviewHeading') : mode === 'daily' ? `${month} · ${t(language, 'attendance.daily')}` : `${dayLabel(weekday)} · ${t(language, 'attendance.byTime')}`}</h2>
+    <div className="attendance-report-heading">
+      <time className="attendance-report-month" dateTime={month}>{monthLabel}</time>
+      <h2 className="attendance-heading">{mode === 'overview' ? t(language, 'attendance.overviewHeading') : mode === 'daily' ? t(language, 'attendance.daily') : `${dayLabel(weekday)} · ${t(language, 'attendance.byTime')}`}</h2>
+    </div>
     {mode === 'daily' ? <AttendanceCalendar key={month} month={month} meetings={meetings} language={language} today={toLocalDateString(now)} />
       : !meetings.length ? <div className="attendance-empty" role="status">{t(language, 'attendance.empty')}</div>
       : mode === 'overview' ? <AttendanceOverview meetings={meetings} language={language} /> : <div className="attendance-table-wrap"><table className="attendance-table">

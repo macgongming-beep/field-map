@@ -7,7 +7,7 @@ import { DesktopStats } from './DesktopStats'
 import { downloadCSV } from '../hooks/useServiceLogs'
 
 vi.mock('../hooks/useServiceLogs', () => ({ downloadCSV: vi.fn() }))
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.clearAllMocks() })
+afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.clearAllMocks() })
 const events = [
   { id: 1, date: '2026-10-07', time: '10:00', title: 'Morning', applicants: ['A', 'B'], hasMeeting: true },
   { id: 2, date: '2026-10-14', time: '10:00', title: 'Morning', applicants: [], hasMeeting: true },
@@ -29,14 +29,14 @@ test('visit exclusion is inclusive across months, changes denominators and match
   expect(document.querySelector('.attendance-summary')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'PDF 출력 설정' }))
   const paper = document.querySelector('.attendance-print-root')!
-  expect(paper.textContent).toContain('2026-09-29 ~ 2026-10-03')
+  expect(paper.textContent).toContain('2026-09-29 ~ 2026-10-04')
   expect(paper.querySelector('.attendance-day:nth-child(2) strong')?.textContent).toBe('2')
   fireEvent.click(screen.getByRole('button', { name: '참여 통계 CSV 다운로드' }))
   expect(downloadCSV).toHaveBeenLastCalledWith(expect.any(String), expect.stringContaining('"2026-09","18:30","—","2","—"'))
   fireEvent.click(screen.getByLabelText('순회 방문 기간 제외'))
   expect(document.querySelector('.attendance-day:nth-child(2) strong')?.textContent).toBe('6')
   expect(paper.querySelector('.attendance-day:nth-child(3) strong')?.textContent).toBe('10')
-  expect(paper.textContent).not.toContain('2026-09-29 ~ 2026-10-03')
+  expect(paper.textContent).not.toContain('2026-09-29 ~ 2026-10-04')
   expect(JSON.stringify(source)).toBe(snapshot)
 })
 
@@ -106,6 +106,35 @@ test('overview distinguishes zero attendance from no meeting and keeps weekdays 
   ]} language="ko" now={new Date(2026, 9, 20, 12)} />)
   expect([...document.querySelectorAll('.attendance-day')].map(node => node.querySelector('strong')?.textContent ?? 'none')).toEqual(['0', '3', '1', 'none', 'none', 'none', 'none'])
   expect(document.querySelector('.attendance-day:nth-child(2) .attendance-bar-track span')?.getAttribute('style')).toContain('100%')
+})
+
+test('exclusion dates and checkbox survive remount and remain isolated per account', () => {
+  const props = { events, language: 'ko' as const, now: new Date(2026, 9, 20) }
+  const first = render(<ServiceAttendanceStats {...props} userId={41} />)
+  expect((screen.getByLabelText('제외 종료일') as HTMLInputElement).value).toBe('2026-10-04')
+  fireEvent.change(screen.getByLabelText('제외 종료일'), { target: { value: '2026-10-05' } })
+  fireEvent.click(screen.getByLabelText('순회 방문 기간 제외'))
+  first.unmount()
+  const second = render(<ServiceAttendanceStats {...props} userId={41} />)
+  expect((screen.getByLabelText('순회 방문 기간 제외') as HTMLInputElement).checked).toBe(false)
+  fireEvent.click(screen.getByLabelText('순회 방문 기간 제외'))
+  expect((screen.getByLabelText('제외 종료일') as HTMLInputElement).value).toBe('2026-10-05')
+  second.unmount()
+  render(<ServiceAttendanceStats {...props} userId={42} />)
+  expect((screen.getByLabelText('제외 종료일') as HTMLInputElement).value).toBe('2026-10-04')
+})
+
+test('report month follows selected month and language for screenshots', () => {
+  render(<ServiceAttendanceStats events={events} language="ko" now={new Date(2026, 9, 20)} />)
+  const month = () => document.querySelector('.attendance-report-heading time')!
+  expect(month().textContent).toBe('2026년 10월')
+  fireEvent.change(screen.getByLabelText('집계 월'), { target: { value: '2026-09' } })
+  expect(month().textContent).toBe('2026년 9월')
+  expect(month().getAttribute('datetime')).toBe('2026-09')
+  fireEvent.change(screen.getByLabelText('언어'), { target: { value: 'zh' } })
+  expect(month().textContent).toBe('2026年9月')
+  fireEvent.change(screen.getByLabelText('语言'), { target: { value: 'en' } })
+  expect(month().textContent).toBe('September 2026')
 })
 
 test('language can switch without changing month or participation data', () => {
