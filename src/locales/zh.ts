@@ -1,5 +1,7 @@
 // 简体中文 번역 (i18n.ts 에서 분리)
 export const zh = {
+    'attendance.peopleSuffix': '人',
+    'attendance.emptyDate': '此日期没有已统计的传道聚会。',
     'attendance.overview': '每周总览',
     'attendance.overviewHeading': '按星期和时间划分的月平均参加人数',
     'attendance.statsType': '统计类别',

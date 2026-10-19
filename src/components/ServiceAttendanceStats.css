@@ -32,6 +32,16 @@
 .attendance-emphasis { font-weight:700; color:#207358; }
 .attendance-empty { padding:48px 16px; text-align:center; color:#777; background:#f4f4f2; }
 .attendance-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.attendance-calendar { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); border-top:1px solid #ddd; border-left:1px solid #ddd; }
+.attendance-calendar-weekday { text-align:center; padding:12px 2px; font-size:13px; color:#666; background:#f4f4f2; border-right:1px solid #ddd; border-bottom:1px solid #ddd; }
+.attendance-calendar-date,.attendance-calendar-blank { min-width:0; min-height:100px; border:0; border-right:1px solid #ddd; border-bottom:1px solid #ddd; background:white; }
+.attendance-calendar-date { display:flex; flex-direction:column; gap:8px; padding:10px 8px; text-align:left; color:#222; cursor:pointer; font:inherit; }
+.attendance-calendar-date[aria-pressed=true] { background:#edf8f2; box-shadow:inset 0 0 0 2px #207358; }
+.attendance-calendar-date[aria-current=date] .attendance-calendar-number { color:#207358; text-decoration:underline; text-underline-offset:4px; }
+.attendance-calendar-date:disabled { color:#aaa; background:#fafafa; cursor:default; }
+.attendance-calendar-number { font-size:14px; font-weight:600; }
+.attendance-calendar-meeting { display:flex; justify-content:space-between; gap:4px; width:100%; font-size:12px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.attendance-calendar-meeting strong { color:#207358; }
 .attendance-stats button:focus-visible,.stats-tabs button:focus-visible { outline:2px solid #207358; outline-offset:3px; }
 @media(max-width:600px) {
   .stats-page { padding:20px 16px; }
@@ -39,4 +49,7 @@
   .attendance-summary { gap:10px; }
   .attendance-summary dd { font-size:24px; }
   .attendance-table th,.attendance-table td { padding:12px 6px; }
+  .attendance-calendar-date { padding:8px 3px; gap:8px; }
+  .attendance-calendar-meeting { flex-direction:column; gap:1px; font-size:11px; }
+  .attendance-calendar-number { font-size:12px; }
 }

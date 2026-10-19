@@ -1,5 +1,7 @@
 // English 번역 (i18n.ts 에서 분리)
 export const en = {
+    'attendance.peopleSuffix': ' people',
+    'attendance.emptyDate': 'No counted service meetings on this date.',
     'attendance.overview': 'Week overview',
     'attendance.overviewHeading': 'Monthly average participants by weekday and time',
     'attendance.statsType': 'Statistics category',

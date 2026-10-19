@@ -1,5 +1,7 @@
 // 한국어 번역 (i18n.ts 에서 분리)
 export const ko = {
+    'attendance.peopleSuffix': '명',
+    'attendance.emptyDate': '이 날짜에 집계된 봉사 모임이 없습니다.',
     'attendance.statsType': '통계 종류',
     'attendance.tab.activity': '방문 · 구역',
     'attendance.tab.attendance': '봉사 참여',

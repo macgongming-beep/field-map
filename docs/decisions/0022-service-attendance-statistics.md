@@ -35,6 +35,16 @@ snapshot, which has no separate cancellation field. Invalid dates are excluded.
 
 ## Rollout
 
+Calendar follow-up (2026-10-19): the date view is now a Monday-first monthly
+calendar, independent of the weekday-detail filter. Each date shows meeting times
+and participant counts; selecting it shows meeting titles below. Empty months still
+show their dates. Future dates are disabled and future meetings remain excluded.
+Changing month resets selection. Daily CSV exports every counted meeting in that
+month with its own weekday, not the previously selected weekday. No new queries.
+Focused coverage includes a cross-weekday date, date selection, month reset,
+Monday-first alignment and leap February. Restoring the old weekday filter makes
+the calendar coverage fail. Desktop and narrow-layout checks use synthetic data.
+
 Follow-up: rename the tab to Service Participation, remove cumulative attendance
 from summaries, detailed tables and CSV, and default to a weekday-by-start-time
 monthly-average matrix. Keep weekday details and individual date views. A missing
