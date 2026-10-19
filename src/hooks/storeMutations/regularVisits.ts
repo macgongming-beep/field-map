@@ -6,11 +6,13 @@ import { promptDialog } from '../../lib/confirm'
 
 export function makeRegularVisitMutations(deps: {
   fetchAll: () => Promise<void>
+  refreshDetails?: () => Promise<void>
   buildings: Building[]
   cards: TerritoryCard[]
   returnVisits: ReturnVisit[]
 }) {
   const { fetchAll, buildings, returnVisits } = deps
+  const refreshDetails = deps.refreshDetails ?? fetchAll
 
   // 표시 이름: 건물명 + 호수 (이전에는 카드에서 동 이름을 추출했는데 불필요하게 앞에 붙음)
   const getReturnVisitDisplayName = (building: Building, unitNumber: string) => {
@@ -143,11 +145,11 @@ export function makeRegularVisitMutations(deps: {
         // 로그는 저장됐지만 요약 갱신 실패 → 조용히 stale 되지 않게 알림
         console.warn('정기방문 요약(last_*) 갱신 실패:', updRes.error)
         showToast(msg('기록은 저장됐지만 요약 갱신에 실패했어요. 새로고침 해주세요.'), 'info')
-        await fetchAll()
+        await refreshDetails()
         return
       }
     }
-    await fetchAll()
+    await refreshDetails()
     showToast(msg('기록이 저장됐습니다'))
   }
 
@@ -266,7 +268,7 @@ export function makeRegularVisitMutations(deps: {
   const updateReturnVisitNickname = async (id: number, nickname: string) => {
     const res = await supabase.from('return_visits').update({ nickname: nickname.trim() }).eq('id', id)
     if (res.error) { reportMutationError(msg('별칭을 저장하지 못했습니다.'), res.error); return }
-    await fetchAll()
+    await refreshDetails()
     showToast(msg('별칭이 저장됐습니다'))
   }
 

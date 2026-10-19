@@ -195,6 +195,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     | 'resources'
     | 'communication'
     | 'returnVisits'
+    | 'returnVisitDetails'
     | 'specialPeriods'
     | 'restaurantRequests'
     | 'system'
@@ -456,7 +457,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
 
-      case 'returnVisits': {
+      case 'returnVisits':
+      case 'returnVisitDetails': {
         const [returnVisitsRes, returnVisitLogsRes] = await Promise.all([
           supabase.from('return_visits').select('*').is('ended_at', null).order('created_at', { ascending: false }),
           supabase.from('return_visit_logs').select('*').is('invalidated_at', null).order('visited_at', { ascending: false }),
@@ -464,6 +466,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
         measure(returnVisitsRes.data)
         measure(returnVisitLogsRes.data)
+
+        // Do not erase either snapshot when a post-save refresh fails.
+        if (returnVisitsRes.error || returnVisitLogsRes.error) {
+          throw new Error('Return visit data load failed')
+        }
 
         setReturnVisits(returnVisitsRes.error ? [] : (returnVisitsRes.data as {
           id: number; unit_id: number; building_id: number; display_name: string;
@@ -968,6 +975,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     () => fetchSlices(['buildings', 'returnVisits'], { triggeredBy: 'mutation:returnVisits' }),
     [fetchSlices],
   )
+  const refetchReturnVisitDetails = useCallback(
+    // Logs and nicknames do not change recipient territory membership.
+    () => fetchSlices(['returnVisitDetails'], { triggeredBy: 'mutation:returnVisitDetails' }),
+    [fetchSlices],
+  )
   const refetchSpecialPeriods = useCallback(
     () => fetchSlices(['specialPeriods'], { triggeredBy: 'mutation:specialPeriods' }),
     [fetchSlices],
@@ -1082,7 +1094,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     updateReturnVisitNickname,
     updateReturnVisitAddress,
     reassignReturnVisit,
-  } = makeRegularVisitMutations({ fetchAll: refetchReturnVisits, buildings, cards, returnVisits })
+  } = makeRegularVisitMutations({
+    fetchAll: refetchReturnVisits,
+    refreshDetails: import.meta.env.VITE_DEMO_MODE === 'true' ? refetchReturnVisitDetails : refetchReturnVisits,
+    buildings, cards, returnVisits,
+  })
 
   // ── 도메인별 mutation 분리 (storeMutations.ts) ──────────────
   const { createNotice, deleteNotice } = makeNoticeMutations({ fetchAll: refetchCommunication })

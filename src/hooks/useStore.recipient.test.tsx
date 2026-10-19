@@ -5,6 +5,7 @@ import { useStore } from './useStore'
 import type { RawBuilding } from './storeTransforms'
 
 const state = vi.hoisted(() => ({
+  returnRows: [] as Record<string, unknown>[], returnLogs: [] as Record<string, unknown>[],
   failedTable: '',
   unitParent: 20, insertError: false, unitLookupError: false,
   historyColumns: [] as string[],
@@ -44,6 +45,8 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       if (table === 'service_sessions') state.sessionFilters.push(filters)
       const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
+        : table === 'return_visits' ? state.returnRows
+        : table === 'return_visit_logs' ? state.returnLogs
         : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []
       return resolve({ data, error: table === state.failedTable || (writing && state.insertError) ? new Error('offline') : null })
     }
@@ -54,6 +57,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: 'test', type: '주택', lat: 1, lng: 1, warning: false, memo: null,
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
+  state.returnRows = []; state.returnLogs = []
   state.failedTable = ''
   state.unitParent = 20; state.insertError = false; state.unitLookupError = false; state.historyColumns = []
   state.sessions = []; state.sessionFilters = []
@@ -63,6 +67,56 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test.each(['nickname', 'log'] as const)('demo return visit %s refresh keeps buildings and histories', async (kind) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const buildings = result.current.buildings
+  const histories = result.current.visitHistories
+  state.returnRows = [{ id: 51, nickname: 'new name', last_result: '부재' }]
+  state.returnLogs = [{ id: 52, return_visit_id: 51, result: '부재', memo: 'new log' }]
+  state.reads = []; state.refresh.mockClear()
+  await act(async () => {
+    if (kind === 'nickname') await result.current.updateReturnVisitNickname(51, 'new name')
+    else await result.current.addReturnVisitLog(51, '부재', 'new log')
+  })
+  expect(state.reads).toContain('return_visits')
+  expect(state.reads).toContain('return_visit_logs')
+  expect(state.reads).not.toContain('buildings')
+  expect(state.reads).not.toContain('visit_histories')
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(result.current.buildings).toBe(buildings)
+  expect(result.current.visitHistories).toBe(histories)
+  expect(result.current.returnVisits[0].nickname).toBe('new name')
+  expect(result.current.returnVisitLogs[0].memo).toBe('new log')
+})
+
+test('failed return visit refresh preserves both snapshots', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  state.returnRows = [{ id: 51, nickname: 'old name' }]
+  state.returnLogs = [{ id: 52, return_visit_id: 51, memo: 'old log' }]
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const visits = result.current.returnVisits, logs = result.current.returnVisitLogs
+  state.failedTable = 'return_visit_logs'
+  await act(async () => {
+    await expect(result.current.updateReturnVisitNickname(51, 'new name')).rejects.toThrow('Return visit data load failed')
+  })
+  expect(result.current.returnVisits).toBe(visits)
+  expect(result.current.returnVisitLogs).toBe(logs)
+})
+
+test('production nickname save retains building refresh', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  const { result } = renderHook(() => useStore(true, 'developer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  await act(async () => { await result.current.updateReturnVisitNickname(51, 'name') })
+  expect(state.reads).toContain('buildings')
+  expect(state.reads).toContain('return_visits')
+})
 
 test.each(['user', 'developer'] as const)('demo session end refreshes sessions without histories (%s)', async (role) => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')

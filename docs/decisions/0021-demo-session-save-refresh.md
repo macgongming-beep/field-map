@@ -41,3 +41,24 @@ dpl_9zt8KhJ9oDVeL1Tug5o53mMvPx8u (READY), alias
 https://chinese-territory-app-demo.vercel.app. Remote build passed.
 Production main was not updated. No live session records were created in this
 verification; start/end behavior was exercised by the automated store tests.
+
+## Reachability correction and demo alignment (2026-10-19)
+
+Demo redeployed from 56c0a7f, deployment dpl_DrGM617a4GoQAvs2gJmt8wNUfFKF
+(READY), including production's multi-month participation and language controls.
+Live demo UI verification confirmed both months and Chinese report switching.
+Session refresh remains demo-gated; production behavior was not activated.
+
+The earlier request to manually press start/end on a phone was incorrect for the
+current UI. DesktopHome accepts but does not use either callback; DesktopMyService
+and MobileTerritory retain unused end callbacks after removing the end button.
+DesktopApp's start wrapper is only passed to DesktopHome. MobileHome forwards end
+to MobileTerritory. No reachable current start/end control was found. Automatic
+session closure remains the separate auto_close_stale_sessions path.
+
+Re-ran useStore.recipient.test.tsx: 38 passed, covering demo start/end status and
+end-time refresh, history preservation, role filtering, failed reads and unchanged
+production behavior. These are mocked store integration tests, not live DB writes
+or physical-phone tests. No session records were created or ended in this check.
+Do not count this unreachable manual-save path toward observed egress savings or
+ask the user to find removed controls. Investigate reachable read paths next.
