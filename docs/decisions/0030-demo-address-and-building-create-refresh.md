@@ -1,7 +1,7 @@
 # Demo: targeted address and building creation refresh
 
 - Date: 2026-10-20
-- Status: implemented for demo full stores only; live browser verification pending
+- Status: deployed and browser-verified for demo full stores only
 
 Address-only updates modify return_visits, not building rows. A full store can
 refresh the parent list and log index without rereading every building.
@@ -25,8 +25,26 @@ failed address writes. Removing both demo callback connections failed exactly
 the three new store tests; restored afterward.
 Full suite: 1,453 tests / 187 files passed; lint and build passed.
 
-Vercel previously rejected deployment with api-deployments-free-per-day.
-This work does not claim a new demo deployment, browser save verification or
-production rollout. After quota reset: deploy demo, test address save/map link,
-new/existing building placement and card counts, then review before production.
+Vercel previously rejected deployment with api-deployments-free-per-day. On
+2026-10-20 the quota allowed deployment of 33d999a to the demo alias, deployment
+dpl_5uSFj2eaie6ABC2mSoffLgcpC2Dz. The browser applied the PWA update and loaded
+assets/index-Dxa6sWnb.js before verification.
+
+Live Chrome verification with the demo admin (full store):
+- Saved an address on disposable return visit DEMO-RV-LAZY-1020 (id 22).
+  It appeared immediately, survived reload, and its map button opened existing
+  building 41 with its pin and address.
+- Created DEMO-PIN-1020 (building 130) from the regular-visit map. The app
+  correctly explained that this unrelated building was outside that map scope;
+  it was subsequently visible on the general map without a page reload.
+- Created DEMO-PIN-LIVE-1020 (building 131) on the general map. Its pin and row
+  appeared without reload; the unassigned building count changed 21 to 22 and
+  existing pins remained. No units were added, so the unit count stayed 6.
+- Submitted building 131's address again. The existing-building notice appeared,
+  the map selected building 131, and the building count remained 22.
+
+Fixtures remain in demo for review. Screenshots are in scratch/demo-address-33d999a.png,
+scratch/demo-new-pin-live-33d999a.png and scratch/demo-existing-pin-33d999a.png.
+This was browser verification, not a two-physical-phone or production test.
+No production deployment was performed. Review before enabling in production.
 No monthly egress savings estimate; scoped volunteer behavior is unchanged.
