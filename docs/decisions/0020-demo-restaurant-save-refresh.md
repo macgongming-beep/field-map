@@ -67,3 +67,16 @@ automated store tests do not establish either.
 - Test history 72 was soft-invalidated through invalidate_visit_history_tx;
   unit 163 returned to its baseline status. No production data was touched.
 - Two physical phones and production traffic remain unverified for this change.
+
+## Production opt-in (2026-10-19)
+
+User approved production activation after the demo review. The separate
+VITE_RESTAURANT_VISIT_REFRESH_ENABLED flag overrides the demo fallback; only
+literal true enables targeted saves. Explicit false disables them even in demo,
+and neither flag set retains the original refresh. The personal-session flag,
+role/view eligibility, failed-save handling and fallback remain unchanged.
+
+This is a build-time flag: disabling requires rebuilding/redeploying and users
+applying the PWA update. It is not an immediate runtime rollback. No DB changes
+are involved. Tests cover production opt-in and explicit opt-out; reverting to
+the demo-only gate makes three flag regression cases fail.

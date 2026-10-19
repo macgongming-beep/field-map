@@ -1104,7 +1104,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     rejectRestaurantRequest,
   } = makeRestaurantServiceMutations({
     fetchAll: refetchRestaurantRequests, buildings, cardBoundaries,
-    refreshVisit: import.meta.env.VITE_DEMO_MODE === 'true' ? refreshRestaurantVisit : undefined,
+    refreshVisit: (import.meta.env.VITE_RESTAURANT_VISIT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
+      ? refreshRestaurantVisit : undefined,
   })
 
   // app_settings 키/값 서버 저장 (기기 간 공유). 캘린더 프리셋 등에 사용.

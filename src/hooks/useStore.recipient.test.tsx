@@ -64,8 +64,13 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
 
-test('demo restaurant save refreshes an out-of-scope building without expanding the recipient map', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each([
+  ['true', undefined],
+  [undefined, 'true'],
+  ['false', 'true'],
+] as const)('enabled restaurant save preserves recipient scope (%s, %s)', async (demo, enabled) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RESTAURANT_VISIT_REFRESH_ENABLED', enabled)
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(state.historyColumns[0].split(', ')).toContain('visit_type')
@@ -102,8 +107,14 @@ test.each(['parent', 'sync', 'invalid-parent'])('restaurant %s failure recovers 
   expect(state.changed).toHaveBeenCalledTimes(failure === 'sync' ? 1 : 0)
 })
 
-test('production restaurant save retains the existing refresh until separately approved', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'false')
+test.each([
+  [undefined, undefined],
+  ['false', undefined],
+  ['true', 'false'],
+  [undefined, 'false'],
+] as const)('disabled restaurant save retains the existing refresh (%s, %s)', async (demo, enabled) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RESTAURANT_VISIT_REFRESH_ENABLED', enabled)
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   state.reads = []
