@@ -45,8 +45,9 @@ production reads are unchanged. No DB/schema/permission changes.
   bodies; invalidating that test result returned the count to one. Reload
   retained the edited memo and excluded the invalidated result.
 - Browser checks used the demo administrator's volunteer view. Desktop modal,
-  account races and retry behavior were covered by automated tests, not a
-  separate live desktop/offline exercise. No production data was changed.
+  was not separately browser-tested; shared reader/hook account races and
+  retry behavior were covered by automated tests, not a live offline exercise.
+  No production data was changed.
 - Existing unrelated date-display issue observed: MobileTerritory fmtDate
   slices an ISO timestamp before parsing, so a post-midnight KST visit can
   show yesterday in the list but today in detail. That function is unchanged
