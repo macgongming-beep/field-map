@@ -28,7 +28,7 @@ export const zh = {
     'attendance.unknownTime': '时间未定',
     'attendance.export': '下载出席统计 CSV',
     'attendance.empty': '没有可统计的已开始传道聚会。',
-    'attendance.noMeeting': '没有聚会',
+    'attendance.noMeeting': '没有安排',
     'attendance.excludeVisit': '排除分区探访期间',
     'attendance.excluded': '已排除分区探访期间',
     'attendance.excludeStart': '排除开始日期',
