@@ -190,6 +190,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     | 'cards'
     | 'cardBoundaries'
     | 'visits'
+    | 'serviceSessions'
     | 'calendar'
     | 'resources'
     | 'communication'
@@ -320,7 +321,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
 
+      case 'serviceSessions':
       case 'visits': {
+        const sessionsOnly = slice === 'serviceSessions'
         // Phase 5 projection + 기간 필터
         // visit_histories: 최근 12개월만 (이전 데이터는 별도 통계 RPC 필요 시)
         const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
@@ -328,7 +331,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         //   숫자가 조용히 줄어든다. 반드시 끝까지 받는다.
         //   (예전에는 봉사 세션을 100개만 받아 누적 시간이 절반만 나왔다)
         const [visitsRes, sessionsRes] = await Promise.all([
-          historiesRecovered ? Promise.resolve({ data: [], error: null }) : fetchAllPages((from, to) => supabase
+          sessionsOnly || historiesRecovered ? Promise.resolve({ data: [], error: null }) : fetchAllPages((from, to) => supabase
             .from('visit_histories')
             .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, service_session_id, special_period_id, invitation_left, created_at, created_by_user_id, visit_type')
             .is('invalidated_at', null)
@@ -351,11 +354,17 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         if (visitsRes.error) {
           throw new Error('Visit data load failed', { cause: visitsRes.error })
         }
+        // A post-save read failure must preserve the previous snapshot and surface.
+        if (sessionsOnly && sessionsRes.error) {
+          throw new Error('Service session data load failed', { cause: sessionsRes.error })
+        }
 
         measure(visitsRes.data)
         measure(sessionsRes.data)
 
-        if (historiesRecovered) {
+        if (sessionsOnly) {
+          // Starting/ending a session does not change visit histories.
+        } else if (historiesRecovered) {
           // Match the full/targeted SQL created_at >= cutoff contract (NULL is excluded).
           setVisitHistories((current) => current.filter((history) =>
             history.createdAt != null && Date.parse(history.createdAt) >= Date.parse(oneYearAgo)))
@@ -777,6 +786,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     [fetchSlices],
   )
 
+  const refetchServiceSessions = useCallback(
+    () => fetchSlices(['serviceSessions'], { triggeredBy: 'mutation:serviceSessions' }),
+    [fetchSlices],
+  )
+
   // ── 건물 데이터를 서버 재조회 없이 화면에 반영 ────────────────
   // 건물 전체(약 440KB)를 다시 받는 대신 바뀐 부분만 갈아끼운다.
   // ⚠ 카드의 진행률·세대 수는 건물에서 계산되므로 함께 다시 계산해야 한다.
@@ -986,7 +1000,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
   // ── Mutations ─────────────────────────────────────────────
   const { getRecordServiceSession, startServiceSession, endServiceSession } =
-    makeServiceSessionMutations({ fetchAll: refetchVisits, serviceSessions, buildings })
+    makeServiceSessionMutations({
+      fetchAll: import.meta.env.VITE_DEMO_MODE === 'true' ? refetchServiceSessions : refetchVisits,
+      serviceSessions, buildings,
+    })
 
   const { assignCardToEventParticipant, assignCardsToEventParticipantsBulk } =
     makeEventAssignmentMutations({ fetchAll: refetchCalendar })

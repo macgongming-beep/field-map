@@ -34,7 +34,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     q.insert = () => { writing = true; return q }
     q.single = () => {
       state.reads.push(table)
-      return Promise.resolve({ data: { id: filters.find(([key]) => key === 'id')?.[1], building_id: state.unitParent }, error: state.unitLookupError ? new Error('offline') : null })
+      return Promise.resolve({ data: table === 'service_sessions' ? { id: 777 } : { id: filters.find(([key]) => key === 'id')?.[1], building_id: state.unitParent }, error: state.unitLookupError ? new Error('offline') : null })
     }
     q.eq = (key: string, value: unknown) => { filters.push([key, value]); return q }
     q.range = (from: number, to: number) => { range = [from, to]; return q }
@@ -63,6 +63,66 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test.each(['user', 'developer'] as const)('demo session end refreshes sessions without histories (%s)', async (role) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  state.sessions = Array.from({ length: 1001 }, (_, id) => ({ id, user_name: 'Volunteer', status: 'active', started_at: '2026-10-19T00:00:00Z' }))
+  state.sessions.push({ id: 2000, user_name: 'other', status: 'ended' })
+  const { result } = renderHook(() => useStore(true, role, role === 'user' ? 'Volunteer' : undefined))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const histories = result.current.visitHistories
+  state.sessions[0] = { ...state.sessions[0], status: 'ended', ended_at: '2026-10-19T01:00:00Z' }
+  state.reads = []
+  await act(async () => { await result.current.endServiceSession(0) })
+  expect(state.reads).not.toContain('visit_histories')
+  expect(result.current.visitHistories).toBe(histories)
+  expect(result.current.serviceSessions).toHaveLength(role === 'user' ? 1001 : 1002)
+  expect(result.current.serviceSessions.find(s => s.id === 0)?.status).toBe('ended')
+  expect(result.current.serviceSessions.find(s => s.id === 0)?.endedAt).toBe('2026-10-19T01:00:00Z')
+})
+
+test('demo session start refreshes session state without downloading histories', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const histories = result.current.visitHistories
+  state.sessions = [{ id: 777, user_name: 'Volunteer', status: 'active', primary_card_id: 1 }]
+  state.reads = []
+  await act(async () => {
+    expect(await result.current.startServiceSession({ role: 'user', timeSlot: '오전', primaryCardId: 1 })).toBe(777)
+  })
+  expect(state.reads).not.toContain('visit_histories')
+  expect(result.current.visitHistories).toBe(histories)
+  expect(result.current.serviceSessions.map(s => [s.id, s.status])).toEqual([[777, 'active']])
+})
+
+test('session-only read failure preserves sessions and histories', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  state.sessions = [{ id: 1, user_name: 'Volunteer', status: 'active' }]
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const previous = result.current.serviceSessions
+  const histories = result.current.visitHistories
+  state.failedTable = 'service_sessions'; state.reads = []
+  await act(async () => {
+    await expect(result.current.refetchSlices(['serviceSessions'])).rejects.toThrow('Service session data load failed')
+  })
+  expect(result.current.serviceSessions).toBe(previous)
+  expect(result.current.visitHistories).toBe(histories)
+  expect(state.reads).toEqual(['service_sessions'])
+})
+
+test('production session end keeps the existing combined refresh', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  await act(async () => { await result.current.endServiceSession(1) })
+  expect(state.reads).toContain('visit_histories')
+  expect(state.reads).toContain('service_sessions')
+})
 
 test.each([
   ['true', undefined],

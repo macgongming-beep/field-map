@@ -34,6 +34,8 @@
 
 식당 기록 저장 후 갱신: [0020 데모 식당 방문 부분 갱신](0020-demo-restaurant-save-refresh.md)
 
+봉사 시작·종료 후 갱신: [0021 데모 세션 단독 갱신](0021-demo-session-save-refresh.md)
+
 운영 전환: [0017 범위 조회와 구역선 기기 캐시](0017-production-recipient-and-boundary-cache.md)
 
 구역선 재실행 비용: [0016 데모 구역선 기기 보관](0016-demo-boundary-device-cache.md)
