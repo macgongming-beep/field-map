@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { Building, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot, VisitHistory } from '../types'
+import type { Building, CalendarEvent, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot, VisitHistory } from '../types'
 import { toLocalDateString } from '../utils/dateUtils'
+import { t, type AppLanguage } from '../i18n'
+import { ServiceAttendanceStats } from './ServiceAttendanceStats'
 
 const TIME_SLOTS: TimeSlot[] = ['오전', '오후', '저녁']
 type ScopeFilter = 'all' | 'regular' | number
@@ -117,6 +119,8 @@ export function DesktopStats({
   serviceSessions,
   specialPeriods,
   actualRole,
+  calendarEvents,
+  language,
 }: {
   cards: TerritoryCard[]
   buildings: Building[]
@@ -124,8 +128,11 @@ export function DesktopStats({
   serviceSessions: ServiceSession[]
   specialPeriods: SpecialPeriod[]
   actualRole: Role
+  calendarEvents: CalendarEvent[]
+  language: AppLanguage
 }) {
   const navigate = useNavigate()
+  const [statsView, setStatsView] = useState<'activity' | 'attendance'>('activity')
   const isDeveloper = actualRole === 'developer'
   const [scope, setScope]               = useState<ScopeFilter>('all')
   const [trendMode, setTrendMode]       = useState<TrendMode>('monthly')
@@ -453,12 +460,12 @@ export function DesktopStats({
     r === '만남' ? C.green : r === '부재' ? C.amber : C.brand
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', padding: '32px', width: '100%', maxWidth: 1060, margin: '0 auto' }}>
+    <section className="stats-page">
       <header className="page-header">
         <div className="page-header-text">
           <h1 className="page-header-title">통계</h1>
         </div>
-        {(actualRole === 'admin' || actualRole === 'developer') && (
+        {statsView === 'activity' && (actualRole === 'admin' || actualRole === 'developer') && (
           <button type="button" className="stats-report-button" onClick={() => navigate('/stats/chinese-report')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
               <path d="M6 3h9l3 3v15H6z" />
@@ -468,6 +475,15 @@ export function DesktopStats({
           </button>
         )}
       </header>
+
+      <div className="stats-tabs" role="tablist" aria-label={t(language, 'attendance.statsType')}>
+        {(['activity', 'attendance'] as const).map(view => <button type="button" role="tab" key={view}
+          id={`stats-tab-${view}`} aria-selected={statsView === view} aria-controls={`stats-panel-${view}`}
+          onClick={() => setStatsView(view)}>{t(language, `attendance.tab.${view}`)}</button>)}
+      </div>
+      {statsView === 'attendance' ? <div role="tabpanel" id="stats-panel-attendance" aria-labelledby="stats-tab-attendance">
+        <ServiceAttendanceStats events={calendarEvents} language={language} />
+      </div> : <div role="tabpanel" id="stats-panel-activity" aria-labelledby="stats-tab-activity">
 
       {/* ── 분석 범위 ── */}
       <div style={cardStyle}>
@@ -957,6 +973,7 @@ export function DesktopStats({
           </div>
         </div>
       )}
+      </div>}
     </section>
   )
 }

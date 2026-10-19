@@ -44,6 +44,8 @@
 후속 변경: [0014 수동 홈 표시와 모음 휴지통](0014-meeting-toggle-and-trash.md)
 
 
+봉사 참석 통계: [0022 요일·시각별 참석 집계](0022-service-attendance-statistics.md)
+
 ```markdown
 # 제목
 
