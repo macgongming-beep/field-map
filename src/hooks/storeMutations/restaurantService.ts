@@ -140,7 +140,10 @@ export function makeRestaurantServiceMutations(deps: {
     }
     // 남의 신청이면 RLS 로 0행이 온다 — 오류가 아니므로 행 수로 봐야 한다
     if (!ensureAffectedRows(result.data, msg('메모를 저장하지 못했습니다.'))) return
-    await (deps.refreshRequests ?? fetchAll)()
+    try { await (deps.refreshRequests ?? fetchAll)() } catch (error) {
+      reportMutationError(msg('메모는 저장됐지만 목록을 새로 불러오지 못했습니다.'), error)
+      return
+    }
     showToast(msg('메모가 저장됐습니다 🍜'))
   }
 

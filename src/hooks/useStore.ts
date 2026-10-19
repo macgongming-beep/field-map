@@ -1100,7 +1100,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   } = makeRegularVisitMutations({
     fetchAll: refetchReturnVisits,
     refreshDetails: refetchReturnVisitDetails,
-    refreshLogEdit: import.meta.env.VITE_DEMO_MODE === 'true' ? refetchReturnVisitDetails : undefined,
+    refreshLogEdit: refetchReturnVisitDetails,
     buildings, cards, returnVisits,
   })
 
@@ -1141,7 +1141,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     rejectRestaurantRequest,
   } = makeRestaurantServiceMutations({
     fetchAll: refetchRestaurantRequests, buildings, cardBoundaries,
-    refreshRequests: import.meta.env.VITE_DEMO_MODE === 'true' ? refetchRestaurantRequestDetails : undefined,
+    refreshRequests: refetchRestaurantRequestDetails,
     refreshVisit: (import.meta.env.VITE_RESTAURANT_VISIT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
       ? refreshRestaurantVisit : undefined,
   })

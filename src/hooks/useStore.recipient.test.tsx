@@ -73,12 +73,13 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
 
 test.each((['true', 'false'] as const).flatMap(demo =>
-  (['edit', 'delete', 'request', 'memo'] as const).map(kind => ({ demo, kind }))))(
-  'detail changes refresh authoritative state (demo=$demo, $kind)', async ({ demo, kind }) => {
+  (['user', 'leader', 'admin', 'developer'] as const).flatMap(role =>
+    (['edit', 'delete', 'request', 'memo'] as const).map(kind => ({ demo, role, kind })))))(
+  'detail changes refresh authoritative state (demo=$demo, $role, $kind)', async ({ demo, role, kind }) => {
     vi.stubEnv('VITE_DEMO_MODE', demo)
     localStorage.setItem('currentVisitor', 'Volunteer')
     localStorage.setItem('auth_token', '00000000-0000-0000-0000-000000000007')
-    const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+    const { result } = renderHook(() => useStore(true, role, role === 'user' ? 'Volunteer' : undefined))
     await waitFor(() => expect(result.current.loading).toBe(false))
     const buildings = result.current.buildings, histories = result.current.visitHistories
     state.returnRows = [{ id: 51, last_result: kind === 'delete' ? null : '만남' }]
@@ -91,13 +92,11 @@ test.each((['true', 'false'] as const).flatMap(demo =>
       else if (kind === 'memo') await result.current.updateRestaurantRequestMemo(61, 'edited')
       else expect(await result.current.submitRestaurantRequest({ name: 'test', address: 'test', memo: 'edited', isChinese: true, initialState: '미방문', regularVisitor: null })).toBe(true)
     })
-    if (demo === 'true') {
-      expect(state.refresh).not.toHaveBeenCalled()
-      expect(state.reads).not.toContain('buildings')
-      expect(state.reads).not.toContain('visit_histories')
-      expect(result.current.buildings).toBe(buildings)
-      expect(result.current.visitHistories).toBe(histories)
-    } else expect(state.refresh).toHaveBeenCalled()
+    expect(state.refresh).not.toHaveBeenCalled()
+    expect(state.reads).not.toContain('buildings')
+    expect(state.reads).not.toContain('visit_histories')
+    expect(result.current.buildings).toBe(buildings)
+    expect(result.current.visitHistories).toBe(histories)
     if (kind === 'edit' || kind === 'delete') {
       expect(state.reads).toContain('return_visit_logs')
       expect(result.current.returnVisits[0].lastResult).toBe(kind === 'delete' ? null : '만남')
@@ -109,15 +108,17 @@ test.each((['true', 'false'] as const).flatMap(demo =>
   },
 )
 
-test('failed request refresh preserves the list without repeating a committed insert', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each((['true', 'false'] as const).flatMap(demo =>
+  (['request', 'memo'] as const).map(kind => ({ demo, kind }))))('failed $kind refresh preserves the list without repeating a committed write (demo=$demo)', async ({ demo, kind }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
   state.requests = [{ id: 61, name: 'test', memo: 'old', status: 'pending' }]
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   const requests = result.current.restaurantRequests
   state.failedTable = 'restaurant_requests'; state.reads = []
   await act(async () => {
-    expect(await result.current.submitRestaurantRequest({ name: 'test', address: 'test', memo: '', isChinese: true, initialState: '미방문', regularVisitor: null })).toBe(true)
+    if (kind === 'memo') await expect(result.current.updateRestaurantRequestMemo(61, 'edited')).resolves.toBeUndefined()
+    else expect(await result.current.submitRestaurantRequest({ name: 'test', address: 'test', memo: '', isChinese: true, initialState: '미방문', regularVisitor: null })).toBe(true)
   })
   expect(result.current.restaurantRequests).toBe(requests)
   expect(state.reads.filter(table => table === 'restaurant_requests:insert')).toHaveLength(1)

@@ -1,10 +1,11 @@
 # Demo request and log edit refresh
 
 - Date: 2026-10-19
-- Status: demo deployed and live UI verified; production unchanged
+- Status: demo verified; independent production review passed
 
-Only VITE_DEMO_MODE=true injects the new callbacks. Production keeps its
-existing refresh paths for these four operations.
+Initially only VITE_DEMO_MODE=true injected the new callbacks. The user approved
+production activation after independent review; the activation removes these
+two gates only. The unrelated service-session refresh remains demo-only.
 
 Restaurant request submission and request memo edits read restaurant_requests
 only. Approval, rejection, registration and visit writes keep their previous
@@ -53,3 +54,19 @@ Screenshots in scratch: demo-log-edit-a73cdb1.png,
 demo-log-delete-a73cdb1.png, demo-request-memo-a73cdb1.png.
 Live UI proves persistence/rendering, not wire-byte savings. Request omissions
 are verified by store tests, not measured browser network traffic.
+
+## Production activation verification
+
+Extended the four operation cases across user, leader, admin and developer,
+with demo both true and false. All assert authoritative detail state, unchanged
+building/history snapshots, and no territory scope refresh. Request read failure
+preservation is also covered with demo false. Full suite: 1,372 tests / 182 files;
+lint and build passed. No schema or environment-variable changes are needed.
+
+Independent review found a committed memo write followed by a failed refresh
+could leave the caller's saving state locked. The mutation now reports that the
+memo was saved but the list refresh failed, preserves the old snapshot, and
+resolves so the caller clears its saving state. Added demo/production failure
+tests; removing the catch makes precisely these two tests fail. Chinese and
+English messages distinguish successful writes from failed refreshes.
+Independent re-review passed with no remaining blockers (84 focused tests).

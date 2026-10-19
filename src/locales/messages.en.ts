@@ -355,6 +355,8 @@ export const messagesEn: Record<string, string> = {
   "먼저 팀원을 추가해 주세요.": "Please add team members first.",
   "메모가 저장됐습니다 🍜": "Note saved 🍜",
   "메모를 저장하지 못했습니다.": "Could not save the note.",
+  "메모는 저장됐지만 목록을 새로 불러오지 못했습니다.": "The note was saved, but the list could not be refreshed.",
+  "신청은 완료됐지만 목록을 새로 불러오지 못했습니다.": "The request was submitted, but the list could not be refreshed.",
   "멤버가 있는 팀을 먼저 선택하세요": "Choose a team that has members first",
   "미배정 건물 카드를 찾을 수 없습니다.": "Could not find the \"Unassigned buildings\" card.",
   "미배정 참가자가 없습니다.": "There are no unassigned participants.",
