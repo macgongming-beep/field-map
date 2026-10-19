@@ -169,8 +169,10 @@ test.each(['true', 'false'])('failed return visit refresh preserves both snapsho
   expect(result.current.returnVisitLogs).toBe(logs)
 })
 
-test.each(['user', 'developer'] as const)('demo session end refreshes sessions without histories (%s)', async (role) => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each((['true', 'false'] as const).flatMap(demo =>
+  (['user', 'leader', 'admin', 'developer'] as const).map(role => ({ demo, role }))))('session end refreshes sessions without histories ($demo, $role)', async ({ demo, role }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_PERSONAL_SESSIONS_ENABLED', 'true')
   localStorage.setItem('currentVisitor', 'Volunteer')
   state.sessions = Array.from({ length: 1001 }, (_, id) => ({ id, user_name: 'Volunteer', status: 'active', started_at: '2026-10-19T00:00:00Z' }))
   state.sessions.push({ id: 2000, user_name: 'other', status: 'ended' })
@@ -187,8 +189,8 @@ test.each(['user', 'developer'] as const)('demo session end refreshes sessions w
   expect(result.current.serviceSessions.find(s => s.id === 0)?.endedAt).toBe('2026-10-19T01:00:00Z')
 })
 
-test('demo session start refreshes session state without downloading histories', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(['true', 'false'])('session start refreshes session state without downloading histories (demo=%s)', async demo => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
   localStorage.setItem('currentVisitor', 'Volunteer')
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
@@ -219,13 +221,13 @@ test('session-only read failure preserves sessions and histories', async () => {
   expect(state.reads).toEqual(['service_sessions'])
 })
 
-test('production session end keeps the existing combined refresh', async () => {
+test('production session end skips histories even without personal session filtering', async () => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   state.reads = []
   await act(async () => { await result.current.endServiceSession(1) })
-  expect(state.reads).toContain('visit_histories')
+  expect(state.reads).not.toContain('visit_histories')
   expect(state.reads).toContain('service_sessions')
 })
 

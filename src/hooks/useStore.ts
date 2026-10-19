@@ -784,13 +784,6 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // 도메인별로 적절한 slice만 refetch하는 함수를 만들어서 주입.
   // 결과: mutation 파일 손대지 않고 부분 refetch 적용.
   // Phase 5 hotfix: territory 분할에 따라 mutation별로 정밀 매핑
-  const refetchVisits = useCallback(
-    // buildings 는 다시 받지 않는다 — 바뀐 세대 한 줄만 patchUnit 으로 반영한다
-    // (건물 1,000여 개 · 440KB 재다운로드가 기록할 때마다의 지연 원인이었다)
-    () => fetchSlices(['visits'], { triggeredBy: 'mutation:visits' }),
-    [fetchSlices],
-  )
-
   const refetchServiceSessions = useCallback(
     () => fetchSlices(['serviceSessions'], { triggeredBy: 'mutation:serviceSessions' }),
     [fetchSlices],
@@ -1016,7 +1009,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // ── Mutations ─────────────────────────────────────────────
   const { getRecordServiceSession, startServiceSession, endServiceSession } =
     makeServiceSessionMutations({
-      fetchAll: import.meta.env.VITE_DEMO_MODE === 'true' ? refetchServiceSessions : refetchVisits,
+      fetchAll: refetchServiceSessions,
       serviceSessions, buildings,
     })
 

@@ -1,6 +1,6 @@
 # Session-only post-save refresh
 
-- Status: demo only; production activation not approved
+- Status: production activation approved 2026-10-19
 - Date: 2026-10-19
 - Related: 0012, 0020
 
@@ -62,3 +62,12 @@ production behavior. These are mocked store integration tests, not live DB write
 or physical-phone tests. No session records were created or ended in this check.
 Do not count this unreachable manual-save path toward observed egress savings or
 ask the user to find removed controls. Investigate reachable read paths next.
+
+## Production activation (2026-10-19)
+
+User explicitly approved production activation. Both mutations now use the
+session-only slice without the demo gate. Personal session filtering, initial
+loading, manual refresh and foreground recovery are unchanged. Start/end tests
+cover both demo and production; end tests also cover all four roles and paginated
+session results. This does not make the currently unused UI callbacks reachable
+and must not be counted as measured egress savings.
