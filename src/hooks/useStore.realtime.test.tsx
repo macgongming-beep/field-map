@@ -5,6 +5,7 @@ import { testBuilding } from '../test/territoryFixture'
 
 const state = vi.hoisted(() => ({ rpc: vi.fn(), changed: vi.fn(), clock: vi.fn(), index: vi.fn(), reads: [] as string[], boundaryColumns: [] as string[], block: null as null | Promise<void> }))
 const logColumns = vi.hoisted(() => [] as string[])
+const creationCards = vi.hoisted(() => ({ enabled: false }))
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock, fetchBuildingRecoveryIndex: state.index }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: (...args: unknown[]) => state.rpc(...args) ?? Promise.resolve({ error: null }),
@@ -23,13 +24,13 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     chain.then = async (resolve: (r: unknown) => void) => {
       state.reads.push(table)
       if (table === 'buildings') await state.block
-      return resolve({ data: writing && table === 'units' ? [{ id: 1 }] : writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
+      return resolve({ data: creationCards.enabled && table === 'cards' ? [{ id: 1, name: 'card', card_assignments: [] }] : writing && table === 'units' ? [{ id: 1 }] : writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
     }
     return chain
   },
 } }))
 afterEach(() => { cleanup(); vi.clearAllMocks(); state.rpc.mockReset(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
-afterEach(() => { logColumns.length = 0 })
+afterEach(() => { logColumns.length = 0; creationCards.enabled = false })
 
 test.each([
   ['true', undefined, true], ['false', undefined, false],
@@ -57,6 +58,38 @@ test('building survey save updates its snapshot without global building or card 
   expect(result.current.buildings).toEqual([updated, other])
   // One buildings request is the UPDATE, not a global list refresh.
   expect(state.reads.filter((table) => table === 'buildings')).toHaveLength(1)
+  expect(state.reads).not.toContain('cards')
+})
+
+test.each(['true', 'false'])('address save narrows reads only in full-store demo=%s', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const { result } = renderHook(() => useStore(false))
+  await act(async () => { await result.current.updateReturnVisitAddress(7, 'new address') })
+  expect(state.reads).toContain('return_visits')
+  expect(state.reads).toContain('return_visit_logs')
+  expect(state.reads.includes('buildings')).toBe(demo !== 'true')
+})
+
+test.each(['created', 'existing'] as const)('demo placement refreshes only the %s building and keeps other pins', async (action) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(false))
+  creationCards.enabled = true
+  await act(async () => { await result.current.refetchSlices(['cards']) })
+  state.reads = []
+  const other = testBuilding(2, 1, 'other')
+  state.changed.mockResolvedValueOnce({ buildings: [other], histories: [] })
+  await act(async () => { await result.current.syncChangedBuildings([2]) })
+  state.rpc.mockResolvedValueOnce({ data: { ok: true, action, building_id: 9 }, error: null })
+  const added = testBuilding(9, 1, 'new')
+  state.changed.mockResolvedValueOnce({ buildings: [added], histories: [] })
+  await act(async () => {
+    expect(await result.current.createBuildingForPlacement({ cardId: 1, name: 'new', address: 'new', type: '주택', lat: 37, lng: 127 }))
+      .toEqual({ action, buildingId: 9 })
+  })
+  expect(state.changed).toHaveBeenLastCalledWith([9])
+  expect(result.current.buildings).toEqual([other, added])
+  expect(state.reads).not.toContain('buildings')
   expect(state.reads).not.toContain('cards')
 })
 

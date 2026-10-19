@@ -5,11 +5,16 @@ const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
   toast: vi.fn(),
   error: vi.fn(),
+  update: vi.fn(),
+  eq: vi.fn(),
 }))
 
 vi.mock('../../lib/authToken', () => ({ getAuthToken: () => mocks.token }))
 vi.mock('./shared', () => ({
-  supabase: { rpc: mocks.rpc },
+  supabase: { rpc: mocks.rpc, from: () => ({ update: (value: unknown) => {
+    mocks.update(value)
+    return { eq: mocks.eq }
+  } }) },
   showToast: mocks.toast,
   reportMutationError: mocks.error,
   requireVisitor: vi.fn(),
@@ -20,6 +25,31 @@ beforeEach(() => {
   mocks.rpc.mockReset().mockResolvedValue({ data: { ok: true, request_id: 9 }, error: null })
   mocks.toast.mockReset()
   mocks.error.mockReset()
+  mocks.update.mockReset()
+  mocks.eq.mockReset().mockResolvedValue({ error: null })
+})
+
+describe('address-only refresh', () => {
+  it.each([false, true])('uses narrow refresh with full fallback on failure=%s', async (fails) => {
+    const { makeRegularVisitMutations } = await import('./regularVisits')
+    const fetchAll = vi.fn().mockResolvedValue(undefined)
+    const refreshAddress = fails ? vi.fn().mockRejectedValue(new Error('offline')) : vi.fn().mockResolvedValue(undefined)
+    const mutations = makeRegularVisitMutations({ fetchAll, refreshAddress, buildings: [], cards: [], returnVisits: [] })
+    await mutations.updateReturnVisitAddress(31, ' new address ')
+    expect(mocks.update).toHaveBeenCalledWith({ address: 'new address' })
+    expect(mocks.eq).toHaveBeenCalledWith('id', 31)
+    expect(refreshAddress).toHaveBeenCalledOnce()
+    expect(fetchAll).toHaveBeenCalledTimes(fails ? 1 : 0)
+  })
+  it('does not refresh or report success after a failed write', async () => {
+    const { makeRegularVisitMutations } = await import('./regularVisits')
+    mocks.eq.mockResolvedValue({ error: new Error('offline') })
+    const fetchAll = vi.fn(), refreshAddress = vi.fn()
+    await makeRegularVisitMutations({ fetchAll, refreshAddress, buildings: [], cards: [], returnVisits: [] }).updateReturnVisitAddress(31, 'new')
+    expect(refreshAddress).not.toHaveBeenCalled()
+    expect(fetchAll).not.toHaveBeenCalled()
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
 })
 
 describe('정기방문 종료 mutation', () => {

@@ -1071,6 +1071,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   } = makeBuildingMutations({
     role, fetchAll: refetchBuildings, buildings, cards, appendUnits, removeUnit,
     refreshBuilding: (buildingId) => syncChangedBuildings([buildingId]),
+    // Scoped stores must re-evaluate card access after creation/address changes.
+    refreshCreatedBuilding: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+      ? (buildingId) => syncChangedBuildings([buildingId]) : undefined,
   })
 
   const { saveCardBoundary, deleteCardBoundary, restoreCardBoundaries, mergeCardBoundaries, undoMergeCardBoundaries } = makeCardBoundaryMutations({ fetchAll: refetchCardBoundaries, cardBoundaries, buildings })
@@ -1111,6 +1114,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     fetchAll: refetchReturnVisits,
     refreshDetails: refetchReturnVisitDetails,
     refreshLogEdit: refetchReturnVisitDetails,
+    refreshAddress: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+      ? refetchReturnVisitDetails : undefined,
     buildings, cards, returnVisits,
   })
 

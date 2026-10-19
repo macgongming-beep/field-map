@@ -30,6 +30,7 @@ export function makeBuildingMutations(deps: {
   role: Role
   fetchAll: () => Promise<void>
   refreshBuilding?: (buildingId: number) => Promise<void>
+  refreshCreatedBuilding?: (buildingId: number) => Promise<void>
   buildings: Building[]
   cards: TerritoryCard[]
   /**
@@ -50,6 +51,12 @@ export function makeBuildingMutations(deps: {
   const canDeleteWithoutReasonPrompt = () => (
     role === 'leader' || role === 'admin' || role === 'developer'
   )
+
+  const refreshCreatedBuilding = async (id: number) => {
+    if (!deps.refreshCreatedBuilding) return fetchAll()
+    try { await deps.refreshCreatedBuilding(id) }
+    catch { await fetchAll() }
+  }
 
   /**
    * create_building_tx 를 부르고 결과를 그대로 알려 준다. 실패는 null.
@@ -117,7 +124,7 @@ export function makeBuildingMutations(deps: {
       return null
     }
 
-    await fetchAll()
+    await refreshCreatedBuilding(response.building_id)
     showToast(msg('"{autoName}" 건물이 추가됐습니다', { autoName: autoName }))
     return { action: 'created', buildingId: response.building_id }
   }
@@ -137,7 +144,7 @@ export function makeBuildingMutations(deps: {
    */
   const createBuildingForPlacement = async (input: CreateBuildingInput): Promise<CreatedBuildingResult | null> => {
     const created = await requestCreateBuilding(input)
-    if (created?.action === 'existing') await fetchAll()
+    if (created?.action === 'existing') await refreshCreatedBuilding(created.buildingId)
     return created
   }
 

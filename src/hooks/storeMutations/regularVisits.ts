@@ -8,6 +8,7 @@ export function makeRegularVisitMutations(deps: {
   fetchAll: () => Promise<void>
   refreshDetails?: () => Promise<void>
   refreshLogEdit?: () => Promise<void>
+  refreshAddress?: () => Promise<void>
   buildings: Building[]
   cards: TerritoryCard[]
   returnVisits: ReturnVisit[]
@@ -276,7 +277,11 @@ export function makeRegularVisitMutations(deps: {
   const updateReturnVisitAddress = async (id: number, address: string) => {
     const res = await supabase.from('return_visits').update({ address: address.trim() }).eq('id', id)
     if (res.error) { reportMutationError(msg('주소를 저장하지 못했습니다.'), res.error); return }
-    await fetchAll()
+    if (!deps.refreshAddress) await fetchAll()
+    else {
+      try { await deps.refreshAddress() }
+      catch { await fetchAll() }
+    }
     showToast(msg('주소가 저장됐습니다'))
   }
 

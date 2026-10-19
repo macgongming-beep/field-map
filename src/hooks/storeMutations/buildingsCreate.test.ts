@@ -21,10 +21,11 @@ vi.mock('./serviceLog', () => ({ logServiceAction: vi.fn() }))
 
 const { makeBuildingMutations } = await import('./buildings')
 
-function mutations() {
+function mutations(refreshCreatedBuilding?: (id: number) => Promise<void>) {
   return makeBuildingMutations({
     role: 'user',
     fetchAll: state.fetchAll,
+    refreshCreatedBuilding,
     buildings: [{ id: 7, name: '기존 건물', address: '언동로 213', units: [] } as never],
     cards: [{ id: 3, name: '기흥구 구갈동 1' } as never],
     appendUnits: vi.fn(),
@@ -72,6 +73,14 @@ describe('건물 등록 RPC', () => {
     state.rpc.mockResolvedValue({ data: { ok: false, action: 'ambiguous', candidate_ids: [7, 8] }, error: null })
     await expect(mutations().createBuilding(input)).resolves.toBe(false)
     expect(state.toast).toHaveBeenCalledWith('같은 주소의 건물이 여러 개입니다. 기존 건물을 선택해 주세요.', 'error')
+  })
+
+  test('targeted creation refresh failure falls back to the original snapshot', async () => {
+    state.rpc.mockResolvedValue({ data: { ok: true, action: 'created', building_id: 91 }, error: null })
+    const refresh = vi.fn().mockRejectedValue(new Error('offline'))
+    await expect(mutations(refresh).createBuilding(input)).resolves.toBe(true)
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(91)
+    expect(state.fetchAll).toHaveBeenCalledOnce()
   })
 })
 
