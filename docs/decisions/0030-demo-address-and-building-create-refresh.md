@@ -89,3 +89,31 @@ guard and response-version guard failed exactly three new regressions. UI tests
 cover draft preservation and retry in both list and detail editors. Live RLS
 zero-row simulation and artificial overlapping responses are automated-test
 coverage, not production-write experiments.
+
+## Address-only production activation (2026-10-20)
+
+Independent Codex re-review approved the hardening with no actionable regression;
+the reviewer did not rerun the parent's 1,475-test/lint/build checks. Demo abff60e
+was Ready as dpl_ChhTB8D4LSNXHZAtdgGhFHwUMe7r. After the PWA update, fixture
+DEMO-RV-LAZY-1020 (return visit 22) saved its address from demo building 41 to
+building 52, retained it after reload, and opened the map with buildingId=52.
+The fixture remains at its test address ending in 216.
+
+Production flags were set before pushing the reviewed commit abff60e to main:
+
+- VITE_RETURN_VISIT_ADDRESS_REFRESH_ENABLED=true
+- VITE_BUILDING_CREATE_REFRESH_ENABLED=false
+- VITE_LAZY_RETURN_VISIT_LOGS_ENABLED remains true; VITE_DEMO_MODE is absent.
+
+Git integration deployed abff60e499a047409431dac56562f433a46d83d0 successfully as
+dpl_4i5LuSPkVgaDbmDJMgbQZCwasNmG and assigned chinese-territory-app.vercel.app.
+The redundant CLI deployment dpl_7EWgjLiM696ge1QJ9bavBhGwHJaB was canceled after
+the matching Git deployment was confirmed Ready. Public production assets
+index-7GrziB3i.js / TerritoryReportView-C4_AvvcD.js confirm the created-building
+callback is undefined and the address callback retains the recipient guard.
+
+Production PWA update loaded that entry asset. Read-only smoke confirmed the six
+existing return visits and two historical entries in an opened record dialog;
+the dialog was canceled without saving. No production data or DB permissions
+were changed. Live save verification used only the demo fixture. Savings remain
+unmeasured; compare equivalent production time windows after client adoption.
