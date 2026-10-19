@@ -29,6 +29,7 @@ export type CreatedBuildingResult = { action: 'created' | 'existing'; buildingId
 export function makeBuildingMutations(deps: {
   role: Role
   fetchAll: () => Promise<void>
+  refreshBuilding?: (buildingId: number) => Promise<void>
   buildings: Building[]
   cards: TerritoryCard[]
   /**
@@ -40,6 +41,11 @@ export function makeBuildingMutations(deps: {
   removeUnit: (unitId: number) => void
 }) {
   const { role, fetchAll, buildings, cards, appendUnits, removeUnit } = deps
+  const refreshBuilding = async (buildingId: number) => {
+    if (!deps.refreshBuilding) return fetchAll()
+    try { await deps.refreshBuilding(buildingId) }
+    catch { await fetchAll() }
+  }
 
   const canDeleteWithoutReasonPrompt = () => (
     role === 'leader' || role === 'admin' || role === 'developer'
@@ -286,7 +292,7 @@ export function makeBuildingMutations(deps: {
       reportMutationError(msg('건물 출입 상태를 변경하지 못했습니다.'), result.error)
       return false
     }
-    await fetchAll()
+    await refreshBuilding(buildingId)
     showToast(blocked ? msg('건물을 출입불가로 표시했습니다') : msg('건물 출입불가를 해제했습니다'))
     return true
   }
@@ -469,7 +475,7 @@ export function makeBuildingMutations(deps: {
       targetId: buildingId,
       details: { building_name: building?.name ?? null, surveyed },
     })
-    await fetchAll()
+    await refreshBuilding(buildingId)
     return true
   }
 
@@ -502,7 +508,7 @@ export function makeBuildingMutations(deps: {
       targetId: buildingId,
       details: { building_name: name, card_name: card?.name ?? null },
     })
-    await fetchAll()
+    await refreshBuilding(buildingId)
     if (lat === undefined) {
       showToast(msg('건물 정보가 수정됐습니다'))
     }

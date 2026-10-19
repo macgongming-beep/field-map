@@ -25,6 +25,31 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 } }))
 afterEach(() => { cleanup(); vi.clearAllMocks(); state.rpc.mockReset(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
 
+test('building survey save updates its snapshot without global building or card reads', async () => {
+  const { result } = renderHook(() => useStore(false))
+  const building = testBuilding(1, 1, 'edited')
+  const other = testBuilding(2, 2, 'unchanged')
+  state.changed.mockResolvedValueOnce({ buildings: [building, other], histories: [] })
+  await act(async () => { await result.current.syncChangedBuildings([1, 2]) })
+  const updated = { ...building, unitsSurveyed: true }
+  state.changed.mockResolvedValueOnce({ buildings: [updated], histories: [] })
+  await act(async () => { await result.current.setUnitsSurveyed(1, true) })
+  expect(state.changed).toHaveBeenLastCalledWith([1])
+  expect(result.current.buildings).toEqual([updated, other])
+  // One buildings request is the UPDATE, not a global list refresh.
+  expect(state.reads.filter((table) => table === 'buildings')).toHaveLength(1)
+  expect(state.reads).not.toContain('cards')
+})
+
+test('building edit targeted failure uses the existing building and card recovery', async () => {
+  const { result } = renderHook(() => useStore(false))
+  state.changed.mockRejectedValueOnce(new Error('offline'))
+  await act(async () => { await result.current.setUnitsSurveyed(1, true) })
+  expect(state.changed).toHaveBeenCalledWith([1])
+  expect(state.reads).toContain('cards')
+  expect(state.reads.filter((table) => table === 'buildings')).toHaveLength(2)
+})
+
 test.each(['list', 'place'] as const)('restaurant %s removal immediately updates store without realtime or reload', async (mode) => {
   localStorage.setItem('auth_token', 'test-token')
   const { result } = renderHook(() => useStore(false))

@@ -13,6 +13,19 @@ vi.mock('./shared', () => ({
 }))
 beforeEach(() => { state.error = null; state.rows = [{ id: 61 }]; state.report.mockClear() })
 
+test('rejection refreshes pending requests without buildings or histories', async () => {
+  const fetchAll = vi.fn()
+  const refreshRequests = vi.fn().mockResolvedValue(undefined)
+  const mutations = makeRestaurantServiceMutations({ fetchAll, refreshRequests, buildings: [], cardBoundaries: [] })
+  await mutations.rejectRestaurantRequest(61, 'admin')
+  expect(refreshRequests).toHaveBeenCalledOnce()
+  expect(fetchAll).not.toHaveBeenCalled()
+  refreshRequests.mockRejectedValueOnce(new Error('offline'))
+  await mutations.rejectRestaurantRequest(61, 'admin')
+  expect(state.report).toHaveBeenCalledWith(expect.stringContaining('거절은 완료됐지만'), expect.any(Error))
+  expect(fetchAll).not.toHaveBeenCalled()
+})
+
 test.each(['error', 'empty'])('memo %s result must preserve draft via false return', async (failure) => {
   if (failure === 'error') state.error = new Error('offline')
   else state.rows = []

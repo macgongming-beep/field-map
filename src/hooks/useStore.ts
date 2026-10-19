@@ -1063,7 +1063,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     setUnitsSurveyed,
     moveBuildingToCard,
     reassignBuildingsToCards,
-  } = makeBuildingMutations({ role, fetchAll: refetchBuildings, buildings, cards, appendUnits, removeUnit })
+  } = makeBuildingMutations({
+    role, fetchAll: refetchBuildings, buildings, cards, appendUnits, removeUnit,
+    refreshBuilding: (buildingId) => syncChangedBuildings([buildingId]),
+  })
 
   const { saveCardBoundary, deleteCardBoundary, restoreCardBoundaries, mergeCardBoundaries, undoMergeCardBoundaries } = makeCardBoundaryMutations({ fetchAll: refetchCardBoundaries, cardBoundaries, buildings })
 

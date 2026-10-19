@@ -216,7 +216,7 @@ export function makeRestaurantServiceMutations(deps: {
       return
     }
     if (!ensureAffectedRows(result.data, msg('신청 거절에 실패했습니다.'))) return
-    try { await fetchAll() } catch (error) {
+    try { await (deps.refreshRequests ?? fetchAll)() } catch (error) {
       reportMutationError(msg('거절은 완료됐지만 목록을 새로 불러오지 못했습니다. 새로고침 후 확인해 주세요.'), error)
       return
     }
