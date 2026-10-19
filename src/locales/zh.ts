@@ -1,12 +1,14 @@
 // 简体中文 번역 (i18n.ts 에서 분리)
 export const zh = {
+    'attendance.overview': '每周总览',
+    'attendance.overviewHeading': '按星期和时间划分的月平均参加人数',
     'attendance.statsType': '统计类别',
     'attendance.tab.activity': '探访 · 区域',
-    'attendance.tab.attendance': '传道出席',
+    'attendance.tab.attendance': '传道参与',
     'attendance.month': '统计月份',
     'attendance.weekday': '星期',
     'attendance.view': '统计视图',
-    'attendance.average': '月平均',
+    'attendance.average': '按星期详情',
     'attendance.daily': '按日期',
     'attendance.time': '开始时间',
     'attendance.averageCount': '每场平均人数',

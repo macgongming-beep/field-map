@@ -17,28 +17,44 @@ const events = [
 
 test('weekday, average/date switch, month and export use the same filtered meetings', () => {
   render(<ServiceAttendanceStats events={events} language="ko" now={new Date(2026, 9, 20, 12)} />)
+  const matrixRows = within(screen.getByRole('table')).getAllByRole('row')
+  expect(within(matrixRows[0]).getAllByRole('columnheader').map(cell => cell.textContent)).toEqual(['시작 시각', '월', '화', '수', '목', '금', '토', '일'])
+  expect(within(matrixRows[1]).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['—', '—', '1', '—', '—', '—', '—'])
+  expect(screen.queryByText('누적 참석 (명)')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '참여 통계 CSV 다운로드' }))
+  expect(downloadCSV).toHaveBeenCalledWith('attendance-2026-10-all-overview.csv', expect.stringContaining('"월","화","수","목","금","토","일"'))
+  fireEvent.click(screen.getByRole('button', { name: '요일별 상세', exact: true }))
   expect(screen.getByRole('status').textContent).toContain('없습니다')
   fireEvent.click(screen.getByRole('button', { name: '수', exact: true }))
   const rows = within(screen.getByRole('table')).getAllByRole('row')
   expect(rows).toHaveLength(3)
-  expect(within(rows[1]).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['1', '2', '2'])
+  expect(within(rows[1]).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['1', '2'])
   fireEvent.click(screen.getByRole('button', { name: '날짜별', exact: true }))
   expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(4)
   expect(screen.queryByText('Future')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: '참석 통계 CSV 다운로드' }))
+  fireEvent.click(screen.getByRole('button', { name: '참여 통계 CSV 다운로드' }))
   expect(downloadCSV).toHaveBeenCalledWith('attendance-2026-10-3-daily.csv', expect.stringContaining('2026-10-14'))
   fireEvent.change(screen.getByLabelText('집계 월'), { target: { value: '2026-09' } })
   expect(screen.getByRole('status').textContent).toContain('없습니다')
-  expect((screen.getByRole('button', { name: '참석 통계 CSV 다운로드' }) as HTMLButtonElement).disabled).toBe(true)
+  expect((screen.getByRole('button', { name: '참여 통계 CSV 다운로드' }) as HTMLButtonElement).disabled).toBe(true)
 })
 
 test('attendance is a separate statistics panel, not affected by visit scope controls', () => {
   render(<MemoryRouter><DesktopStats calendarEvents={events} cards={[]} buildings={[]} visitHistories={[]}
     serviceSessions={[]} specialPeriods={[]} actualRole="admin" language="ko" /></MemoryRouter>)
   expect(screen.getByText('분석 범위')).toBeTruthy()
-  fireEvent.click(screen.getByRole('tab', { name: '봉사 참석' }))
+  fireEvent.click(screen.getByRole('tab', { name: '봉사 참여' }))
   expect(screen.queryByText('분석 범위')).toBeNull()
   expect(screen.getByLabelText('집계 월')).toBeTruthy()
   fireEvent.click(screen.getByRole('tab', { name: '방문 · 구역' }))
   expect(screen.getByText('분석 범위')).toBeTruthy()
+})
+
+test('overview distinguishes zero attendance from no meeting and keeps weekdays separate', () => {
+  render(<ServiceAttendanceStats events={[...events,
+    { id: 5, date: '2026-10-05', time: '10:00', title: 'Monday', applicants: [], hasMeeting: true } as CalendarEvent,
+    { id: 6, date: '2026-10-06', time: '10:00', title: 'Tuesday', applicants: ['A', 'B', 'C'], hasMeeting: true } as CalendarEvent,
+  ]} language="ko" now={new Date(2026, 9, 20, 12)} />)
+  const row = within(screen.getByRole('table')).getAllByRole('row')[1]
+  expect(within(row).getAllByRole('cell').map(cell => cell.textContent)).toEqual(['0', '3', '1', '—', '—', '—', '—'])
 })

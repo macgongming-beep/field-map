@@ -15,7 +15,10 @@
 .attendance-weekdays { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; margin-top:24px; border-bottom:1px solid #ddd; }
 .attendance-weekdays button { min-height:46px; border:0; border-bottom:3px solid transparent; background:none; color:#666; font-size:14px; font-weight:600; cursor:pointer; padding:8px 2px; overflow-wrap:anywhere; }
 .attendance-weekdays button[aria-pressed=true] { border-bottom-color:#207358; color:#207358; }
-.attendance-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; padding:24px 0; margin:0; border-bottom:1px solid #ddd; }
+.attendance-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; padding:24px 0; margin:0; border-bottom:1px solid #ddd; }
+.attendance-matrix th:first-child { width:66px; }
+.attendance-table.attendance-matrix th,.attendance-table.attendance-matrix td { padding:15px 3px; text-align:center; }
+.attendance-table.attendance-matrix th:first-child { text-align:left; }
 .attendance-summary dt { font-size:13px; color:#666; overflow-wrap:anywhere; }
 .attendance-summary dd { margin:8px 0 0; font-size:28px; font-weight:650; font-variant-numeric:tabular-nums; }
 .attendance-summary div:last-child dd { color:#207358; }

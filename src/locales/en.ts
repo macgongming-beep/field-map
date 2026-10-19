@@ -1,12 +1,14 @@
 // English 번역 (i18n.ts 에서 분리)
 export const en = {
+    'attendance.overview': 'Week overview',
+    'attendance.overviewHeading': 'Monthly average participants by weekday and time',
     'attendance.statsType': 'Statistics category',
     'attendance.tab.activity': 'Visits · Territory',
-    'attendance.tab.attendance': 'Service attendance',
+    'attendance.tab.attendance': 'Service participation',
     'attendance.month': 'Month',
     'attendance.weekday': 'Weekday',
     'attendance.view': 'Summary view',
-    'attendance.average': 'Monthly average',
+    'attendance.average': 'Weekday details',
     'attendance.daily': 'By date',
     'attendance.time': 'Start time',
     'attendance.averageCount': 'Average attendees',

@@ -35,6 +35,15 @@ snapshot, which has no separate cancellation field. Invalid dates are excluded.
 
 ## Rollout
 
+Follow-up: rename the tab to Service Participation, remove cumulative attendance
+from summaries, detailed tables and CSV, and default to a weekday-by-start-time
+monthly-average matrix. Keep weekday details and individual date views. A missing
+meeting is shown as a dash, not zero; actual zero attendance remains numeric zero.
+The matrix export includes every weekday and the selected month.
+Focused follow-up tests: eight passed. Shifting the weekday assignment by one day
+makes two UI tests fail; restored before the full run. Desktop and 390px screenshots
+confirm all seven weekdays fit. Lint and build pass.
+
 Demo only. Existing statistics permission/routing is unchanged. No new mobile menu.
 Review real calendar totals in the demo before authorizing production separately.
 
