@@ -1,5 +1,5 @@
 import type { Building, EndReturnVisitInput, ManualReturnVisitInput, ReturnVisit, TerritoryCard } from '../../types'
-import { supabase, showToast, reportMutationError, requireVisitor } from './shared'
+import { supabase, showToast, reportMutationError, requireVisitor, ensureAffectedRows } from './shared'
 import { msg } from '../../lib/msg'
 import { getAuthToken } from '../../lib/authToken'
 import { promptDialog } from '../../lib/confirm'
@@ -274,15 +274,22 @@ export function makeRegularVisitMutations(deps: {
     showToast(msg('별칭이 저장됐습니다'))
   }
 
-  const updateReturnVisitAddress = async (id: number, address: string) => {
-    const res = await supabase.from('return_visits').update({ address: address.trim() }).eq('id', id)
-    if (res.error) { reportMutationError(msg('주소를 저장하지 못했습니다.'), res.error); return }
-    if (!deps.refreshAddress) await fetchAll()
-    else {
-      try { await deps.refreshAddress() }
-      catch { await fetchAll() }
+  const updateReturnVisitAddress = async (id: number, address: string): Promise<boolean> => {
+    try {
+      const res = await supabase.from('return_visits').update({ address: address.trim() }).eq('id', id).select('id')
+      if (res.error) { reportMutationError(msg('주소를 저장하지 못했습니다.'), res.error); return false }
+      if (!ensureAffectedRows(res.data, msg('주소를 저장하지 못했습니다.'))) return false
+      if (!deps.refreshAddress) await fetchAll()
+      else {
+        try { await deps.refreshAddress() }
+        catch { await fetchAll() }
+      }
+      showToast(msg('주소가 저장됐습니다'))
+      return true
+    } catch (error) {
+      reportMutationError(msg('저장 결과를 확인하지 못했습니다. 입력 내용은 유지됩니다. 연결을 확인해 주세요.'), error)
+      return false
     }
-    showToast(msg('주소가 저장됐습니다'))
   }
 
   // 정기방문 담당자 재배정 (전출/삭제로 끊긴 정기방문을 다른 봉사자에게)

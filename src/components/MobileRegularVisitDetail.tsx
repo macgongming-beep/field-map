@@ -10,6 +10,7 @@ import type { Building, EndReturnVisitInput, ReturnVisit, ReturnVisitLog } from 
 import { formatRelativeVisitDate } from '../utils/returnVisits'
 import { confirmDialog } from '../lib/confirm'
 import { msg } from '../lib/msg'
+import { showToast } from '../lib/toast'
 import { EndReturnVisitDialog } from './EndReturnVisitDialog'
 import { useReturnVisitLogDetails } from '../hooks/useReturnVisitLogDetails'
 import { ReturnVisitLogReadStatus } from './ReturnVisitLogReadStatus'
@@ -25,7 +26,7 @@ type Props = {
   onDeleteReturnVisitLog?: (id: number) => Promise<void>
   onDeleteReturnVisit?: (id: number, input: EndReturnVisitInput) => Promise<boolean>
   onUpdateReturnVisitNickname?: (id: number, nickname: string) => Promise<void>
-  onUpdateReturnVisitAddress?: (id: number, address: string) => Promise<void>
+  onUpdateReturnVisitAddress?: (id: number, address: string) => Promise<boolean>
 }
 
 function fmtFullDate(value: string, language: AppLanguage) {
@@ -71,6 +72,7 @@ export function MobileRegularVisitDetail({
   const [nicknameValue, setNicknameValue] = useState('')
   const [addressOpen, setAddressOpen] = useState(false)
   const [addressValue, setAddressValue] = useState('')
+  const [addressSaving, setAddressSaving] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [endOpen, setEndOpen] = useState(false)
 
@@ -355,10 +357,17 @@ export function MobileRegularVisitDetail({
               <button type="button" onClick={() => setAddressOpen(false)}>{t(language, 'common.cancel')}</button>
               <button
                 type="button"
+                disabled={addressSaving}
                 onClick={async () => {
                   if (!onUpdateReturnVisitAddress) return
-                  await onUpdateReturnVisitAddress(rv.id, addressValue)
-                  setAddressOpen(false)
+                  setAddressSaving(true)
+                  try {
+                    if (await onUpdateReturnVisitAddress(rv.id, addressValue)) setAddressOpen(false)
+                  } catch {
+                    showToast(msg('저장 결과를 확인하지 못했습니다. 입력 내용은 유지됩니다. 연결을 확인해 주세요.'), 'error')
+                  } finally {
+                    setAddressSaving(false)
+                  }
                 }}
               >
                 {t(language, 'common.save')}

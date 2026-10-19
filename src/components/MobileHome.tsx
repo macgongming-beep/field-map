@@ -388,7 +388,7 @@ export function MobileHome({
   onDeleteReturnVisit?: (id: number, input: EndReturnVisitInput) => Promise<boolean>
   onReassignReturnVisit?: (id: number, newAssignee: string) => Promise<boolean> | boolean
   onUpdateReturnVisitNickname?: (id: number, nickname: string) => Promise<void>
-  onUpdateReturnVisitAddress?: (id: number, address: string) => Promise<void>
+  onUpdateReturnVisitAddress?: (id: number, address: string) => Promise<boolean>
   onToggleChinese: (buildingId: number, unitId: number) => void
   onUndoLatestVisit: (buildingId: number, unitId: number) => void
   onUpdateVisitHistory: (historyId: number, unitId: number, input: { result: UnitStatus; timeSlot: TimeSlot; memo: string; visitedAt: string }) => void

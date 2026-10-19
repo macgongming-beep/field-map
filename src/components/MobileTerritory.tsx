@@ -159,7 +159,7 @@ export function MobileTerritory({
   onDeleteReturnVisitLog?: (id: number) => Promise<void>
   onDeleteReturnVisit?: (id: number, input: EndReturnVisitInput) => Promise<boolean>
   onUpdateReturnVisitNickname?: (id: number, nickname: string) => Promise<void>
-  onUpdateReturnVisitAddress?: (id: number, address: string) => Promise<void>
+  onUpdateReturnVisitAddress?: (id: number, address: string) => Promise<boolean>
 }) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -1258,9 +1258,13 @@ export function MobileTerritory({
                             onClick={async () => {
                               if (!onUpdateReturnVisitAddress) return
                               setAddressSaving(true)
-                              await onUpdateReturnVisitAddress(rv.id, addressEditValue)
-                              setAddressSaving(false)
-                              setAddressEditId(null)
+                              try {
+                                if (await onUpdateReturnVisitAddress(rv.id, addressEditValue)) setAddressEditId(null)
+                              } catch {
+                                showToast(msg('저장 결과를 확인하지 못했습니다. 입력 내용은 유지됩니다. 연결을 확인해 주세요.'), 'error')
+                              } finally {
+                                setAddressSaving(false)
+                              }
                             }}
                             type="button"
                           >{addressSaving ? '…' : t(language, 'common.save')}</button>

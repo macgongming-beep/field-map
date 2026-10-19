@@ -51,7 +51,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       if (table === 'restaurant_requests' && !writing) state.requestFilters.push(filters)
       const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
-        : table === 'return_visits' ? state.returnRows
+        : table === 'return_visits' ? writing ? [{ id: 7 }] : state.returnRows
         : table === 'return_visit_logs' ? state.returnLogs
         : table === 'restaurant_requests' ? writing ? [{ id: 61 }] : state.requests.filter(row => filters.every(([key, value]) => row[key] === value))
         : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []

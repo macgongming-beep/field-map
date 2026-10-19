@@ -144,6 +144,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const [specialPeriods, setSpecialPeriods] = useState<SpecialPeriod[]>([])
   const [returnVisits, setReturnVisits] = useState<ReturnVisit[]>([])
   const [returnVisitLogs, setReturnVisitLogs] = useState<ReturnVisitLog[]>([])
+  const returnVisitReadVersion = useRef(0)
   const [informalAssets, setInformalAssets] = useState<InformalAsset[]>([])
   const [eventInformalAssignments, setEventInformalAssignments] = useState<EventInformalAssignment[]>([])
   const recipientInformalAssignments = useMemo(() => teamInformalAssignments(calendarEvents, eventInformalAssignments), [calendarEvents, eventInformalAssignments])
@@ -460,6 +461,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
       case 'returnVisits':
       case 'returnVisitDetails': {
+        // Both slices own the same snapshots; a late pre-save read must not win.
+        const version = ++returnVisitReadVersion.current
         const [returnVisitsRes, returnVisitLogsRes] = await Promise.all([
           supabase.from('return_visits').select('*').is('ended_at', null).order('created_at', { ascending: false }),
           lazyReturnVisitLogsEnabled()
@@ -471,6 +474,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
         measure(returnVisitsRes.data)
         measure(returnVisitLogsRes.data)
+
+        if (version !== returnVisitReadVersion.current) return approxBytes
 
         // Do not erase either snapshot when a post-save refresh fails.
         if (returnVisitsRes.error || returnVisitLogsRes.error) {

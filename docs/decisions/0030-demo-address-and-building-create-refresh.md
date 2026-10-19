@@ -70,3 +70,22 @@ Flag commit e22022e deployed to demo as dpl_fvNTuSRYZ55H8sefZcLDXLg9neZt (Ready)
 With both flags unset, the demo build retains the previously verified behavior
 and identical entry asset index-Dxa6sWnb.js. Production remains the separate
 0296f78 release documented in decision 0029; these opt-ins are not enabled there.
+
+## Pre-activation review hardening (2026-10-20)
+
+Independent Codex review (not Claude) found no flag regression but identified two
+inherited address-path risks: a zero-row UPDATE could announce success, and an
+older returnVisits read could overwrite a newer returnVisitDetails snapshot.
+Activation was held while both were addressed.
+
+Address UPDATE now selects its affected ID and returns false on zero rows, write
+errors, or unrecovered refresh failure. Both mobile address editors preserve the
+draft and release saving state on false/throw. Successful saves close normally.
+The two return-visit slices share a response version so an older request cannot
+overwrite the latest parent/log snapshots. No schema or permission changes.
+
+Full suite: 1,475 tests / 187 files; lint/build passed. Removing the affected-row
+guard and response-version guard failed exactly three new regressions. UI tests
+cover draft preservation and retry in both list and detail editors. Live RLS
+zero-row simulation and artificial overlapping responses are automated-test
+coverage, not production-write experiments.

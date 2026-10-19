@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, expect, test, vi, beforeEach } from 'vitest'
 import { MobileTerritory } from './MobileTerritory'
+import { MobileRegularVisitDetail } from './MobileRegularVisitDetail'
 
 // 봉사자 여러 명이 신고했다: 주소를 치는 도중 엉뚱한 지방 주소로 칸이 바뀐다.
 // 원인은 타이핑 800ms 뒤 첫 지오코딩 결과로 **입력칸을 덮어쓰던 것**이었다.
@@ -211,6 +212,39 @@ describe('연결된 정기방문 주소 계약', () => {
     const moreButtons = screen.getAllByRole('button', { name: '더보기' })
     fireEvent.click(moreButtons[moreButtons.length - 1])
   }
+
+  test.each(['false', 'throw'])('주소 저장 %s 후 입력을 유지하고 재시도한다', async (failure) => {
+    const save = failure === 'throw' ? vi.fn().mockRejectedValueOnce(new Error('offline')) : vi.fn().mockResolvedValueOnce(false)
+    save.mockResolvedValueOnce(true)
+    renderIt({ returnVisits: [visit(null)], onUpdateReturnVisitAddress: save })
+    openVisitMenu()
+    fireEvent.click(screen.getByRole('button', { name: '주소 수정' }))
+    fireEvent.change(screen.getByDisplayValue('명지로 116'), { target: { value: '새 주소' } })
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '저장' })).toBeEnabled())
+    expect(screen.getByDisplayValue('새 주소')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(screen.queryByDisplayValue('새 주소')).not.toBeInTheDocument())
+    expect(save).toHaveBeenNthCalledWith(2, 77, '새 주소')
+  })
+
+  test.each(['false', 'throw'])('상세 주소 저장 %s 후 입력을 유지하고 재시도한다', async (failure) => {
+    const save = failure === 'throw' ? vi.fn().mockRejectedValueOnce(new Error('offline')) : vi.fn().mockResolvedValueOnce(false)
+    save.mockResolvedValueOnce(true)
+    render(<MemoryRouter initialEntries={['/regular/77']}><Routes>
+      <Route path="/regular/:id" element={<MobileRegularVisitDetail language="ko" returnVisits={[visit(null)]}
+        returnVisitLogs={[]} buildings={[]} currentVisitor="홍길동" onUpdateReturnVisitAddress={save} />} />
+    </Routes></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }))
+    fireEvent.click(screen.getByRole('button', { name: '주소 수정' }))
+    fireEvent.change(screen.getByDisplayValue('명지로 116'), { target: { value: '새 주소' } })
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '저장' })).toBeEnabled())
+    expect(screen.getByDisplayValue('새 주소')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '저장' }))
+    await waitFor(() => expect(screen.queryByDisplayValue('새 주소')).not.toBeInTheDocument())
+    expect(save).toHaveBeenNthCalledWith(2, 77, '새 주소')
+  })
 
   test.each([
     ['2026-10-20T00:40:00+09:00', '2026-10-19T15:32:00Z', '오늘'],

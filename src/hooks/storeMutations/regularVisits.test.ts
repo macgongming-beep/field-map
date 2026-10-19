@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   error: vi.fn(),
   update: vi.fn(),
   eq: vi.fn(),
+  select: vi.fn(),
 }))
 
 vi.mock('../../lib/authToken', () => ({ getAuthToken: () => mocks.token }))
@@ -18,6 +19,7 @@ vi.mock('./shared', () => ({
   showToast: mocks.toast,
   reportMutationError: mocks.error,
   requireVisitor: vi.fn(),
+  ensureAffectedRows: (rows: unknown[] | null) => Boolean(rows?.length),
 }))
 
 beforeEach(() => {
@@ -26,7 +28,8 @@ beforeEach(() => {
   mocks.toast.mockReset()
   mocks.error.mockReset()
   mocks.update.mockReset()
-  mocks.eq.mockReset().mockResolvedValue({ error: null })
+  mocks.select.mockReset().mockResolvedValue({ data: [{ id: 31 }], error: null })
+  mocks.eq.mockReset().mockReturnValue({ select: mocks.select })
 })
 
 describe('address-only refresh', () => {
@@ -35,17 +38,19 @@ describe('address-only refresh', () => {
     const fetchAll = vi.fn().mockResolvedValue(undefined)
     const refreshAddress = fails ? vi.fn().mockRejectedValue(new Error('offline')) : vi.fn().mockResolvedValue(undefined)
     const mutations = makeRegularVisitMutations({ fetchAll, refreshAddress, buildings: [], cards: [], returnVisits: [] })
-    await mutations.updateReturnVisitAddress(31, ' new address ')
+    expect(await mutations.updateReturnVisitAddress(31, ' new address ')).toBe(true)
+    expect(mocks.select).toHaveBeenCalledWith('id')
     expect(mocks.update).toHaveBeenCalledWith({ address: 'new address' })
     expect(mocks.eq).toHaveBeenCalledWith('id', 31)
     expect(refreshAddress).toHaveBeenCalledOnce()
     expect(fetchAll).toHaveBeenCalledTimes(fails ? 1 : 0)
   })
-  it('does not refresh or report success after a failed write', async () => {
+  it.each(['error', 'zero', 'throw'])('does not refresh or report success after write %s', async (failure) => {
     const { makeRegularVisitMutations } = await import('./regularVisits')
-    mocks.eq.mockResolvedValue({ error: new Error('offline') })
+    if (failure === 'throw') mocks.select.mockRejectedValue(new Error('offline'))
+    else mocks.select.mockResolvedValue({ data: [], error: failure === 'error' ? new Error('offline') : null })
     const fetchAll = vi.fn(), refreshAddress = vi.fn()
-    await makeRegularVisitMutations({ fetchAll, refreshAddress, buildings: [], cards: [], returnVisits: [] }).updateReturnVisitAddress(31, 'new')
+    expect(await makeRegularVisitMutations({ fetchAll, refreshAddress, buildings: [], cards: [], returnVisits: [] }).updateReturnVisitAddress(31, 'new')).toBe(false)
     expect(refreshAddress).not.toHaveBeenCalled()
     expect(fetchAll).not.toHaveBeenCalled()
     expect(mocks.toast).not.toHaveBeenCalled()
