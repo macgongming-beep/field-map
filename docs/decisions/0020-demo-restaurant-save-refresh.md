@@ -44,3 +44,26 @@ contract, not a measured billing saving or an explanation of 230 MB/day.
 
 Physical two-device synchronization and production egress are separate checks;
 automated store tests do not establish either.
+
+## Deployed demo verification (2026-10-19)
+
+- Source: befd5f9, branch codex/recipient-request-cost. Production main remains
+  64fbdc3; this change has not been released to production.
+- Demo deployment: dpl_8Lnmcgxm1BTfmKYzHzf6X7ApQAns, Ready, alias
+  https://chinese-territory-app-demo.vercel.app.
+- Full suite: 1,298 tests / 179 files passed; lint and build passed. Replacing
+  the targeted callback with fetchAll made two new regression tests fail.
+- Logged in as the actual demo volunteer role, selected catalog restaurant 2,
+  saved a unique memo, then reopened its detail. The memo and restaurant type
+  were visible. The active restaurant card closed normally after saving.
+- Isolated save window in Chrome DevTools: insert plus unit-parent lookup and
+  the building/unit/history reads scoped to building 75. No restaurant_requests,
+  service_sessions, or global building/history reload in that window.
+  Observed Transferred: 5,228 bytes. Service-worker wrapper rows are not counted
+  as extra network requests. This is one demo observation, not a before/after
+  comparison, production billing measurement, or monthly saving estimate.
+- Local evidence (untracked): scratch/restaurant-targeted-save-network.txt and
+  scratch/restaurant-targeted-save-verified.jpg.
+- Test history 72 was soft-invalidated through invalidate_visit_history_tx;
+  unit 163 returned to its baseline status. No production data was touched.
+- Two physical phones and production traffic remain unverified for this change.
