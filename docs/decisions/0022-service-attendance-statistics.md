@@ -1,6 +1,6 @@
 # Service attendance statistics
 
-- Status: demo implementation; production unchanged
+- Status: production deployed (2026-10-19)
 - Date: 2026-10-19
 
 ## Decision
@@ -75,3 +75,16 @@ Review real calendar totals in the demo before authorizing production separately
 Demo deployed from `e89d3f2` on 2026-10-19: deployment
 `dpl_4oVU9TjP2jJg97gPdgonCnkKGbbv` reported READY and was aliased to
 https://chinese-territory-app-demo.vercel.app. Production was not deployed.
+
+## Production rollout (2026-10-19)
+
+After the user verified the demo and authorized production, main was fast-forwarded
+from `3c5491d` to `24ba40f`. Git-triggered deployment
+`dpl_78oZMeekcpLnjwkcbo1unxWYnJEy` reported Ready; build logs identify main /
+24ba40f and the production alias https://chinese-territory-app.vercel.app resolves
+to that deployment. No DB migration, data writes, or environment changes occurred.
+The included session-refresh experiment remains demo-only: production has no
+VITE_DEMO_MODE setting. The reviewed source passed 1,319 tests, lint and build
+before demo deployment; the production build also succeeded. Production alias and
+build verification do not constitute a new authenticated printing smoke test.
+Existing PWA clients must apply the update to see the new participation views.
