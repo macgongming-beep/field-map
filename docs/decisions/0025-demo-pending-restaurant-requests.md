@@ -1,7 +1,7 @@
 # Pending restaurant requests only
 
 - Date: 2026-10-19
-- Status: demo verified; not approved for production
+- Status: demo verified; independent review passed for production activation
 
 RestaurantServiceSheet displays the current volunteer's pending requests;
 RestaurantsTab displays pending requests for review. Neither uses approved or
@@ -42,3 +42,21 @@ Screenshots: scratch/demo-pending-request-memo-a934970.png and
 scratch/demo-pending-request-reviewed-a934970.png. UI checks establish saved
 state/rendering; server query narrowing is covered by tests, not a live network
 byte measurement. No monthly savings estimate is claimed.
+
+## Production activation
+
+User approved activation after review. Removed only the demo gate: the shared
+request slice now queries status=pending in production as well. Independent
+read-only review confirmed both UI consumers require pending rows, approval
+reads the request directly inside its RPC transaction, and backup/restore paths
+are independent. No blockers found; reviewer did not independently rerun tests.
+
+Expanded query tests across demo true/false, all four roles, and both approved
+and rejected transitions. Full suite: 1,395 tests / 182 files; lint and build
+passed. Removing the server status filter fails all 16 targeted tests; restoring
+it passes. Existing save and read-failure tests remain green.
+
+Pre-existing follow-ups, not changed by this activation: review controls need
+finally handling for refresh failures; memo write failures need an explicit
+success result before discarding UI drafts; request reads are not paginated.
+No DB/schema, notification, authentication or write changes are included.

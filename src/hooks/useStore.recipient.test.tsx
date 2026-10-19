@@ -76,7 +76,9 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
 
 test.each((['true', 'false'] as const).flatMap(demo =>
-  (['user', 'admin', 'developer'] as const).map(role => ({ demo, role }))))('pending request query preserves production and removes reviewed rows on refresh ($demo, $role)', async ({ demo, role }) => {
+  (['user', 'leader', 'admin', 'developer'] as const).flatMap(role =>
+    (['approved', 'rejected'] as const).map(status => ({ demo, role, status })))))(
+  'pending request query removes reviewed rows on refresh ($demo, $role, $status)', async ({ demo, role, status }) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
   state.requests = [
     { id: 61, name: 'pending', status: 'pending' },
@@ -85,12 +87,12 @@ test.each((['true', 'false'] as const).flatMap(demo =>
   ]
   const { result } = renderHook(() => useStore(true, role, role === 'user' ? 'Volunteer' : undefined))
   await waitFor(() => expect(result.current.loading).toBe(false))
-  expect(state.requestFilters).toEqual([demo === 'true' ? [['status', 'pending']] : []])
-  expect(result.current.restaurantRequests.map(r => r.id)).toEqual(demo === 'true' ? [61] : [61, 62, 63])
-  state.requests[0] = { ...state.requests[0], status: 'rejected' }
+  expect(state.requestFilters).toEqual([[['status', 'pending']]])
+  expect(result.current.restaurantRequests.map(r => r.id)).toEqual([61])
+  state.requests[0] = { ...state.requests[0], status }
   await act(async () => { await result.current.refetchSlices(['restaurantRequests']) })
-  expect(result.current.restaurantRequests.map(r => r.id)).toEqual(demo === 'true' ? [] : [61, 62, 63])
-  expect(state.requestFilters).toEqual(Array.from({ length: 2 }, () => demo === 'true' ? [['status', 'pending']] : []))
+  expect(result.current.restaurantRequests.map(r => r.id)).toEqual([])
+  expect(state.requestFilters).toEqual(Array.from({ length: 2 }, () => [['status', 'pending']]))
 })
 
 test.each((['true', 'false'] as const).flatMap(demo =>
