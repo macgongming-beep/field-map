@@ -13,3 +13,9 @@ Verification: 1,413 tests / 184 files, lint and build pass. Nine new cases cover
 Live demo: code `874ae3a` deployed READY as `dpl_5pKrk6QVqDJyKj2QozumjypMpSLh`. Applied the PWA update before testing. Created and approved two disposable requests through the UI. `DEMO-REMOVE-LIST-1019` disappeared immediately after list removal (six to five restaurants); `DEMO-REMOVE-PLACE-1019` disappeared immediately after place deletion (five to four restaurants). No reload or navigation occurred between deletion and checking each result. The original four restaurant rows remained.
 
 Fixture state: list-only test building 129 retains its non-restaurant unit by design; place test building 128 has zero units and is no longer a restaurant. These records were not forcibly purged past the existing safe-deletion contract. Evidence: `scratch/demo-restaurant-list-removed-874ae3a.png` and `scratch/demo-restaurant-place-removed-874ae3a.png`. Production unchanged.
+
+## Production release
+
+2026-10-19, user authorized production after review. Fast-forwarded remote main from `e9224b1` to `cd5f6f9`; the only application changes are `b592a65` (failure recovery, decision 0026) and `874ae3a` (removal refresh). No DB, permissions, or environment-variable changes. `e0a49c8` was already an ancestor of main, contrary to the external review's deployment assumption; the existing personal-sessions environment setting was not modified.
+
+Vercel production deployment `dpl_6T83oLiY96aEpruUp8J23on5qB1R` reached READY and the canonical `chinese-territory-app.vercel.app` alias was verified against that deployment. Applied the app update and confirmed the production restaurant tab rendered 387 restaurants with regional groups. Production verification was read-only; deletion and offline retry were tested only on demo. Screenshot: `scratch/production-restaurant-fixes-cd5f6f9.png`.
