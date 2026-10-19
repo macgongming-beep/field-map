@@ -1,5 +1,9 @@
 // 简体中文 번역 (i18n.ts 에서 분리)
 export const zh = {
+    'attendance.statsTitle': '统计',
+    'attendance.statsLanguage': '统计语言',
+    'attendance.addMonth': '添加月份',
+    'attendance.removeMonth': '移除月份',
     'attendance.language': '语言',
     'attendance.printOptions': 'PDF 打印设置',
     'attendance.printViews': '打印内容',

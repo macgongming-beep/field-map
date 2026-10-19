@@ -120,3 +120,15 @@ localized year/month formatting, so cropped screenshots retain their context.
 Regression tests cover language/month changes, remount persistence, account isolation,
 invalid dates and storage failures. Disabling restoration fails the remount test;
 using the current month instead of selected month fails the screenshot-heading test.
+
+## Multiple reporting months (2026-10-19)
+
+Add/remove reporting months and stack localized month reports for screenshots.
+Use one bar maximum across selected months for comparable lengths. CSV and PDF
+include all selected months; PDF retains separate pages per month and view.
+The Statistics header language selector also controls participation report language;
+legacy activity report body translations are unchanged. Exclusion preferences apply
+to every selected month without modifying calendar data or issuing new DB reads.
+Full suite: 1,326 tests / 182 files; build and lint passed. Removing extra months
+from the report list fails the new multi-month regression test. Browser smoke on
+synthetic data confirmed two month reports and Chinese header/report switching.

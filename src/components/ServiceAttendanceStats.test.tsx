@@ -124,6 +124,33 @@ test('exclusion dates and checkbox survive remount and remain isolated per accou
   expect((screen.getByLabelText('제외 종료일') as HTMLInputElement).value).toBe('2026-10-04')
 })
 
+test('extra months render together, share scale, export and print, and can be removed', () => {
+  const previous = { ...events[0], id: 100, date: '2026-09-23', applicants: ['A','B','C','D'] }
+  render(<ServiceAttendanceStats events={[...events, previous]} language="ko" now={new Date(2026,9,20)} />)
+  fireEvent.click(screen.getByRole('button', { name: '+ 월 추가' }))
+  expect([...document.querySelectorAll('.attendance-report-month')].map(node => node.textContent)).toEqual(['2026년 10월','2026년 9월'])
+  const regions = document.querySelectorAll('.attendance-month-report')
+  expect(regions[0].querySelector('.attendance-bar-track span')?.getAttribute('style')).toContain('25%')
+  expect(regions[1].querySelector('.attendance-bar-track span')?.getAttribute('style')).toContain('100%')
+  fireEvent.click(screen.getByRole('button', { name: '참여 통계 CSV 다운로드' }))
+  expect(downloadCSV).toHaveBeenLastCalledWith(expect.any(String), expect.stringContaining('2026-09'))
+  fireEvent.click(screen.getByRole('button', { name: 'PDF 출력 설정' }))
+  expect(document.querySelectorAll('.attendance-print-page')).toHaveLength(2)
+  fireEvent.click(screen.getByRole('button', { name: '월 제거 2026-09' }))
+  expect(document.querySelectorAll('.attendance-month-report')).toHaveLength(1)
+  expect(document.querySelectorAll('.attendance-print-page')).toHaveLength(1)
+})
+
+test('statistics language selector updates participation without resetting selected month', () => {
+  render(<MemoryRouter><DesktopStats calendarEvents={events} cards={[]} buildings={[]} visitHistories={[]}
+    serviceSessions={[]} specialPeriods={[]} actualRole="admin" language="ko" /></MemoryRouter>)
+  fireEvent.click(screen.getByRole('tab', { name: '봉사 참여' }))
+  fireEvent.change(screen.getByLabelText('통계 언어'), { target: { value: 'zh' } })
+  expect(screen.getByRole('heading', { name: '统计', exact: true })).toBeTruthy()
+  expect(screen.getByRole('tab', { name: '传道参与' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: '+ 添加月份' })).toBeTruthy()
+})
+
 test('report month follows selected month and language for screenshots', () => {
   render(<ServiceAttendanceStats events={events} language="ko" now={new Date(2026, 9, 20)} />)
   const month = () => document.querySelector('.attendance-report-heading time')!

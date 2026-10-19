@@ -1,5 +1,9 @@
 // 한국어 번역 (i18n.ts 에서 분리)
 export const ko = {
+    'attendance.statsTitle': '통계',
+    'attendance.statsLanguage': '통계 언어',
+    'attendance.addMonth': '월 추가',
+    'attendance.removeMonth': '월 제거',
     'attendance.language': '언어',
     'attendance.printOptions': 'PDF 출력 설정',
     'attendance.printViews': '출력할 보기',

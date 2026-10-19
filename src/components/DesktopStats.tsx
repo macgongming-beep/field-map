@@ -120,7 +120,7 @@ export function DesktopStats({
   specialPeriods,
   actualRole,
   calendarEvents,
-  language,
+  language: appLanguage,
   currentUserId,
 }: {
   cards: TerritoryCard[]
@@ -134,6 +134,8 @@ export function DesktopStats({
   currentUserId?: number
 }) {
   const navigate = useNavigate()
+  const [languageOverride, setLanguageOverride] = useState<AppLanguage | null>(null)
+  const language = languageOverride ?? appLanguage
   const [statsView, setStatsView] = useState<'activity' | 'attendance'>('activity')
   const isDeveloper = actualRole === 'developer'
   const [scope, setScope]               = useState<ScopeFilter>('all')
@@ -465,8 +467,11 @@ export function DesktopStats({
     <section className="stats-page">
       <header className="page-header">
         <div className="page-header-text">
-          <h1 className="page-header-title">통계</h1>
+          <h1 className="page-header-title">{t(language, 'attendance.statsTitle')}</h1>
         </div>
+        <label className="attendance-month">{t(language, 'attendance.statsLanguage')}<select value={language} onChange={event => setLanguageOverride(event.target.value as AppLanguage)}>
+          <option value="ko">한국어</option><option value="zh">中文</option><option value="en">English</option>
+        </select></label>
         {statsView === 'activity' && (actualRole === 'admin' || actualRole === 'developer') && (
           <button type="button" className="stats-report-button" onClick={() => navigate('/stats/chinese-report')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -484,7 +489,7 @@ export function DesktopStats({
           onClick={() => setStatsView(view)}>{t(language, `attendance.tab.${view}`)}</button>)}
       </div>
       {statsView === 'attendance' ? <div role="tabpanel" id="stats-panel-attendance" aria-labelledby="stats-tab-attendance">
-        <ServiceAttendanceStats key={currentUserId ?? 'anonymous'} userId={currentUserId} events={calendarEvents} language={language} />
+        <ServiceAttendanceStats key={currentUserId ?? 'anonymous'} userId={currentUserId} events={calendarEvents} language={language} onLanguageChange={setLanguageOverride} />
       </div> : <div role="tabpanel" id="stats-panel-activity" aria-labelledby="stats-tab-activity">
 
       {/* ── 분석 범위 ── */}

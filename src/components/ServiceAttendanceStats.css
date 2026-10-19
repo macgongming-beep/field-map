@@ -30,6 +30,11 @@
 .attendance-report-heading { margin:28px 0 16px; }
 .attendance-report-month { display:block; font-size:22px; font-weight:700; margin-bottom:8px; }
 .attendance-report-heading .attendance-heading { margin:0; }
+.attendance-extra-month { display:flex; align-items:end; gap:6px; }
+.attendance-add-month { height:42px; border:1px solid #ccc; border-radius:4px; padding:0 12px; background:white; color:#222; cursor:pointer; }
+.attendance-month-report + .attendance-month-report { border-top:1px solid #ddd; margin-top:20px; }
+.attendance-month-report .attendance-day h3 { margin-bottom:12px; }
+.attendance-month-report .attendance-bar-row { margin-bottom:12px; }
 .attendance-table-wrap { overflow-x:auto; }
 .attendance-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:14px; font-variant-numeric:tabular-nums; }
 .attendance-table th,.attendance-table td { padding:15px 10px; text-align:right; border-bottom:1px solid #e5e5e3; overflow-wrap:anywhere; }

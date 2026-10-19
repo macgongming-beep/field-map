@@ -1,5 +1,9 @@
 // English 번역 (i18n.ts 에서 분리)
 export const en = {
+    'attendance.statsTitle': 'Statistics',
+    'attendance.statsLanguage': 'Statistics language',
+    'attendance.addMonth': 'Add month',
+    'attendance.removeMonth': 'Remove month',
     'attendance.language': 'Language',
     'attendance.printOptions': 'PDF print settings',
     'attendance.printViews': 'Views to print',
