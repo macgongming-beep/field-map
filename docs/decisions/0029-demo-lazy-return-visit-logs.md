@@ -1,6 +1,6 @@
 # Demo: read return-visit detail bodies only when opened
 
-- Status: production release approved; rollout in progress
+- Status: production release approved; deployment blocked by Vercel daily quota
 - Date: 2026-10-20
 
 ## Why
@@ -87,3 +87,13 @@ Store initial/post-save projections and hook opening/memo refresh were tested
 with production mode plus explicit true. Explicit false overrides demo mode.
 Reverting the flag support failed exactly three relevant tests. Final suite:
 1,445 tests / 187 files passed; lint and build passed.
+
+Release 0296f78 was fast-forwarded to origin/main and the production project's
+VITE_LAZY_RETURN_VISIT_LOGS_ENABLED was set to true. However, deployment failed
+with api-deployments-free-per-day (more than 100; retry after 24 hours).
+Do not treat the main push or environment setting as a completed release.
+The production alias still resolves to Ready deployment
+dpl_CzhCp1D93XbxtZwWgC2ACx1xcfDu (a4b07ba). Its existing behavior is unchanged.
+Rebuild/deploy main after the quota resets, then verify the alias, PWA update,
+and existing return-visit detail read. No production writes were used in smoke
+checks. No automatic retry was scheduled.
