@@ -120,3 +120,25 @@ This is a build-time switch, not a runtime kill switch. Turning it off requires 
 new build/deployment and client update. During rollback, keep the RPC installed
 while any enabled PWA clients may still be running; do not drop it immediately.
 No monthly saving or attribution of the reported 230 MB/day is claimed.
+
+## Production deployment completed (2026-10-19)
+
+Installed the catalog RPC on production `qdxemvdorasoryfysuoq` after backup:
+`backups/restaurant-catalog-production-2026-10-19T03-19-30.815Z/before.dump`.
+Archive listing was verified; this was not a restore rehearsal. The function is
+SECURITY INVOKER and retains verify_session. An unauthenticated request was
+rejected with HTTP 400 / P0001 (missing session token). No production test visit
+records were written and no RLS policies were changed.
+
+Set production `VITE_RESTAURANT_BROWSE_ENABLED=true` and directly deployed source
+`f076502` to Vercel deployment `dpl_CZTJmspYaVjbCkRnYpRNQMazKUEt` (READY), alias
+`https://chinese-territory-app.vercel.app`. Previous production deployment:
+`dpl_7em4uxF73fcE6u8gr11jkwBC6sm7`. The production browser displayed the update
+prompt and loaded the existing calendar after applying it. Production restaurant
+save was deliberately not exercised; the actual-volunteer save/reopen test above
+was performed on demo. Screenshot: `scratch/restaurant-production-deployed.jpg`.
+
+GitHub push remains blocked by missing HTTPS authentication. origin/main was
+`e0a49c8`; this direct deployment is ahead of the remote repository. Restore GitHub
+authentication and synchronize the reviewed commits before another Git-driven
+release, to avoid replacing this deployment with older source.
