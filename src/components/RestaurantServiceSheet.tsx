@@ -13,6 +13,8 @@ import { t, translateKoreanAddress, type AppLanguage } from '../i18n'
 import { getRestaurantUnits } from '../utils/restaurants'
 import { RESTAURANT_INITIAL_STATES, type RestaurantInitialState, type SubmitRestaurantRequest } from '../types/restaurantRegistration'
 import { msg } from '../lib/msg'
+import { restaurantBrowseEnabled } from '../lib/restaurantBrowseFlag'
+import { RestaurantCatalog } from './RestaurantCatalog'
 
 // ── 아이콘 ────────────────────────────────────────────────────
 function ForkIcon() {
@@ -331,7 +333,10 @@ export function RestaurantServiceSheet({
               </div>
             )}
 
-            {grouped.length === 0 ? (
+            {restaurantBrowseEnabled() ? (
+              <RestaurantCatalog key={currentVisitor} search={search} cards={cards} language={language}
+                translatePlaceNames={translatePlaceNames} onSelect={handleSelectRestaurant} onAdd={handleOpenAddRequest} />
+            ) : grouped.length === 0 ? (
               <div className="restaurant-empty">
                 {search.trim() ? (
                   <>

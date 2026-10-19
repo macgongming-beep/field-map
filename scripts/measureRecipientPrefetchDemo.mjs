@@ -149,7 +149,8 @@ try {
     globalThis.__recipientMeasurement = { client, token: user.token }
     async function readerAt(old) {
       const entry = resolve('src/lib/recipientStore.ts')
-      const bundle = await rolldown({ input: entry, plugins: [{
+      const bundle = await rolldown({ input: entry,
+        transform: { define: { 'import.meta.env': JSON.stringify({ VITE_DEMO_MODE: 'true' }) } }, plugins: [{
         name: 'measurement-session',
         resolveId(id) {
           if (id === './supabase' || id === './authToken') return '\0measurement:' + id
@@ -172,7 +173,7 @@ try {
     let baselineDetails
     for (const old of [true, false]) {
       const reader = await readerAt(old)
-      phase = old ? `before-${baseline}` : 'after-return-visit-scope'
+      phase = old ? `before-${baseline}` : 'after-current-reader'
       const started = performance.now()
       try {
         let details = await reader.read()

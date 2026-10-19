@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { getAuthToken } from './authToken'
+import { restaurantBrowseEnabled } from './restaurantBrowseFlag'
 import { createRecipientPreview } from './recipientPreview'
 import { assignedServiceScope } from '../utils/cardServiceScope'
 import type { CalendarEvent } from '../types'
@@ -45,8 +46,8 @@ export function createRecipientStoreReader(userName: string) {
       pages<{ card_id: number }>((from, to) => supabase.from('card_assignments').select('card_id').eq('user_name', userName).order('card_id').range(from, to)),
       pages<{ primary_card_id: number | null }>((from, to) => supabase.from('service_sessions').select('primary_card_id').eq('user_name', userName).eq('status', 'active').is('ended_at', null).order('id').range(from, to)),
       supabase.rpc('get_recipient_return_visit_card_ids', { p_token: token }),
-      pages<{ card_id: number }>((from, to) => supabase.from('buildings').select('id,card_id').eq('is_restaurant', true).order('id').range(from, to)),
-      pages<{ building_id: number }>((from, to) => supabase.from('units').select('id,building_id').eq('is_restaurant', true).order('id').range(from, to)),
+      restaurantBrowseEnabled() ? [] : pages<{ card_id: number }>((from, to) => supabase.from('buildings').select('id,card_id').eq('is_restaurant', true).order('id').range(from, to)),
+      restaurantBrowseEnabled() ? [] : pages<{ building_id: number }>((from, to) => supabase.from('units').select('id,building_id').eq('is_restaurant', true).order('id').range(from, to)),
       pages<{ building_id: number }>((from, to) => supabase.from('event_restaurant_assignments').select('id,building_id').eq('user_name', userName).order('id').range(from, to)),
     ])
     check()

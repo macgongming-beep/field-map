@@ -19,11 +19,24 @@ import { createRecipientStoreReader, recipientStoreEnabled } from './recipientSt
 import type { CalendarEvent } from '../types'
 
 beforeEach(() => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
   vi.clearAllMocks(); state.token = 'session'; state.rows = {}
   state.previewOptions = []
   state.assignments.mockResolvedValue([])
   state.rpc.mockResolvedValue({ data: [], error: null })
   state.prefetch.mockImplementation((ids: number[]) => ({ details: Promise.resolve({ buildings: ids.map((card_id) => ({ card_id })), boundaries: [], histories: [], baseline: null }) }))
+})
+
+test('demo lazy catalog excludes global restaurant cards but preserves personal restaurant assignments', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  state.rows = {
+    buildings: [{ id: 50, card_id: 5, is_restaurant: true }, { id: 60, card_id: 6 }, { id: 70, card_id: 7 }],
+    units: [{ building_id: 60, is_restaurant: true }],
+    event_restaurant_assignments: [{ building_id: 70, user_name: 'me' }, { building_id: 50, user_name: 'other' }],
+    card_assignments: [{ card_id: 1, user_name: 'me' }],
+  }
+  await createRecipientStoreReader('me').read()
+  expect(state.prefetch).toHaveBeenCalledExactlyOnceWith([1, 7])
 })
 
 test('only the real demo volunteer workflow opts in; general maps and administrators stay full', () => {

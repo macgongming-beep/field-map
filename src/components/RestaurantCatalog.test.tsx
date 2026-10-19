@@ -1,0 +1,66 @@
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { RestaurantCatalog } from './RestaurantCatalog'
+import type { TerritoryCard } from '../types'
+const api = vi.hoisted(() => ({ page: vi.fn(), detail: vi.fn() }))
+vi.mock('../lib/restaurantCatalog', () => ({ createRestaurantCatalog: () => api }))
+vi.mock('../lib/msg', () => ({ msg: (value: string) => value }))
+const item = (id: number) => ({ building_id: id, unit_id: null, card_id: 1, name: `Cafe ${id}`, address: 'Address', region: 'A', area: 'A1' })
+const props = { search: '', cards: [{ id: 1, region: 'A', area: 'A1' }] as TerritoryCard[], language: 'ko' as const, translatePlaceNames: false, onSelect: vi.fn(), onAdd: vi.fn() }
+beforeEach(() => { vi.clearAllMocks(); api.page.mockResolvedValue({ items: [item(1)], more: false }) })
+afterEach(() => { cleanup(); vi.useRealTimers() })
+test('opening performs no query; a region loads one page and a rerender does not reload', async () => {
+  const view = render(<RestaurantCatalog {...props} />)
+  expect(api.page).not.toHaveBeenCalled()
+  fireEvent.change(screen.getByLabelText('지역 선택'), { target: { value: 'A' } })
+  await screen.findByText('Cafe 1')
+  expect(api.page).toHaveBeenCalledExactlyOnceWith({ search: '', region: 'A', area: null, all: false }, undefined)
+  view.rerender(<RestaurantCatalog {...props} cards={[...props.cards]} />)
+  expect(api.page).toHaveBeenCalledTimes(1)
+})
+test('load more uses last displayed cursor, prevents overlapping requests and selection loads only its detail', async () => {
+  api.page.mockResolvedValueOnce({ items: Array.from({ length: 20 }, (_, i) => item(i + 1)), more: true })
+  render(<RestaurantCatalog {...props} />)
+  fireEvent.change(screen.getByLabelText('지역 선택'), { target: { value: '*' } })
+  const more = await screen.findByText('더 보기')
+  let finish!: (value: unknown) => void
+  api.page.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  fireEvent.click(more); fireEvent.click(more)
+  expect(api.page).toHaveBeenCalledTimes(2)
+  expect(api.page.mock.calls[1][1]).toEqual(item(20))
+  await act(async () => finish({ items: [item(21)], more: false }))
+  expect(screen.queryByText('더 보기')).toBeNull()
+  const detail = { building: { id: 21 }, unit: null, key: '21-none' }
+  api.detail.mockResolvedValue(detail)
+  fireEvent.click(screen.getByText('Cafe 21'))
+  await waitFor(() => expect(props.onSelect).toHaveBeenCalledWith(detail))
+  expect(api.detail).toHaveBeenCalledExactlyOnceWith(item(21))
+})
+test('changing neighborhood rejects late pages; search debounces before requesting', async () => {
+  let finish!: (value: unknown) => void
+  api.page.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const view = render(<RestaurantCatalog {...props} />)
+  fireEvent.change(screen.getByLabelText('지역 선택'), { target: { value: 'A' } })
+  await waitFor(() => expect(api.page).toHaveBeenCalledTimes(1))
+  fireEvent.change(screen.getByLabelText('동 선택'), { target: { value: 'A1' } })
+  await screen.findByText('Cafe 1')
+  await act(async () => finish({ items: [item(99)], more: true }))
+  expect(screen.queryByText('Cafe 99')).toBeNull()
+  vi.useFakeTimers()
+  view.rerender(<RestaurantCatalog {...props} search="caf" />)
+  view.rerender(<RestaurantCatalog {...props} search="cafe" />)
+  await act(async () => { vi.advanceTimersByTime(349) })
+  expect(api.page).toHaveBeenCalledTimes(2)
+  await act(async () => { vi.advanceTimersByTime(1) })
+  expect(api.page).toHaveBeenCalledTimes(3)
+  expect(api.page.mock.calls[2][0]).toMatchObject({ search: 'cafe', area: 'A1' })
+})
+test('failure retries the same page without a global fallback', async () => {
+  api.page.mockRejectedValueOnce(new Error('offline'))
+  render(<RestaurantCatalog {...props} />)
+  fireEvent.change(screen.getByLabelText('지역 선택'), { target: { value: 'A' } })
+  fireEvent.click(await screen.findByText('다시 시도'))
+  await screen.findByText('Cafe 1')
+  expect(api.page.mock.calls[0]).toEqual(api.page.mock.calls[1])
+})

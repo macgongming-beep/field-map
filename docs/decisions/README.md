@@ -30,6 +30,8 @@
 
 ## 새 기록 틀
 
+식당 목록 지연 조회: [0019 데모 식당 탐색과 선조회 분리](0019-demo-restaurant-catalog.md)
+
 운영 전환: [0017 범위 조회와 구역선 기기 캐시](0017-production-recipient-and-boundary-cache.md)
 
 구역선 재실행 비용: [0016 데모 구역선 기기 보관](0016-demo-boundary-device-cache.md)

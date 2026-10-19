@@ -4,6 +4,13 @@
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
 export const messagesEn: Record<string, string> = {
+  '지역 선택': 'Select district',
+  '동 선택': 'Select neighborhood',
+  '전체 동': 'All neighborhoods',
+  '불러오는 중...': 'Loading...',
+  '다시 시도': 'Retry',
+  '더 보기': 'Load more',
+  '식당 정보를 불러오지 못했습니다. 다시 선택해 주세요.': 'Unable to load the restaurant. Please select it again.',
   '장소 {n}개': '{n} places',
   '전체 지도': 'Full map',
   '선택 해제': 'Deselect',
