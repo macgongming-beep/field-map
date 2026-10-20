@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
+import { readSnapshotParts, SupersededReadError } from './supersededRead'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
 import { recoverRecipientBuildings, readRecipientBoundaries } from './recipientRecovery'
@@ -262,7 +263,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         measure(buildingRows)
         if ((import.meta.env.VITE_BUILDING_MOVE_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
           && fullVersion !== buildingFullReadVersion.current) {
-          throw new Error('Building read superseded')
+          throw new SupersededReadError('Building read superseded')
         }
         const transformedBuildings = buildingRows.map(toBuilding)
         setBuildings(transformedBuildings)
@@ -436,7 +437,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         )
         if ((import.meta.env.VITE_CALENDAR_EVENT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
           && version !== calendarReadVersion.current) {
-          throw new Error('Calendar read superseded')
+          throw new SupersededReadError('Calendar read superseded')
         }
         setCalendarEvents(transformedEvents)
         recipientCalendarRef.current = transformedEvents
@@ -736,10 +737,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const buildingsBytes = await read('buildings')
         totalBytes += buildingsBytes
         const remaining = slices.filter((s) => s !== 'buildings')
-        const bytesArr = await Promise.all(remaining.map(read))
+        const bytesArr = await readSnapshotParts(remaining.map(read))
         totalBytes += bytesArr.reduce((a, b) => a + b, 0)
       } else {
-        const bytesArr = await Promise.all(slices.map(read))
+        const bytesArr = await readSnapshotParts(slices.map(read))
         totalBytes = bytesArr.reduce((a, b) => a + b, 0)
       }
 
@@ -784,6 +785,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       await withLoadDeadline(fetchSlices(ALL_SLICES, { triggeredBy: recovery ? 'foreground' : 'fetchAll' }))
       loadedOnceRef.current = true
     } catch (error) {
+      // Only a complete existing snapshot makes cancellation safe to leave on screen.
+      if (error instanceof SupersededReadError && loadedOnceRef.current) throw error
       console.error('[fetchAll] failed:', error)
       const message = msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.')
       // A background refresh failure must not unmount an editor with unsaved work.
@@ -890,7 +893,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     const data = await fetchChangedBuildings(buildingIds)
     // A previous map's in-flight read must not overwrite a newer map's response.
     const ids = new Set(buildingIds.filter((id) => versions.get(id) === realtimeVersionsRef.current.get(id)))
-    if (requireFresh && ids.size !== new Set(buildingIds).size) throw new Error('Building refresh superseded')
+    if (requireFresh && ids.size !== new Set(buildingIds).size) throw new SupersededReadError('Building refresh superseded')
     const updated = data.buildings.filter((b) => ids.has(b.id))
     const unitIds = new Set([
       ...buildingsRef.current.filter((b) => ids.has(b.id)).flatMap((b) => b.units.map((u) => u.id)),
@@ -1041,7 +1044,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     }
     const version = ++calendarReadVersion.current
     const event = await fetchUpdatedCalendarEvent(eventId)
-    if (version !== calendarReadVersion.current) throw new Error('Calendar refresh superseded')
+    if (version !== calendarReadVersion.current) throw new SupersededReadError('Calendar refresh superseded')
     const next = recipientCalendarRef.current.map(current => current.id === eventId ? event : current)
       .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
     recipientCalendarRef.current = next

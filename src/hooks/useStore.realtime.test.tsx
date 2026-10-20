@@ -14,6 +14,8 @@ const calendarResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, 
 const buildingResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
 const calendarAssignmentState = vi.hoisted(() => ({ failedTable: '', rows: {} as Record<string, Record<string, unknown>[]> }))
 const updatedEvent = vi.hoisted(() => vi.fn())
+const toast = vi.hoisted(() => vi.fn())
+vi.mock('../lib/toast', () => ({ showToast: toast }))
 vi.mock('./calendarEventRefresh', () => ({ CALENDAR_EVENT_COLUMNS: '*, event_participants(*)', fetchUpdatedCalendarEvent: updatedEvent }))
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock, fetchBuildingRecoveryIndex: state.index }))
 vi.mock('../lib/supabase', () => ({ supabase: {
@@ -62,6 +64,117 @@ const calendarMoveFlagCases = [
   [undefined, undefined, false], ['false', undefined, false], ['true', undefined, true],
   ['false', 'true', true], ['true', 'false', false], ['false', 'false', false],
 ] as const
+
+const fullReadNotificationCases = (['buildings', 'calendar'] as const).flatMap(slice =>
+  ['true', 'false'].flatMap(flag => [true, false].map(loaded => ({ slice, flag, loaded }))))
+
+test.each(['buildings', 'calendar'] as const)(
+  'loaded refetchAll superseded by actual %s mutation preserves save without error toast',
+  async (slice) => {
+    vi.stubEnv('VITE_DEMO_MODE', 'false')
+    vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', 'true')
+    vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', 'true')
+    localStorage.setItem('auth_token', 'test')
+    state.rpc.mockResolvedValue({ data: { ok: true }, error: null })
+    creationCards.enabled = true
+    creationCards.ids = [1, 2]
+    buildingResponses.push(Promise.resolve({ data: rawMoveBuildings(1, 'before'), error: null }))
+    calendarResponses.push(Promise.resolve({ data: rawEvents, error: null }))
+    const { result } = renderHook(() => useStore(false))
+    await act(async () => { await result.current.refetchAll() })
+    toast.mockClear()
+    const responses = slice === 'buildings' ? buildingResponses : calendarResponses
+    let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+    responses.push(new Promise(resolve => { release = resolve }))
+    let older!: Promise<unknown>
+    act(() => { older = result.current.refetchAll().then(() => null, error => error) })
+    await waitFor(() => expect(responses).toHaveLength(0))
+    responses.push(Promise.resolve({
+      data: slice === 'buildings' ? rawMoveBuildings(2, 'saved')
+        : rawEvents.map(e => e.id === 1 ? { ...e, title: 'saved' } : e),
+      error: null,
+    }))
+    await act(async () => {
+      const saved = slice === 'buildings'
+        ? await result.current.moveBuildingToCard(1, 2)
+        : await result.current.updateCalendarEvent(1, eventInput, false)
+      expect(saved).toBe(true)
+    })
+    await act(async () => {
+      release({ data: slice === 'buildings' ? rawMoveBuildings(1, 'stale') : rawEvents, error: null })
+      expect(await older).toEqual(expect.objectContaining({
+        message: slice === 'buildings' ? 'Building read superseded' : 'Calendar read superseded',
+      }))
+    })
+    if (slice === 'buildings') {
+      expect(result.current.buildings.find(b => b.id === 1)).toMatchObject({ cardId: 2, name: 'saved' })
+      expect(result.current.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 0, 0], [2, 2, 2]])
+    } else {
+      expect(result.current.calendarEvents.find(e => e.id === 1)?.title).toBe('saved')
+    }
+    expect(result.current.error).toBeNull()
+    expect(toast.mock.calls.filter(([, kind]) => kind === 'error')).toEqual([])
+  },
+)
+
+test.each(fullReadNotificationCases)(
+  'superseded refetchAll reports only incomplete initial loads: $slice flag=$flag loaded=$loaded',
+  async ({ slice, flag, loaded }) => {
+    vi.stubEnv('VITE_DEMO_MODE', 'false')
+    vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', slice === 'buildings' ? flag : 'false')
+    vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', slice === 'calendar' ? flag : 'false')
+    const { result } = renderHook(() => useStore(false))
+    if (loaded) await act(async () => { await result.current.refetchAll() })
+    toast.mockClear()
+    const responses = slice === 'buildings' ? buildingResponses : calendarResponses
+    let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+    responses.push(new Promise(resolve => { release = resolve }))
+    let older!: Promise<unknown>
+    act(() => { older = result.current.refetchAll().then(() => null, error => error) })
+    await waitFor(() => expect(responses).toHaveLength(0))
+    await act(async () => { await result.current.refetchSlices([slice]) })
+    let outcome: unknown
+    await act(async () => {
+      release({ data: [], error: null })
+      outcome = await older
+    })
+    if (flag === 'true') {
+      expect(outcome).toEqual(expect.objectContaining({
+        message: slice === 'buildings' ? 'Building read superseded' : 'Calendar read superseded',
+      }))
+    } else {
+      expect(outcome).toBeNull()
+    }
+    if (flag === 'true' && !loaded) {
+      expect(result.current.error).toEqual(expect.any(String))
+    } else {
+      expect(result.current.error).toBeNull()
+    }
+    expect(toast).not.toHaveBeenCalled()
+  },
+)
+
+test.each(fullReadNotificationCases)(
+  'refetchAll still reports genuine network failure: $slice flag=$flag loaded=$loaded',
+  async ({ slice, flag, loaded }) => {
+    vi.stubEnv('VITE_DEMO_MODE', 'false')
+    vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', slice === 'buildings' ? flag : 'false')
+    vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', slice === 'calendar' ? flag : 'false')
+    const { result } = renderHook(() => useStore(false))
+    if (loaded) await act(async () => { await result.current.refetchAll() })
+    toast.mockClear()
+    const responses = slice === 'buildings' ? buildingResponses : calendarResponses
+    responses.push(Promise.resolve({ data: [], error: new Error('network unavailable') }))
+    await act(async () => { await expect(result.current.refetchAll()).rejects.toThrow() })
+    if (loaded) {
+      expect(result.current.error).toBeNull()
+      expect(toast).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'error')
+    } else {
+      expect(result.current.error).toEqual(expect.any(String))
+      expect(toast).not.toHaveBeenCalled()
+    }
+  },
+)
 
 test.each((['calendar', 'buildings'] as const).flatMap(slice =>
   ([['true', 'false'], ['false', undefined]] as const).map(([demo, flag]) => ({ slice, demo, flag }))))(
