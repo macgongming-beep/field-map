@@ -69,3 +69,16 @@ demo-only callbacks failed exactly four flag tests (eight passed); restored.
 An additional recipient double-failure regression was added after that full run.
 Activation/deployment verification is recorded below when complete. Disabling
 either flag requires rebuilding/redeploying and users accepting the PWA update.
+
+Both production flags were set to true before the fast-forward push of 0f77e9f
+to main. Vercel Git deployment dpl_Htt4tnyyhqPMvwYSLCFShhC1S7rm is Ready and owns
+chinese-territory-app.vercel.app. Public assets index-Mn92x-s-.js and
+TerritoryReportView-ICu9xYYB.js confirm both targeted callbacks enabled, the
+Chinese recipient guard retained, and strict rename fallback present.
+
+The additional recipient suite passed 113 tests. Production PWA update loaded
+the new entry asset; read-only UI smoke retained 16 informal assets in five
+groups (609 cards and 387 restaurants also shown). No production records were
+edited. Screenshot: scratch/production-small-refresh-0f77e9f.png.
+Live mutation tests remain the demo checks above, not production experiments.
+Egress impact is unmeasured; compare matching windows after client adoption.
