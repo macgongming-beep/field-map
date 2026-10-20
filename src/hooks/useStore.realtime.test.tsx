@@ -8,6 +8,7 @@ const logColumns = vi.hoisted(() => [] as string[])
 const creationCards = vi.hoisted(() => ({ enabled: false }))
 const returnResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: null }> [])
 const groupResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
+const assetResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock, fetchBuildingRecoveryIndex: state.index }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: (...args: unknown[]) => state.rpc(...args) ?? Promise.resolve({ error: null }),
@@ -23,18 +24,108 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       return chain
     }
     chain.limit = () => { lookup = true; return chain }
+    chain.single = async () => { state.reads.push(table); return { data: { id: 7 }, error: null } }
     chain.then = async (resolve: (r: unknown) => void) => {
       state.reads.push(table)
       if (!writing && table === 'return_visits' && returnResponses.length) return resolve(await returnResponses.shift())
       if (!writing && table === 'informal_groups' && groupResponses.length) return resolve(await groupResponses.shift())
+      if (!writing && table === 'informal_assets' && assetResponses.length) return resolve(await assetResponses.shift())
       if (table === 'buildings') await state.block
-      return resolve({ data: creationCards.enabled && table === 'cards' ? [{ id: 1, name: 'card', card_assignments: [] }] : writing && (table === 'units' || table === 'return_visits' || table === 'informal_groups') ? [{ id: 1 }] : writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
+      return resolve({ data: creationCards.enabled && table === 'cards' ? [{ id: 1, name: 'card', card_assignments: [] }] : writing && (table === 'units' || table === 'return_visits' || table === 'informal_groups' || table === 'informal_assets') ? [{ id: 1 }] : writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
     }
     return chain
   },
 } }))
 afterEach(() => { cleanup(); vi.clearAllMocks(); state.rpc.mockReset(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
-afterEach(() => { logColumns.length = 0; creationCards.enabled = false; returnResponses.length = 0; groupResponses.length = 0 })
+afterEach(() => { logColumns.length = 0; creationCards.enabled = false; returnResponses.length = 0; groupResponses.length = 0; assetResponses.length = 0 })
+
+test.each(['true', 'false'])('group creation reads only groups in demo=%s', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const { result } = renderHook(() => useStore(false))
+  groupResponses.push(Promise.resolve({ data: [{ id: 7, name: 'created', position: 0 }], error: null }))
+  await act(async () => { expect(await result.current.createInformalGroup({ name: 'created', createdBy: 'test' })).toBe(7) })
+  expect(result.current.informalGroups[0].name).toBe('created')
+  expect(state.reads.includes('informal_assets')).toBe(demo !== 'true')
+  expect(state.reads.includes('event_informal_assignments')).toBe(demo !== 'true')
+  expect(state.reads.includes('event_restaurant_assignments')).toBe(demo !== 'true')
+})
+
+test.each(['true', 'false'])('bulk group movement reads catalog without assignments in demo=%s', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const { result } = renderHook(() => useStore(false))
+  assetResponses.push(Promise.resolve({ data: [{ id: 11, name: 'moved', group_id: 7 }, { id: 12, name: 'other', group_id: 8 }], error: null }))
+  groupResponses.push(Promise.resolve({ data: [{ id: 7, name: 'target' }, { id: 8, name: 'other' }], error: null }))
+  await act(async () => { expect(await result.current.moveAssetsToGroup([11], 7)).toEqual({ failed: [] }) })
+  expect(result.current.informalAssets.map(a => [a.id, a.groupId])).toEqual([[11, 7], [12, 8]])
+  expect(state.reads.filter(t => t === 'informal_groups')).toHaveLength(1)
+  expect(state.reads.includes('event_informal_assignments')).toBe(demo !== 'true')
+  expect(state.reads.includes('event_restaurant_assignments')).toBe(demo !== 'true')
+})
+
+test.each(['resources', 'informalAssets'] as const)('late %s cannot undo a moved asset', async (slice) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  assetResponses.push(new Promise(resolve => { release = resolve }))
+  const { result } = renderHook(() => useStore(false))
+  let pending!: Promise<void>
+  act(() => { pending = result.current.refetchSlices([slice]).catch(() => undefined) })
+  await waitFor(() => expect(assetResponses).toHaveLength(0))
+  assetResponses.push(Promise.resolve({ data: [{ id: 11, name: 'moved', group_id: 7 }], error: null }))
+  await act(async () => { expect(await result.current.moveAssetToGroup(11, 7)).toBe(true) })
+  await act(async () => {
+    release({ data: [{ id: 11, name: 'moved', group_id: 1 }], error: null })
+    await pending
+  })
+  expect(result.current.informalAssets[0].groupId).toBe(7)
+})
+
+test('failed narrow and strict asset refresh preserves prior catalog', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(false))
+  assetResponses.push(Promise.resolve({ data: [{ id: 11, name: 'old', group_id: 1 }], error: null }))
+  await act(async () => { await result.current.refetchSlices(['informalAssets']) })
+  assetResponses.push(...Array.from({ length: 2 }, () => Promise.resolve({ data: [], error: new Error('offline') })))
+  await act(async () => { expect(await result.current.moveAssetToGroup(11, 7)).toBe(false) })
+  expect(result.current.informalAssets[0].groupId).toBe(1)
+})
+
+test('superseding failed background read triggers post-move recovery', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(false))
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  assetResponses.push(new Promise(resolve => { release = resolve }))
+  let moved!: Promise<boolean>
+  act(() => { moved = result.current.moveAssetToGroup(11, 7) })
+  await waitFor(() => expect(assetResponses).toHaveLength(0))
+  assetResponses.push(Promise.resolve({ data: [], error: new Error('offline') }))
+  await act(async () => { await result.current.refetchSlices(['resources']) })
+  assetResponses.push(Promise.resolve({ data: [{ id: 11, name: 'moved', group_id: 7 }], error: null }))
+  await act(async () => {
+    release({ data: [{ id: 11, name: 'moved', group_id: 7 }], error: null })
+    expect(await moved).toBe(true)
+  })
+  expect(result.current.informalAssets[0].groupId).toBe(7)
+  expect(state.reads.filter(t => t === 'event_restaurant_assignments')).toHaveLength(2)
+})
+
+test('superseding failed background group read triggers create recovery', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(false))
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  groupResponses.push(new Promise(resolve => { release = resolve }))
+  let created!: Promise<number | null>
+  act(() => { created = result.current.createInformalGroup({ name: 'created', createdBy: 'test' }) })
+  await waitFor(() => expect(groupResponses).toHaveLength(0))
+  groupResponses.push(Promise.resolve({ data: [], error: new Error('offline') }))
+  await act(async () => { await expect(result.current.refetchSlices(['resources'])).rejects.toThrow() })
+  groupResponses.push(Promise.resolve({ data: [{ id: 7, name: 'created' }], error: null }))
+  await act(async () => {
+    release({ data: [{ id: 7, name: 'created' }], error: null })
+    expect(await created).toBe(7)
+  })
+  expect(result.current.informalGroups[0].name).toBe('created')
+  expect(state.reads.filter(t => t === 'event_restaurant_assignments')).toHaveLength(2)
+})
 
 test.each(['resources', 'informalGroups'] as const)('late %s read cannot undo renamed group', async (slice) => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')
@@ -42,7 +133,7 @@ test.each(['resources', 'informalGroups'] as const)('late %s read cannot undo re
   groupResponses.push(new Promise(resolve => { release = resolve }))
   const { result } = renderHook(() => useStore(false))
   let pending!: Promise<void>
-  act(() => { pending = result.current.refetchSlices([slice]) })
+  act(() => { pending = result.current.refetchSlices([slice]).catch(() => undefined) })
   await waitFor(() => expect(groupResponses).toHaveLength(0))
   groupResponses.push(Promise.resolve({ data: [{ id: 7, name: 'new', position: 0 }], error: null }))
   await act(async () => { await result.current.renameInformalGroup(7, 'new') })

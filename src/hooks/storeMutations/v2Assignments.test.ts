@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 const state = vi.hoisted(() => ({
   result: { data: [] as Array<{ id: number }>, error: null as unknown },
   select: vi.fn(),
+  single: vi.fn(),
   rpc: vi.fn(),
   toast: vi.fn(),
   storageRemove: vi.fn(),
@@ -27,12 +28,149 @@ const { makeV2AssignmentMutations } = await import('./v2Assignments')
 describe('비공식 그룹 쓰기 결과 계약', () => {
   beforeEach(() => {
     state.result = { data: [], error: null }
-    state.select.mockReset().mockImplementation(() => Promise.resolve(state.result))
+    state.single.mockReset().mockResolvedValue({ data: { id: 7 }, error: null })
+    state.select.mockReset().mockImplementation(() => Object.assign(Promise.resolve(state.result), { single: state.single }))
     // v2 RPC 는 지운 행의 사진 경로(text)를 돌려준다. 문자열이 아니면 실패다.
     state.rpc.mockReset().mockResolvedValue({ data: null, error: null })
     state.storageRemove.mockReset().mockResolvedValue({ data: [{ name: 'abc.png' }], error: null })
     state.toast.mockClear()
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  })
+
+  test.each(['absent', 'narrow', 'fallback', 'legacy-fallback'])('group creation refresh: %s', async (mode) => {
+    const fetchAll = vi.fn().mockResolvedValue(undefined)
+    const refreshCreatedGroup = mode === 'absent' ? undefined : mode === 'narrow'
+      ? vi.fn().mockResolvedValue(undefined) : vi.fn().mockRejectedValue(new Error('offline'))
+    const refreshGroupsFallback = mode === 'legacy-fallback' ? undefined : vi.fn().mockResolvedValue(undefined)
+    const mutations = makeV2AssignmentMutations({ fetchAll, refreshCreatedGroup, refreshGroupsFallback })
+    expect(await mutations.createInformalGroup({ name: 'new', createdBy: 'admin' })).toBe(7)
+    expect(state.single).toHaveBeenCalledOnce()
+    if (refreshCreatedGroup) expect(refreshCreatedGroup).toHaveBeenCalledOnce()
+    if (refreshGroupsFallback) expect(refreshGroupsFallback).toHaveBeenCalledTimes(mode === 'fallback' ? 1 : 0)
+    expect(fetchAll).toHaveBeenCalledTimes(mode === 'absent' || mode === 'legacy-fallback' ? 1 : 0)
+  })
+
+  test.each([null, {}, { id: 0 }, { id: -1 }, { id: 1.5 }, { id: '7' }])('group creation rejects an invalid returned ID: %j', async (data) => {
+    state.single.mockResolvedValue({ data, error: null })
+    const fetchAll = vi.fn(), refreshCreatedGroup = vi.fn()
+    expect(await makeV2AssignmentMutations({ fetchAll, refreshCreatedGroup })
+      .createInformalGroup({ name: 'new', createdBy: 'admin' })).toBeNull()
+    expect(fetchAll).not.toHaveBeenCalled()
+    expect(refreshCreatedGroup).not.toHaveBeenCalled()
+    expect(state.toast).toHaveBeenCalledWith(expect.any(String), 'error')
+  })
+
+  test('group insert error does not refresh', async () => {
+    state.single.mockResolvedValue({ data: null, error: new Error('denied') })
+    const fetchAll = vi.fn(), refreshCreatedGroup = vi.fn()
+    expect(await makeV2AssignmentMutations({ fetchAll, refreshCreatedGroup })
+      .createInformalGroup({ name: 'new', createdBy: 'admin' })).toBeNull()
+    expect(refreshCreatedGroup).not.toHaveBeenCalled()
+    expect(fetchAll).not.toHaveBeenCalled()
+  })
+
+  test('group creation without narrow callback retains refresh rejection', async () => {
+    const fetchAll = vi.fn().mockRejectedValue(new Error('offline'))
+    const refreshGroupsFallback = vi.fn()
+    await expect(makeV2AssignmentMutations({ fetchAll, refreshGroupsFallback })
+      .createInformalGroup({ name: 'new', createdBy: 'admin' })).rejects.toThrow('offline')
+    expect(state.single).toHaveBeenCalledOnce()
+    expect(fetchAll).toHaveBeenCalledOnce()
+    expect(refreshGroupsFallback).not.toHaveBeenCalled()
+    expect(state.toast).not.toHaveBeenCalled()
+  })
+
+  test('committed group ID survives narrow and fallback refresh failure', async () => {
+    const fetchAll = vi.fn()
+    const refreshCreatedGroup = vi.fn().mockRejectedValue(new Error('offline'))
+    const refreshGroupsFallback = vi.fn().mockRejectedValue(new Error('offline'))
+    expect(await makeV2AssignmentMutations({ fetchAll, refreshCreatedGroup, refreshGroupsFallback })
+      .createInformalGroup({ name: 'new', createdBy: 'admin' })).toBe(7)
+    expect(state.single).toHaveBeenCalledOnce()
+    expect(state.toast).toHaveBeenCalledWith(expect.stringContaining('자료를 불러오지 못했습니다'), 'error')
+    expect(refreshGroupsFallback).toHaveBeenCalledOnce()
+    expect(fetchAll).not.toHaveBeenCalled()
+  })
+
+  test.each(['narrow', 'fallback', 'legacy-fallback', 'double-failure'])('single asset move refresh: %s', async (mode) => {
+    state.result = { data: [{ id: 7 }], error: null }
+    const fetchAll = vi.fn().mockResolvedValue(undefined)
+    const refreshMovedAssets = mode === 'narrow' ? vi.fn().mockResolvedValue(undefined)
+      : vi.fn().mockRejectedValue(new Error('offline'))
+    const refreshMovedAssetsFallback = mode === 'legacy-fallback' ? undefined : mode === 'double-failure'
+      ? vi.fn().mockRejectedValue(new Error('offline')) : vi.fn().mockResolvedValue(undefined)
+    const refreshGroupsFallback = vi.fn()
+    const mutations = makeV2AssignmentMutations({ fetchAll, refreshMovedAssets, refreshMovedAssetsFallback, refreshGroupsFallback })
+    expect(await mutations.moveAssetToGroup(7, null)).toBe(mode !== 'double-failure')
+    expect(refreshMovedAssets).toHaveBeenCalledOnce()
+    if (refreshMovedAssetsFallback) expect(refreshMovedAssetsFallback).toHaveBeenCalledTimes(mode === 'narrow' ? 0 : 1)
+    expect(fetchAll).toHaveBeenCalledTimes(mode === 'legacy-fallback' ? 1 : 0)
+    expect(refreshGroupsFallback).not.toHaveBeenCalled()
+    if (mode === 'double-failure') expect(state.toast).toHaveBeenCalledWith(expect.stringContaining('자료를 불러오지 못했습니다'), 'error')
+  })
+
+  test.each(['zero', 'error'])('failed asset move skips targeted reads: %s', async (mode) => {
+    state.result = { data: [], error: mode === 'error' ? new Error('denied') : null }
+    const fetchAll = vi.fn(), refreshMovedAssets = vi.fn(), refreshMovedAssetsFallback = vi.fn()
+    expect(await makeV2AssignmentMutations({ fetchAll, refreshMovedAssets, refreshMovedAssetsFallback })
+      .moveAssetToGroup(7, 3)).toBe(false)
+    expect(refreshMovedAssets).not.toHaveBeenCalled()
+    expect(refreshMovedAssetsFallback).not.toHaveBeenCalled()
+    expect(fetchAll).not.toHaveBeenCalled()
+  })
+
+  test.each([false, true])('bulk move waits for all writes and refreshes partial success once (refreshFails=%s)', async (refreshFails) => {
+    let finish!: (value: typeof state.result) => void
+    state.select
+      .mockResolvedValueOnce({ data: [{ id: 11 }], error: null })
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const fetchAll = vi.fn()
+    const refreshMovedAssets = refreshFails ? vi.fn().mockRejectedValue(new Error('offline')) : vi.fn().mockResolvedValue(undefined)
+    const refreshMovedAssetsFallback = vi.fn().mockRejectedValue(new Error('offline'))
+    const pending = makeV2AssignmentMutations({ fetchAll, refreshMovedAssets, refreshMovedAssetsFallback })
+      .moveAssetsToGroup([11, 12, 13], 5)
+    await Promise.resolve()
+    expect(refreshMovedAssets).not.toHaveBeenCalled()
+    finish({ data: [{ id: 13 }], error: null })
+    expect(await pending).toEqual(refreshFails ? { failed: [12], refreshFailed: true } : { failed: [12] })
+    expect(refreshMovedAssets).toHaveBeenCalledOnce()
+    expect(refreshMovedAssetsFallback).toHaveBeenCalledTimes(refreshFails ? 1 : 0)
+    expect(fetchAll).not.toHaveBeenCalled()
+    if (refreshFails) expect(state.toast).toHaveBeenCalledWith(expect.stringContaining('자료를 불러오지 못했습니다'), 'error')
+  })
+
+  test('empty bulk move skips writes and refresh', async () => {
+    const fetchAll = vi.fn(), refreshMovedAssets = vi.fn()
+    expect(await makeV2AssignmentMutations({ fetchAll, refreshMovedAssets }).moveAssetsToGroup([], 5)).toEqual({ failed: [] })
+    expect(state.select).not.toHaveBeenCalled()
+    expect(refreshMovedAssets).not.toHaveBeenCalled()
+    expect(fetchAll).not.toHaveBeenCalled()
+  })
+
+  test('bulk refresh failure does not label successful writes as failed', async () => {
+    state.result = { data: [{ id: 7 }], error: null }
+    const fetchAll = vi.fn()
+    const refreshMovedAssets = vi.fn().mockRejectedValue(new Error('offline'))
+    const refreshMovedAssetsFallback = vi.fn().mockRejectedValue(new Error('offline'))
+    const result = await makeV2AssignmentMutations({ fetchAll, refreshMovedAssets, refreshMovedAssetsFallback })
+      .moveAssetsToGroup([11, 12], 5)
+    expect(result).toEqual({ failed: [], refreshFailed: true })
+    expect(refreshMovedAssets).toHaveBeenCalledOnce()
+    expect(refreshMovedAssetsFallback).toHaveBeenCalledOnce()
+    expect(fetchAll).not.toHaveBeenCalled()
+  })
+
+  test('new callbacks do not change group or bulk asset deletion refresh', async () => {
+    state.result = { data: [{ id: 7 }], error: null }
+    state.rpc.mockResolvedValue({ data: '', error: null })
+    const fetchAll = vi.fn(), refreshCreatedGroup = vi.fn(), refreshMovedAssets = vi.fn()
+    const mutations = makeV2AssignmentMutations({ fetchAll, refreshCreatedGroup, refreshMovedAssets })
+    expect(await mutations.deleteInformalGroup(7)).toBe(true)
+    expect(await mutations.deleteInformalAssets([11, 12])).toEqual({ failed: [] })
+    expect(fetchAll).toHaveBeenCalledTimes(2)
+    expect(refreshCreatedGroup).not.toHaveBeenCalled()
+    expect(refreshMovedAssets).not.toHaveBeenCalled()
   })
 
   test.each([false, true])('rename refreshes only groups, falling back on failure=%s', async (fails) => {

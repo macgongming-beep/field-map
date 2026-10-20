@@ -40,7 +40,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     q.update = () => { writing = true; return q }
     q.single = () => {
       state.reads.push(table)
-      return Promise.resolve({ data: table === 'service_sessions' ? { id: 777 } : { id: filters.find(([key]) => key === 'id')?.[1], building_id: state.unitParent }, error: state.unitLookupError ? new Error('offline') : null })
+      return Promise.resolve({ data: table === 'service_sessions' ? { id: 777 } : table === 'informal_groups' ? { id: 7 } : { id: filters.find(([key]) => key === 'id')?.[1], building_id: state.unitParent }, error: state.unitLookupError ? new Error('offline') : null })
     }
     q.eq = (key: string, value: unknown) => { filters.push([key, value]); return q }
     q.range = (from: number, to: number) => { range = [from, to]; return q }
@@ -53,7 +53,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
         : table === 'return_visits' ? writing ? [{ id: 7 }] : state.returnRows
         : table === 'return_visit_logs' ? state.returnLogs
-        : writing && (table === 'units' || table === 'informal_groups') ? [{ id: 100 }]
+        : writing && (table === 'units' || table === 'informal_groups' || table === 'informal_assets') ? [{ id: 100 }]
         : table === 'restaurant_requests' ? writing ? [{ id: 61 }] : state.requests.filter(row => filters.every(([key, value]) => row[key] === value))
         : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []
       return resolve({ data, error: (!writing && table === state.failedTable) || (writing && state.insertError) ? new Error('offline') : null })
@@ -534,6 +534,24 @@ test('production group rename does not rebuild recipient scope', async () => {
   await act(async () => { expect(await result.current.renameInformalGroup(7, 'new')).toBe(true) })
   expect(state.refresh).not.toHaveBeenCalled()
   expect(state.reads).toEqual(['informal_groups:insert', 'informal_groups'])
+  expect(result.current.buildings.map(b => b.id)).toEqual([10])
+})
+
+test.each(['create', 'move', 'bulk'] as const)('demo group %s avoids recipient scope recalculation', async (action) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear()
+  state.reads = []
+  await act(async () => {
+    if (action === 'create') expect(await result.current.createInformalGroup({ name: 'test', createdBy: 'Volunteer' })).toBe(7)
+    else if (action === 'move') expect(await result.current.moveAssetToGroup(11, 7)).toBe(true)
+    else expect(await result.current.moveAssetsToGroup([11, 12], 7)).toEqual({ failed: [] })
+  })
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(state.reads).not.toContain('event_informal_assignments')
+  expect(state.reads).not.toContain('event_restaurant_assignments')
+  expect(state.reads.filter(t => t === 'informal_groups')).toHaveLength(action === 'create' ? 2 : 1)
   expect(result.current.buildings.map(b => b.id)).toEqual([10])
 })
 

@@ -238,7 +238,7 @@ type Props = {
   onDeleteGroup: (groupId: number) => Promise<boolean>
   onMoveAsset: (assetId: number, groupId: number | null) => Promise<boolean>
   /** 일괄 이동. 위와 같은 이유로 나뉘어 있다. */
-  onMoveMany?: (assetIds: number[], groupId: number | null) => Promise<{ failed: number[] }>
+  onMoveMany?: (assetIds: number[], groupId: number | null) => Promise<{ failed: number[]; refreshFailed?: boolean }>
   language?: AppLanguage
   /** 지도에서 돌아왔을 때 펼친 그룹을 복원하기 위한 화면별 저장 키. */
   expandedStateKey: string
@@ -250,10 +250,14 @@ type Props = {
  */
 async function runMany(
   ids: number[],
-  many: ((ids: number[]) => Promise<{ failed: number[] }>) | undefined,
+  many: ((ids: number[]) => Promise<{ failed: number[]; refreshFailed?: boolean }>) | undefined,
   one: (id: number) => Promise<boolean>,
-): Promise<number[]> {
-  if (many) return (await many(ids)).failed
+): Promise<number[] | null> {
+  if (many) {
+    const result = await many(ids)
+    // The mutation already reports refresh failure; retain selection for retry.
+    return result.refreshFailed ? null : result.failed
+  }
   const results = await Promise.all(ids.map((id) => one(id)))
   return ids.filter((_id, index) => !results[index])
 }
@@ -1295,6 +1299,7 @@ export function InformalCardsTab({
                     onMoveMany ? (many) => onMoveMany(many, null) : undefined,
                     (id) => onMoveAsset(id, null),
                   )
+                  if (failed === null) return
                   if (failed.length === 0) {
                     setBulkMoveOpen(false)
                     clearSelection()
@@ -1325,6 +1330,7 @@ export function InformalCardsTab({
                       onMoveMany ? (many) => onMoveMany(many, g.id) : undefined,
                       (id) => onMoveAsset(id, g.id),
                     )
+                    if (failed === null) return
                     if (failed.length === 0) {
                       setBulkMoveOpen(false)
                       clearSelection()
@@ -1390,6 +1396,7 @@ export function InformalCardsTab({
                   const ids = Array.from(selectedAssetIds)
                   setBulkDeleteConfirm(false)
                   const failed = await runMany(ids, onDeleteMany, onDelete)
+                  if (failed === null) return
                   if (failed.length === 0) {
                     clearSelection()
                     showToast(copy.deletedMany(ids.length), 'success')

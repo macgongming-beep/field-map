@@ -14,6 +14,9 @@ export function makeV2AssignmentMutations(deps: {
   refreshRestaurantBuildings?: (buildingIds: number[]) => Promise<void>
   refreshGroups?: () => Promise<void>
   refreshGroupsFallback?: () => Promise<void>
+  refreshCreatedGroup?: () => Promise<void>
+  refreshMovedAssets?: () => Promise<void>
+  refreshMovedAssetsFallback?: () => Promise<void>
 }) {
   const { fetchAll } = deps
   const refreshRestaurants = deps.refreshRestaurantBuildings ?? fetchAll
@@ -194,7 +197,7 @@ export function makeV2AssignmentMutations(deps: {
   }
 
   // ── 비공식 그룹 ────────────────────────────────────
-  const createInformalGroup = async (input: { name: string; createdBy: string }) => {
+  const createInformalGroup = async (input: { name: string; createdBy: string }): Promise<number | null> => {
     const { data, error } = await supabase
       .from('informal_groups')
       .insert({ name: input.name.trim() || '새 그룹', created_by: input.createdBy })
@@ -204,8 +207,21 @@ export function makeV2AssignmentMutations(deps: {
       showToast(msg('그룹 생성 실패: {message}', { message: error.message }), 'error')
       return null
     }
-    await fetchAll()
-    return data?.id ?? null
+    if (!Number.isSafeInteger(data?.id) || data.id <= 0) {
+      reportMutationError(msg('그룹 생성 실패: {message}', { message: 'Invalid group ID' }), new Error('Invalid group ID'))
+      return null
+    }
+    if (!deps.refreshCreatedGroup) await fetchAll()
+    else {
+      // Narrow-refresh recovery must not invite a duplicate confirmed insert.
+      try {
+        try { await deps.refreshCreatedGroup() }
+        catch { await (deps.refreshGroupsFallback ?? fetchAll)() }
+      } catch (error) {
+        reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'), error)
+      }
+    }
+    return data.id
   }
 
   const renameInformalGroup = async (groupId: number, name: string): Promise<boolean> => {
@@ -258,10 +274,24 @@ export function makeV2AssignmentMutations(deps: {
     return ensureAffectedRows(data, msg('자료를 이동하지 못했습니다.'))
   }
 
+  const refreshMovedAssets = async (): Promise<boolean> => {
+    if (!deps.refreshMovedAssets) {
+      await fetchAll()
+      return true
+    }
+    try {
+      try { await deps.refreshMovedAssets() }
+      catch { await (deps.refreshMovedAssetsFallback ?? fetchAll)() }
+      return true
+    } catch (error) {
+      reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'), error)
+      return false
+    }
+  }
+
   const moveAssetToGroup = async (assetId: number, groupId: number | null): Promise<boolean> => {
     if (!await moveAssetToGroupCore(assetId, groupId)) return false
-    await fetchAll()
-    return true
+    return refreshMovedAssets()
   }
 
   /** 재조회를 뺀 알맹이. Storage 정리까지 여기서 끝낸다. */
@@ -324,27 +354,28 @@ export function makeV2AssignmentMutations(deps: {
   const runBulk = async (
     ids: number[],
     one: (id: number) => Promise<boolean>,
-  ): Promise<{ failed: number[] }> => {
+    refresh: () => Promise<unknown> = fetchAll,
+  ): Promise<{ failed: number[]; refreshFailed?: boolean }> => {
     if (ids.length === 0) return { failed: [] }
+    const outcome: { failed: number[]; refreshFailed?: boolean } = { failed: [] }
     try {
       // allSettled 를 쓴다 — 하나가 던져도 나머지 결과를 잃지 않는다
       const results = await Promise.allSettled(ids.map((id) => one(id)))
-      return {
-        failed: ids.filter((_id, index) => {
-          const r = results[index]
-          return r.status !== 'fulfilled' || r.value !== true
-        }),
-      }
+      outcome.failed = ids.filter((_id, index) => {
+        const r = results[index]
+        return r.status !== 'fulfilled' || r.value !== true
+      })
     } finally {
-      await fetchAll()
+      if (await refresh() === false) outcome.refreshFailed = true
     }
+    return outcome
   }
 
   const deleteInformalAssets = (assetIds: number[]) =>
     runBulk(assetIds, deleteInformalAssetCore)
 
   const moveAssetsToGroup = (assetIds: number[], groupId: number | null) =>
-    runBulk(assetIds, (id) => moveAssetToGroupCore(id, groupId))
+    runBulk(assetIds, (id) => moveAssetToGroupCore(id, groupId), refreshMovedAssets)
 
   // ── 비공식 배정 ────────────────────────────────────
   const assignInformalToUser = async (input: {

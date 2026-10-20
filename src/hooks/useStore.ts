@@ -148,6 +148,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const [informalAssets, setInformalAssets] = useState<InformalAsset[]>([])
   const [eventInformalAssignments, setEventInformalAssignments] = useState<EventInformalAssignment[]>([])
   const informalGroupReadVersion = useRef(0)
+  const informalAssetReadVersion = useRef(0)
   const recipientInformalAssignments = useMemo(() => teamInformalAssignments(calendarEvents, eventInformalAssignments), [calendarEvents, eventInformalAssignments])
   const [eventRestaurantAssignments, setEventRestaurantAssignments] = useState<EventRestaurantAssignment[]>([])
   const [informalGroups, setInformalGroups] = useState<InformalGroup[]>([])
@@ -197,6 +198,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     | 'calendar'
     | 'resources'
     | 'informalGroups'
+    | 'informalAssets'
     | 'communication'
     | 'returnVisits'
     | 'returnVisitDetails'
@@ -210,7 +212,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   ]
 
   // 각 slice를 독립적으로 fetch. 페이로드 크기 누적 반환.
-  const fetchSlice = useCallback(async (slice: Slice, recovery = false, historiesRecovered = false, strictGroups = false): Promise<number> => {
+  const fetchSlice = useCallback(async (slice: Slice, recovery = false, historiesRecovered = false, strictGroups = false, strictAssets = false): Promise<number> => {
     let approxBytes = 0
     // ⚠ 운영에서는 측정하지 않는다 — 숫자 하나 얻으려고 440KB 를 통째로
     //   문자열로 바꾸는 비용이 구형 기기에서 그대로 체감된다
@@ -432,6 +434,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
       case 'resources': {
         const groupVersion = ++informalGroupReadVersion.current
+        const assetVersion = ++informalAssetReadVersion.current
         const [informalAssetsRes, eventInformalRes, eventRestaurantRes, informalGroupsRes] = await Promise.all([
           supabase.from('informal_assets').select('*').eq('archived', false).order('created_at', { ascending: false }),
           supabase.from('event_informal_assignments').select('*'),
@@ -444,7 +447,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         measure(eventRestaurantRes.data)
         measure(informalGroupsRes.data)
 
-        setInformalAssets(informalAssetsRes.error ? [] : (informalAssetsRes.data as RawInformalAsset[]).map(toInformalAsset))
+        if (import.meta.env.VITE_DEMO_MODE !== 'true' || assetVersion === informalAssetReadVersion.current) {
+          if (!informalAssetsRes.error) setInformalAssets((informalAssetsRes.data as RawInformalAsset[]).map(toInformalAsset))
+          else if (!strictAssets && import.meta.env.VITE_DEMO_MODE !== 'true') setInformalAssets([])
+        }
         setEventInformalAssignments(eventInformalRes.error ? [] : (eventInformalRes.data as RawEventInformalAssignment[]).map(toEventInformalAssignment))
         setEventRestaurantAssignments(eventRestaurantRes.error ? [] : (eventRestaurantRes.data as RawEventRestaurantAssignment[]).map(toEventRestaurantAssignment))
         if (groupVersion === informalGroupReadVersion.current) {
@@ -453,6 +459,15 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         }
         if (informalGroupsRes.error && (strictGroups || import.meta.env.VITE_DEMO_MODE === 'true')) {
           throw new Error('Informal groups load failed', { cause: informalGroupsRes.error })
+        }
+        if (informalAssetsRes.error && strictAssets) {
+          throw new Error('Informal assets load failed', { cause: informalAssetsRes.error })
+        }
+        if (strictAssets && assetVersion !== informalAssetReadVersion.current) {
+          throw new Error('Informal assets recovery superseded')
+        }
+        if (strictGroups && import.meta.env.VITE_DEMO_MODE === 'true' && groupVersion !== informalGroupReadVersion.current) {
+          throw new Error('Informal groups recovery superseded')
         }
 
         if (informalAssetsRes.error || eventInformalRes.error || eventRestaurantRes.error || informalGroupsRes.error) {
@@ -464,10 +479,23 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       case 'informalGroups': {
         const version = ++informalGroupReadVersion.current
         const res = await supabase.from('informal_groups').select('*').order('position').order('created_at')
-        if (version !== informalGroupReadVersion.current) return 0
+        if (version !== informalGroupReadVersion.current) {
+          if (import.meta.env.VITE_DEMO_MODE === 'true') throw new Error('Informal groups refresh superseded')
+          return 0
+        }
         if (res.error) throw new Error('Informal groups load failed', { cause: res.error })
         measure(res.data)
         setInformalGroups((res.data as RawInformalGroup[]).map(toInformalGroup))
+        return approxBytes
+      }
+
+      case 'informalAssets': {
+        const version = ++informalAssetReadVersion.current
+        const res = await supabase.from('informal_assets').select('*').eq('archived', false).order('created_at', { ascending: false })
+        if (version !== informalAssetReadVersion.current) throw new Error('Informal assets refresh superseded')
+        if (res.error) throw new Error('Informal assets load failed', { cause: res.error })
+        measure(res.data)
+        setInformalAssets((res.data as RawInformalAsset[]).map(toInformalAsset))
         return approxBytes
       }
 
@@ -573,7 +601,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const recipientQueue = useRef<Promise<void>>(Promise.resolve())
   const fetchSlices = useCallback((
     slices: Slice[],
-    options?: { triggeredBy?: string; strictGroups?: boolean },
+    options?: { triggeredBy?: string; strictGroups?: boolean; strictAssets?: boolean },
   ): Promise<void> => {
     if (recipientReader) {
       const work = async () => {
@@ -600,7 +628,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
               requested.delete('buildings')
               requested.delete('cardBoundaries')
               // Histories remain global for statistics; scoped recovery cannot replace them.
-              await Promise.all([...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups)))
+              await Promise.all([...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups, options?.strictAssets)))
               return
             }
           } catch {
@@ -613,7 +641,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           await fetchSlice('buildings')
           requested.delete('buildings')
         }
-        await Promise.all([...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups)))
+        await Promise.all([...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups, options?.strictAssets)))
         if (baseline && slices.includes('buildings')) {
           territoryCheckpoint.baseline = baseline
           territoryCheckpoint.cards.clear()
@@ -630,11 +658,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     // Only recovery callers share reads. A post-mutation refresh must not join a
     // query that started before the write and could return an older snapshot.
     const recovery = options?.triggeredBy === 'foreground' || options?.triggeredBy?.startsWith('realtime:')
-    const share = !options?.strictGroups && (options?.triggeredBy === 'fetchAll' || recovery)
+    const share = !options?.strictGroups && !options?.strictAssets && (options?.triggeredBy === 'fetchAll' || recovery)
     let reusedTerritoryRead = false
     let historiesRecovered = false
     const read = (slice: Slice) => {
-      if (!share) return fetchSlice(slice, slice === 'cardBoundaries' && options?.triggeredBy === 'mutation:cardBoundaries', false, options?.strictGroups)
+      if (!share) return fetchSlice(slice, slice === 'cardBoundaries' && options?.triggeredBy === 'mutation:cardBoundaries', false, options?.strictGroups, options?.strictAssets)
       const existing = recoveryReads.get(slice)
       // A sessions-only visits read cannot replace histories unless this caller recovered them.
       if (existing && (recovery || !existing.delta)
@@ -1177,6 +1205,13 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       ? () => fetchSlices(['informalGroups'], { triggeredBy: 'mutation:informalGroups' }) : undefined,
     // Only rename recovery requires groups; ordinary startup remains nonfatal.
     refreshGroupsFallback: () => fetchSlices(['resources'], { triggeredBy: 'mutation:informalGroups:recovery', strictGroups: true }),
+    refreshCreatedGroup: import.meta.env.VITE_DEMO_MODE === 'true'
+      ? () => fetchSlices(['informalGroups'], { triggeredBy: 'mutation:informalGroupCreate' }) : undefined,
+    refreshMovedAssets: import.meta.env.VITE_DEMO_MODE === 'true'
+      ? () => fetchSlices(['informalAssets', 'informalGroups'], { triggeredBy: 'mutation:informalGroupMove' }) : undefined,
+    refreshMovedAssetsFallback: () => fetchSlices(['resources'], {
+      triggeredBy: 'mutation:informalGroupMove:recovery', strictGroups: true, strictAssets: true,
+    }),
   })
 
   const {
