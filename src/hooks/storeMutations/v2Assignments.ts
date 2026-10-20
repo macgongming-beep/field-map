@@ -12,6 +12,7 @@ import type { InformalKind } from '../../types'
 export function makeV2AssignmentMutations(deps: {
   fetchAll: () => Promise<void>
   refreshRestaurantBuildings?: (buildingIds: number[]) => Promise<void>
+  refreshGroups?: () => Promise<void>
 }) {
   const { fetchAll } = deps
   const refreshRestaurants = deps.refreshRestaurantBuildings ?? fetchAll
@@ -217,7 +218,16 @@ export function makeV2AssignmentMutations(deps: {
       return false
     }
     if (!ensureAffectedRows(data, msg('그룹 이름을 변경하지 못했습니다.'))) return false
-    await fetchAll()
+    if (!deps.refreshGroups) await fetchAll()
+    else {
+      try {
+        try { await deps.refreshGroups() }
+        catch { await fetchAll() }
+      } catch (error) {
+        reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'), error)
+        return false
+      }
+    }
     return true
   }
 

@@ -147,6 +147,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const returnVisitReadVersion = useRef(0)
   const [informalAssets, setInformalAssets] = useState<InformalAsset[]>([])
   const [eventInformalAssignments, setEventInformalAssignments] = useState<EventInformalAssignment[]>([])
+  const informalGroupReadVersion = useRef(0)
   const recipientInformalAssignments = useMemo(() => teamInformalAssignments(calendarEvents, eventInformalAssignments), [calendarEvents, eventInformalAssignments])
   const [eventRestaurantAssignments, setEventRestaurantAssignments] = useState<EventRestaurantAssignment[]>([])
   const [informalGroups, setInformalGroups] = useState<InformalGroup[]>([])
@@ -195,6 +196,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     | 'serviceSessions'
     | 'calendar'
     | 'resources'
+    | 'informalGroups'
     | 'communication'
     | 'returnVisits'
     | 'returnVisitDetails'
@@ -429,6 +431,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       }
 
       case 'resources': {
+        const groupVersion = ++informalGroupReadVersion.current
         const [informalAssetsRes, eventInformalRes, eventRestaurantRes, informalGroupsRes] = await Promise.all([
           supabase.from('informal_assets').select('*').eq('archived', false).order('created_at', { ascending: false }),
           supabase.from('event_informal_assignments').select('*'),
@@ -444,11 +447,27 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         setInformalAssets(informalAssetsRes.error ? [] : (informalAssetsRes.data as RawInformalAsset[]).map(toInformalAsset))
         setEventInformalAssignments(eventInformalRes.error ? [] : (eventInformalRes.data as RawEventInformalAssignment[]).map(toEventInformalAssignment))
         setEventRestaurantAssignments(eventRestaurantRes.error ? [] : (eventRestaurantRes.data as RawEventRestaurantAssignment[]).map(toEventRestaurantAssignment))
-        setInformalGroups(informalGroupsRes.error ? [] : (informalGroupsRes.data as RawInformalGroup[]).map(toInformalGroup))
+        if (groupVersion === informalGroupReadVersion.current) {
+          if (!informalGroupsRes.error) setInformalGroups((informalGroupsRes.data as RawInformalGroup[]).map(toInformalGroup))
+          else if (import.meta.env.VITE_DEMO_MODE !== 'true') setInformalGroups([])
+        }
+        if (informalGroupsRes.error && import.meta.env.VITE_DEMO_MODE === 'true') {
+          throw new Error('Informal groups load failed', { cause: informalGroupsRes.error })
+        }
 
         if (informalAssetsRes.error || eventInformalRes.error || eventRestaurantRes.error || informalGroupsRes.error) {
           console.warn('v2 신 배정 모델 일부 미적용 — supabase/v2_assignment_model.sql 실행 필요')
         }
+        return approxBytes
+      }
+
+      case 'informalGroups': {
+        const version = ++informalGroupReadVersion.current
+        const res = await supabase.from('informal_groups').select('*').order('position').order('created_at')
+        if (version !== informalGroupReadVersion.current) return 0
+        if (res.error) throw new Error('Informal groups load failed', { cause: res.error })
+        measure(res.data)
+        setInformalGroups((res.data as RawInformalGroup[]).map(toInformalGroup))
         return approxBytes
       }
 
@@ -1119,6 +1138,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     fetchAll: refetchReturnVisits,
     refreshDetails: refetchReturnVisitDetails,
     refreshLogEdit: refetchReturnVisitDetails,
+    refreshChinese: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+      ? (buildingId) => syncChangedBuildings([buildingId]) : undefined,
     refreshAddress: (import.meta.env.VITE_RETURN_VISIT_ADDRESS_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? refetchReturnVisitDetails : undefined,
     buildings, cards, returnVisits,
@@ -1150,7 +1171,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     toggleBuildingRestaurant,
     removeRestaurantUnit,
     bulkSetRestaurantFlag,
-  } = makeV2AssignmentMutations({ fetchAll: refetchResources, refreshRestaurantBuildings })
+  } = makeV2AssignmentMutations({
+    fetchAll: refetchResources, refreshRestaurantBuildings,
+    refreshGroups: import.meta.env.VITE_DEMO_MODE === 'true'
+      ? () => fetchSlices(['informalGroups'], { triggeredBy: 'mutation:informalGroups' }) : undefined,
+  })
 
   const {
     addRestaurantVisit,

@@ -9,6 +9,7 @@ export function makeRegularVisitMutations(deps: {
   refreshDetails?: () => Promise<void>
   refreshLogEdit?: () => Promise<void>
   refreshAddress?: () => Promise<void>
+  refreshChinese?: (buildingId: number) => Promise<void>
   buildings: Building[]
   cards: TerritoryCard[]
   returnVisits: ReturnVisit[]
@@ -111,12 +112,22 @@ export function makeRegularVisitMutations(deps: {
     if (!building || !unit) return
 
     const newValue = !unit.isChinese
-    const result = await supabase.from('units').update({ is_chinese: newValue }).eq('id', unitId)
+    const result = await supabase.from('units').update({ is_chinese: newValue }).eq('id', unitId).select('id')
     if (result.error) {
       reportMutationError(msg('중국인 거주 여부를 저장하지 못했습니다.'), result.error)
       return
     }
-    await fetchAll()
+    if (!ensureAffectedRows(result.data, msg('중국인 거주 여부를 저장하지 못했습니다.'))) return
+    if (!deps.refreshChinese) await fetchAll()
+    else {
+      try {
+        try { await deps.refreshChinese(buildingId) }
+        catch { await fetchAll() }
+      } catch (error) {
+        reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'), error)
+        return
+      }
+    }
     showToast(newValue ? '중국인 거주가 등록됐습니다' : '중국인 거주가 해제됐습니다')
   }
 

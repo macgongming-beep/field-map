@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { testBuilding } from '../../test/territoryFixture'
 
 const mocks = vi.hoisted(() => ({
   token: '00000000-0000-0000-0000-000000000007' as string | null,
@@ -53,6 +54,30 @@ describe('address-only refresh', () => {
     expect(await makeRegularVisitMutations({ fetchAll, refreshAddress, buildings: [], cards: [], returnVisits: [] }).updateReturnVisitAddress(31, 'new')).toBe(false)
     expect(refreshAddress).not.toHaveBeenCalled()
     expect(fetchAll).not.toHaveBeenCalled()
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
+})
+
+describe('Chinese flag refresh', () => {
+  it.each(['narrow', 'fallback', 'absent'])('refreshes the changed building: %s', async (mode) => {
+    const { makeRegularVisitMutations } = await import('./regularVisits')
+    const fetchAll = vi.fn().mockResolvedValue(undefined)
+    const refreshChinese = mode === 'absent' ? undefined : mode === 'fallback'
+      ? vi.fn().mockRejectedValue(new Error('offline')) : vi.fn().mockResolvedValue(undefined)
+    const mutations = makeRegularVisitMutations({ fetchAll, refreshChinese, buildings: [testBuilding(1, 1, 'test')], cards: [], returnVisits: [] })
+    await mutations.toggleChinese(1, 101)
+    expect(mocks.update).toHaveBeenCalledWith({ is_chinese: true })
+    expect(mocks.eq).toHaveBeenCalledWith('id', 101)
+    if (refreshChinese) expect(refreshChinese).toHaveBeenCalledWith(1)
+    expect(fetchAll).toHaveBeenCalledTimes(mode === 'narrow' ? 0 : 1)
+  })
+  it.each(['zero', 'error'])('does not refresh after write %s', async (failure) => {
+    const { makeRegularVisitMutations } = await import('./regularVisits')
+    mocks.select.mockResolvedValue({ data: [], error: failure === 'error' ? new Error('offline') : null })
+    const fetchAll = vi.fn(), refreshChinese = vi.fn()
+    await makeRegularVisitMutations({ fetchAll, refreshChinese, buildings: [testBuilding(1, 1, 'test')], cards: [], returnVisits: [] }).toggleChinese(1, 101)
+    expect(fetchAll).not.toHaveBeenCalled()
+    expect(refreshChinese).not.toHaveBeenCalled()
     expect(mocks.toast).not.toHaveBeenCalled()
   })
 })

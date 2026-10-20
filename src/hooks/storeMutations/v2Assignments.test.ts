@@ -35,6 +35,23 @@ describe('비공식 그룹 쓰기 결과 계약', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
   })
 
+  test.each([false, true])('rename refreshes only groups, falling back on failure=%s', async (fails) => {
+    state.result = { data: [{ id: 7 }], error: null }
+    const fetchAll = vi.fn().mockResolvedValue(undefined)
+    const refreshGroups = fails ? vi.fn().mockRejectedValue(new Error('offline')) : vi.fn().mockResolvedValue(undefined)
+    expect(await makeV2AssignmentMutations({ fetchAll, refreshGroups }).renameInformalGroup(7, 'new')).toBe(true)
+    expect(refreshGroups).toHaveBeenCalledOnce()
+    expect(fetchAll).toHaveBeenCalledTimes(fails ? 1 : 0)
+  })
+
+  test('rename reports refresh failure if both reads fail', async () => {
+    state.result = { data: [{ id: 7 }], error: null }
+    const fetchAll = vi.fn().mockRejectedValue(new Error('offline'))
+    const refreshGroups = vi.fn().mockRejectedValue(new Error('offline'))
+    expect(await makeV2AssignmentMutations({ fetchAll, refreshGroups }).renameInformalGroup(7, 'new')).toBe(false)
+    expect(state.toast).toHaveBeenCalledWith(expect.stringContaining('자료를 불러오지 못했습니다'), 'error')
+  })
+
   test.each([
     ['이름 변경', (mutations: ReturnType<typeof makeV2AssignmentMutations>) => mutations.renameInformalGroup(7, '새 이름')],
     ['삭제', (mutations: ReturnType<typeof makeV2AssignmentMutations>) => mutations.deleteInformalGroup(7)],
