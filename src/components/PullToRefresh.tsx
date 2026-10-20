@@ -2,6 +2,8 @@
 // 화면 최상단에서 아래로 당기면 새로고침
 import { useEffect, useRef, useState } from 'react'
 import { msg } from '../lib/msg'
+import { Sentry } from '../lib/sentry'
+import { SupersededReadError } from '../hooks/supersededRead'
 import './PullToRefresh.css'
 
 const THRESHOLD = 70 // px
@@ -58,8 +60,9 @@ export function PullToRefresh({ onRefresh }: { onRefresh: () => Promise<void> | 
         setRefreshing(true)
         try {
           await onRefresh()
-        } catch {
+        } catch (error) {
           // The refresh owner reports errors; DOM event handlers must not reject.
+          if (!(error instanceof SupersededReadError)) Sentry.captureException(error)
         } finally {
           setRefreshing(false)
         }
