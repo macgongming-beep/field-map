@@ -1,11 +1,12 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import { testBuilding } from '../test/territoryFixture'
 
 const state = vi.hoisted(() => ({ rpc: vi.fn(), changed: vi.fn(), clock: vi.fn(), index: vi.fn(), reads: [] as string[], boundaryColumns: [] as string[], block: null as null | Promise<void> }))
 const logColumns = vi.hoisted(() => [] as string[])
-const creationCards = vi.hoisted(() => ({ enabled: false }))
+const creationCards = vi.hoisted(() => ({ enabled: false, ids: [1] }))
 const returnResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: null }> [])
 const groupResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock, fetchBuildingRecoveryIndex: state.index }))
@@ -28,13 +29,48 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       if (!writing && table === 'return_visits' && returnResponses.length) return resolve(await returnResponses.shift())
       if (!writing && table === 'informal_groups' && groupResponses.length) return resolve(await groupResponses.shift())
       if (table === 'buildings') await state.block
-      return resolve({ data: creationCards.enabled && table === 'cards' ? [{ id: 1, name: 'card', card_assignments: [] }] : writing && (table === 'units' || table === 'return_visits' || table === 'informal_groups') ? [{ id: 1 }] : writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
+      return resolve({ data: creationCards.enabled && table === 'cards' ? creationCards.ids.map(id => ({ id, name: 'card', card_assignments: [] })) : writing && (table === 'units' || table === 'return_visits' || table === 'informal_groups') ? [{ id: 1 }] : writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
     }
     return chain
   },
 } }))
 afterEach(() => { cleanup(); vi.clearAllMocks(); state.rpc.mockReset(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
 afterEach(() => { logColumns.length = 0; creationCards.enabled = false; returnResponses.length = 0; groupResponses.length = 0 })
+afterEach(() => { creationCards.ids = [1] })
+
+test.each([1, 2])('production card totals use the same snapshot after %s queued building changes', async (changes) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  const { result } = renderHook(() => {
+    const [tick, setTick] = useState(0)
+    const store = useStore(false)
+    return { store, tick, setTick }
+  })
+  const first = testBuilding(1, 1, 'first')
+  const second = testBuilding(2, 2, 'second')
+  const untouched = testBuilding(3, 2, 'untouched')
+  state.changed.mockResolvedValueOnce({ buildings: [first, second, untouched], histories: [] })
+  await act(async () => { await result.current.store.syncChangedBuildings([1, 2, 3]) })
+  creationCards.enabled = true
+  creationCards.ids = [1, 2]
+  await act(async () => { await result.current.store.refetchSlices(['cards']) })
+  expect(result.current.store.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 1, 1], [2, 2, 2]])
+  state.reads = []
+  act(() => {
+    // Pending work prevents React's eager updater path from hiding stale ref reads.
+    result.current.setTick(tick => tick + 1)
+    for (const building of [first, second].slice(0, changes)) {
+      result.current.store.applyPlaceDeletionSignal({
+        targetType: 'building', buildingId: building.id, unitId: null,
+        unitIds: building.units.map(unit => unit.id), returnVisitIds: [],
+      })
+    }
+  })
+  expect(result.current.tick).toBe(1)
+  expect(result.current.store.buildings).toEqual(changes === 1 ? [second, untouched] : [untouched])
+  expect(result.current.store.cards.map(c => [c.id, c.buildings, c.units]))
+    .toEqual([[1, 0, 0], [2, 3 - changes, 3 - changes]])
+  expect(state.reads).toEqual([])
+})
 
 test.each(['resources', 'informalGroups'] as const)('late %s read cannot undo renamed group', async (slice) => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')
