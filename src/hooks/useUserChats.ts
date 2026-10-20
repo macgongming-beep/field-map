@@ -63,11 +63,31 @@ function isLockedByEventDate(eventDate: string): boolean {
 export function useUserChats(
   userId: number | null | undefined,
   userName: string | null | undefined,
-  options?: { realtime?: boolean },
+  options?: { realtime?: boolean; badgeOnly?: boolean },
 ) {
   const realtimeEnabled = options?.realtime !== false
-  const cacheKey = getUserChatsCacheKey(userId, userName)
-  const [chats, setChats] = useState<UserChat[]>(() => getCachedUserChats(cacheKey)?.chats ?? [])
+  const badgeOnly = options?.badgeOnly === true
+  const badgeToken = badgeOnly ? getAuthToken() : null
+  const accountKey = getUserChatsCacheKey(userId, userName)
+  // Badge rows omit list details. Never share their cache/inflight with full lists.
+  const cacheKey = badgeOnly && accountKey
+    ? JSON.stringify(['badge', accountKey, badgeToken])
+    : accountKey
+  const currentBadgeKey = useRef(cacheKey)
+  useEffect(() => { currentBadgeKey.current = cacheKey }, [cacheKey])
+  const [snapshot, setSnapshot] = useState(() => ({
+    key: cacheKey, chats: getCachedUserChats(cacheKey)?.chats ?? [],
+  }))
+  const chats = useMemo(() => badgeOnly && snapshot.key !== cacheKey ? [] : snapshot.chats,
+    [badgeOnly, snapshot, cacheKey])
+  const setChats = useCallback((next: UserChat[] | ((previous: UserChat[]) => UserChat[])) => {
+    setSnapshot((previous) => ({
+      key: cacheKey,
+      chats: typeof next === 'function'
+        ? next(badgeOnly && previous.key !== cacheKey ? [] : previous.chats)
+        : next,
+    }))
+  }, [badgeOnly, cacheKey])
   const [loading, setLoading] = useState(false)
   const channelIdRef = useRef(
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -76,6 +96,8 @@ export function useUserChats(
   )
 
   const fetchAll = useCallback(async (options?: { force?: boolean }) => {
+    const isCurrent = () => !badgeOnly
+      || (currentBadgeKey.current === cacheKey && getAuthToken() === badgeToken)
     if (!userId || !userName) {
       setChats([])
       return
@@ -85,6 +107,8 @@ export function useUserChats(
     const cacheFresh = cached && Date.now() - cached.fetchedAt < USER_CHATS_CACHE_TTL
     if (cached) {
       setChats(cached.chats)
+    } else if (badgeOnly) {
+      setChats([])
     }
     if (cacheFresh && !options?.force) {
       setLoading(false)
@@ -96,9 +120,9 @@ export function useUserChats(
       setLoading(!cached)
       try {
         const result = await existingRequest
-        setChats(result)
+        if (isCurrent()) setChats(result)
       } finally {
-        setLoading(false)
+        if (isCurrent()) setLoading(false)
       }
       return
     }
@@ -146,7 +170,7 @@ export function useUserChats(
       const eventIds = events.map((e) => e.id)
 
       // 2. 채팅 읽음 상태 (RPC — 본인 것만)
-      const token = getAuthToken()
+      const token = badgeOnly ? badgeToken : getAuthToken()
       const readMap = new Map<number, string>()
       if (token) {
         const { data: readRows } = await supabase.rpc('get_my_chat_reads', {
@@ -182,11 +206,13 @@ export function useUserChats(
       })
 
       // 4. 일정별 참여 인원 카운트
-      const { data: allParticipants } = await supabase
+      // Only totalUnread/local read updates are supported by the internal badge consumer.
+      // Participant/session placeholders must not be used to render a chat list.
+      const { data: allParticipants } = badgeOnly ? { data: [] } : await supabase
         .from('event_participants')
         .select('event_id')
         .in('event_id', eventIds)
-      const { data: allCartParticipants } = CART_APPLICATIONS_ENABLED
+      const { data: allCartParticipants } = !badgeOnly && CART_APPLICATIONS_ENABLED
         ? await supabase
           .from('event_cart_applications')
           .select('event_id')
@@ -202,7 +228,7 @@ export function useUserChats(
       })
 
       // 5. 봉사 세션 (잠금 판단용)
-      const { data: sessions } = await supabase
+      const { data: sessions } = badgeOnly ? { data: [] } : await supabase
         .from('service_sessions')
         .select('calendar_event_id, ended_at')
         .in('calendar_event_id', eventIds)
@@ -269,17 +295,19 @@ export function useUserChats(
 
     try {
       const result = await loadPromise
+      if (!isCurrent()) return
       setCachedUserChats(cacheKey, result)
       setChats(result)
     } catch (e) {
+      if (!isCurrent()) return
       console.warn('[user_chats] fetch failed:', e)
       if (cached) setChats(cached.chats)
       else setChats([])
     } finally {
-      clearInflightUserChats(cacheKey)
-      setLoading(false)
+      if (getInflightUserChats(cacheKey) === loadPromise) clearInflightUserChats(cacheKey)
+      if (isCurrent()) setLoading(false)
     }
-  }, [cacheKey, userId, userName])
+  }, [cacheKey, userId, userName, badgeOnly, badgeToken, setChats])
 
   useEffect(() => {
     fetchAll()
@@ -350,7 +378,7 @@ export function useUserChats(
     setChats((prev) =>
       prev.map((c) => (c.eventId === eventId ? { ...c, unreadCount: 0 } : c))
     )
-  }, [])
+  }, [setChats])
 
   // 모든 채팅방 읽음 처리 (활성 + 잠긴 것 모두)
   const markAllChatsRead = useCallback(async () => {
@@ -369,7 +397,7 @@ export function useUserChats(
     if (error) {
       console.warn('[user_chats] mark_all_chats_read failed:', error)
     }
-  }, [chats])
+  }, [chats, setChats])
 
   return {
     chats,
