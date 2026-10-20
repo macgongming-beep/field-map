@@ -117,3 +117,26 @@ existing return visits and two historical entries in an opened record dialog;
 the dialog was canceled without saving. No production data or DB permissions
 were changed. Live save verification used only the demo fixture. Savings remain
 unmeasured; compare equivalent production time windows after client adoption.
+
+## Building-creation activation (2026-10-20)
+
+At the user's request, verified creation again on the current demo abff60e build.
+Created disposable DEMO-CREATE-FLAG-1020 (building 132, no units) through the map
+UI. Its pin and selected list row appeared without reload; unassigned buildings
+increased 22 to 23 while units stayed at 6 and existing building rows remained.
+After reload, search returned exactly one matching building and selected its pin.
+Screenshot: scratch/demo-building-create-enabled-1020.png. Fixture remains in demo.
+
+Re-ran buildingsCreate, useStore.realtime, and useStore.recipient tests: 173 passed
+in three files. These include independent flags, scoped-store exclusion, existing
+building behavior and refresh fallback. No application-code changes were needed;
+the reviewed abff60e source and previous 1,475-test/lint/build result still apply.
+
+Enabled VITE_BUILDING_CREATE_REFRESH_ENABLED=true in production; address refresh
+remains true and DEMO_MODE absent. Redeployed the same clean abff60e archive as
+dpl_Bnh3CthxhY2dithszUFS4BHx4DxW (Ready, canonical production alias assigned).
+Public assets index-COM6vpWo.js / TerritoryReportView-B7wJq4Gd.js confirm both
+callbacks enabled with recipientReader guards intact. Scoped volunteers retain
+authoritative scope refresh rather than arbitrary-building insertion. This is a
+build-time setting; disabling requires another deployment and client update.
+Production verification is read-only; no real buildings were created or changed.
