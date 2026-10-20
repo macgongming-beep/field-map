@@ -870,22 +870,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // ⚠ 카드의 진행률·세대 수는 건물에서 계산되므로 함께 다시 계산해야 한다.
   //   (buildingsRef 는 다음 cards 조회가 쓰는 값이라 같이 갱신)
   const applyBuildingsChange = useCallback((update: (prev: Building[]) => Building[]) => {
-    if (import.meta.env.VITE_DEMO_MODE === 'true') {
-      // React may defer the state updater; card totals must use this same snapshot.
-      const next = update(buildingsRef.current)
-      buildingsRef.current = next
-      setBuildings(next)
-      setCards(prevCards => prevCards.map(card => recipientReader && !recipientReader.allowsCard(card.id)
-        ? card : recomputeCardStats(card, next)))
-      return
-    }
-    setBuildings((prev) => {
-      const next = update(prev)
-      buildingsRef.current = next
-      return next
-    })
-    setCards((prevCards) => prevCards.map((card) => recipientReader && !recipientReader.allowsCard(card.id)
-      ? card : recomputeCardStats(card, buildingsRef.current)))
+    // React may defer the state updater; card totals must use this same snapshot.
+    const next = update(buildingsRef.current)
+    buildingsRef.current = next
+    setBuildings(next)
+    setCards(prevCards => prevCards.map(card => recipientReader && !recipientReader.allowsCard(card.id)
+      ? card : recomputeCardStats(card, next)))
   }, [recipientReader])
 
   // Realtime updates only the affected buildings and their visit histories.

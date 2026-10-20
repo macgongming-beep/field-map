@@ -1,4 +1,5 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import { testBuilding } from '../test/territoryFixture'
@@ -158,6 +159,42 @@ test('moving a building recomputes both card totals and preserves other building
   expect(result.current.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 0, 0], [2, 2, 2]])
   expect(result.current.buildings.find(b => b.id === 2)).toEqual(other)
   expect(state.reads).toEqual(['buildings'])
+})
+
+test.each([1, 2])('production card totals use the same snapshot after %s queued building changes', async (changes) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  const { result } = renderHook(() => {
+    const [tick, setTick] = useState(0)
+    const store = useStore(false)
+    return { store, tick, setTick }
+  })
+  const first = testBuilding(1, 1, 'first')
+  const second = testBuilding(2, 2, 'second')
+  const untouched = testBuilding(3, 2, 'untouched')
+  state.changed.mockResolvedValueOnce({ buildings: [first, second, untouched], histories: [] })
+  await act(async () => { await result.current.store.syncChangedBuildings([1, 2, 3]) })
+  creationCards.enabled = true
+  creationCards.ids = [1, 2]
+  await act(async () => { await result.current.store.refetchSlices(['cards']) })
+  expect(result.current.store.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 1, 1], [2, 2, 2]])
+  state.reads = []
+
+  act(() => {
+    // Pending work prevents React's eager updater path from hiding stale ref reads.
+    result.current.setTick(tick => tick + 1)
+    for (const building of [first, second].slice(0, changes)) {
+      result.current.store.applyPlaceDeletionSignal({
+        targetType: 'building', buildingId: building.id, unitId: null,
+        unitIds: building.units.map(unit => unit.id), returnVisitIds: [],
+      })
+    }
+  })
+
+  expect(result.current.tick).toBe(1)
+  expect(result.current.store.buildings).toEqual(changes === 1 ? [second, untouched] : [untouched])
+  expect(result.current.store.cards.map(c => [c.id, c.buildings, c.units]))
+    .toEqual([[1, 0, 0], [2, 3 - changes, 3 - changes]])
+  expect(state.reads).toEqual([])
 })
 
 const rawMoveBuildings = (cardId: number, name: string) => [
