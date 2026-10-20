@@ -180,7 +180,9 @@ export function AppHeaderActionButtons({
   const [openChat, setOpenChat] = useState(false)
   const [headerChatTarget, setHeaderChatTarget] = useState<HeaderChatTarget>(null)
   const { notifications: notifList, markRead: notifMarkRead, markAllRead: notifMarkAllRead, clearReadNotifications: notifClearRead } = useNotifications(userId ?? null)
-  const { totalUnread, markChatReadLocally } = useUserChats(userId ?? null, userName)
+  const { totalUnread, markChatReadLocally } = useUserChats(userId ?? null, userName, {
+    badgeOnly: import.meta.env.VITE_DEMO_MODE === 'true',
+  })
   // 공지와 댓글 화면은 닫았지만 과거 알림 행은 복구 가능하도록 보존한다.
   // 표시 목록과 벨 배지에서 함께 제외해야 눌러도 갈 곳 없는 숫자가 남지 않는다.
   const visibleNotifications = useMemo(

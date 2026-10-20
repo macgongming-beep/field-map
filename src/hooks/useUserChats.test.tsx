@@ -4,13 +4,15 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { clearUserChatsCache } from '../lib/userChatsCache'
 import { useUserChats } from './useUserChats'
 import { NotificationCenter } from '../components/NotificationCenter'
+import { GlobalChatModal } from '../components/GlobalChatModal'
 import type { AppNotification } from './useNotifications'
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(), rpc: vi.fn(), channel: vi.fn(), removeChannel: vi.fn(),
+  select: vi.fn(), token: 'test-token',
 }))
 vi.mock('../lib/supabase', () => ({ supabase: mocks }))
-vi.mock('../lib/authToken', () => ({ getAuthToken: () => 'test-token' }))
+vi.mock('../lib/authToken', () => ({ getAuthToken: () => mocks.token }))
 vi.mock('../config/features', () => ({ CART_APPLICATIONS_ENABLED: true }))
 
 type Payload = { new: { event_id?: unknown } }
@@ -22,6 +24,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.spyOn(document, 'hidden', 'get').mockReturnValue(false)
   clearUserChatsCache()
+  mocks.token = 'test-token'
   handlers.clear()
   eventIds = [1]
   mocks.rpc.mockImplementation(async (name: string) => ({
@@ -33,7 +36,7 @@ beforeEach(() => {
   mocks.from.mockImplementation((table: string) => {
     let personal = false
     const query = {
-      select: vi.fn(() => query),
+      select: vi.fn((columns: string) => { mocks.select(table, columns); return query }),
       eq: vi.fn((column: string) => { personal = column === 'user_name'; return query }),
       in: vi.fn(() => query),
       then: (resolve: (value: { data: unknown[]; error: null }) => unknown) => Promise.resolve({
@@ -74,6 +77,115 @@ async function mount() {
   mocks.rpc.mockClear()
   return hook
 }
+
+test.each([undefined, false])('full mode (%s) retains participant and session detail reads', async (badgeOnly) => {
+  renderHook(() => useUserChats(10, 'test-user', { badgeOnly, realtime: false }))
+  await act(async () => {})
+  expect(mocks.select).toHaveBeenCalledWith('event_participants', 'event_id')
+  expect(mocks.select).toHaveBeenCalledWith('event_cart_applications', 'event_id')
+  expect(mocks.select).toHaveBeenCalledWith('service_sessions', 'calendar_event_id, ended_at')
+})
+
+test('badge skips list details but preserves unread across old rooms, own messages and read receipts', async () => {
+  mocks.rpc.mockImplementation(async (name: string) => ({
+    data: name === 'get_my_chat_reads' ? [{ event_id: 1, last_read_at: '2026-10-05T09:00:00Z' }]
+      : name === 'get_chat_message_meta' ? [
+        { event_id: 1, created_at: '2026-10-05T10:00:00Z', author_id: 20 },
+        { event_id: 1, created_at: '2026-10-05T11:00:00Z', author_id: 10 },
+        { event_id: 1, created_at: '2026-10-05T08:00:00Z', author_id: 20 },
+      ] : [], error: null,
+  }))
+  const badge = renderHook(() => useUserChats(10, 'test-user', { badgeOnly: true, realtime: false }))
+  await act(async () => {})
+  expect(badge.result.current.totalUnread).toBe(1)
+  expect(mocks.select).not.toHaveBeenCalledWith('event_participants', 'event_id')
+  expect(mocks.select).not.toHaveBeenCalledWith('event_cart_applications', 'event_id')
+  expect(mocks.from).not.toHaveBeenCalledWith('service_sessions')
+  expect(mocks.rpc).toHaveBeenCalledWith('get_my_chat_reads', { p_token: 'test-token' })
+  const full = renderHook(() => useUserChats(10, 'test-user', { realtime: false }))
+  await act(async () => {})
+  expect(full.result.current.totalUnread).toBe(badge.result.current.totalUnread)
+  expect(mocks.from).toHaveBeenCalledWith('service_sessions')
+  act(() => badge.result.current.markChatReadLocally(1))
+  expect(badge.result.current.totalUnread).toBe(0)
+})
+
+test('badge inflight cannot satisfy a concurrently opened full list', async () => {
+  renderHook(() => useUserChats(10, 'test-user', { badgeOnly: true, realtime: false }))
+  renderHook(() => useUserChats(10, 'test-user', { realtime: false }))
+  await act(async () => {})
+  expect(mocks.from.mock.calls.filter(([table]) => table === 'calendar_events')).toHaveLength(2)
+  expect(mocks.select).toHaveBeenCalledWith('event_participants', 'event_id')
+  expect(mocks.from).toHaveBeenCalledWith('service_sessions')
+})
+
+test('opening the actual modal after a warmed badge still loads full list details', async () => {
+  renderHook(() => useUserChats(10, 'test-user', { badgeOnly: true, realtime: false }))
+  await act(async () => {})
+  mocks.select.mockClear()
+  mocks.from.mockClear()
+  render(<GlobalChatModal userId={10} userName="test-user" onClose={() => {}} />)
+  await act(async () => {})
+  expect(mocks.select).toHaveBeenCalledWith('event_participants', 'event_id')
+  expect(mocks.select).toHaveBeenCalledWith('event_cart_applications', 'event_id')
+  expect(mocks.select).toHaveBeenCalledWith('service_sessions', 'calendar_event_id, ended_at')
+})
+
+test('badge cache is separated by account and session token', async () => {
+  const { rerender, result } = renderHook(({ id }) => useUserChats(id, 'test-user', { badgeOnly: true, realtime: false }),
+    { initialProps: { id: 10 } })
+  await act(async () => {})
+  mocks.rpc.mockClear()
+  mocks.token = 'replacement-token'
+  eventIds = [2]
+  rerender({ id: 10 })
+  await act(async () => {})
+  expect(mocks.rpc).toHaveBeenCalledWith('get_chat_message_meta', { p_token: 'replacement-token', p_event_ids: [2] })
+  expect(result.current.chats.map((chat) => chat.eventId)).toEqual([2])
+  mocks.rpc.mockClear()
+  rerender({ id: 11 })
+  await act(async () => {})
+  expect(mocks.rpc).toHaveBeenCalledWith('get_chat_message_meta', expect.anything())
+})
+
+test.each(['account', 'token'])('badge hides old identity on the first %s render before effects', async (change) => {
+  const renders: number[] = []
+  const { rerender } = renderHook(({ id }) => {
+    const value = useUserChats(id, 'test-user', { badgeOnly: true, realtime: false })
+    renders.push(value.totalUnread)
+    return value
+  }, { initialProps: { id: 10 } })
+  await act(async () => {})
+  expect(renders.at(-1)).toBe(1)
+  renders.length = 0
+  if (change === 'token') mocks.token = 'new-token'
+  rerender({ id: change === 'account' ? 11 : 10 })
+  expect(renders[0]).toBe(0)
+  await act(async () => {})
+})
+
+test('late badge response from a replaced token cannot overwrite the new session', async () => {
+  let finishOld!: (value: { data: unknown[]; error: null }) => void
+  mocks.rpc.mockImplementation(async (name: string, args: { p_token: string }) => {
+    if (name === 'get_chat_message_meta' && args.p_token === 'test-token') {
+      return new Promise((resolve) => { finishOld = resolve })
+    }
+    return { data: [], error: null }
+  })
+  const { result, rerender } = renderHook(() => useUserChats(10, 'test-user', { badgeOnly: true, realtime: false }))
+  await act(async () => {})
+  expect(finishOld).toBeTypeOf('function')
+  mocks.token = 'new-token'
+  eventIds = [2]
+  rerender()
+  await act(async () => {})
+  expect(result.current.chats.map((chat) => chat.eventId)).toEqual([2])
+  await act(async () => finishOld({
+    data: [{ event_id: 1, created_at: '2026-10-05T10:00:00Z', author_id: 20 }], error: null,
+  }))
+  expect(result.current.chats.map((chat) => chat.eventId)).toEqual([2])
+  expect(result.current.totalUnread).toBe(0)
+})
 
 async function emit(table: string, eventId: unknown) {
   await act(async () => {
