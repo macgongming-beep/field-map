@@ -1,7 +1,7 @@
 # Independent calendar edit and building move opt-ins
 
 - Date: 2026-10-20
-- Status: production flags remain disabled; supersession notification follow-up below
+- Status: building-move production opt-in activated 2026-10-20; calendar opt-in disabled
 - Scope: build-time gates only; no database or permission changes
 
 ## Flags
@@ -106,3 +106,25 @@ Follow-up verification:
 - This follow-up is kept on the development branch, not bundled with the approved
   production building-move activation.
 - Verification: 1,635 tests / 192 files passed; lint and build passed.
+
+## Production activation, 2026-10-20
+
+After external approval of `fe46556`, the approved calendar/building changes were
+ported onto production `b792a23` without the unrelated demo group optimizations:
+`4859086`, `c25fa40`, `8a4ffdc`. The universal snapshot fix remains intact.
+
+- Release `8a4ffdc`: 1,595 tests passed; lint and production-environment build passed.
+- Production environment: `VITE_BUILDING_MOVE_REFRESH_ENABLED=true`,
+  `VITE_CALENDAR_EVENT_REFRESH_ENABLED=false`.
+- Deployment `dpl_VCUpkvEXoAu4Tp3FghmYs59coSeU` is Ready and serves the canonical
+  production domain. Entry `/assets/index-ChIqDabw.js` and its store-containing
+  `/assets/TerritoryReportView-BuY8zuGV.js` both returned HTTP 200.
+- Deployed store code has the building callback with recipient exclusion,
+  `refreshUpdatedEvent: void 0`, the building stale-read guard, and typed cancellation.
+- Main pushes also auto-deploy the demo project. Its canonical alias was restored
+  to previously verified `dpl_GspdqhWroYpXt1AuC8ikbJ7cgq5z`; entry remains
+  `/assets/index-BBJmTsoa.js` (HTTP 200).
+- No production database writes, schema changes, or new real-device save test.
+- Post-approval follow-up `34f8d9c` is not in this production release.
+- Compare matched usage windows after clients accept the update; do not attribute
+  whole-day egress changes solely to building moves.
