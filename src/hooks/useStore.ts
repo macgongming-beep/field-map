@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
+import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
 import { recoverRecipientBuildings, readRecipientBoundaries } from './recipientRecovery'
@@ -15,7 +16,6 @@ import { showToast } from '../lib/toast'
 import { findActivePeriodId } from '../utils/specialPeriod'
 import { getRegionNames, setRegionsFromDatabase } from '../lib/regions'
 import { applyCongregationSettings } from '../lib/congregationProfile'
-import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { lazyReturnVisitLogsEnabled } from './returnVisitLogReader'
 import { isRestaurantAssignmentDeleted, resolvePlaceDeletionScope } from '../utils/placeDeletionSignal'
 import type {
@@ -132,12 +132,17 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // 클로저가 stale 가능 → ref로 항상 최신값 보장.
   const buildingsRef = useRef<Building[]>([])
   const realtimeVersionsRef = useRef(new Map<number, number>())
+  const buildingFullReadVersion = useRef(0)
+  const buildingFullReadsPending = useRef(0)
   const territoryCheckpoint = useRef(createTerritoryCheckpoint()).current
   const syncBuildingsRef = useRef<((ids: number[]) => Promise<void>) | null>(null)
   const [visitHistories, setVisitHistories] = useState<VisitHistory[]>([])
   const [serviceSessions, setServiceSessions] = useState<ServiceSession[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
   const recipientCalendarRef = useRef<CalendarEvent[] | undefined>(undefined)
+  const calendarReadVersion = useRef(0)
+  const calendarReadsPending = useRef(0)
+  const calendarSnapshotComplete = useRef(false)
   const [cardBoundaries, setCardBoundaries] = useState<CardBoundary[]>([])
   const boundaryReader = useRef(createCardBoundaryReader())
   const [notices, setNotices] = useState<Notice[]>([])
@@ -223,6 +228,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
     switch (slice) {
       case 'buildings': {
+        const fullVersion = ++buildingFullReadVersion.current
+        buildingFullReadsPending.current += 1
+        try {
         const scoped = await recipientReader?.read()
         if (scoped) {
           const next = scoped.buildings.map(toBuilding)
@@ -252,6 +260,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           if (page.length < pageSize) break
         }
         measure(buildingRows)
+        if (import.meta.env.VITE_DEMO_MODE === 'true' && fullVersion !== buildingFullReadVersion.current) {
+          throw new Error('Building read superseded')
+        }
         const transformedBuildings = buildingRows.map(toBuilding)
         setBuildings(transformedBuildings)
         buildingsRef.current = transformedBuildings  // ref 동기 갱신 (cards transform용)
@@ -261,6 +272,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         // 단, 비용 절감을 위해 cards refetch는 별도 'cards' slice 호출 시에만 수행.
         // 대부분 buildings 변경 시 cards 데이터는 그대로지만 transform 결과는 약간 stale 가능.
         return approxBytes
+        } finally { buildingFullReadsPending.current -= 1 }
       }
 
       case 'cards': {
@@ -389,12 +401,13 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       }
 
       case 'calendar': {
+        const version = ++calendarReadVersion.current
+        calendarReadsPending.current += 1
+        try {
         const [eventsRes, eventCardAssignmentsRes, eventAssignmentCardsRes] = await Promise.all([
           // 1,000개를 넘으면 조용히 잘리므로 끝까지 받는다 (현재 일정 700개 근처)
           fetchAllPages((from, to) => supabase.from('calendar_events')
-            .select(CART_APPLICATIONS_ENABLED
-              ? '*, event_participants(*), event_cart_applications(user_id,is_team_lead,created_at,user:app_users!event_cart_applications_user_id_fkey(name))'
-              : '*, event_participants(*)')
+            .select(CALENDAR_EVENT_COLUMNS)
             .order('event_date').order('time').range(from, to)),
           fetchAllPages((from, to) => supabase.from('event_card_assignments').select('*').order('id').range(from, to)),
           fetchAllPages((from, to) => supabase.from('event_card_assignment_cards').select('*').order('id').range(from, to)),
@@ -420,8 +433,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const transformedEvents = (eventsRes.data as unknown as RawCalendarEvent[]).map((event) =>
           toCalendarEvent(event, merged.filter((a) => a.eventId === event.id)),
         )
+        if (import.meta.env.VITE_DEMO_MODE === 'true' && version !== calendarReadVersion.current) {
+          throw new Error('Calendar read superseded')
+        }
         setCalendarEvents(transformedEvents)
         recipientCalendarRef.current = transformedEvents
+        calendarSnapshotComplete.current = !eventCardAssignmentsRes.error && !eventAssignmentCardsRes.error
 
         if (eventCardAssignmentsRes.error) {
           console.warn('일정별 카드 배정 로드 실패.', eventCardAssignmentsRes.error)
@@ -430,6 +447,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           console.warn('다중 카드 배정 로드 실패.', eventAssignmentCardsRes.error)
         }
         return approxBytes
+        } finally { calendarReadsPending.current -= 1 }
       }
 
       case 'resources': {
@@ -852,6 +870,15 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // ⚠ 카드의 진행률·세대 수는 건물에서 계산되므로 함께 다시 계산해야 한다.
   //   (buildingsRef 는 다음 cards 조회가 쓰는 값이라 같이 갱신)
   const applyBuildingsChange = useCallback((update: (prev: Building[]) => Building[]) => {
+    if (import.meta.env.VITE_DEMO_MODE === 'true') {
+      // React may defer the state updater; card totals must use this same snapshot.
+      const next = update(buildingsRef.current)
+      buildingsRef.current = next
+      setBuildings(next)
+      setCards(prevCards => prevCards.map(card => recipientReader && !recipientReader.allowsCard(card.id)
+        ? card : recomputeCardStats(card, next)))
+      return
+    }
     setBuildings((prev) => {
       const next = update(prev)
       buildingsRef.current = next
@@ -862,7 +889,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   }, [recipientReader])
 
   // Realtime updates only the affected buildings and their visit histories.
-  const syncChangedBuildings = useCallback(async (buildingIds: number[]) => {
+  const syncChangedBuildings = useCallback(async (buildingIds: number[], requireFresh = false) => {
     const versions = new Map(buildingIds.map((id) => {
       const version = (realtimeVersionsRef.current.get(id) ?? 0) + 1
       realtimeVersionsRef.current.set(id, version)
@@ -871,6 +898,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     const data = await fetchChangedBuildings(buildingIds)
     // A previous map's in-flight read must not overwrite a newer map's response.
     const ids = new Set(buildingIds.filter((id) => versions.get(id) === realtimeVersionsRef.current.get(id)))
+    if (requireFresh && ids.size !== new Set(buildingIds).size) throw new Error('Building refresh superseded')
     const updated = data.buildings.filter((b) => ids.has(b.id))
     const unitIds = new Set([
       ...buildingsRef.current.filter((b) => ids.has(b.id)).flatMap((b) => b.units.map((u) => u.id)),
@@ -1015,6 +1043,25 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     () => fetchSlices(['calendar', 'visits'], { triggeredBy: 'mutation:calendar:participant-removal' }),
     [fetchSlices],
   )
+  const refreshUpdatedEvent = useCallback(async (eventId: number) => {
+    if (!calendarSnapshotComplete.current || calendarReadsPending.current || !recipientCalendarRef.current?.some(event => event.id === eventId)) {
+      throw new Error('Complete calendar snapshot required')
+    }
+    const version = ++calendarReadVersion.current
+    const event = await fetchUpdatedCalendarEvent(eventId)
+    if (version !== calendarReadVersion.current) throw new Error('Calendar refresh superseded')
+    const next = recipientCalendarRef.current.map(current => current.id === eventId ? event : current)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
+    recipientCalendarRef.current = next
+    setCalendarEvents(next)
+  }, [])
+  const refreshMovedBuilding = useCallback(async (buildingId: number) => {
+    if (buildingFullReadsPending.current) throw new Error('Building snapshot refresh in progress')
+    const version = buildingFullReadVersion.current
+    await syncChangedBuildings([buildingId], true)
+    // A full read that started during the targeted read must not silently win.
+    if (version !== buildingFullReadVersion.current) throw new Error('Building snapshot changed during move')
+  }, [syncChangedBuildings])
   const refetchCommunication = useCallback(
     () => fetchSlices(['communication'], { triggeredBy: 'mutation:communication' }),
     [fetchSlices],
@@ -1123,6 +1170,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   } = makeBuildingMutations({
     role, fetchAll: refetchBuildings, buildings, cards, appendUnits, removeUnit,
     refreshBuilding: (buildingId) => syncChangedBuildings([buildingId]),
+    refreshMovedBuilding: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+      ? refreshMovedBuilding : undefined,
     // Scoped stores must re-evaluate card access after creation/address changes.
     refreshCreatedBuilding: (import.meta.env.VITE_BUILDING_CREATE_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? (buildingId) => syncChangedBuildings([buildingId]) : undefined,
@@ -1146,6 +1195,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     addParticipantToEvent,
   } = makeCalendarMutations({
     fetchAll: refetchCalendar,
+    refreshUpdatedEvent: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+      ? refreshUpdatedEvent : undefined,
     refetchAfterParticipantRemoval: refetchCalendarAndVisits,
     calendarEvents,
   })

@@ -46,6 +46,7 @@ function buildEventPayload(input: CalendarEventInput): Record<string, unknown> {
 export function makeCalendarMutations(deps: {
   fetchAll: () => Promise<void>
   refetchAfterParticipantRemoval?: () => Promise<void>
+  refreshUpdatedEvent?: (eventId: number) => Promise<void>
   calendarEvents: CalendarEvent[]
 }) {
   const { fetchAll, refetchAfterParticipantRemoval, calendarEvents } = deps
@@ -132,7 +133,12 @@ export function makeCalendarMutations(deps: {
       showToast(msg('일정을 수정하지 못했습니다.'), 'error')
       return false
     }
-    await fetchAll()
+    if (deps.refreshUpdatedEvent) {
+      try { await deps.refreshUpdatedEvent(eventId) }
+      catch { await fetchAll() }
+    } else {
+      await fetchAll()
+    }
     showToast(msg('일정이 수정됐습니다'))
     return true
   }

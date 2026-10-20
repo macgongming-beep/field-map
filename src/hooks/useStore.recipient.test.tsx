@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   requestFilters: [] as unknown[][],
   unitParent: 20, insertError: false, unitLookupError: false,
   historyColumns: [] as string[],
+  calendarFilters: [] as [string, unknown][][],
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
   buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
 }))
@@ -40,6 +41,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     q.update = () => { writing = true; return q }
     q.single = () => {
       state.reads.push(table)
+      if (table === 'calendar_events') state.calendarFilters.push([...filters])
       return Promise.resolve({ data: table === 'service_sessions' ? { id: 777 } : table === 'informal_groups' ? { id: 7 } : { id: filters.find(([key]) => key === 'id')?.[1], building_id: state.unitParent }, error: state.unitLookupError ? new Error('offline') : null })
     }
     q.eq = (key: string, value: unknown) => { filters.push([key, value]); return q }
@@ -49,10 +51,12 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       state.reads.push(writing ? `${table}:insert` : table)
       if (table === 'service_sessions') state.sessionFilters.push(filters)
       if (table === 'restaurant_requests' && !writing) state.requestFilters.push(filters)
+      if (table === 'calendar_events' && !writing) state.calendarFilters.push([...filters])
       const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
         : table === 'return_visits' ? writing ? [{ id: 7 }] : state.returnRows
         : table === 'return_visit_logs' ? state.returnLogs
+        : writing && table === 'buildings' ? [{ id: filters.find(([key]) => key === 'id')?.[1] }]
         : writing && (table === 'units' || table === 'informal_groups' || table === 'informal_assets') ? [{ id: 100 }]
         : table === 'restaurant_requests' ? writing ? [{ id: 61 }] : state.requests.filter(row => filters.every(([key, value]) => row[key] === value))
         : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []
@@ -72,6 +76,7 @@ beforeEach(() => {
   state.requestFilters = []
   state.unitParent = 20; state.insertError = false; state.unitLookupError = false; state.historyColumns = []
   state.sessions = []; state.sessionFilters = []
+  state.calendarFilters = []
   state.changed.mockReset()
   state.unchanged.mockResolvedValue(null); state.recover.mockReset(); state.boundaries.mockResolvedValue([])
   state.buildings = [building]; state.allowed = [1]; state.reads = []
@@ -489,6 +494,53 @@ test('calendar refresh revokes the final card and removes its buildings and boun
   expect(result.current.buildings).toEqual([])
   expect(result.current.cardBoundaries).toEqual([])
   expect(state.refresh).toHaveBeenCalled()
+})
+
+test('demo single-event update retains broad calendar and recipient scope refresh', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.buildings.map((b) => b.id)).toEqual([10])
+  state.refresh.mockClear()
+  state.reads = []; state.calendarFilters = []
+  state.allowed = []; state.buildings = []
+  await act(async () => {
+    expect(await result.current.updateCalendarEvent(7, {
+      time: '10:00', title: 'Updated', place: 'Hall', leader: 'Other', memo: '',
+      hasMeeting: true, allowApplications: true,
+    }, false)).toBe(true)
+  })
+  expect(state.calendarFilters).toEqual([[]])
+  expect(state.reads).toEqual(expect.arrayContaining([
+    'calendar_events', 'event_card_assignments', 'event_card_assignment_cards', 'cards',
+  ]))
+  expect(state.refresh).toHaveBeenCalledOnce()
+  expect(state.changed).not.toHaveBeenCalled()
+  expect(result.current.buildings).toEqual([])
+  expect(result.current.cardBoundaries).toEqual([])
+  expect(result.current.cards.find((card) => card.id === 2)?.units).toBe(50)
+})
+
+test('demo building card move retains broad scoped refresh instead of targeted sync', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.buildings.map((b) => b.id)).toEqual([10])
+  state.refresh.mockClear()
+  state.reads = []
+  // The building moved to card 2, outside this recipient's card 1 snapshot.
+  state.buildings = []
+  state.changed.mockResolvedValue({ buildings: [{ ...result.current.buildings[0], cardId: 2 }], histories: [] })
+  await act(async () => { expect(await result.current.moveBuildingToCard(10, 2)).toBe(true) })
+  expect(state.reads).toContain('buildings:insert')
+  expect(state.reads).toContain('cards')
+  expect(state.refresh).toHaveBeenCalledOnce()
+  expect(state.changed).not.toHaveBeenCalled()
+  expect(state.reads).not.toContain('buildings')
+  expect(result.current.buildings).toEqual([])
+  expect(result.current.cardBoundaries.map((boundary) => boundary.cardId)).toEqual([1])
+  expect(result.current.cards.find((card) => card.id === 2)?.units).toBe(50)
 })
 
 test('building creation refresh keeps the new point inside its assigned card', async () => {
