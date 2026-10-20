@@ -59,6 +59,16 @@ describe('address-only refresh', () => {
 })
 
 describe('Chinese flag refresh', () => {
+  it('reports failure without success when targeted and fallback reads both fail', async () => {
+    const { makeRegularVisitMutations } = await import('./regularVisits')
+    const fetchAll = vi.fn().mockRejectedValue(new Error('offline'))
+    const refreshChinese = vi.fn().mockRejectedValue(new Error('offline'))
+    await makeRegularVisitMutations({ fetchAll, refreshChinese, buildings: [testBuilding(1, 1, 'test')], cards: [], returnVisits: [] }).toggleChinese(1, 101)
+    expect(refreshChinese).toHaveBeenCalledWith(1)
+    expect(fetchAll).toHaveBeenCalledOnce()
+    expect(mocks.error).toHaveBeenCalledWith(expect.stringContaining('자료를 불러오지 못했습니다'), expect.any(Error))
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
   it.each(['narrow', 'fallback', 'absent'])('refreshes the changed building: %s', async (mode) => {
     const { makeRegularVisitMutations } = await import('./regularVisits')
     const fetchAll = vi.fn().mockResolvedValue(undefined)
