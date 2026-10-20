@@ -31,6 +31,7 @@ export function makeBuildingMutations(deps: {
   fetchAll: () => Promise<void>
   refreshBuilding?: (buildingId: number) => Promise<void>
   refreshCreatedBuilding?: (buildingId: number) => Promise<void>
+  refreshMovedBuilding?: (buildingId: number) => Promise<void>
   buildings: Building[]
   cards: TerritoryCard[]
   /**
@@ -55,6 +56,12 @@ export function makeBuildingMutations(deps: {
   const refreshCreatedBuilding = async (id: number) => {
     if (!deps.refreshCreatedBuilding) return fetchAll()
     try { await deps.refreshCreatedBuilding(id) }
+    catch { await fetchAll() }
+  }
+
+  const refreshMovedBuilding = async (id: number) => {
+    if (!deps.refreshMovedBuilding) return fetchAll()
+    try { await deps.refreshMovedBuilding(id) }
     catch { await fetchAll() }
   }
 
@@ -529,7 +536,7 @@ export function makeBuildingMutations(deps: {
       return false
     }
     if (!ensureAffectedRows(result.data, msg('건물 카드를 변경하지 못했습니다.'))) return false
-    await fetchAll()
+    await refreshMovedBuilding(buildingId)
     showToast(msg('건물 카드가 변경됐습니다'))
     return true
   }

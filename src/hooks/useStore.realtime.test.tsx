@@ -9,6 +9,11 @@ const logColumns = vi.hoisted(() => [] as string[])
 const creationCards = vi.hoisted(() => ({ enabled: false, ids: [1] }))
 const returnResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: null }> [])
 const groupResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
+const calendarResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
+const buildingResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
+const calendarAssignmentState = vi.hoisted(() => ({ failedTable: '', rows: {} as Record<string, Record<string, unknown>[]> }))
+const updatedEvent = vi.hoisted(() => vi.fn())
+vi.mock('./calendarEventRefresh', () => ({ CALENDAR_EVENT_COLUMNS: '*, event_participants(*)', fetchUpdatedCalendarEvent: updatedEvent }))
 vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: state.clock, fetchBuildingRecoveryIndex: state.index }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: (...args: unknown[]) => state.rpc(...args) ?? Promise.resolve({ error: null }),
@@ -28,15 +33,236 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       state.reads.push(table)
       if (!writing && table === 'return_visits' && returnResponses.length) return resolve(await returnResponses.shift())
       if (!writing && table === 'informal_groups' && groupResponses.length) return resolve(await groupResponses.shift())
+      if (!writing && table === 'calendar_events' && calendarResponses.length) return resolve(await calendarResponses.shift())
+      if (!writing && table === 'buildings' && buildingResponses.length) return resolve(await buildingResponses.shift())
+      if (!writing && (table === 'event_card_assignments' || table === 'event_card_assignment_cards')) {
+        return resolve({ data: calendarAssignmentState.rows[table] ?? [],
+          error: calendarAssignmentState.failedTable === table ? new Error('assignment read failed') : null })
+      }
       if (table === 'buildings') await state.block
-      return resolve({ data: creationCards.enabled && table === 'cards' ? creationCards.ids.map(id => ({ id, name: 'card', card_assignments: [] })) : writing && (table === 'units' || table === 'return_visits' || table === 'informal_groups') ? [{ id: 1 }] : writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
+      return resolve({ data: creationCards.enabled && table === 'cards' ? creationCards.ids.map(id => ({ id, name: 'card', card_assignments: [] })) : writing && (table === 'buildings' || table === 'units' || table === 'return_visits' || table === 'informal_groups') ? [{ id: 1 }] : writing && table === 'card_boundaries' ? [{ card_id: 1 }] : lookup ? [{ id: 1 }] : [], error: null })
     }
     return chain
   },
 } }))
 afterEach(() => { cleanup(); vi.clearAllMocks(); state.rpc.mockReset(); state.changed.mockReset(); vi.unstubAllEnvs(); localStorage.clear(); state.reads = []; state.boundaryColumns = []; state.block = null })
 afterEach(() => { logColumns.length = 0; creationCards.enabled = false; returnResponses.length = 0; groupResponses.length = 0 })
-afterEach(() => { creationCards.ids = [1] })
+afterEach(() => { calendarResponses.length = 0; buildingResponses.length = 0; updatedEvent.mockReset(); creationCards.ids = [1] })
+afterEach(() => { calendarAssignmentState.failedTable = ''; calendarAssignmentState.rows = {} })
+
+const eventInput = { time: '11:00', title: 'edited', place: '', leader: '', memo: '', hasMeeting: true, allowApplications: true }
+const rawEvents = [
+  { id: 1, event_date: '2026-10-20', time: '10:00', title: 'before', event_participants: [{ user_name: 'A' }] },
+  { id: 2, event_date: '2026-08-20', time: '10:00', title: 'history', event_participants: [{ user_name: 'B' }] },
+]
+
+test.each(['event_card_assignments', 'event_card_assignment_cards'])('incomplete calendar from %s failure forces broad edit recovery', async (table) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  localStorage.setItem('auth_token', 'test')
+  state.rpc.mockResolvedValue({ data: { ok: true }, error: null })
+  calendarAssignmentState.rows = {
+    event_card_assignments: [{ id: 1, event_id: 2, user_name: 'B', assigned_card_id: 10 }],
+    event_card_assignment_cards: [{ id: 2, event_id: 2, user_name: 'B', card_id: 11 }],
+  }
+  calendarAssignmentState.failedTable = table
+  const { result } = renderHook(() => useStore(false))
+  calendarResponses.push(Promise.resolve({ data: rawEvents, error: null }))
+  await act(async () => { await result.current.refetchSlices(['calendar']) })
+  expect(result.current.calendarEvents.find(e => e.id === 1)).toBeDefined()
+  expect(result.current.calendarEvents.find(e => e.id === 2)?.cardAssignments[0]?.assignedCardId).not.toBe(11)
+  calendarAssignmentState.failedTable = ''
+  calendarResponses.push(Promise.resolve({
+    data: rawEvents.map(e => e.id === 1 ? { ...e, title: 'recovered' } : e), error: null,
+  }))
+  // A working narrow reader must still be bypassed when another event is incomplete.
+  updatedEvent.mockResolvedValue({ ...result.current.calendarEvents.find(e => e.id === 1)!, title: 'narrow' })
+  state.reads = []
+  await act(async () => { expect(await result.current.updateCalendarEvent(1, eventInput, false)).toBe(true) })
+  expect(updatedEvent).not.toHaveBeenCalled()
+  expect(state.reads).toEqual(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards'])
+  expect(result.current.calendarEvents.find(e => e.id === 1)?.title).toBe('recovered')
+  expect(result.current.calendarEvents.find(e => e.id === 2)).toMatchObject({
+    title: 'history', applicants: ['B'], cardAssignments: [{ assignedCardId: 11, assignedCardIds: [11] }],
+  })
+  await act(async () => { expect(await result.current.updateCalendarEvent(1, eventInput, false)).toBe(true) })
+  expect(updatedEvent).toHaveBeenCalledExactlyOnceWith(1)
+})
+
+test.each(['true', 'false'])('single event edit narrows only in demo=%s and preserves historical participants', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  localStorage.setItem('auth_token', 'test')
+  state.rpc.mockResolvedValue({ data: { ok: true }, error: null })
+  const { result } = renderHook(() => useStore(false))
+  calendarResponses.push(Promise.resolve({ data: rawEvents, error: null }))
+  await act(async () => { await result.current.refetchSlices(['calendar']) })
+  const original = result.current.calendarEvents.find(e => e.id === 2)
+  updatedEvent.mockResolvedValue({ ...result.current.calendarEvents[0], time: '11:00', title: 'edited', applicants: ['A', 'C'] })
+  calendarResponses.push(Promise.resolve({ data: rawEvents.map(e => e.id === 1 ? { ...e, title: 'edited' } : e), error: null }))
+  state.reads = []
+  await act(async () => { expect(await result.current.updateCalendarEvent(1, eventInput, false)).toBe(true) })
+  expect(updatedEvent).toHaveBeenCalledTimes(demo === 'true' ? 1 : 0)
+  expect(state.reads.includes('calendar_events')).toBe(demo !== 'true')
+  expect(result.current.calendarEvents.find(e => e.id === 2)).toEqual(original)
+  expect(result.current.calendarEvents.find(e => e.id === 1)?.title).toBe('edited')
+})
+
+test('newer failed full calendar read cannot turn a targeted edit into false success', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  localStorage.setItem('auth_token', 'test')
+  state.rpc.mockResolvedValue({ data: { ok: true }, error: null })
+  const { result } = renderHook(() => useStore(false))
+  calendarResponses.push(Promise.resolve({ data: rawEvents, error: null }))
+  await act(async () => { await result.current.refetchSlices(['calendar']) })
+  let release!: (event: typeof result.current.calendarEvents[number]) => void
+  updatedEvent.mockReturnValue(new Promise(resolve => { release = resolve }))
+  let saved!: Promise<boolean>
+  act(() => { saved = result.current.updateCalendarEvent(1, eventInput, false) })
+  await waitFor(() => expect(updatedEvent).toHaveBeenCalledOnce())
+  calendarResponses.push(Promise.resolve({ data: [], error: new Error('offline') }))
+  await act(async () => { await expect(result.current.refetchSlices(['calendar'])).rejects.toThrow() })
+  calendarResponses.push(Promise.resolve({ data: rawEvents.map(e => ({ ...e, title: 'recovered' })), error: null }))
+  await act(async () => {
+    release({ ...result.current.calendarEvents[0], title: 'edited' })
+    expect(await saved).toBe(true)
+  })
+  expect(result.current.calendarEvents.every(e => e.title === 'recovered')).toBe(true)
+})
+
+test.each(['true', 'false'])('building card movement narrows only in demo=%s', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const { result } = renderHook(() => useStore(false))
+  const moved = testBuilding(1, 2, 'moved')
+  state.changed.mockResolvedValue({ buildings: [moved], histories: [] })
+  await act(async () => { expect(await result.current.moveBuildingToCard(1, 2)).toBe(true) })
+  expect(state.changed).toHaveBeenCalledTimes(demo === 'true' ? 1 : 0)
+  expect(state.reads.includes('cards')).toBe(demo !== 'true')
+  if (demo === 'true') expect(result.current.buildings[0].cardId).toBe(2)
+})
+
+test('moving a building recomputes both card totals and preserves other buildings', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(false))
+  const source = testBuilding(1, 1, 'source')
+  const other = testBuilding(2, 2, 'other')
+  state.changed.mockResolvedValueOnce({ buildings: [source, other], histories: [] })
+  await act(async () => { await result.current.syncChangedBuildings([1, 2]) })
+  creationCards.enabled = true
+  creationCards.ids = [1, 2]
+  await act(async () => { await result.current.refetchSlices(['cards']) })
+  expect(result.current.cards.map(c => c.buildings)).toEqual([1, 1])
+  state.changed.mockResolvedValueOnce({ buildings: [{ ...source, cardId: 2 }], histories: [] })
+  state.reads = []
+  await act(async () => { await result.current.moveBuildingToCard(1, 2) })
+  expect(result.current.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 0, 0], [2, 2, 2]])
+  expect(result.current.buildings.find(b => b.id === 2)).toEqual(other)
+  expect(state.reads).toEqual(['buildings'])
+})
+
+const rawMoveBuildings = (cardId: number, name: string) => [
+  { id: 1, card_id: cardId, name, address: 'test', type: '주택', lat: 37, lng: 127, warning: false, memo: null,
+    units: [{ id: 101, building_id: 1, number: '101', status: '미방문', is_chinese: false, memo: null, regular_visits: [] }] },
+  { id: 2, card_id: 2, name: 'other', address: 'test', type: '주택', lat: 37, lng: 127, warning: false, memo: null,
+    units: [{ id: 201, building_id: 2, number: '101', status: '미방문', is_chinese: false, memo: null, regular_visits: [] }] },
+]
+
+test.each(['preexisting', 'during-target'] as const)('building move recovers over a %s full read and rejects its late snapshot', async (overlap) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  creationCards.enabled = true
+  creationCards.ids = [1, 2]
+  const { result } = renderHook(() => useStore(false))
+  buildingResponses.push(Promise.resolve({ data: rawMoveBuildings(1, 'before'), error: null }))
+  await act(async () => { await result.current.refetchSlices(['buildings', 'cards']) })
+  expect(result.current.cards.map(c => [c.buildings, c.units])).toEqual([[1, 1], [1, 1]])
+  const other = result.current.buildings.find(b => b.id === 2)
+
+  let releaseTarget!: (value: { buildings: ReturnType<typeof testBuilding>[]; histories: [] }) => void
+  state.changed.mockReturnValue(new Promise(resolve => { releaseTarget = resolve }))
+  let saved!: Promise<boolean>
+  if (overlap === 'during-target') {
+    act(() => { saved = result.current.moveBuildingToCard(1, 2) })
+    await waitFor(() => expect(state.changed).toHaveBeenCalledOnce())
+  }
+
+  let releaseFull!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  buildingResponses.push(new Promise(resolve => { releaseFull = resolve }))
+  let oldFull!: Promise<unknown>
+  act(() => {
+    oldFull = result.current.refetchSlices(['buildings', 'cards']).then(() => null, error => error)
+  })
+  await waitFor(() => expect(buildingResponses).toHaveLength(0))
+  buildingResponses.push(Promise.resolve({ data: rawMoveBuildings(2, 'recovered'), error: null }))
+  await act(async () => {
+    if (overlap === 'preexisting') saved = result.current.moveBuildingToCard(1, 2)
+    else releaseTarget({ buildings: [testBuilding(1, 2, 'targeted')], histories: [] })
+    expect(await saved).toBe(true)
+  })
+  expect(state.changed).toHaveBeenCalledTimes(overlap === 'preexisting' ? 0 : 1)
+  expect(result.current.buildings.find(b => b.id === 1)?.name).toBe('recovered')
+  expect(result.current.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 0, 0], [2, 2, 2]])
+  await act(async () => {
+    releaseFull({ data: rawMoveBuildings(1, 'stale'), error: null })
+    expect(await oldFull).toEqual(expect.objectContaining({ message: 'Building read superseded' }))
+  })
+  expect(result.current.buildings.find(b => b.id === 1)).toMatchObject({ cardId: 2, name: 'recovered' })
+  expect(result.current.buildings.find(b => b.id === 2)).toEqual(other)
+  expect(result.current.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 0, 0], [2, 2, 2]])
+})
+
+test('building move recovers when a superseding targeted read fails', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  creationCards.enabled = true
+  creationCards.ids = [1, 2]
+  const { result } = renderHook(() => useStore(false))
+  buildingResponses.push(Promise.resolve({ data: rawMoveBuildings(1, 'before'), error: null }))
+  await act(async () => { await result.current.refetchSlices(['buildings', 'cards']) })
+  let release!: (value: { buildings: ReturnType<typeof testBuilding>[]; histories: [] }) => void
+  state.changed.mockReturnValueOnce(new Promise(resolve => { release = resolve }))
+  let saved!: Promise<boolean>
+  act(() => { saved = result.current.moveBuildingToCard(1, 2) })
+  await waitFor(() => expect(state.changed).toHaveBeenCalledOnce())
+  state.changed.mockRejectedValueOnce(new Error('newer targeted read failed'))
+  await act(async () => {
+    await expect(result.current.syncChangedBuildings([1])).rejects.toThrow('newer targeted read failed')
+  })
+  buildingResponses.push(Promise.resolve({ data: rawMoveBuildings(2, 'recovered'), error: null }))
+  await act(async () => {
+    release({ buildings: [testBuilding(1, 2, 'targeted')], histories: [] })
+    expect(await saved).toBe(true)
+  })
+  expect(buildingResponses).toHaveLength(0)
+  expect(result.current.buildings.find(b => b.id === 1)).toMatchObject({ cardId: 2, name: 'recovered' })
+  expect(result.current.buildings.find(b => b.id === 2)?.name).toBe('other')
+  expect(result.current.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 0, 0], [2, 2, 2]])
+})
+
+test('old full calendar read finishing after edit fallback cannot restore stale events', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  localStorage.setItem('auth_token', 'test')
+  state.rpc.mockResolvedValue({ data: { ok: true }, error: null })
+  const { result } = renderHook(() => useStore(false))
+  calendarResponses.push(Promise.resolve({ data: rawEvents, error: null }))
+  await act(async () => { await result.current.refetchSlices(['calendar']) })
+  const history = result.current.calendarEvents.find(e => e.id === 2)
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  calendarResponses.push(new Promise(resolve => { release = resolve }))
+  let oldFull!: Promise<unknown>
+  act(() => {
+    oldFull = result.current.refetchSlices(['calendar']).then(() => null, error => error)
+  })
+  await waitFor(() => expect(calendarResponses).toHaveLength(0))
+  calendarResponses.push(Promise.resolve({
+    data: rawEvents.map(e => e.id === 1 ? { ...e, title: 'recovered', time: '11:00' } : e), error: null,
+  }))
+  await act(async () => { expect(await result.current.updateCalendarEvent(1, eventInput, false)).toBe(true) })
+  expect(updatedEvent).not.toHaveBeenCalled()
+  expect(result.current.calendarEvents.find(e => e.id === 1)?.title).toBe('recovered')
+  await act(async () => {
+    release({ data: rawEvents, error: null })
+    expect(await oldFull).toEqual(expect.objectContaining({ message: 'Calendar read superseded' }))
+  })
+  expect(result.current.calendarEvents.find(e => e.id === 1)).toMatchObject({ title: 'recovered', time: '11:00' })
+  expect(result.current.calendarEvents.find(e => e.id === 2)).toEqual(history)
+})
 
 test.each([1, 2])('production card totals use the same snapshot after %s queued building changes', async (changes) => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
