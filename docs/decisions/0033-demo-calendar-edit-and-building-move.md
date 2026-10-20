@@ -1,7 +1,7 @@
 # Demo single-event edit and building-card movement refresh
 
 - Date: 2026-10-20
-- Status: implementation; live demo verification pending
+- Status: demo deployed and live save/reload verification passed; production unchanged
 - Production: unchanged; no DB or permission changes
 
 ## Investigation and scope
@@ -71,6 +71,28 @@ the initial read; missing participants must never be interpreted as zero attenda
   cases fail, while their production-disabled counterparts passed.
 - Two independent agent reviews completed. The calendar baseline completeness
   finding was fixed and both assignment-table failure regressions passed.
-- Live demo artifact identifiers and save/reload observations are pending.
+
+## Live demo verification
+
+- App commit: `f15f27e`; demo deployment `dpl_GspdqhWroYpXt1AuC8ikbJ7cgq5z`.
+- Alias: https://chinese-territory-app-demo.vercel.app
+- Loaded module verified against published HTML: `/assets/index-BBJmTsoa.js`.
+- Actual demo administrator account; virtual fixture only, not production data.
+- Created event 99 (`DEMO-REFRESH-1020`), then edited title, time to 13:00-15:00
+  and description. Immediate calendar/detail rendering and reload persistence
+  passed; mobile detail also displayed the edited values. The test event remains
+  identifiable as `DEMO-REFRESH-1020 확인완료`, with no participants.
+- Moved virtual building 74 from card 28 to card 30. The source building list
+  dropped from two to one; the destination listed three buildings. Its map opened
+  at `cardId=30&buildingId=74`, displaying the moved building and its four units,
+  with destination totals of three buildings / twelve units. Reload retained it.
+- Restored building 74 to card 28. Destination returned to two buildings; source
+  returned to two buildings with six and four units. No units/history were edited.
+- Screenshots: `scratch/demo-calendar-verified-f15f27e.png` and
+  `scratch/demo-card-move-f15f27e.png`. Browser zoom restored to 100%.
+- These browser checks verify save/display persistence, not request-byte totals
+  or savings attribution. Targeted-versus-broad behavior and failure races are
+  covered by automated integration/mutation tests. Real two-phone simultaneous
+  editing was not exercised in this run.
 
 No monthly savings estimate is claimed.
