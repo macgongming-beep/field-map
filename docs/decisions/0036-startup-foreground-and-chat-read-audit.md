@@ -103,3 +103,17 @@ remain intact; existing Sentry secret scrubbing is unchanged.
 - Mutations removing detail-query gating and identity masking fail their tests.
 - Actual errors are captured once by Sentry; typed cancellation is not captured.
 - No production configuration or database changes are included.
+
+## Demo deployment and browser check
+
+- Demo deployment `dpl_693TvSW2vnpzcRXV2DVJ1kQEr8B1` is ready at commit
+  `3221e0c`; lint and production build passed.
+- Applied the demo PWA update and verified the loaded entry is
+  `/assets/index-CG3IjHnW.js`.
+- The admin home loaded; opening chat showed the active room and three past
+  rooms with their six-person counts. Opening notifications showed the existing
+  notification. No browser console errors were captured during this check.
+- This is a UI smoke check, not a live unread-message delivery test or a byte
+  measurement. Automated tests cover unread parity and skipped detail queries.
+- Production remains `8a4ffdc`; neither this badge optimization nor the Sentry
+  follow-up was released to production in this step.
