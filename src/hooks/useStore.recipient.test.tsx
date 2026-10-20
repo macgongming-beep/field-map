@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   unitParent: 20, insertError: false, unitLookupError: false,
   historyColumns: [] as string[],
   calendarFilters: [] as [string, unknown][][],
+  calendarResponses: [] as Promise<{ data: Record<string, unknown>[]; error: null }>[],
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
   buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
 }))
@@ -52,6 +53,9 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       if (table === 'service_sessions') state.sessionFilters.push(filters)
       if (table === 'restaurant_requests' && !writing) state.requestFilters.push(filters)
       if (table === 'calendar_events' && !writing) state.calendarFilters.push([...filters])
+      if (table === 'calendar_events' && !writing && state.calendarResponses.length) {
+        return resolve(await state.calendarResponses.shift())
+      }
       const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
         : table === 'return_visits' ? writing ? [{ id: 7 }] : state.returnRows
@@ -77,6 +81,7 @@ beforeEach(() => {
   state.unitParent = 20; state.insertError = false; state.unitLookupError = false; state.historyColumns = []
   state.sessions = []; state.sessionFilters = []
   state.calendarFilters = []
+  state.calendarResponses = []
   state.changed.mockReset()
   state.unchanged.mockResolvedValue(null); state.recover.mockReset(); state.boundaries.mockResolvedValue([])
   state.buildings = [building]; state.allowed = [1]; state.reads = []
@@ -496,8 +501,67 @@ test('calendar refresh revokes the final card and removes its buildings and boun
   expect(state.refresh).toHaveBeenCalled()
 })
 
-test('demo single-event update retains broad calendar and recipient scope refresh', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test('production opt-ins serialize deferred recipient calendar refreshes and publish each scope', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', 'true')
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear()
+  state.calendarFilters = []
+  state.reads = []
+  state.refresh
+    .mockImplementationOnce(calendar => {
+      expect(calendar[0].title).toBe('first scope')
+      state.allowed = [2]
+      state.buildings = [{ ...building, id: 20, card_id: 2, units: [] }]
+    })
+    .mockImplementationOnce(calendar => {
+      expect(calendar[0].title).toBe('revoked scope')
+      state.allowed = []
+      state.buildings = []
+    })
+  let releaseFirst!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  let releaseSecond!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.calendarResponses.push(
+    new Promise(resolve => { releaseFirst = resolve }),
+    new Promise(resolve => { releaseSecond = resolve }),
+  )
+  let first!: Promise<void>, second!: Promise<void>
+  act(() => {
+    first = result.current.refetchSlices(['calendar'])
+    second = result.current.refetchSlices(['calendar'])
+  })
+  await waitFor(() => expect(state.calendarFilters).toHaveLength(1))
+  expect(state.calendarResponses).toHaveLength(1)
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(result.current.buildings.map(b => b.id)).toEqual([10])
+  await act(async () => {
+    releaseFirst({ data: [{ id: 7, event_date: '2026-10-20', time: '10:00', title: 'first scope' }], error: null })
+    await first
+  })
+  await waitFor(() => expect(state.calendarFilters).toHaveLength(2))
+  expect(state.refresh).toHaveBeenCalledOnce()
+  expect(result.current.buildings.map(b => [b.id, b.cardId])).toEqual([[20, 2]])
+  expect(result.current.cardBoundaries.map(b => b.cardId)).toEqual([2])
+  await act(async () => {
+    releaseSecond({ data: [{ id: 7, event_date: '2026-10-20', time: '10:00', title: 'revoked scope' }], error: null })
+    await second
+  })
+  expect(state.refresh).toHaveBeenCalledTimes(2)
+  expect(state.calendarFilters).toEqual([[], []])
+  expect(result.current.calendarEvents[0].title).toBe('revoked scope')
+  expect(result.current.buildings).toEqual([])
+  expect(result.current.cardBoundaries).toEqual([])
+  expect(result.current.cards.find(c => c.id === 2)?.units).toBe(50)
+  expect(state.changed).not.toHaveBeenCalled()
+  expect(state.reads).not.toContain('buildings')
+})
+
+test.each(['true', 'false'])('single-event update retains broad calendar and recipient scope refresh (demo=%s)', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
   localStorage.setItem('auth_token', 'test-token')
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
@@ -522,8 +586,10 @@ test('demo single-event update retains broad calendar and recipient scope refres
   expect(result.current.cards.find((card) => card.id === 2)?.units).toBe(50)
 })
 
-test('demo building card move retains broad scoped refresh instead of targeted sync', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(['true', 'false'])('building card move retains broad scoped refresh instead of targeted sync (demo=%s)', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(result.current.buildings.map((b) => b.id)).toEqual([10])

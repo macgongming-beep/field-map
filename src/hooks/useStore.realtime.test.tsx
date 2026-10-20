@@ -55,9 +55,37 @@ const rawEvents = [
   { id: 1, event_date: '2026-10-20', time: '10:00', title: 'before', event_participants: [{ user_name: 'A' }] },
   { id: 2, event_date: '2026-08-20', time: '10:00', title: 'history', event_participants: [{ user_name: 'B' }] },
 ]
+const calendarMoveFlagCases = [
+  [undefined, undefined, false], ['false', undefined, false], ['true', undefined, true],
+  ['false', 'true', true], ['true', 'false', false], ['false', 'false', false],
+] as const
 
-test.each(['event_card_assignments', 'event_card_assignment_cards'])('incomplete calendar from %s failure forces broad edit recovery', async (table) => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each((['calendar', 'buildings'] as const).flatMap(slice =>
+  ([['true', 'false'], ['false', undefined]] as const).map(([demo, flag]) => ({ slice, demo, flag }))))(
+  '$slice full-read guard remains off with demo=$demo explicit=$flag', async ({ slice, demo, flag }) => {
+    vi.stubEnv('VITE_DEMO_MODE', demo)
+    vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', slice === 'calendar' ? flag : 'true')
+    vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', slice === 'buildings' ? flag : 'true')
+    const responses = slice === 'calendar' ? calendarResponses : buildingResponses
+    let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+    responses.push(new Promise(resolve => { release = resolve }))
+    const { result } = renderHook(() => useStore(false))
+    let older!: Promise<unknown>
+    act(() => { older = result.current.refetchSlices([slice]).then(() => null, error => error) })
+    await waitFor(() => expect(responses).toHaveLength(0))
+    responses.push(Promise.resolve({ data: [], error: null }))
+    await act(async () => { await result.current.refetchSlices([slice]) })
+    await act(async () => {
+      release({ data: [], error: null })
+      expect(await older).toBeNull()
+    })
+  },
+)
+
+test.each(['event_card_assignments', 'event_card_assignment_cards'].flatMap(table =>
+  ['true', 'false'].map(demo => ({ table, demo }))))('incomplete calendar from $table forces broad recovery (demo=$demo)', async ({ table, demo }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
   localStorage.setItem('auth_token', 'test')
   state.rpc.mockResolvedValue({ data: { ok: true }, error: null })
   calendarAssignmentState.rows = {
@@ -88,8 +116,10 @@ test.each(['event_card_assignments', 'event_card_assignment_cards'])('incomplete
   expect(updatedEvent).toHaveBeenCalledExactlyOnceWith(1)
 })
 
-test.each(['true', 'false'])('single event edit narrows only in demo=%s and preserves historical participants', async (demo) => {
+test.each(calendarMoveFlagCases)('single event edit honors demo=%s explicit=%s and preserves historical participants', async (demo, flag, enabled) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', flag)
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', enabled ? 'false' : 'true')
   localStorage.setItem('auth_token', 'test')
   state.rpc.mockResolvedValue({ data: { ok: true }, error: null })
   const { result } = renderHook(() => useStore(false))
@@ -100,14 +130,16 @@ test.each(['true', 'false'])('single event edit narrows only in demo=%s and pres
   calendarResponses.push(Promise.resolve({ data: rawEvents.map(e => e.id === 1 ? { ...e, title: 'edited' } : e), error: null }))
   state.reads = []
   await act(async () => { expect(await result.current.updateCalendarEvent(1, eventInput, false)).toBe(true) })
-  expect(updatedEvent).toHaveBeenCalledTimes(demo === 'true' ? 1 : 0)
-  expect(state.reads.includes('calendar_events')).toBe(demo !== 'true')
+  expect(updatedEvent).toHaveBeenCalledTimes(enabled ? 1 : 0)
+  expect(state.reads.includes('calendar_events')).toBe(!enabled)
   expect(result.current.calendarEvents.find(e => e.id === 2)).toEqual(original)
   expect(result.current.calendarEvents.find(e => e.id === 1)?.title).toBe('edited')
 })
 
-test('newer failed full calendar read cannot turn a targeted edit into false success', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(['true', 'false'])('newer failed full calendar read cannot turn a targeted edit into false success (demo=%s)', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', 'false')
   localStorage.setItem('auth_token', 'test')
   state.rpc.mockResolvedValue({ data: { ok: true }, error: null })
   const { result } = renderHook(() => useStore(false))
@@ -128,19 +160,22 @@ test('newer failed full calendar read cannot turn a targeted edit into false suc
   expect(result.current.calendarEvents.every(e => e.title === 'recovered')).toBe(true)
 })
 
-test.each(['true', 'false'])('building card movement narrows only in demo=%s', async (demo) => {
+test.each(calendarMoveFlagCases)('building card movement honors demo=%s explicit=%s', async (demo, flag, enabled) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', flag)
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', enabled ? 'false' : 'true')
   const { result } = renderHook(() => useStore(false))
   const moved = testBuilding(1, 2, 'moved')
   state.changed.mockResolvedValue({ buildings: [moved], histories: [] })
   await act(async () => { expect(await result.current.moveBuildingToCard(1, 2)).toBe(true) })
-  expect(state.changed).toHaveBeenCalledTimes(demo === 'true' ? 1 : 0)
-  expect(state.reads.includes('cards')).toBe(demo !== 'true')
-  if (demo === 'true') expect(result.current.buildings[0].cardId).toBe(2)
+  expect(state.changed).toHaveBeenCalledTimes(enabled ? 1 : 0)
+  expect(state.reads.includes('cards')).toBe(!enabled)
+  if (enabled) expect(result.current.buildings[0].cardId).toBe(2)
 })
 
-test('moving a building recomputes both card totals and preserves other buildings', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(['true', 'false'])('moving a building recomputes both card totals and preserves other buildings (demo=%s)', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
   const { result } = renderHook(() => useStore(false))
   const source = testBuilding(1, 1, 'source')
   const other = testBuilding(2, 2, 'other')
@@ -165,8 +200,11 @@ const rawMoveBuildings = (cardId: number, name: string) => [
     units: [{ id: 201, building_id: 2, number: '101', status: '미방문', is_chinese: false, memo: null, regular_visits: [] }] },
 ]
 
-test.each(['preexisting', 'during-target'] as const)('building move recovers over a %s full read and rejects its late snapshot', async (overlap) => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(['preexisting', 'during-target'].flatMap(overlap =>
+  ['true', 'false'].map(demo => ({ overlap, demo }))))('building move recovers over a $overlap full read (demo=$demo)', async ({ overlap, demo }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', 'false')
   creationCards.enabled = true
   creationCards.ids = [1, 2]
   const { result } = renderHook(() => useStore(false))
@@ -208,8 +246,10 @@ test.each(['preexisting', 'during-target'] as const)('building move recovers ove
   expect(result.current.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 0, 0], [2, 2, 2]])
 })
 
-test('building move recovers when a superseding targeted read fails', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(['true', 'false'])('building move recovers when a superseding targeted read fails (demo=%s)', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', 'false')
   creationCards.enabled = true
   creationCards.ids = [1, 2]
   const { result } = renderHook(() => useStore(false))
@@ -235,8 +275,10 @@ test('building move recovers when a superseding targeted read fails', async () =
   expect(result.current.cards.map(c => [c.id, c.buildings, c.units])).toEqual([[1, 0, 0], [2, 2, 2]])
 })
 
-test('old full calendar read finishing after edit fallback cannot restore stale events', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(['true', 'false'])('old full calendar read finishing after edit fallback cannot restore stale events (demo=%s)', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', demo === 'true' ? undefined : 'true')
+  vi.stubEnv('VITE_BUILDING_MOVE_REFRESH_ENABLED', 'false')
   localStorage.setItem('auth_token', 'test')
   state.rpc.mockResolvedValue({ data: { ok: true }, error: null })
   const { result } = renderHook(() => useStore(false))

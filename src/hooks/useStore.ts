@@ -258,7 +258,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           if (page.length < pageSize) break
         }
         measure(buildingRows)
-        if (import.meta.env.VITE_DEMO_MODE === 'true' && fullVersion !== buildingFullReadVersion.current) {
+        if ((import.meta.env.VITE_BUILDING_MOVE_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
+          && fullVersion !== buildingFullReadVersion.current) {
           throw new Error('Building read superseded')
         }
         const transformedBuildings = buildingRows.map(toBuilding)
@@ -431,7 +432,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const transformedEvents = (eventsRes.data as unknown as RawCalendarEvent[]).map((event) =>
           toCalendarEvent(event, merged.filter((a) => a.eventId === event.id)),
         )
-        if (import.meta.env.VITE_DEMO_MODE === 'true' && version !== calendarReadVersion.current) {
+        if ((import.meta.env.VITE_CALENDAR_EVENT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
+          && version !== calendarReadVersion.current) {
           throw new Error('Calendar read superseded')
         }
         setCalendarEvents(transformedEvents)
@@ -1132,7 +1134,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   } = makeBuildingMutations({
     role, fetchAll: refetchBuildings, buildings, cards, appendUnits, removeUnit,
     refreshBuilding: (buildingId) => syncChangedBuildings([buildingId]),
-    refreshMovedBuilding: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+    refreshMovedBuilding: (import.meta.env.VITE_BUILDING_MOVE_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? refreshMovedBuilding : undefined,
     // Scoped stores must re-evaluate card access after creation/address changes.
     refreshCreatedBuilding: (import.meta.env.VITE_BUILDING_CREATE_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
@@ -1157,7 +1159,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     addParticipantToEvent,
   } = makeCalendarMutations({
     fetchAll: refetchCalendar,
-    refreshUpdatedEvent: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+    refreshUpdatedEvent: (import.meta.env.VITE_CALENDAR_EVENT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? refreshUpdatedEvent : undefined,
     refetchAfterParticipantRemoval: refetchCalendarAndVisits,
     calendarEvents,

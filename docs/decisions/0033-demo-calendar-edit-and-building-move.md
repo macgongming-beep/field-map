@@ -4,6 +4,9 @@
 - Status: implementation; live demo verification pending
 - Production: unchanged; no DB or permission changes
 
+Follow-up: decision 0035 adds independent production opt-in flags while retaining
+the recipient exclusion and recovery behavior. It does not enable production.
+
 ## Investigation and scope
 
 The calendar slice reads all events with participants and both assignment tables.
