@@ -7,7 +7,7 @@ import { testBuilding } from '../test/territoryFixture'
 const state = vi.hoisted(() => ({ rpc: vi.fn(), changed: vi.fn(), clock: vi.fn(), index: vi.fn(), reads: [] as string[], boundaryColumns: [] as string[], block: null as null | Promise<void> }))
 const logColumns = vi.hoisted(() => [] as string[])
 const creationCards = vi.hoisted(() => ({ enabled: false, ids: [1] }))
-const returnResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: null }> [])
+const returnResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
 const groupResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
 const assetResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
 const calendarResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
@@ -67,6 +67,32 @@ const calendarMoveFlagCases = [
 
 const fullReadNotificationCases = (['buildings', 'calendar'] as const).flatMap(slice =>
   ['true', 'false'].flatMap(flag => [true, false].map(loaded => ({ slice, flag, loaded }))))
+
+test('refetchAll reports a real parallel failure after calendar supersession', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CALENDAR_EVENT_REFRESH_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(false))
+  await act(async () => { await result.current.refetchAll() })
+  toast.mockClear()
+  let releaseCalendar!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  let releaseVisits!: (value: { data: Record<string, unknown>[]; error: unknown }) => void
+  calendarResponses.push(new Promise(resolve => { releaseCalendar = resolve }))
+  returnResponses.push(new Promise(resolve => { releaseVisits = resolve }))
+  let refresh!: Promise<unknown>
+  act(() => { refresh = result.current.refetchAll().then(() => null, error => error) })
+  await waitFor(() => {
+    expect(calendarResponses).toHaveLength(0)
+    expect(returnResponses).toHaveLength(0)
+  })
+  await act(async () => { await result.current.refetchSlices(['calendar']) })
+  await act(async () => { releaseCalendar({ data: [], error: null }) })
+  await act(async () => {
+    releaseVisits({ data: [], error: new Error('offline') })
+    expect(await refresh).toEqual(expect.objectContaining({ message: 'Return visit data load failed' }))
+  })
+  expect(result.current.error).toBeNull()
+  expect(toast).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'error')
+})
 
 test.each(['buildings', 'calendar'] as const)(
   'loaded refetchAll superseded by actual %s mutation preserves save without error toast',

@@ -58,6 +58,8 @@ export function PullToRefresh({ onRefresh }: { onRefresh: () => Promise<void> | 
         setRefreshing(true)
         try {
           await onRefresh()
+        } catch {
+          // The refresh owner reports errors; DOM event handlers must not reject.
         } finally {
           setRefreshing(false)
         }

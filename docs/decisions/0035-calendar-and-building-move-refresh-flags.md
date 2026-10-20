@@ -93,3 +93,16 @@ Follow-up verification:
   checking fails its dedicated test. Both mutations were restored.
 - Independent review identified the incomplete-first-load exception; it is now
   explicitly protected and tested. No remaining code blocker was found.
+
+## Post-approval follow-up (separate from the production activation)
+
+- A `useStore` integration test now overlaps a superseded calendar read with a
+  genuinely failed return-visit read and asserts the real failure toast.
+- `PullToRefresh` consumes the refresh promise rejection. The store still owns
+  failure UI, while the DOM event handler always clears its spinner and can retry.
+  Both ordinary failures and `SupersededReadError` are tested.
+- Replacing snapshot aggregation with `Promise.all` breaks the integration test;
+  removing the component catch produces unhandled rejections. Mutations restored.
+- This follow-up is kept on the development branch, not bundled with the approved
+  production building-move activation.
+- Verification: 1,635 tests / 192 files passed; lint and build passed.
