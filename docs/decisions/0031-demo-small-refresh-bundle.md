@@ -46,3 +46,26 @@ Live admin UI checks:
 
 Screenshots are local scratch/demo-small-group-saved.png and
 scratch/demo-small-chinese-restored.png. No production deployment was performed.
+
+## Production opt-in (2026-10-20)
+
+User approved activating both changes together. Independent build-time flags:
+
+- VITE_CHINESE_FLAG_REFRESH_ENABLED
+- VITE_INFORMAL_GROUP_REFRESH_ENABLED
+
+Each falls back to VITE_DEMO_MODE only when unset. Explicit false disables it.
+Chinese refresh still excludes recipient stores; group-only rename does not
+change scope, so remains available to recipient stores.
+
+Rename recovery has an explicit strictGroups read option and dedicated fallback
+callback. Unlike ordinary production startup, this recovery must preserve groups
+and report an error if the group read fails. Strict reads cannot reuse an older,
+non-strict in-flight request. Other resource mutations are unchanged.
+
+Independent Codex review approved the changes with no actionable findings.
+Full suite: 1,504 tests / 187 files, lint and build passed. Temporarily restoring
+demo-only callbacks failed exactly four flag tests (eight passed); restored.
+An additional recipient double-failure regression was added after that full run.
+Activation/deployment verification is recorded below when complete. Disabling
+either flag requires rebuilding/redeploying and users accepting the PWA update.

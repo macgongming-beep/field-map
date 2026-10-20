@@ -210,7 +210,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   ]
 
   // 각 slice를 독립적으로 fetch. 페이로드 크기 누적 반환.
-  const fetchSlice = useCallback(async (slice: Slice, recovery = false, historiesRecovered = false): Promise<number> => {
+  const fetchSlice = useCallback(async (slice: Slice, recovery = false, historiesRecovered = false, strictGroups = false): Promise<number> => {
     let approxBytes = 0
     // ⚠ 운영에서는 측정하지 않는다 — 숫자 하나 얻으려고 440KB 를 통째로
     //   문자열로 바꾸는 비용이 구형 기기에서 그대로 체감된다
@@ -449,9 +449,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         setEventRestaurantAssignments(eventRestaurantRes.error ? [] : (eventRestaurantRes.data as RawEventRestaurantAssignment[]).map(toEventRestaurantAssignment))
         if (groupVersion === informalGroupReadVersion.current) {
           if (!informalGroupsRes.error) setInformalGroups((informalGroupsRes.data as RawInformalGroup[]).map(toInformalGroup))
-          else if (import.meta.env.VITE_DEMO_MODE !== 'true') setInformalGroups([])
+          else if (!strictGroups && import.meta.env.VITE_DEMO_MODE !== 'true') setInformalGroups([])
         }
-        if (informalGroupsRes.error && import.meta.env.VITE_DEMO_MODE === 'true') {
+        if (informalGroupsRes.error && (strictGroups || import.meta.env.VITE_DEMO_MODE === 'true')) {
           throw new Error('Informal groups load failed', { cause: informalGroupsRes.error })
         }
 
@@ -573,7 +573,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const recipientQueue = useRef<Promise<void>>(Promise.resolve())
   const fetchSlices = useCallback((
     slices: Slice[],
-    options?: { triggeredBy?: string },
+    options?: { triggeredBy?: string; strictGroups?: boolean },
   ): Promise<void> => {
     if (recipientReader) {
       const work = async () => {
@@ -600,7 +600,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
               requested.delete('buildings')
               requested.delete('cardBoundaries')
               // Histories remain global for statistics; scoped recovery cannot replace them.
-              await Promise.all([...requested].map((slice) => fetchSlice(slice)))
+              await Promise.all([...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups)))
               return
             }
           } catch {
@@ -613,7 +613,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           await fetchSlice('buildings')
           requested.delete('buildings')
         }
-        await Promise.all([...requested].map((slice) => fetchSlice(slice)))
+        await Promise.all([...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups)))
         if (baseline && slices.includes('buildings')) {
           territoryCheckpoint.baseline = baseline
           territoryCheckpoint.cards.clear()
@@ -630,11 +630,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     // Only recovery callers share reads. A post-mutation refresh must not join a
     // query that started before the write and could return an older snapshot.
     const recovery = options?.triggeredBy === 'foreground' || options?.triggeredBy?.startsWith('realtime:')
-    const share = options?.triggeredBy === 'fetchAll' || recovery
+    const share = !options?.strictGroups && (options?.triggeredBy === 'fetchAll' || recovery)
     let reusedTerritoryRead = false
     let historiesRecovered = false
     const read = (slice: Slice) => {
-      if (!share) return fetchSlice(slice, slice === 'cardBoundaries' && options?.triggeredBy === 'mutation:cardBoundaries')
+      if (!share) return fetchSlice(slice, slice === 'cardBoundaries' && options?.triggeredBy === 'mutation:cardBoundaries', false, options?.strictGroups)
       const existing = recoveryReads.get(slice)
       // A sessions-only visits read cannot replace histories unless this caller recovered them.
       if (existing && (recovery || !existing.delta)
@@ -1138,7 +1138,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     fetchAll: refetchReturnVisits,
     refreshDetails: refetchReturnVisitDetails,
     refreshLogEdit: refetchReturnVisitDetails,
-    refreshChinese: import.meta.env.VITE_DEMO_MODE === 'true' && !recipientReader
+    refreshChinese: (import.meta.env.VITE_CHINESE_FLAG_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? (buildingId) => syncChangedBuildings([buildingId]) : undefined,
     refreshAddress: (import.meta.env.VITE_RETURN_VISIT_ADDRESS_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? refetchReturnVisitDetails : undefined,
@@ -1173,8 +1173,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     bulkSetRestaurantFlag,
   } = makeV2AssignmentMutations({
     fetchAll: refetchResources, refreshRestaurantBuildings,
-    refreshGroups: import.meta.env.VITE_DEMO_MODE === 'true'
+    refreshGroups: (import.meta.env.VITE_INFORMAL_GROUP_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
       ? () => fetchSlices(['informalGroups'], { triggeredBy: 'mutation:informalGroups' }) : undefined,
+    // Only rename recovery requires groups; ordinary startup remains nonfatal.
+    refreshGroupsFallback: () => fetchSlices(['resources'], { triggeredBy: 'mutation:informalGroups:recovery', strictGroups: true }),
   })
 
   const {

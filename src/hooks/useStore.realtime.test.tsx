@@ -53,8 +53,9 @@ test.each(['resources', 'informalGroups'] as const)('late %s read cannot undo re
   expect(result.current.informalGroups[0].name).toBe('new')
 })
 
-test('group read failure preserves snapshot and returns false after fallback also fails', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each(['true', 'false'])('group read failure preserves snapshot after fallback also fails (demo=%s)', async (demo) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_INFORMAL_GROUP_REFRESH_ENABLED', 'true')
   const { result } = renderHook(() => useStore(false))
   groupResponses.push(Promise.resolve({ data: [{ id: 7, name: 'old', position: 0 }], error: null }))
   await act(async () => { await result.current.refetchSlices(['informalGroups']) })
@@ -65,6 +66,7 @@ test('group read failure preserves snapshot and returns false after fallback als
 
 test('non-demo startup keeps the existing nonfatal groups-read failure behavior', async () => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_INFORMAL_GROUP_REFRESH_ENABLED', 'true')
   groupResponses.push(Promise.resolve({ data: [], error: new Error('offline') }))
   const { result } = renderHook(() => useStore(true))
   await waitFor(() => expect(result.current.loading).toBe(false))
@@ -72,8 +74,15 @@ test('non-demo startup keeps the existing nonfatal groups-read failure behavior'
   expect(result.current.informalGroups).toEqual([])
 })
 
-test.each(['true', 'false'])('Chinese flag targeted refresh is demo-only: %s', async (demo) => {
+const smallRefreshCases = [
+  [undefined, undefined, false], ['true', undefined, true], ['false', undefined, false],
+  ['false', 'true', true], ['true', 'false', false], ['false', 'false', false],
+] as const
+
+test.each(smallRefreshCases)('Chinese refresh honors demo=%s explicit=%s', async (demo, flag, enabled) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CHINESE_FLAG_REFRESH_ENABLED', flag)
+  vi.stubEnv('VITE_INFORMAL_GROUP_REFRESH_ENABLED', enabled ? 'false' : 'true')
   const { result } = renderHook(() => useStore(false))
   const building = testBuilding(1, 1, 'edited'), other = testBuilding(2, 2, 'other')
   state.changed.mockResolvedValueOnce({ buildings: [building, other], histories: [] })
@@ -82,22 +91,37 @@ test.each(['true', 'false'])('Chinese flag targeted refresh is demo-only: %s', a
   const updated = { ...building, units: building.units.map(u => ({ ...u, isChinese: true })) }
   state.changed.mockResolvedValueOnce({ buildings: [updated], histories: [] })
   await act(async () => { await result.current.toggleChinese(1, 101) })
-  expect(state.reads.includes('return_visits')).toBe(demo !== 'true')
-  expect(state.reads.includes('buildings')).toBe(demo !== 'true')
-  if (demo === 'true') {
+  expect(state.reads.includes('return_visits')).toBe(!enabled)
+  expect(state.reads.includes('buildings')).toBe(!enabled)
+  if (enabled) {
     expect(state.changed).toHaveBeenCalledWith([1])
     expect(result.current.buildings).toEqual([updated, other])
   }
 })
 
-test.each(['true', 'false'])('group rename reads only groups in demo: %s', async (demo) => {
+test.each(smallRefreshCases)('group rename honors demo=%s explicit=%s', async (demo, flag, enabled) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_INFORMAL_GROUP_REFRESH_ENABLED', flag)
+  vi.stubEnv('VITE_CHINESE_FLAG_REFRESH_ENABLED', enabled ? 'false' : 'true')
   const { result } = renderHook(() => useStore(false))
   await act(async () => { expect(await result.current.renameInformalGroup(7, 'renamed')).toBe(true) })
   expect(state.reads.filter(t => t === 'informal_groups')).toHaveLength(2)
-  expect(state.reads.includes('informal_assets')).toBe(demo !== 'true')
-  expect(state.reads.includes('event_restaurant_assignments')).toBe(demo !== 'true')
-  expect(state.reads.includes('event_informal_assignments')).toBe(demo !== 'true')
+  expect(state.reads.includes('informal_assets')).toBe(!enabled)
+  expect(state.reads.includes('event_restaurant_assignments')).toBe(!enabled)
+  expect(state.reads.includes('event_informal_assignments')).toBe(!enabled)
+})
+
+test('production group rename recovers through fresh resources after a narrow read failure', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_INFORMAL_GROUP_REFRESH_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(false))
+  groupResponses.push(
+    Promise.resolve({ data: [], error: new Error('offline') }),
+    Promise.resolve({ data: [{ id: 7, name: 'new', position: 0 }], error: null }),
+  )
+  await act(async () => { expect(await result.current.renameInformalGroup(7, 'new')).toBe(true) })
+  expect(result.current.informalGroups[0].name).toBe('new')
+  expect(state.reads).toContain('informal_assets')
 })
 
 test.each(['returnVisits', 'returnVisitDetails'] as const)('late %s read cannot undo a saved address', async (slice) => {

@@ -13,6 +13,7 @@ export function makeV2AssignmentMutations(deps: {
   fetchAll: () => Promise<void>
   refreshRestaurantBuildings?: (buildingIds: number[]) => Promise<void>
   refreshGroups?: () => Promise<void>
+  refreshGroupsFallback?: () => Promise<void>
 }) {
   const { fetchAll } = deps
   const refreshRestaurants = deps.refreshRestaurantBuildings ?? fetchAll
@@ -222,7 +223,7 @@ export function makeV2AssignmentMutations(deps: {
     else {
       try {
         try { await deps.refreshGroups() }
-        catch { await fetchAll() }
+        catch { await (deps.refreshGroupsFallback ?? fetchAll)() }
       } catch (error) {
         reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'), error)
         return false

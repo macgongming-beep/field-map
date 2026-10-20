@@ -53,6 +53,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
         : table === 'return_visits' ? writing ? [{ id: 7 }] : state.returnRows
         : table === 'return_visit_logs' ? state.returnLogs
+        : writing && (table === 'units' || table === 'informal_groups') ? [{ id: 100 }]
         : table === 'restaurant_requests' ? writing ? [{ id: 61 }] : state.requests.filter(row => filters.every(([key, value]) => row[key] === value))
         : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []
       return resolve({ data, error: (!writing && table === state.failedTable) || (writing && state.insertError) ? new Error('offline') : null })
@@ -499,10 +500,11 @@ test('building creation refresh keeps the new point inside its assigned card', a
   expect(state.reads).not.toContain('buildings')
 })
 
-test.each(['address', 'created', 'existing'] as const)('production opt-ins retain recipient scope refresh for %s', async (action) => {
+test.each(['address', 'created', 'existing', 'chinese'] as const)('production opt-ins retain recipient scope refresh for %s', async (action) => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
   vi.stubEnv('VITE_RETURN_VISIT_ADDRESS_REFRESH_ENABLED', 'true')
   vi.stubEnv('VITE_BUILDING_CREATE_REFRESH_ENABLED', 'true')
+  vi.stubEnv('VITE_CHINESE_FLAG_REFRESH_ENABLED', 'true')
   localStorage.setItem('auth_token', 'test-token')
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
@@ -510,15 +512,42 @@ test.each(['address', 'created', 'existing'] as const)('production opt-ins retai
   state.changed.mockResolvedValue({ buildings: [], histories: [] })
   // The mutation changes scope; no arbitrary-ID insertion may bypass this read.
   state.allowed = []; state.buildings = []
-  state.creationAction = action === 'address' ? '' : action
+  state.creationAction = action === 'address' || action === 'chinese' ? '' : action
   await act(async () => {
     if (action === 'address') await result.current.updateReturnVisitAddress(7, 'new address')
+    else if (action === 'chinese') await result.current.toggleChinese(10, 100)
     else expect(await result.current.createBuildingForPlacement({ cardId: 1, name: 'new', address: 'new', type: '주택', lat: 37, lng: 127 }))
       .toEqual({ action, buildingId: 11 })
   })
   expect(state.refresh).toHaveBeenCalled()
   expect(state.changed).not.toHaveBeenCalled()
   expect(result.current.buildings).toEqual([])
+})
+
+test('production group rename does not rebuild recipient scope', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_INFORMAL_GROUP_REFRESH_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear()
+  state.reads = []
+  await act(async () => { expect(await result.current.renameInformalGroup(7, 'new')).toBe(true) })
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(state.reads).toEqual(['informal_groups:insert', 'informal_groups'])
+  expect(result.current.buildings.map(b => b.id)).toEqual([10])
+})
+
+test('recipient group rename reports failed strict recovery without losing buildings', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_INFORMAL_GROUP_REFRESH_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.failedTable = 'informal_groups'
+  state.reads = []
+  await act(async () => { expect(await result.current.renameInformalGroup(7, 'new')).toBe(false) })
+  expect(state.reads.filter(t => t === 'informal_groups')).toHaveLength(2)
+  expect(state.reads).toContain('informal_assets')
+  expect(result.current.buildings.map(b => b.id)).toEqual([10])
 })
 
 test('a moved-out building disappears without dropping its globally retained history', async () => {
