@@ -1,7 +1,7 @@
 # Demo group creation and asset movement refresh
 
 - Date: 2026-10-20
-- Status: implementation and demo verification in progress
+- Status: demo verified; production unchanged
 
 Group creation changes informal_groups. Asset group movement changes
 informal_assets.group_id. Neither changes event assignments or building scope.
@@ -17,7 +17,6 @@ are shared between resources and the new informalAssets slice so an older read
 cannot overwrite a move. The new slice is not added to ALL_SLICES.
 
 No schema, permission, notification, or production flag changes are requested.
-Verification results will be appended after tests and live demo checks.
 
 ## Automated verification
 
@@ -31,6 +30,26 @@ Verification results will be appended after tests and live demo checks.
 - Production creation without the optional callback retains its prior rejected
   refresh contract. A confirmed demo insert returns its ID even if recovery
   fails, avoiding duplicate creation on retry.
+
+## Live demo verification
+
+- App commit: ae3fdfd.
+- Demo deployment: dpl_HzoQRBhi2SjTPrgqREbYmdtreygx.
+- Alias: https://chinese-territory-app-demo.vercel.app.
+- Browser entry matched the deployed HTML: /assets/index-ChvbSZrR.js.
+- Created DEMO-GROUP-MOVE-1020 via UI; group appeared immediately and persisted
+  through reload.
+- Selected two explicitly virtual practice cards from the existing group and
+  moved them together. Destination count became 2, source became 1; both cards
+  appeared in the destination and persisted through reload.
+- Moved both cards back; original group count returned to 3, test group to 0,
+  and reload preserved that state. The empty test group remains; no cards deleted.
+- Evidence: scratch/demo-group-move-ae3fdfd.png and
+  scratch/demo-group-restored-ae3fdfd.png.
+- Failure/race behavior was tested automatically, not by disconnecting the live
+  browser. No production deployment or production data writes in this task.
+- Request exclusions are asserted in store tests. No live billing-byte or
+  monthly savings claim is made.
 
 ## Next candidate: calendar (read-only investigation)
 
