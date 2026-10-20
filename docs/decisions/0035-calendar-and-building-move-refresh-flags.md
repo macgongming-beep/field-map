@@ -1,7 +1,7 @@
 # Independent calendar edit and building move opt-ins
 
 - Date: 2026-10-20
-- Status: automated verification and independent review passed; production flags are not enabled
+- Status: production flags remain disabled; supersession notification follow-up below
 - Scope: build-time gates only; no database or permission changes
 
 ## Flags
@@ -59,3 +59,37 @@ instant runtime kill switches.
 - No production configuration or deployment is part of this change. Earlier
   decision 0033 records live demo saves; this follow-up validates flag combinations
   automatically and does not claim new real-device or egress measurements.
+
+## Follow-up: expected supersession is not a connection failure
+
+External review reproduced a manual full refresh superseded by a building move:
+the saved result was correct, but `fetchAll` reported the abandoned read as a
+connection failure. The same full-read cancellation path exists for calendar edits.
+
+Building and calendar guards now throw `SupersededReadError`. `fetchAll` preserves
+the rejection (so callers do not treat incomplete reads as successful snapshots)
+without showing an error toast for that type when a complete snapshot has already
+loaded. An interrupted first load retains the recoverable error screen: a newer
+building-only read does not guarantee that calendar and other slices have loaded.
+Genuine failures still use the existing error UI. Targeted mutation fallbacks are unchanged.
+No message-text matching is used.
+
+Parallel snapshot reads also check sibling outcomes after a supersession. A real
+failure in another slice takes precedence, rather than being hidden by whichever
+cancelled read rejected first. Ordinary failures still reject immediately; the
+existing full-load deadline continues to bound the refresh.
+
+This follow-up does not enable either flag, change production configuration,
+write database data, or claim a new real-device/network-volume measurement.
+
+Follow-up verification:
+
+- 1,632 tests / 191 files passed; lint and build passed.
+- Building/calendar flags true and false, before and after first complete load:
+  supersession UI and genuine network-failure UI are covered independently.
+- Actual building movement and single event editing during `refetchAll` preserve
+  saved state without an error toast; building movement also verifies both totals.
+- Removing the UI suppression fails four regressions. Removing sibling failure
+  checking fails its dedicated test. Both mutations were restored.
+- Independent review identified the incomplete-first-load exception; it is now
+  explicitly protected and tested. No remaining code blocker was found.
