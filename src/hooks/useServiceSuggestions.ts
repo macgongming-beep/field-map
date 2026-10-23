@@ -10,7 +10,7 @@ export function useServiceSuggestions(home = false) {
 
   const fetchSuggestions = useCallback(async () => {
     try {
-      if (home && import.meta.env.VITE_DEMO_MODE === 'true') {
+      if (home && (import.meta.env.VITE_HOME_SUGGESTION_BODY_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true') {
         setSuggestions((await readHomeServiceSuggestion()).map(toServiceSuggestion))
         return
       }
