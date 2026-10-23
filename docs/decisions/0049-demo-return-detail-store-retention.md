@@ -1,6 +1,6 @@
 # Return-visit detail navigation retains the recipient snapshot
 
-- Status: demo verification; production unchanged
+- Status: production enabled (2026-10-24); historical demo checks retained below
 - Date: 2026-10-23
 
 ## Problem
@@ -290,3 +290,32 @@ Release procedure: build a production-target deployment without live aliases,
 inspect its compiled feature branch and map helper, then promote it and verify
 the canonical assets. Existing PWA clients must apply the app update. Record
 the actual deployment and limits after verification below.
+
+### Production verification completed
+
+- Code: `c5eb3fe`, pushed to main. Vercel production variable
+  `VITE_RETURN_DETAIL_RETENTION_ENABLED=true` added; other flags unchanged.
+- Deployment: `dpl_URqzYrnsKkMBaxfp9baMA3RrTNVJ`, production target built
+  with `--skip-domain`, inspected using authenticated Vercel CLI reads, then
+  promoted to `https://chinese-territory-app.vercel.app`.
+- Canonical entry: `/assets/index-CeTzNfjD.js` (HTTP 200). The actual shared
+  chunk `/assets/useCardDirectory-DupUAFDU.js` contains the retention helper
+  defaulting to `true` and the user-only detail calendar branch. The mobile
+  chunk `/assets/MobileHome-zvTKpvyx.js` contains the same personal map helper
+  at both list and detail call sites.
+- Applied the normal PWA update to an existing production browser session;
+  verified its document script matches `index-CeTzNfjD.js`. It initially had
+  an older waiting worker, so a second available update was applied.
+- Read-only smoke in Chrome mobile emulation: opened an existing linked
+  return visit from the list, opened its detail map and saw **one building
+  and unit 104**, then returned to the same detail. The route included
+  `scope=regularVisits`, the target return-visit ID and linked building ID.
+  No visit, assignment, building or unit was created, edited or deleted.
+- The production login was an administrator using volunteer presentation.
+  This verifies the ungated map fix, NOT real-user recipient retention.
+  Real-user retention is covered by the approved demo smoke, production
+  flag/role/round-trip tests and the compiled production branch inspection.
+  No physical-phone check or production byte-savings measurement is claimed.
+- Restored the original administrator presentation and browser pages after
+  checking. Local screenshot: `/tmp/field-map-return-detail-production.png`;
+  not committed because it contains production location information.
