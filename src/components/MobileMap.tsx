@@ -3102,19 +3102,17 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
 
       {/* ── 세대 상세 풀스크린 오버레이 ── */}
       {liveFullScreenUnit && (
-        <div style={{
+        <div className="mobile-unit-detail" style={{
           position: 'fixed', top: 0, right: 0, bottom: sheetHeight, left: 0, zIndex: 600,
           background: 'var(--bg, #f5f6f8)',
           display: 'flex', flexDirection: 'column',
-          overflowY: 'auto',
           transition: isDragging ? 'none' : 'bottom 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         }}>
           {/* 헤더 — 지도 헤더(.mobile-map-header) 스타일 일치 */}
-          <div style={{
-            position: 'sticky', top: 0, zIndex: 10,
+          <div className="mobile-unit-detail-header" style={{
+            position: 'relative', zIndex: 10,
             background: 'var(--bg)',
             borderBottom: '1px solid var(--line)',
-            padding: '10px 12px',
             display: 'flex', alignItems: 'flex-start', gap: 10,
           }}>
             <button
@@ -3124,7 +3122,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
               aria-label={msg('닫기')}
             >‹</button>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ margin: 0, fontWeight: 700, fontSize: 20, letterSpacing: '-0.015em', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ margin: 0, fontWeight: 700, fontSize: 20, letterSpacing: 0, overflowWrap: 'anywhere', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 {liveFullScreenUnit.building.name
                   ? `${liveFullScreenUnit.building.name} ${liveFullScreenUnit.unit.number}`
                   : liveFullScreenUnit.unit.number}
@@ -3139,6 +3137,9 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 type="button"
+                aria-label={t(language, 'settings.title')}
+                aria-expanded={showUnitHeaderMenu}
+                title={t(language, 'settings.title')}
                 onClick={() => setShowUnitHeaderMenu(v => !v)}
                 style={{ width: 36, height: 36, padding: 0, border: 'none', borderRadius: 8, background: 'transparent', color: 'var(--muted)', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}
               >⋯</button>
@@ -3189,7 +3190,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
           </div>
           {/* 호수 편집 인라인 */}
           {editingUnitNumber && (
-            <div style={{ padding: '8px 16px', background: 'var(--surface)', borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
+            <div style={{ flexShrink: 0, padding: '8px 16px', background: 'var(--surface)', borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
               <input
                 autoFocus
                 value={unitNumberDraft}
@@ -3216,7 +3217,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
           )}
 
           {/* 본문 */}
-          <div style={{ flex: 1 }}>
+          <div className="mobile-unit-detail-body">
             <UnitDetailScreen key={liveFullScreenUnit.unit.id} language={language}
               unit={liveFullScreenUnit.unit}
               building={liveFullScreenUnit.building}
