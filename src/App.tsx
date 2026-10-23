@@ -97,7 +97,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   const selectCalendarDemand = useCallback((month: string, full: boolean) => {
     setCalendarDemand(previous => previous.month === month && previous.full === full ? previous : { month, full })
   }, [])
-  const calendarScope = calendarReadScope(location.pathname, location.search, calendarDemand.month, calendarDemand.full, import.meta.env.VITE_DEMO_MODE)
+  const calendarScope = calendarReadScope(location.pathname, location.search, calendarDemand.month, calendarDemand.full, import.meta.env.VITE_DEMO_MODE, undefined, actualRole)
 
   const {
     calendarScopeReady, calendarReadError, retryCalendarRead,

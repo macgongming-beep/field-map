@@ -2,15 +2,16 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import { SupersededReadError } from './supersededRead'
+import { calendarReadScope } from './calendarReadScope'
 
 const state = vi.hoisted(() => ({ scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null }))
-vi.mock('./calendarReadScope', () => ({ readScopedCalendar: state.scoped }))
+vi.mock('./calendarReadScope', async importOriginal => ({ ...await importOriginal<typeof import('./calendarReadScope')>(), readScopedCalendar: state.scoped }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: () => Promise.resolve({ data: null, error: null }),
   from: (table: string) => {
     const q: Record<string, unknown> = {}
     let lookup = false
-    for (const key of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq']) q[key] = () => q
+    for (const key of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'delete', 'insert']) q[key] = () => q
     q.limit = () => { lookup = true; return q }
     q.then = (resolve: (value: unknown) => void) => {
       state.reads.push(table)
@@ -44,6 +45,27 @@ test('production ignores a requested date scope', async () => {
   const { result } = renderHook(() => useStore(true, 'admin', undefined, 'since:2026-10-09'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(state.scoped).not.toHaveBeenCalled()
+  expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
+})
+test('admin home to allocation adds no calendar read; save refreshes cards and foreground stays scoped', async () => {
+  const now = new Date('2026-10-23T12:00:00')
+  const { result, rerender } = renderHook(({ path }) => useStore(true, 'admin', undefined,
+    calendarReadScope(path, '', '', false, 'true', now, 'admin')), { initialProps: { path: '/' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  rerender({ path: '/assignment' })
+  expect(result.current.calendarScopeReady).toBe(true)
+  expect(state.scoped).toHaveBeenCalledTimes(1)
+  await act(async () => { await result.current.setCardLeaders(1, ['Leader']) })
+  expect(state.reads).toContain('cards')
+  expect(state.reads).not.toContain('calendar_events')
+  expect(state.reads).not.toContain('event_card_assignments')
+  expect(state.scoped).toHaveBeenCalledTimes(1)
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'foreground' }) })
+  expect(state.scoped).toHaveBeenLastCalledWith('since:2026-10-09')
+  expect(state.scoped).toHaveBeenCalledTimes(2)
+  rerender({ path: '/stats' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
   expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
 })
 test('failed old-month read remains not ready and can be retried', async () => {
