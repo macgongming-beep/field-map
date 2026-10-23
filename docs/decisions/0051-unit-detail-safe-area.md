@@ -47,3 +47,12 @@ exact user's iOS state is still pending.
 Keep this visual fix separate from the pending home-detail calendar flag review
 (`c017528`). Production deployment needs user authorization. Demo testing must
 not be described as proof of the user's physical iPhone behavior.
+
+## Demo release
+
+- Code `c08ebcf`; lint and build passed as well as the full suite above.
+- Deployed only the demo project (`prj_txJm1ruq4OiRnZi3cjz9IXLkGKPG`), deployment
+  `dpl_HsTPRgYbPnvj2FsSu5B8SDuFxFLA`; canonical demo alias updated successfully.
+- The canonical site's served `App-B6G6CAod.css` contains all three new layout
+  rules, including safe-top padding and separate body scrolling.
+- Production project and environment variables were not changed.
