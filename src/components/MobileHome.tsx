@@ -34,7 +34,7 @@ import { LocationPermissionSettings } from './LocationPermissionSettings'
 import { AppUpdateCard } from './AppUpdateCard'
 import { AppHeader } from './AppHeader'
 import { findReturnVisitBuilding, findReturnVisitUnit, formatRelativeVisitDate, getLatestReturnVisitDate, getUserReturnVisits, normalizeVisitorName } from '../utils/returnVisits'
-import { isValidMapCoordinate } from '../utils/mapUtils'
+import { returnVisitMapPath } from '../utils/returnVisitMapPath'
 import { msg } from '../lib/msg'
 import { useAdminAttentionCounts } from '../hooks/useAdminAttentionCounts'
 import { confirmDialog, alertDialog } from '../lib/confirm'
@@ -1056,22 +1056,7 @@ export function MobileHome({
                   onOpenAssignmentMap={teamServiceEnabled() ? (eventId, cardId) => navigate(`/map?assignmentMap=${eventId}${cardId == null ? '' : `&assignmentCard=${cardId}`}`) : undefined}
                   onOpenInformalMap={(assetId) => navigate(`/map?informalId=${assetId}`)}
                   onOpenRegularVisitMap={(returnVisitId) => {
-                    const params = new URLSearchParams()
-                    params.set('scope', 'regularVisits')
-                    if (returnVisitId) {
-                      const rv = myRegularVisits.find((item) => item.id === returnVisitId)
-                      params.set('returnVisitId', String(returnVisitId))
-                      if (rv) {
-                        const building = findReturnVisitBuilding(rv, buildings)
-                        if (building && isValidMapCoordinate(Number(building.lat), Number(building.lng))) {
-                          params.set('buildingId', String(building.id))
-                        } else if (rv.address.trim()) {
-                          params.set('addr', rv.address.trim())
-                          params.set('pinLabel', rv.nickname || rv.displayName)
-                        }
-                      }
-                    }
-                    navigate(`/map?${params.toString()}`)
+                    navigate(returnVisitMapPath(myRegularVisits.find((item) => item.id === returnVisitId), buildings))
                   }}
                   onEndServiceSession={onEndServiceSession}
                   onCreateManualReturnVisit={onCreateManualReturnVisit}

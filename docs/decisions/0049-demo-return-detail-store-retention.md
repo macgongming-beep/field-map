@@ -198,3 +198,37 @@ their own flags. Existing running clients do not switch instantly.
 
 The linked-building browser check is still required on the deployed follow-up;
 record its exact fixture, observed route and cleanup separately below.
+
+## Linked map regression discovered during live verification
+
+On follow-up `60c615e`, the real demo volunteer opened return visit 24, linked
+to building 79 / card 31 / unit label 104. The detail correctly had the
+building, but its map button navigated to `/map?cardId=31`. MobileHome's normal
+user map filters out cards without a current assignment, so the resulting
+map displayed zero buildings. The old component test checked only the URL;
+it did not render the map's parent scope calculation. This is a pre-existing
+detail-map routing bug, not evidence that the recipient RPC omitted a building.
+
+The list already uses `scope=regularVisits`, which resolves only the user's
+target return visit and its unit. List and detail now share `returnVisitMapPath`
+for this existing scope, linked-building focus and unlinked-address fallback.
+No map access rule or recipient-store map opt-in is broadened. General maps
+still use the full store. The routing fix is independent of retention flags,
+so disabling retention restores full detail reads without reintroducing the
+wrong map URL. It needs its own review alongside the flag follow-up.
+
+Regression tests mount the real MobileHome and detail/list navigation with a
+stubbed map renderer. They assert the exact card, building, focused building
+and unit passed to that renderer, with no calendar/card/session assignment.
+Both user and leader paths exclude an unrelated building and another person's
+unit. Restoring the old detail card-map URL fails four tests (two navigation
+tests plus two component route/fallback tests). Browser re-verification of
+the deployed correction and test-only cleanup must be recorded below.
+
+Separate observation: creating the fixture through the existing unit dialog
+displayed a duplicate-registration error followed by success. The existing
+dialog starts toggleRegularVisit without awaiting it, then calls
+setRegularVisitor for the date, allowing two writes to race. The fixture was
+present as return visit 24 after reload. This registration behavior was not
+changed by the retention or map-route work and must not be reported as a
+clean registration smoke; investigate separately.

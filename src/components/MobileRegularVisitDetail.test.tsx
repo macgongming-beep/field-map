@@ -54,18 +54,18 @@ test('scoped building snapshot retains details and save re-reads the target memo
   expect(state.read.mock.calls.every(([id]) => id === 7)).toBe(true)
 })
 
-test('linked building still opens its card map', async () => {
+test('linked building opens the return-visit map rather than an assigned-card map', async () => {
   mount([building])
   await waitFor(() => expect(state.read).toHaveBeenCalled())
   fireEvent.click(screen.getByRole('button', { name: /map/i }))
-  expect(screen.getByTestId('location').textContent).toBe('/map?cardId=3')
+  expect(screen.getByTestId('location').textContent).toBe('/map?scope=regularVisits&returnVisitId=7&buildingId=10')
 })
 
 test('unlinked address retains the map fallback', async () => {
   mount([], [{ ...visit, buildingId: null, unitId: null }])
   await waitFor(() => expect(state.read).toHaveBeenCalled())
   fireEvent.click(screen.getByRole('button', { name: /map/i }))
-  expect(screen.getByTestId('location').textContent).toBe('/map?addr=Test%20address&pinLabel=Test%20nickname')
+  expect(screen.getByTestId('location').textContent).toBe('/map?scope=regularVisits&returnVisitId=7&addr=Test+address&pinLabel=Test+nickname')
 })
 
 test('missing record does not request another record history', () => {
