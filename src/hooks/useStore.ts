@@ -129,6 +129,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   calendarScopeRef.current = calendarScope
   const [loadedCalendarScope, setLoadedCalendarScope] = useState<string | null>(null)
   const [calendarReadError, setCalendarReadError] = useState(false)
+  // Session-local, bounded display cache. Never used as an authorization snapshot.
+  const calendarWindows = useRef(new Map<string, { events: CalendarEvent[]; at: number }>())
   // App keys this store by account/read mode. Never mix partial and full snapshots.
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
   useEffect(() => {
@@ -418,6 +420,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           measure(events)
           if (scope !== calendarScopeRef.current || version !== calendarReadVersion.current) throw new SupersededReadError('Calendar scope superseded')
           setCalendarEvents(events)
+          if (scope.startsWith('window:')) {
+            calendarWindows.current.delete(scope)
+            calendarWindows.current.set(scope, { events, at: Date.now() })
+            if (calendarWindows.current.size > 6) calendarWindows.current.delete(calendarWindows.current.keys().next().value!)
+          }
           // A visible date window is not an authorization snapshot. Recipient scope
           // must independently resolve all of the user's assigned events.
           recipientCalendarRef.current = undefined
@@ -624,6 +631,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     slices: Slice[],
     options?: { triggeredBy?: string; strictGroups?: boolean },
   ): Promise<void> => {
+    // Navigation can reuse recently read months; writes/recovery/manual refresh
+    // invalidate every month, including those not currently visible.
+    if (slices.includes('calendar') && options?.triggeredBy !== 'navigation:calendar') calendarWindows.current.clear()
     if (recipientReader) {
       const work = async () => {
         const baseline = slices.includes('visits')
@@ -1053,12 +1063,26 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     [fetchSlices],
   )
   const previousCalendarScope = useRef(calendarScope)
+  useEffect(() => { calendarWindows.current.clear() }, [role, recipientUser])
   useEffect(() => {
     const changed = previousCalendarScope.current !== calendarScope
     previousCalendarScope.current = calendarScope
-    if (enabled && changed) void refetchCalendar().catch(() => { /* calendar gate exposes retry */ })
-  }, [calendarScope, enabled, refetchCalendar])
+    if (!enabled) { calendarWindows.current.clear(); return }
+    if (!changed) return
+    const cached = calendarWindows.current.get(calendarScope)
+    if (cached && Date.now() - cached.at >= 0 && Date.now() - cached.at < 120_000) {
+      ++calendarReadVersion.current
+      setCalendarEvents(cached.events)
+      recipientCalendarRef.current = undefined
+      calendarSnapshotComplete.current = false
+      setLoadedCalendarScope(calendarScope)
+      setCalendarReadError(false)
+      return
+    }
+    void fetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }).catch(() => { /* calendar gate exposes retry */ })
+  }, [calendarScope, enabled, fetchSlices])
   const refreshUpdatedEvent = useCallback(async (eventId: number) => {
+    calendarWindows.current.clear()
     if (!calendarSnapshotComplete.current || calendarReadsPending.current || !recipientCalendarRef.current?.some(event => event.id === eventId)) {
       throw new Error('Complete calendar snapshot required')
     }

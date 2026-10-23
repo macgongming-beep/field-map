@@ -77,7 +77,7 @@ test('admin home to allocation adds no calendar read; save refreshes cards and f
   expect(state.reads).not.toContain('event_card_assignments')
   expect(state.scoped).toHaveBeenCalledTimes(1)
   await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'foreground' }) })
-  expect(state.scoped).toHaveBeenLastCalledWith('since:2026-10-09')
+  expect(state.scoped).toHaveBeenLastCalledWith('window:2026-10-09:2026-11-30')
   expect(state.scoped).toHaveBeenCalledTimes(2)
   rerender({ path: '/stats' })
   await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
@@ -168,4 +168,45 @@ test('two superseded initial snapshots recover without a permanent application e
   expect(state.scoped).toHaveBeenCalledTimes(3)
   expect(result.current.error).toBeNull()
   expect(result.current.calendarScopeReady).toBe(true)
+})
+
+test('returning to a recent month reuses its participants without a network wait', async () => {
+  const august = 'window:2026-08-01:2026-08-31'
+  const october = 'window:2026-10-01:2026-10-31'
+  state.scoped.mockResolvedValueOnce([{ id: 7, applicants: ['A', 'Guest'], cardAssignments: [] }]).mockResolvedValueOnce([])
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: august } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ scope: october })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  rerender({ scope: august })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(result.current.calendarEvents[0].applicants).toEqual(['A', 'Guest'])
+  expect(state.scoped).toHaveBeenCalledTimes(2)
+})
+
+test.each(['foreground', 'realtime:calendar', 'mutation:calendar', 'fetchAll'])('%s invalidates other cached months', async triggeredBy => {
+  const august = 'window:2026-08-01:2026-08-31'
+  const october = 'window:2026-10-01:2026-10-31'
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: august } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ scope: october })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy }) })
+  rerender({ scope: august })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.scoped).toHaveBeenCalledTimes(4)
+})
+
+test('expired month is fetched again instead of displaying a stale cached snapshot', async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(1000000)
+  try {
+    const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'window:2026-08-01:2026-08-31' } })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    rerender({ scope: 'window:2026-10-01:2026-10-31' })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    clock.mockReturnValue(1120001)
+    rerender({ scope: 'window:2026-08-01:2026-08-31' })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    expect(state.scoped).toHaveBeenCalledTimes(3)
+  } finally { clock.mockRestore() }
 })

@@ -18,8 +18,12 @@ export function calendarReadScope(path: string, search: string, month: string, f
   const recent = new Date(now)
   recent.setDate(recent.getDate() - 14)
   const start = toLocalDateString(recent)
-  const selected = /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? `${month}-01` : start
-  return `since:${path === '/calendar' && selected < start ? selected : start}`
+  if (path === '/calendar' && /^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    const [year, selectedMonth] = month.split('-').map(Number)
+    return `window:${month}-01:${toLocalDateString(new Date(year, selectedMonth, 0))}`
+  }
+  const end = toLocalDateString(new Date(now.getFullYear(), now.getMonth() + 2, 0))
+  return `window:${start}:${end}`
 }
 
 async function pages<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
@@ -35,11 +39,14 @@ async function pages<T>(query: (from: number, to: number) => PromiseLike<{ data:
 
 /** Complete participants and assignments for every returned event, including old months. */
 export async function readScopedCalendar(scope: string) {
-  if (!/^since:\d{4}-\d{2}-\d{2}$/.test(scope)) throw new Error('Invalid calendar scope')
-  const since = scope.slice(6)
+  const match = /^(?:since:(\d{4}-\d{2}-\d{2})|window:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2}))$/.exec(scope)
+  if (!match) throw new Error('Invalid calendar scope')
+  const since = match[1] ?? match[2]
+  const until = match[3]
+  if (until && until < since) throw new Error('Invalid calendar scope')
   const events = await pages<RawCalendarEvent>((from, to) => supabase.from('calendar_events')
-    .select(CALENDAR_EVENT_COLUMNS).gte('event_date', since).order('event_date').order('time').order('id').range(from, to))
-  if (events.some(e => !Number.isSafeInteger(e.id) || e.event_date < since)) throw new Error('Invalid scoped calendar event')
+    .select(CALENDAR_EVENT_COLUMNS).gte('event_date', since).lte('event_date', until ?? '9999-12-31').order('event_date').order('time').order('id').range(from, to))
+  if (events.some(e => !Number.isSafeInteger(e.id) || e.event_date < since || (until && e.event_date > until))) throw new Error('Invalid scoped calendar event')
   const assignments: RawEventCardAssignment[] = []
   const linked: RawEventCardAssignmentCard[] = []
   const ids = [...new Set(events.map(e => e.id))]
