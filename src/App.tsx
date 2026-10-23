@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState } fro
 import { useLocation } from 'react-router-dom'
 import { calendarReadScope } from './hooks/calendarReadScope'
 import { CalendarReadContext } from './hooks/CalendarReadContext'
+import { homeEventDetailId } from './lib/eventDetailNavigation'
 import { Toast } from './components/Toast'
 import { MeetingProvider } from './features/meetingNotes/MeetingProvider'
 import { AppLoading } from './components/AppLoading'
@@ -375,7 +376,9 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   </Suspense></>
 
   // Full consumers must never render historical statistics from a home window.
-  if (import.meta.env.VITE_DEMO_MODE === 'true' && location.pathname !== '/calendar' && !calendarScopeReady) {
+  // Home detail owns CalendarReadGate too: keep its editor mounted while loading history.
+  const homeCalendarDetail = !isDesktop && homeEventDetailId(location.pathname, location.search) !== null
+  if (import.meta.env.VITE_DEMO_MODE === 'true' && location.pathname !== '/calendar' && !homeCalendarDetail && !calendarScopeReady) {
     return calendarReadError
       ? <div role="alert">자료를 불러오지 못했습니다.<button type="button" onClick={() => { void retryCalendarRead().catch(() => {}) }}>다시 시도</button></div>
       : <AppLoading />

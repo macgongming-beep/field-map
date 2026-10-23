@@ -22,6 +22,15 @@ beforeEach(() => {
   state.query.mockReset().mockImplementation(async (table: string) => ({ data: table === 'calendar_events' ? [event] : table === 'event_card_assignments' ? [assignment] : [], error: null }))
 })
 const now = new Date('2026-10-23T12:00:00')
+test.each(['user', 'leader', 'admin', 'developer'] as const)('home detail keeps the %s home snapshot until editing demands history', role => {
+  const home = calendarReadScope('/', '', '', false, 'true', now, role, 'Me')
+  expect(calendarReadScope('/', '?openEvent=17', '', false, 'true', now, role, 'Me')).toBe(home)
+  expect(calendarReadScope('/', '?openEvent=17', '', true, 'true', now, role, 'Me')).toBe('full')
+  for (const flag of [undefined, 'false']) expect(calendarReadScope('/', '?openEvent=17', '', false, flag, now, role, 'Me')).toBe('full')
+  for (const search of ['?openEvent=0', '?openEvent=bad', '?openEvent=17&openChat=17']) {
+    expect(calendarReadScope('/', search, '', false, 'true', now, role, 'Me')).toBe('full')
+  }
+})
 test('demo user return detail shares service calendar while other roles and production stay full', () => {
   const list = calendarReadScope('/territory', '', '', false, 'true', now, 'user', 'Me')
   for (const path of ['/territory/regular/7', '/territory/regular/7/']) {

@@ -39,7 +39,7 @@ import { msg } from '../lib/msg'
 import { useAdminAttentionCounts } from '../hooks/useAdminAttentionCounts'
 import { confirmDialog, alertDialog } from '../lib/confirm'
 import { resetDemoEnvironment } from '../lib/demoEnvironment'
-import { eventDetailNavigationState } from '../lib/eventDetailNavigation'
+import { eventDetailNavigationState, homeEventDetailId } from '../lib/eventDetailNavigation'
 
 type MobileTab = '홈' | '캘린더' | '활동' | '구역' | '지도' | '배정' | '설정'
 
@@ -465,6 +465,13 @@ export function MobileHome({
   // 디자인 v2: 홈에서 "오늘 봉사한 카드" 섹션 제거됨 (활동 탭으로 이동)
   // 토글 상태는 디버그/스위치용으로 보존 — 활동 탭에서 재사용 가능
   const calendarRead = useContext(CalendarReadContext)
+  const homeDetail = import.meta.env.VITE_DEMO_MODE === 'true' && homeEventDetailId(location.pathname, location.search) !== null
+  const openHomeEvent = (id: number) => {
+    if (import.meta.env.VITE_DEMO_MODE === 'true') calendarRead?.select('', false)
+    navigate(`${import.meta.env.VITE_DEMO_MODE === 'true' ? '/' : '/calendar'}?openEvent=${id}`, {
+      state: eventDetailNavigationState(location),
+    })
+  }
   const [todayCardsCollapsed, setTodayCardsCollapsed] = useState(() =>
     window.localStorage.getItem('mobileTodaySessionsCollapsed') === 'true'
   )
@@ -789,6 +796,49 @@ export function MobileHome({
   )
 
 
+  const calendarPanel = (
+    <AdminMobileCalendar
+      detailOnly={homeDetail}
+      language={language}
+      translatePlaceNames={translatePlaceNames}
+      currentVisitor={currentVisitor}
+      currentUserId={currentUser.id}
+      role={role}
+      events={calendarEvents}
+      cards={cards}
+      buildings={buildings}
+      visitHistories={visitHistories}
+      cardBoundaries={cardBoundaries}
+      leaderNames={leaderNames}
+      mentionUsers={allUsers.map((user) => ({ id: user.id, name: user.name, role: user.role }))}
+      participantUsers={allUsers}
+      onAssignCardsToEventParticipantsBulk={onAssignCardsToEventParticipantsBulk}
+      informalAssets={informalAssets}
+      informalGroups={informalGroups}
+      eventInformalAssignments={eventInformalAssignments}
+      eventRestaurantAssignments={eventRestaurantAssignments}
+      onAssignInformalToUser={onAssignInformalToUser}
+      onRemoveInformalAssignment={onRemoveInformalAssignment}
+      onAssignRestaurantToUser={onAssignRestaurantToUser}
+      onRemoveRestaurantAssignment={onRemoveRestaurantAssignment}
+      onCreateEvent={(role === 'admin' || role === 'developer') ? onCreateCalendarEvent : undefined}
+      onCreateRepeatEvents={(role === 'admin' || role === 'developer') ? onCreateRepeatCalendarEvents : undefined}
+      onDeleteEvent={role === 'user' ? undefined : onDeleteCalendarEvent}
+      onDeleteEventSeries={role === 'user' ? undefined : onDeleteCalendarEventSeries}
+      onUpdateEvent={role === 'user' ? undefined : onUpdateCalendarEvent}
+      onUpdateEventSeries={role === 'user' ? undefined : onUpdateCalendarEventSeries}
+      onApplyToEvent={onApplyToEvent}
+      onApplyToCartEvent={onApplyToCartEvent}
+      onManageCartApplication={onManageCartApplication}
+      onSetCartTeamLeader={onSetCartTeamLeader}
+      onAddParticipantToEvent={_onAddParticipantToEvent}
+      onRemoveParticipantFromEvent={_onRemoveParticipantFromEvent}
+      specialPeriods={specialPeriods}
+      globalSettings={globalSettings}
+      onUpsertGlobalSetting={onUpsertGlobalSetting}
+    />
+  )
+
   return (
     <Routes>
       <Route path="/map" element={
@@ -845,7 +895,7 @@ export function MobileHome({
           <Routes>
             {/* 홈 */}
             <Route path="/" element={
-              <>
+              homeDetail ? calendarPanel : <>
                 <AppHeader
                   pageTitle={t(language, 'nav.home')}
                   language={language}
@@ -880,9 +930,7 @@ export function MobileHome({
                     
                     
                     
-                    onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`, {
-                      state: eventDetailNavigationState(location),
-                    })}
+                    onOpenEventDetail={openHomeEvent}
                   />
                 ) : (
                   <UserMobileHome
@@ -897,9 +945,7 @@ export function MobileHome({
                     role={role}
                     
                     
-                    onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`, {
-                      state: eventDetailNavigationState(location),
-                    })}
+                    onOpenEventDetail={openHomeEvent}
                     onOpenZone={() => navigate('/zone')}
                     globalSettings={globalSettings}
                   />
@@ -941,46 +987,7 @@ export function MobileHome({
                   onOpenMenu={() => navigate('/settings')}
                 />
                 {/* 모든 역할이 AdminMobileCalendar 사용 — 권한별 콜백 가시성으로 차등 */}
-                <AdminMobileCalendar
-                  language={language}
-                  translatePlaceNames={translatePlaceNames}
-                  currentVisitor={currentVisitor}
-                  currentUserId={currentUser.id}
-                  role={role}
-                  events={calendarEvents}
-                  cards={cards}
-                  buildings={buildings}
-                  visitHistories={visitHistories}
-                  cardBoundaries={cardBoundaries}
-                  leaderNames={leaderNames}
-                  mentionUsers={allUsers.map((user) => ({ id: user.id, name: user.name, role: user.role }))}
-                  participantUsers={allUsers}
-                  onAssignCardsToEventParticipantsBulk={onAssignCardsToEventParticipantsBulk}
-                  informalAssets={informalAssets}
-                  informalGroups={informalGroups}
-                  eventInformalAssignments={eventInformalAssignments}
-                  eventRestaurantAssignments={eventRestaurantAssignments}
-                  onAssignInformalToUser={onAssignInformalToUser}
-                  onRemoveInformalAssignment={onRemoveInformalAssignment}
-                  onAssignRestaurantToUser={onAssignRestaurantToUser}
-                  onRemoveRestaurantAssignment={onRemoveRestaurantAssignment}
-                  /* 일정 생성: 관리자·개발자만. 인도자는 본인 일정 수정만 가능, user 는 신청만. */
-                  onCreateEvent={(role === 'admin' || role === 'developer') ? onCreateCalendarEvent : undefined}
-                  onCreateRepeatEvents={(role === 'admin' || role === 'developer') ? onCreateRepeatCalendarEvents : undefined}
-                  onDeleteEvent={role === 'user' ? undefined : onDeleteCalendarEvent}
-                  onDeleteEventSeries={role === 'user' ? undefined : onDeleteCalendarEventSeries}
-                  onUpdateEvent={role === 'user' ? undefined : onUpdateCalendarEvent}
-                  onUpdateEventSeries={role === 'user' ? undefined : onUpdateCalendarEventSeries}
-                  onApplyToEvent={onApplyToEvent}
-                  onApplyToCartEvent={onApplyToCartEvent}
-                  onManageCartApplication={onManageCartApplication}
-                  onSetCartTeamLeader={onSetCartTeamLeader}
-                  onAddParticipantToEvent={_onAddParticipantToEvent}
-                  onRemoveParticipantFromEvent={_onRemoveParticipantFromEvent}
-                  specialPeriods={specialPeriods}
-                  globalSettings={globalSettings}
-                  onUpsertGlobalSetting={onUpsertGlobalSetting}
-                />
+                {calendarPanel}
               </>
             } />
 

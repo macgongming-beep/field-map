@@ -30,6 +30,8 @@
 
 ## 새 기록 틀
 
+모바일 홈 일정 바로 열기: [0050 데모 홈 일정 상세](0050-demo-home-event-detail.md)
+
 식당 목록 지연 조회: [0019 데모 식당 탐색과 선조회 분리](0019-demo-restaurant-catalog.md)
 
 식당 기록 저장 후 갱신: [0020 데모 식당 방문 부분 갱신](0020-demo-restaurant-save-refresh.md)

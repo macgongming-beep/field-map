@@ -1,5 +1,14 @@
 export const EVENT_DETAIL_RETURN_TO = 'eventDetailReturnTo'
 
+export function homeEventDetailId(pathname: string, search: string): number | null {
+  if (pathname !== '/' && pathname !== '/home') return null
+  const params = new URLSearchParams(search)
+  if (params.has('openChat')) return null
+  const raw = params.get('openEvent') ?? ''
+  const id = Number(raw)
+  return /^\d+$/.test(raw) && Number.isSafeInteger(id) && id > 0 ? id : null
+}
+
 type AppLocation = {
   pathname: string
   search: string

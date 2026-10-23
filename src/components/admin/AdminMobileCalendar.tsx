@@ -66,6 +66,7 @@ type EventSheetInput = EventInput & {
 }
 
 type Props = {
+  detailOnly?: boolean
   language: AppLanguage
   translatePlaceNames?: boolean
   currentVisitor: string
@@ -176,6 +177,7 @@ const WEEKDAY_LABELS: Record<AppLanguage, string[]> = {
 function CalendarEmptyIcon() { return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>; }
 
 export function AdminMobileCalendar({
+  detailOnly = false,
   language,
   translatePlaceNames = false,
   events,
@@ -214,6 +216,10 @@ export function AdminMobileCalendar({
   globalSettings = {},
   onUpsertGlobalSetting,
 }: Props) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const entryId = Number(searchParams.get('openEvent'))
   const today = useMemo(() => new Date(), [])
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth() + 1)
@@ -225,18 +231,17 @@ export function AdminMobileCalendar({
     | { kind: 'delete'; event: CalendarEvent }
     | null
   >(null)
-  const [detailEventId, setDetailEventId] = useState<number | null>(null)
+  const [detailEventId, setDetailEventId] = useState<number | null>(() =>
+    detailOnly && Number.isSafeInteger(entryId) && entryId > 0 ? entryId : null)
   // 배정 에디터(풀스크린) 대상 이벤트
   const [assignEventId, setAssignEventId] = useState<number | null>(null)
   const detailEvent = detailEventId !== null ? events.find((e) => e.id === detailEventId) ?? null : null
   const editingEvent = editingEventId !== null ? events.find((e) => e.id === editingEventId) ?? null : null
 
-  const location = useLocation()
-  const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
   const closeDetail = () => setDetailEventId(null)
-  const detailReturnToRef = useRef('/calendar')
-  const detailReturnsThroughHistoryRef = useRef(false)
+  const detailReturnToRef = useRef(readEventDetailReturnTo(location.state) ?? (detailOnly ? '/' : '/calendar'))
+  const detailReturnsThroughHistoryRef = useRef(readEventDetailReturnTo(location.state) !== null)
+  const handledDetailEntry = useRef<number | null>(null)
   const returnFromDetail = () => {
     if (requestBackHandler()) return
     setDetailEventId(null)
@@ -252,6 +257,7 @@ export function AdminMobileCalendar({
     const targetIdRaw = openChatId ?? openEventId
     const targetId = Number(targetIdRaw)
     if (!Number.isFinite(targetId)) return
+    if (detailOnly && handledDetailEntry.current === targetId) return
     const targetEvent = events.find((e) => e.id === targetId)
     if (!targetEvent) return
 
@@ -272,17 +278,26 @@ export function AdminMobileCalendar({
       }))
     } else if (openEventId) {
       const returnTo = readEventDetailReturnTo(location.state)
-      detailReturnToRef.current = returnTo ?? '/calendar'
+      detailReturnToRef.current = returnTo ?? (detailOnly ? '/' : '/calendar')
       detailReturnsThroughHistoryRef.current = returnTo !== null
       setDetailEventId(targetEvent.id)
     }
+
+    // Keep the home entry while editing so full-series demand remains explicit.
+    if (detailOnly) { handledDetailEntry.current = targetId; return }
 
     const next = new URLSearchParams(searchParams)
     next.delete('openChat')
     next.delete('openEvent')
     setSearchParams(next, { replace: true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, events])
+  }, [searchParams, events, detailOnly])
+
+  useEffect(() => {
+    if (detailOnly && detailEventId === null && assignEventId === null && editingEventId === null && !scopeAction) {
+      navigate(detailReturnToRef.current, { replace: true })
+    }
+  }, [detailOnly, detailEventId, assignEventId, editingEventId, scopeAction, navigate])
 
   // 일정 상세는 어디서 열렸든 OS·스와이프 뒤로가기를 가로채 상세만 닫는다.
   // 홈·알림 진입도 이전 기록이 앱 화면이라는 보장이 없다. 특히 iOS PWA를
@@ -302,9 +317,10 @@ export function AdminMobileCalendar({
         // 홈·알림에서 왔다면 그 진입 기록이 바로 아래에 있으므로 한 칸 더
         // 물러난다. 캘린더 안에서 연 상세나 외부 딥링크는 현재 캘린더에 남는다.
         if (detailReturnsThroughHistoryRef.current) navigate(-1)
+        else if (detailOnly) navigate('/', { replace: true })
       }
     })
-  }, [navigate, overlayNeedsBackHandler])
+  }, [navigate, overlayNeedsBackHandler, detailOnly])
 
   const cells = useMemo(() => buildCalendarDays(year, month), [year, month])
   const selectedDateStr = toDateStr(year, month, selectedDay)
@@ -349,8 +365,9 @@ export function AdminMobileCalendar({
   const selectedDow = new Date(selectedDateStr).getDay()
 
   return (
-    <CalendarReadGate month={`${year}-${pad2(month)}`} full={addOpen || editingEventId != null || scopeAction != null}>
+    <CalendarReadGate month={detailOnly ? '' : `${year}-${pad2(month)}`} full={addOpen || editingEventId != null || scopeAction != null}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '20px 16px 24px' }}>
+      {!detailOnly && <>
       {/* ── 월 카드 ───────────────────── */}
       <Card padding="14px 14px 8px">
         <div
@@ -552,6 +569,12 @@ export function AdminMobileCalendar({
           </div>
         )}
       </section>
+
+      </>}
+      {detailOnly && detailEventId !== null && !detailEvent && <div role="status">
+        <p>{t(language, 'calendar.noEvents')}</p>
+        <button type="button" onClick={returnFromDetail}>{msg('뒤로')}</button>
+      </div>}
 
       {/* ── 일정 추가/편집 시트 ─────────── */}
       {(addOpen || editingEvent) && (
