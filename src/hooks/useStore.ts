@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
+import { readScopedCalendar } from './calendarReadScope'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
@@ -120,7 +121,13 @@ async function fetchAllPages<T>(
  * 예전에는 로그인 화면에서도 전부 받았다 (App.tsx 는 인증 판단보다 먼저
  * useStore() 를 호출한다). 실측으로 API 만 약 2.2MB · 47개 요청이었다.
  */
-export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string) {
+export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string, requestedCalendarScope?: string) {
+  const calendarScopeFeature = import.meta.env.VITE_DEMO_MODE === 'true' && requestedCalendarScope !== undefined
+  const calendarScope = calendarScopeFeature ? requestedCalendarScope : 'full'
+  const calendarScopeRef = useRef(calendarScope)
+  calendarScopeRef.current = calendarScope
+  const [loadedCalendarScope, setLoadedCalendarScope] = useState<string | null>(null)
+  const [calendarReadError, setCalendarReadError] = useState(false)
   // App keys this store by account/read mode. Never mix partial and full snapshots.
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
   useEffect(() => {
@@ -402,9 +409,23 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
       case 'calendar': {
         const version = ++calendarReadVersion.current
+        const scope = calendarScopeRef.current
         calendarReadsPending.current += 1
         try {
-        const [eventsRes, eventCardAssignmentsRes, eventAssignmentCardsRes] = await Promise.all([
+        if (scope !== 'full') {
+          const events = await withLoadDeadline(readScopedCalendar(scope))
+          measure(events)
+          if (scope !== calendarScopeRef.current || version !== calendarReadVersion.current) throw new SupersededReadError('Calendar scope superseded')
+          setCalendarEvents(events)
+          // A visible date window is not an authorization snapshot. Recipient scope
+          // must independently resolve all of the user's assigned events.
+          recipientCalendarRef.current = undefined
+          calendarSnapshotComplete.current = false
+          setLoadedCalendarScope(scope)
+          setCalendarReadError(false)
+          return approxBytes
+        }
+        const calendarParts = Promise.all([
           // 1,000개를 넘으면 조용히 잘리므로 끝까지 받는다 (현재 일정 700개 근처)
           fetchAllPages((from, to) => supabase.from('calendar_events')
             .select(CALENDAR_EVENT_COLUMNS)
@@ -412,11 +433,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           fetchAllPages((from, to) => supabase.from('event_card_assignments').select('*').order('id').range(from, to)),
           fetchAllPages((from, to) => supabase.from('event_card_assignment_cards').select('*').order('id').range(from, to)),
         ])
+        const [eventsRes, eventCardAssignmentsRes, eventAssignmentCardsRes] = await (calendarScopeFeature ? withLoadDeadline(calendarParts) : calendarParts)
 
         if (eventsRes.error) {
           throw new Error('Calendar data load failed', { cause: eventsRes.error })
         }
-        if (recipientReader && (eventCardAssignmentsRes.error || eventAssignmentCardsRes.error)) {
+        if ((recipientReader || calendarScopeFeature) && (eventCardAssignmentsRes.error || eventAssignmentCardsRes.error)) {
           throw new Error('Recipient calendar assignments load failed', { cause: eventCardAssignmentsRes.error || eventAssignmentCardsRes.error })
         }
 
@@ -433,13 +455,15 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const transformedEvents = (eventsRes.data as unknown as RawCalendarEvent[]).map((event) =>
           toCalendarEvent(event, merged.filter((a) => a.eventId === event.id)),
         )
-        if ((import.meta.env.VITE_CALENDAR_EVENT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
-          && version !== calendarReadVersion.current) {
+        if ((calendarScopeFeature || (import.meta.env.VITE_CALENDAR_EVENT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true')
+          && (version !== calendarReadVersion.current || scope !== calendarScopeRef.current)) {
           throw new SupersededReadError('Calendar read superseded')
         }
         setCalendarEvents(transformedEvents)
         recipientCalendarRef.current = transformedEvents
         calendarSnapshotComplete.current = !eventCardAssignmentsRes.error && !eventAssignmentCardsRes.error
+        setLoadedCalendarScope(scope)
+        setCalendarReadError(false)
 
         if (eventCardAssignmentsRes.error) {
           console.warn('일정별 카드 배정 로드 실패.', eventCardAssignmentsRes.error)
@@ -448,6 +472,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           console.warn('다중 카드 배정 로드 실패.', eventAssignmentCardsRes.error)
         }
         return approxBytes
+        } catch (error) {
+          if (!(error instanceof SupersededReadError) && scope === calendarScopeRef.current && version === calendarReadVersion.current) setCalendarReadError(true)
+          throw error
         } finally { calendarReadsPending.current -= 1 }
       }
 
@@ -586,7 +613,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
     }
-  }, [recipientReader, recipientUser, role])
+  }, [recipientReader, recipientUser, role, calendarScopeFeature])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
@@ -754,7 +781,21 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     // Clear previous failure before reading, never erase a failure reported by a slice.
     setError(null)
     try {
-      await withLoadDeadline(fetchSlices(ALL_SLICES, { triggeredBy: recovery ? 'foreground' : 'fetchAll' }))
+      const deadline = Date.now() + 45_000
+      let retry = false
+      while (true) {
+        try {
+          await withLoadDeadline(fetchSlices(ALL_SLICES, {
+            triggeredBy: retry ? 'initial:calendar-scope-retry' : recovery ? 'foreground' : 'fetchAll',
+          }), Math.max(1, deadline - Date.now()))
+          break
+        } catch (failure) {
+          // Several route changes may supersede initial reads. Finish a complete
+          // replacement within one shared deadline, without swallowing real errors.
+          if (!calendarScopeFeature || loadedOnceRef.current || !(failure instanceof SupersededReadError) || Date.now() >= deadline) throw failure
+          retry = true
+        }
+      }
       loadedOnceRef.current = true
     } catch (error) {
       // Only a complete existing snapshot makes cancellation safe to leave on screen.
@@ -1010,6 +1051,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     () => fetchSlices(['calendar', 'visits'], { triggeredBy: 'mutation:calendar:participant-removal' }),
     [fetchSlices],
   )
+  const previousCalendarScope = useRef(calendarScope)
+  useEffect(() => {
+    const changed = previousCalendarScope.current !== calendarScope
+    previousCalendarScope.current = calendarScope
+    if (enabled && changed) void refetchCalendar().catch(() => { /* calendar gate exposes retry */ })
+  }, [calendarScope, enabled, refetchCalendar])
   const refreshUpdatedEvent = useCallback(async (eventId: number) => {
     if (!calendarSnapshotComplete.current || calendarReadsPending.current || !recipientCalendarRef.current?.some(event => event.id === eventId)) {
       throw new Error('Complete calendar snapshot required')
@@ -1280,6 +1327,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     notices,
     // 로그인했는데 아직 받기 시작도 안 했다면 '불러오는 중' 으로 본다.
     // 그래야 로그인 직후 한 프레임 동안 빈 화면이 그려지지 않는다.
+    calendarScopeReady: loadedCalendarScope === calendarScope,
+    calendarReadError,
+    retryCalendarRead: refetchCalendar,
     loading: enabled ? (loading || !fetchStartedRef.current) : false,
     error,
     assignLeaderToCard,

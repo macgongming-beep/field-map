@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { CalendarReadGate } from '../hooks/CalendarReadGate'
 import { MeetingEditor } from '../features/meetingNotes/MeetingEditor'
 import { askNotifyOnEventEdit } from '../lib/askNotify'
 import { countEventNotifyTargets, countEventNotifyTargetsMany } from '../utils/eventNotify'
@@ -353,7 +354,7 @@ export function DesktopCalendar({
   const repeatCount = isRepeat && repeatEnd ? getWeeklyDates(newDate, repeatEnd).length : 0
 
   return (
-    <>
+    <CalendarReadGate month={`${year}-${String(month).padStart(2, '0')}`} full={isExportOpen || isImportOpen || showCreateForm || editingEventId != null || deleteConfirmEvent != null || scopeModal != null}>
       <ExportEventsModal isOpen={isExportOpen} onClose={() => setIsExportOpen(false)} events={events} />
       <ImportEventsModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} onCreateEvent={onCreateEvent} />
 
@@ -954,7 +955,7 @@ export function DesktopCalendar({
           />
         )
       })()}
-    </>
+    </CalendarReadGate>
   )
 }
 
