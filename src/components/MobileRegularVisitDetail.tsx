@@ -8,6 +8,7 @@ import type { AppLanguage } from '../i18n'
 import { t } from '../i18n'
 import type { Building, EndReturnVisitInput, ReturnVisit, ReturnVisitLog } from '../types'
 import { formatRelativeVisitDate } from '../utils/returnVisits'
+import { returnVisitMapPath } from '../utils/returnVisitMapPath'
 import { confirmDialog } from '../lib/confirm'
 import { msg } from '../lib/msg'
 import { showToast } from '../lib/toast'
@@ -163,13 +164,7 @@ export function MobileRegularVisitDetail({
   }
 
   const handleOpenMap = () => {
-    if (building) {
-      navigate(`/map?cardId=${building.cardId}`)
-      return
-    }
-    if (rv.address) {
-      navigate(`/map?addr=${encodeURIComponent(rv.address)}&pinLabel=${encodeURIComponent(label)}`)
-    }
+    navigate(returnVisitMapPath(rv, buildings))
   }
 
   return (
