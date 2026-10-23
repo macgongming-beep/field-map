@@ -6120,6 +6120,24 @@ button:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
+.mobile-unit-detail {
+  overflow: hidden;
+}
+
+/* Installed iPhone apps draw behind the status bar; keep controls below it.
+   Only the body scrolls, so the close/settings controls cannot scroll away. */
+.mobile-unit-detail-header {
+  flex-shrink: 0;
+  padding: calc(10px + var(--safe-top, 0px)) 12px 10px;
+}
+
+.mobile-unit-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .mobile-map-header button {
   min-width: 36px;
   min-height: 36px;

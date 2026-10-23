@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, test, vi } from 'vitest'
 import type { InformalAsset } from '../types'
@@ -162,6 +163,19 @@ describe('모바일 세대 상세', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /203호/ }))
     expect(await screen.findByText('우일빌라G동 203호')).toBeVisible()
+    const detail = container.querySelector('.mobile-unit-detail') as HTMLElement
+    const header = detail.querySelector('.mobile-unit-detail-header') as HTMLElement
+    const body = detail.querySelector('.mobile-unit-detail-body') as HTMLElement
+    expect(header).not.toBeNull()
+    expect(body).not.toBeNull()
+    expect(body).not.toContainElement(header)
+    const settings = within(header).getByRole('button', { name: '설정' })
+    expect(settings).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(settings)
+    expect(settings).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(within(header).getByRole('button', { name: '세대 수정' }))
+    expect(screen.getByPlaceholderText('호수 (예: 101)')).toHaveValue('203호')
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
     expect(screen.getByText(/다른 호수를 눌러 이동/)).toBeVisible()
     expect(screen.getByRole('button', { name: /방문 시간/ })).toHaveAttribute('aria-expanded', 'false')
     expect(screen.getByText(/못 만난 시간 · 주말 오후/)).toBeVisible()
@@ -217,4 +231,15 @@ describe('모바일 세대 상세', () => {
     expect(screen.queryByRole('combobox', { name: '장소 종류' })).not.toBeInTheDocument()
     expect(screen.getByText('이름·연락처 등 개인정보는 적지 마세요.')).toBeVisible()
   })
+})
+
+test('unit detail reserves the iPhone safe area and scrolls only the body', () => {
+  const css = readFileSync('src/App.css', 'utf8')
+  const rule = (name: string) => css.match(new RegExp(`\\.${name}\\s*\\{([^}]+)\\}`))?.[1] ?? ''
+  expect(rule('mobile-unit-detail')).toMatch(/overflow:\s*hidden/)
+  expect(rule('mobile-unit-detail-header')).toMatch(/flex-shrink:\s*0/)
+  expect(rule('mobile-unit-detail-header')).toMatch(/padding:\s*calc\(10px \+ var\(--safe-top, 0px\)\)/)
+  expect(rule('mobile-unit-detail-body')).toMatch(/min-height:\s*0/)
+  expect(rule('mobile-unit-detail-body')).toMatch(/overflow-y:\s*auto/)
+  expect(rule('mobile-unit-detail-body')).toMatch(/overscroll-behavior:\s*contain/)
 })
