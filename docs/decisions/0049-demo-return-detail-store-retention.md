@@ -81,3 +81,78 @@ production calendar-window and recipient-store gates together before opt-in.
 Direct links to other users' records are not a new permission grant; server
 policies remain authoritative. Live tests must not be described as proving
 all cross-user deep-link or linked-building scenarios.
+
+## Independent Review Packet (2026-10-23)
+
+### Exact scope
+
+- Implementation: `bab74e1`; live demo evidence: `19a584a`.
+- Review the current implementation at `f40358f`, not just the original diff:
+  `c017528` subsequently made the shared calendar gate production-capable but
+  explicitly kept this return-detail branch demo-only.
+- Production main was checked at `4ee7aee`. Home event direct detail is already
+  deployed there; this return-detail retention is not included. Do not review
+  or merge the entire demo branch as one production change.
+- This packet changes documentation only. No new deployment, feature flag,
+  database change or production write is requested by this review preparation.
+
+```sh
+git show bab74e1 -- src
+git show 19a584a -- docs/decisions/0049-demo-return-detail-store-retention.md
+git show c017528 -- src/hooks/calendarReadScope.ts src/hooks/calendarReadScope.test.ts
+```
+
+### Requested checks
+
+1. Read `src/App.tsx`'s keyed AppSession together with
+   `src/lib/recipientStore.ts`. List/detail/list must keep the same account
+   and recipient-mode key. Explicit recipient-store false must still win;
+   leaders, administrators and developers must retain their current behavior.
+2. Read `src/hooks/calendarReadScope.ts` together with
+   `src/utils/returnVisitDetailPath.ts`. A valid user detail route must retain
+   the list's service scope. Invalid IDs, unsupported routes and event/chat
+   links must not silently narrow full consumers. Production calendar opt-in
+   must not by itself enable this pending demo feature.
+3. Verify linked buildings still come from the existing
+   `get_recipient_return_visit_card_ids` resolver, including return-visit cards
+   absent from ordinary event assignments. Check resolver failure/reassignment
+   behavior in `recipientStore.test.ts`; the resolver itself is unchanged.
+4. Check detail consumers in `MobileRegularVisitDetail.tsx` and
+   `useReturnVisitLogDetails.ts`: save/memo updates must invalidate target logs,
+   map navigation and address fallback must remain intact, and delayed reads
+   must not cross records/accounts. These consumers are unchanged by this
+   feature; their tests are evidence for compatibility, not new behavior.
+5. Treat production activation as a separate follow-up: both demo-only gates
+   need coordinated production opt-in tests and a rollback plan. Do not merely
+   remove one demo condition or assume the current calendar flag is sufficient.
+
+### Evidence and limits
+
+- Re-run at `f40358f`: focused five-file suite **229 passed**; full demo suite
+  **1,844 tests / 207 files passed**. This is a demo-branch count, not the
+  production count and not all tests are specific to this change.
+- Lint and TypeScript/Vite build also passed in this preparation.
+- The round-trip regression uses the real useStore with a mocked recipient
+  reader and App's keyed-session pattern. It is not a mounted full-App browser
+  test. It asserts one mount and no additional snapshot-table reads.
+- The component save test checks the target ID, returned memo and refresh;
+  live save/edit/reopen/list verification is the earlier `19a584a` evidence.
+- Linked-building map navigation and address fallback have component tests.
+  A live linked-building detail flow, another user's direct link, and physical
+  iPhone/Android tests have not been established by this packet.
+- No new live browser or network measurement was performed for this packet.
+  The earlier transferred-byte observations have differing background traffic;
+  do not turn them into a precise saving percentage or monthly GB estimate.
+- Earlier mutation checks are recorded above; they were not rerun for this
+  documentation-only preparation.
+
+```sh
+npx vitest run src/lib/recipientStore.test.ts src/hooks/calendarReadScope.test.ts src/hooks/useStore.recipient.test.tsx src/components/MobileRegularVisitDetail.test.tsx src/hooks/useReturnVisitLogDetails.test.tsx
+npm test
+npm run lint
+npm run build
+```
+
+Requested review outcome: approve the demo implementation or identify blocking
+issues, explicitly separating implementation correctness from production gate
+readiness and the live coverage gaps above.

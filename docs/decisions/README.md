@@ -30,6 +30,8 @@
 
 ## 새 기록 틀
 
+재방문 상세 왕복 조회 유지: [0049 데모 변경과 리뷰 자료](0049-demo-return-detail-store-retention.md)
+
 모바일 홈 일정 바로 열기: [0050 데모 홈 일정 상세](0050-demo-home-event-detail.md)
 
 아이폰 세대 상세 헤더: [0051 세대 상세 안전 영역](0051-unit-detail-safe-area.md)
