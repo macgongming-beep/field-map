@@ -47,3 +47,21 @@ restaurant catalog component tests verify other-team names and outside regions.
 Disabling the scope helper makes all three new scoped-store tests fail.
 No schema changes, production deploy or measured monthly saving is claimed.
 Live demo verification and final test counts are recorded below when complete.
+
+## Demo verification
+
+- Code commit a811096; 1,731 tests / 203 files passed, lint and build passed.
+- Removing the mobile shared-name wiring makes its rendered-component test fail.
+- Demo opt-in enabled; deployment dpl_A7hR2q6booHq75KyqGUfyY3naa6s ready.
+- Canonical demo served index-5PE4IPyV.js; browser updated to that exact entry.
+- Actual demo volunteer login: October 5's prior applicant and assigned card still
+  display. September 30 at 10:00 still displays six applicants and all three
+  teams, including the other team's card 28 name (test distribution territory).
+- Mobile 390x844: My Service loads, restaurant catalog offers both test regions;
+  selecting the distribution region exposes its neighborhood outside the user's
+  ordinary personal card list. Existing records/assignments were not modified.
+- Empty scope, grant/revocation, summary progress updates, failure/retry, full
+  statistics-store isolation and legacy fallback were verified by automated
+  tests, not by inserting new live assignments in this run.
+- No production settings or main commits changed. No monthly/billing saving
+  estimate: synthetic and live UI correctness do not establish billed bytes.
