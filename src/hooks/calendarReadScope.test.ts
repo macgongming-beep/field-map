@@ -36,6 +36,25 @@ test('production opt-in does not enable the pending demo return-detail optimizat
   expect(calendarReadScope('/territory/regular/7', '', '', false, 'true', now, 'user', 'Me')).toBe('full')
   expect(calendarReadScope('/territory', '', '', false, 'true', now, 'user', 'Me')).toMatch(/^service:/)
 })
+
+test.each([
+  { demo: 'false', flag: 'true', calendar: 'true', retained: true },
+  { demo: 'false', flag: 'true', calendar: 'false', retained: false },
+  { demo: 'true', flag: 'false', calendar: 'true', retained: false },
+  { demo: 'true', flag: undefined, calendar: 'true', retained: true },
+  { demo: 'false', flag: undefined, calendar: 'true', retained: false },
+])('return detail calendar gate demo=$demo flag=$flag calendar=$calendar', ({ demo, flag, calendar, retained }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RETURN_DETAIL_RETENTION_ENABLED', flag)
+  const detail = calendarReadScope('/territory/regular/7', '', '', false, calendar, now, 'user', 'Me')
+  expect(detail).toBe(retained ? calendarReadScope('/territory', '', '', false, calendar, now, 'user', 'Me') : 'full')
+  for (const role of ['leader', 'admin', 'developer'] as const) {
+    expect(calendarReadScope('/territory/regular/7', '', '', false, calendar, now, role, 'Me')).toBe('full')
+  }
+  for (const search of ['?openEvent=7', '?openChat=7']) {
+    expect(calendarReadScope('/territory/regular/7', search, '', false, calendar, now, 'user', 'Me')).toBe('full')
+  }
+})
 test.each(['user', 'leader', 'admin', 'developer'] as const)('home detail keeps the %s home snapshot until editing demands history', role => {
   const home = calendarReadScope('/', '', '', false, 'true', now, role, 'Me')
   expect(calendarReadScope('/', '?openEvent=17', '', false, 'true', now, role, 'Me')).toBe(home)

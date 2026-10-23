@@ -4,12 +4,13 @@ import { restaurantBrowseEnabled } from './restaurantBrowseFlag'
 import { createRecipientPreview } from './recipientPreview'
 import { assignedServiceScope } from '../utils/cardServiceScope'
 import { isReturnVisitDetailPath } from '../utils/returnVisitDetailPath'
+import { returnDetailRetentionEnabled } from './returnDetailRetention'
 import type { CalendarEvent } from '../types'
 
 /** Only the real recipient workflow opts in; unsupported views retain the full store. */
 export function recipientStoreEnabled(role: string, pathname: string, search: string, demo: string | undefined, enabled?: string) {
   if ((enabled ?? demo) !== 'true' || role !== 'user') return false
-  if (demo === 'true' && isReturnVisitDetailPath(pathname)) return true
+  if (returnDetailRetentionEnabled(undefined, demo) && isReturnVisitDetailPath(pathname)) return true
   // Personal settings need no full territory snapshot. Switching modes here
   // remounts AppSession and reloads every slice on both legs of navigation.
   if ([

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import type { RawBuilding } from './storeTransforms'
 import { recipientStoreEnabled } from '../lib/recipientStore'
-import { calendarReadScope } from './calendarReadScope'
+import { calendarReadScope, calendarWindowEnabled } from './calendarReadScope'
 
 const state = vi.hoisted(() => ({
   creationAction: '' as '' | 'created' | 'existing',
@@ -112,24 +112,36 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
 
-test('return-detail round trips retain the keyed store and issue no snapshot reads', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each([
+  { demo: 'true', flag: undefined, calendar: 'true' },
+  { demo: 'false', flag: 'true', calendar: 'true' },
+  { demo: 'false', flag: 'true', calendar: 'false' },
+])('return-detail round trips retain keyed store: demo=$demo flag=$flag calendar=$calendar', async ({ demo, flag, calendar }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RETURN_DETAIL_RETENTION_ENABLED', flag)
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', calendar)
+  vi.stubEnv('VITE_RECIPIENT_STORE_ENABLED', 'true')
   vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }])
   const mounted = vi.fn()
   const now = new Date('2026-10-23T12:00:00')
+  const scopeFor = (path: string) => calendarReadScope(path, '', '', false, calendarWindowEnabled() ? 'true' : 'false', now, 'user', 'Volunteer')
   function Session({ path, recipient }: { path: string; recipient: boolean }) {
     const store = useStore(true, 'user', recipient ? 'Volunteer' : undefined,
-      calendarReadScope(path, '', '', false, 'true', now, 'user', 'Volunteer'))
+      scopeFor(path))
     useEffect(() => { mounted() }, [])
     return <output data-testid="store-state">{store.loading || !store.calendarScopeReady ? 'loading' : `${store.cards.length}:${store.buildings.length}`}</output>
   }
   function Route({ path }: { path: string }) {
-    const recipient = recipientStoreEnabled('user', path, '', 'true')
+    const recipient = recipientStoreEnabled('user', path, '', demo, 'true')
     return <Session key={`account:${recipient ? 'recipient' : 'full'}`} path={path} recipient={recipient} />
   }
   const { rerender } = render(<Route path="/territory" />)
   await waitFor(() => expect(screen.getByTestId('store-state').textContent).toBe('1:1'))
+  if (calendar === 'false') {
+    expect(scopeFor('/territory/regular/7')).toBe('full')
+    expect(state.calendarFilters).toEqual([[]])
+  } else expect(scopeFor('/territory/regular/7')).toMatch(/^service:/)
   state.reads = []
   state.cardFilters = []
   for (const path of ['/territory/regular/7', '/territory', '/territory/regular/8', '/territory']) {

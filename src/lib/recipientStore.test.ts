@@ -1,4 +1,4 @@
-import { beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 const state = vi.hoisted(() => ({ token: 'session', rows: {} as Record<string, Record<string, unknown>[]>, prefetch: vi.fn(), assignments: vi.fn(), invalidate: vi.fn(), rpc: vi.fn(), previewOptions: [] as unknown[] }))
 vi.mock('./authToken', () => ({ getAuthToken: () => state.token }))
 vi.mock('./recipientPreview', () => ({ createRecipientPreview: (_name: string, options: unknown) => { state.previewOptions.push(options); return ({
@@ -17,6 +17,9 @@ vi.mock('./supabase', () => ({ supabase: { rpc: state.rpc, from: (table: string)
 } } }))
 import { createRecipientStoreReader, recipientStoreEnabled } from './recipientStore'
 import type { CalendarEvent } from '../types'
+import { returnDetailRetentionEnabled } from './returnDetailRetention'
+
+afterEach(() => vi.unstubAllEnvs())
 
 beforeEach(() => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
@@ -60,6 +63,26 @@ test.each(['/territory/regular/7', '/territory/regular/7/'])('demo return detail
   for (const role of ['leader', 'admin', 'developer']) expect(recipientStoreEnabled(role, path, '', 'true')).toBe(false)
   expect(recipientStoreEnabled('user', path, '', undefined, 'true')).toBe(false)
   expect(recipientStoreEnabled('user', path, '', 'true', 'false')).toBe(false)
+})
+
+test.each([
+  { demo: 'false', flag: 'true', retained: true },
+  { demo: 'true', flag: 'false', retained: false },
+  { demo: 'true', flag: undefined, retained: true },
+  { demo: 'false', flag: undefined, retained: false },
+])('return detail store gate demo=$demo flag=$flag', ({ demo, flag, retained }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RETURN_DETAIL_RETENTION_ENABLED', flag)
+  expect(returnDetailRetentionEnabled()).toBe(retained)
+  expect(recipientStoreEnabled('user', '/territory/regular/7', '', demo, 'true')).toBe(retained)
+  expect(recipientStoreEnabled('user', '/territory', '', demo, 'true')).toBe(true)
+  expect(recipientStoreEnabled('user', '/territory/regular/7', '', demo, 'false')).toBe(false)
+  for (const role of ['leader', 'admin', 'developer']) {
+    expect(recipientStoreEnabled(role, '/territory/regular/7', '', demo, 'true')).toBe(false)
+  }
+  for (const path of ['/territory/regular/0', '/territory/regular/bad', '/territory/regular/7/edit', '/map']) {
+    expect(recipientStoreEnabled('user', path, '', demo, 'true')).toBe(false)
+  }
 })
 
 test.each(['/territory/regular/0', '/territory/regular/-1', '/territory/regular/nope', '/territory/regular/7/edit', '/territory/regular/9007199254740992'])('invalid or unsupported detail %s stays full', path => {

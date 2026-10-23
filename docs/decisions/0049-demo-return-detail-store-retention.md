@@ -156,3 +156,45 @@ npm run build
 Requested review outcome: approve the demo implementation or identify blocking
 issues, explicitly separating implementation correctness from production gate
 readiness and the live coverage gaps above.
+
+## Production opt-in follow-up (2026-10-23)
+
+Independent review approved the implementation, but required coordinated gates,
+flag-combination tests, a live linked-building check, and explicit rollback.
+This follow-up does not activate production.
+
+- `returnDetailRetentionEnabled()` is the single predicate for both the
+  recipient-store detail route and its calendar scope. It resolves
+  `(VITE_RETURN_DETAIL_RETENTION_ENABLED ?? VITE_DEMO_MODE) === 'true'`.
+- Existing recipient-store enablement and actual user role are still required.
+  Leaders, administrators, developers, unsupported IDs and general maps retain
+  their previous behavior. No RPC, policies or mutation callbacks changed.
+- The calendar gate remains independent: retention on + calendar-window off
+  retains the recipient store while reading the complete calendar. It does
+  not enable calendar windows implicitly.
+- Tests cover production opt-in, demo explicit false, defaults, role/global
+  store precedence and malformed routes in both callers. Real-useStore keyed
+  round trips cover demo fallback, production on/on and production on/off.
+  The on/off case checks an unfiltered calendar read, one store mount and no
+  further snapshot reads during the round trip.
+- Focused suite: 240 passed. Full suite: 1,855 tests / 207 files passed.
+- Lint and TypeScript/Vite build passed.
+- Mutations: reverting the helper to demo-only fails six tests across both
+  callers and real-useStore wiring; ignoring explicit false fails two caller
+  tests. Both mutations restored before the full suite.
+
+### Rollback and activation contract
+
+Production activation requires a separate reviewed deployment with
+`VITE_RETURN_DETAIL_RETENTION_ENABLED=true`. Leaving it unset in non-demo
+production keeps the previous full-store detail behavior. Do not enable
+`VITE_DEMO_MODE` in production to activate this feature.
+
+Rollback: set `VITE_RETURN_DETAIL_RETENTION_ENABLED=false`, rebuild and redeploy.
+After the user applies the PWA update, entering detail switches to the full
+store and full calendar again; returning to the list can remount/refetch as
+before. Other calendar and recipient optimizations stay enabled according to
+their own flags. Existing running clients do not switch instantly.
+
+The linked-building browser check is still required on the deployed follow-up;
+record its exact fixture, observed route and cleanup separately below.
