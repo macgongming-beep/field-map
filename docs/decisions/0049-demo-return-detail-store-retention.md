@@ -43,13 +43,36 @@ manual refresh and all mutation refresh callbacks remain unchanged.
 
 ## Live Verification
 
-Pending demo deployment verification. Test-only return visit 23 was created
+Demo deployment verified: code `bab74e1`, deployment
+`dpl_5vWXfYF5WiVLBnpWA3kh8Nbv18ib`, canonical demo URL updated. Test-only return visit 23 was created
 as `DEMO 왕복 조회 시험 1023` for the demo volunteer; no production writes.
 Before this patch, both navigation legs showed the global loading screen.
 DevTools REST filter showed 78,465 transferred bytes across the observed
 round-trip window. Its 134 displayed rows include service-worker client and
 network entries plus background activity, so they are NOT 134 server calls.
 This is a demo observation, not a monthly saving or billing attribution.
+
+After applying the PWA update, opening the same detail read only its log
+history (874 transferred bytes; two DevTools rows represent the client and
+service-worker network legs of one request). Returning to the list did NOT
+read cards, buildings, boundaries, global histories or complete calendars.
+The round-trip observation contained 7,101 REST transferred bytes, including
+header notifications/chat metadata and personal application-list queries.
+Those independent queries remain; this is not a zero-request navigation claim.
+The before/after observation windows differ in background activity and cannot
+be used as a precise saving percentage. Native DevTools AX records were saved
+locally under `/tmp/rv-{before,after}-{detail,roundtrip}-ax.txt`.
+
+Live demo: saved an absent result and test memo, saw the history and list's
+last-visit date update, reopened the detail, edited only the memo, and reloaded
+the detail URL. The new memo and result remained present throughout. Linked
+card-map and address fallback were verified by component tests, NOT live
+linked-building UI tests: the demo fixture deliberately has no building.
+Screenshots: `scratch/demo-return-detail-saved-bab74e1.png` and
+`scratch/demo-return-detail-edited-bab74e1.png` (local evidence, not repository assets).
+Cleanup completed through the normal UI: invalidated the test log (history
+retained), ended only test return visit 23 with no place issue, and verified
+the volunteer list returned to zero return visits. No buildings were changed.
 
 ## Production Gate
 
