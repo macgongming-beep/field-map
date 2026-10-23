@@ -1,10 +1,14 @@
 import { supabase } from '../lib/supabase'
 import { CALENDAR_EVENT_COLUMNS } from './calendarEventRefresh'
 import { toLocalDateString } from '../utils/dateUtils'
+import type { Role } from '../types'
 import { mergeEventCardAssignments, toCalendarEvent, toEventCardAssignment, type RawCalendarEvent, type RawEventCardAssignment, type RawEventCardAssignmentCard } from './storeTransforms'
 
-export function calendarReadScope(path: string, search: string, month: string, full: boolean, demo?: string, now = new Date()): string {
-  if (demo !== 'true' || (path === '/calendar' && full) || !['/', '/home', '/calendar'].includes(path)) return 'full'
+export function calendarReadScope(path: string, search: string, month: string, full: boolean, demo?: string, now = new Date(), role?: Role): string {
+  // Admin card allocation does not consume historical events. Share the home
+  // window so opening it does not promote a recent snapshot to all history.
+  const adminAssignment = path === '/assignment' && (role === 'admin' || role === 'developer')
+  if (demo !== 'true' || (path === '/calendar' && full) || (!adminAssignment && !['/', '/home', '/calendar'].includes(path))) return 'full'
   const params = new URLSearchParams(search)
   if (params.has('openChat') || params.has('openEvent')) return 'full'
   const recent = new Date(now)

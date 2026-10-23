@@ -34,6 +34,16 @@ test('production, editor/export and old-event deep links retain full reads', () 
   expect(calendarReadScope('/calendar', '', '2026-08', true, 'true', now)).toBe('full')
   for (const query of ['?openChat=7', '?openEvent=7']) expect(calendarReadScope('/calendar', query, '', false, 'true', now)).toBe('full')
 })
+test.each(['admin', 'developer'] as const)('demo %s card allocation shares home scope without old calendar demand', role => {
+  expect(calendarReadScope('/assignment', '', '2026-08', true, 'true', now, role))
+    .toBe(calendarReadScope('/', '', '', false, 'true', now, role))
+  expect(calendarReadScope('/stats', '', '2026-08', false, 'true', now, role)).toBe('full')
+  for (const flag of [undefined, 'false']) expect(calendarReadScope('/assignment', '', '', false, flag, now, role)).toBe('full')
+  expect(calendarReadScope('/assignment', '?openChat=7', '', false, 'true', now, role)).toBe('full')
+})
+test.each(['user', 'leader', undefined] as const)('non-admin %s allocation stays conservative', role => {
+  expect(calendarReadScope('/assignment', '', '', false, 'true', now, role)).toBe('full')
+})
 test('old month keeps applicants, guests, assignments and attendance counts', async () => {
   const rows = await readScopedCalendar('since:2026-08-01')
   expect(rows[0]).toMatchObject({ applicants: ['A', 'Guest'], guests: ['Guest'], cardAssignments: [{ assignedCardId: 10 }] })
