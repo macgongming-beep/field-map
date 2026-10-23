@@ -4,6 +4,10 @@ import { toLocalDateString } from '../utils/dateUtils'
 import type { Role } from '../types'
 import { mergeEventCardAssignments, toCalendarEvent, toEventCardAssignment, type RawCalendarEvent, type RawEventCardAssignment, type RawEventCardAssignmentCard } from './storeTransforms'
 
+export function calendarWindowEnabled(flag = import.meta.env.VITE_CALENDAR_WINDOW_ENABLED, demo = import.meta.env.VITE_DEMO_MODE): boolean {
+  return (flag ?? demo) === 'true'
+}
+
 export function calendarReadScope(path: string, search: string, month: string, full: boolean, demo?: string, now = new Date(), role?: Role): string {
   // Admin card allocation does not consume historical events. Share the home
   // window so opening it does not promote a recent snapshot to all history.

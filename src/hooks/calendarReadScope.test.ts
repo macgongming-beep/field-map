@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from 'vitest'
-import { calendarReadScope, readScopedCalendar } from './calendarReadScope'
+import { calendarReadScope, calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { attendanceMeetings } from '../utils/serviceAttendance'
 
 const state = vi.hoisted(() => ({ calls: [] as { table: string; filters: [string, unknown][]; from: number }[], query: vi.fn() }))
@@ -21,6 +21,12 @@ beforeEach(() => {
   state.query.mockReset().mockImplementation(async (table: string) => ({ data: table === 'calendar_events' ? [event] : table === 'event_card_assignments' ? [assignment] : [], error: null }))
 })
 const now = new Date('2026-10-23T12:00:00')
+test('calendar window production opt-in and explicit demo opt-out', () => {
+  expect(calendarWindowEnabled('true', 'false')).toBe(true)
+  expect(calendarWindowEnabled('false', 'true')).toBe(false)
+  expect(calendarWindowEnabled(undefined, 'true')).toBe(true)
+  expect(calendarWindowEnabled(undefined, 'false')).toBe(false)
+})
 test('demo home uses recent and future dates; calendar expands to any old month', () => {
   expect(calendarReadScope('/', '', '', false, 'true', now)).toBe('since:2026-10-09')
   expect(calendarReadScope('/calendar', '', '2026-08', false, 'true', now)).toBe('since:2026-08-01')

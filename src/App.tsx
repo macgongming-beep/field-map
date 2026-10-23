@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { calendarReadScope } from './hooks/calendarReadScope'
+import { calendarReadScope, calendarWindowEnabled } from './hooks/calendarReadScope'
 import { CalendarReadContext } from './hooks/CalendarReadContext'
 import { Toast } from './components/Toast'
 import { MeetingProvider } from './features/meetingNotes/MeetingProvider'
@@ -97,7 +97,8 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   const selectCalendarDemand = useCallback((month: string, full: boolean) => {
     setCalendarDemand(previous => previous.month === month && previous.full === full ? previous : { month, full })
   }, [])
-  const calendarScope = calendarReadScope(location.pathname, location.search, calendarDemand.month, calendarDemand.full, import.meta.env.VITE_DEMO_MODE, undefined, actualRole)
+  const windowedCalendar = calendarWindowEnabled()
+  const calendarScope = calendarReadScope(location.pathname, location.search, calendarDemand.month, calendarDemand.full, windowedCalendar ? 'true' : 'false', undefined, actualRole)
 
   const {
     calendarScopeReady, calendarReadError, retryCalendarRead,
@@ -373,7 +374,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   </Suspense></>
 
   // Full consumers must never render historical statistics from a home window.
-  if (import.meta.env.VITE_DEMO_MODE === 'true' && location.pathname !== '/calendar' && !calendarScopeReady) {
+  if (windowedCalendar && location.pathname !== '/calendar' && !calendarScopeReady) {
     return calendarReadError
       ? <div role="alert">자료를 불러오지 못했습니다.<button type="button" onClick={() => { void retryCalendarRead().catch(() => {}) }}>다시 시도</button></div>
       : <AppLoading />
@@ -397,7 +398,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
         }
       >
         <TerritoryRealtimeContext.Provider value={territoryRealtime}>
-        <CalendarReadContext.Provider value={import.meta.env.VITE_DEMO_MODE === 'true' ? {
+        <CalendarReadContext.Provider value={windowedCalendar ? {
           ...calendarDemand, ready: calendarScopeReady, error: calendarReadError, select: selectCalendarDemand,
           retry: () => { void retryCalendarRead().catch(() => {}) },
         } : null}>

@@ -47,6 +47,21 @@ test('production ignores a requested date scope', async () => {
   expect(state.scoped).not.toHaveBeenCalled()
   expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
 })
+test.each([
+  { flag: 'true', demo: 'false', scoped: true },
+  { flag: 'false', demo: 'true', scoped: false },
+])('calendar window flag $flag overrides demo $demo', async ({ flag, demo, scoped }) => {
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', flag)
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'since:2026-10-09' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.scoped.mock.calls.length > 0).toBe(scoped)
+  if (scoped) expect(state.reads).not.toContain('calendar_events')
+  else expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
+  rerender({ scope: 'full' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
+})
 test('admin home to allocation adds no calendar read; save refreshes cards and foreground stays scoped', async () => {
   const now = new Date('2026-10-23T12:00:00')
   const { result, rerender } = renderHook(({ path }) => useStore(true, 'admin', undefined,
