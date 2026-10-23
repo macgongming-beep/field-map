@@ -16,6 +16,7 @@ import { CART_APPLICATIONS_ENABLED } from '../../config/features'
 // 헤더는 상위 MobileHome.tsx 의 AppHeader 가 그림.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { CalendarReadGate } from '../../hooks/CalendarReadGate'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { askNotifyOnEventEdit } from '../../lib/askNotify'
 import { countEventNotifyTargets, countEventNotifyTargetsMany } from '../../utils/eventNotify'
@@ -348,6 +349,7 @@ export function AdminMobileCalendar({
   const selectedDow = new Date(selectedDateStr).getDay()
 
   return (
+    <CalendarReadGate month={`${year}-${pad2(month)}`} full={addOpen || editingEventId != null || scopeAction != null}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '20px 16px 24px' }}>
       {/* ── 월 카드 ───────────────────── */}
       <Card padding="14px 14px 8px">
@@ -708,6 +710,7 @@ export function AdminMobileCalendar({
         />
       )}
     </div>
+    </CalendarReadGate>
   )
 }
 

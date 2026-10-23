@@ -1,5 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { calendarReadScope } from './hooks/calendarReadScope'
+import { CalendarReadContext } from './hooks/CalendarReadContext'
 import { Toast } from './components/Toast'
 import { MeetingProvider } from './features/meetingNotes/MeetingProvider'
 import { AppLoading } from './components/AppLoading'
@@ -91,8 +93,14 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   // 푸시 알림은 서비스 워커가 그린다 — 워커도 언어를 알아야 번역할 수 있다
   syncLanguageToServiceWorker(language)
   const [isDesktop, setIsDesktop] = useState<boolean>(getInitialDesktopMode)
+  const [calendarDemand, setCalendarDemand] = useState({ month: '', full: false })
+  const selectCalendarDemand = useCallback((month: string, full: boolean) => {
+    setCalendarDemand(previous => previous.month === month && previous.full === full ? previous : { month, full })
+  }, [])
+  const calendarScope = calendarReadScope(location.pathname, location.search, calendarDemand.month, calendarDemand.full, import.meta.env.VITE_DEMO_MODE)
 
   const {
+    calendarScopeReady, calendarReadError, retryCalendarRead,
     cards,
     buildings,
     visitHistories,
@@ -210,7 +218,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
     registerRestaurant,
     approveRestaurantRequest,
     rejectRestaurantRequest,
-  } = useStore(storeEnabled, actualRole, recipientUser)
+  } = useStore(storeEnabled, actualRole, recipientUser, calendarScope)
 
   // Phase 2: 캘린더/배정 Realtime → calendar slice만 refetch
   // (useUserChats가 이 책임을 갖고 있었으나 전체 fetchAll 호출하던 증폭점 제거)
@@ -364,6 +372,13 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
     <RecipientPreview key={user.id} userName={user.name} />
   </Suspense></>
 
+  // Full consumers must never render historical statistics from a home window.
+  if (import.meta.env.VITE_DEMO_MODE === 'true' && location.pathname !== '/calendar' && !calendarScopeReady) {
+    return calendarReadError
+      ? <div role="alert">자료를 불러오지 못했습니다.<button type="button" onClick={() => { void retryCalendarRead().catch(() => {}) }}>다시 시도</button></div>
+      : <AppLoading />
+  }
+
   return (
     <>
       <Toast />
@@ -382,6 +397,10 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
         }
       >
         <TerritoryRealtimeContext.Provider value={territoryRealtime}>
+        <CalendarReadContext.Provider value={import.meta.env.VITE_DEMO_MODE === 'true' ? {
+          ...calendarDemand, ready: calendarScopeReady, error: calendarReadError, select: selectCalendarDemand,
+          retry: () => { void retryCalendarRead().catch(() => {}) },
+        } : null}>
         {isDesktop ? (
           <DesktopApp
             language={language}
@@ -607,6 +626,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
             />
           </div>
         )}
+        </CalendarReadContext.Provider>
         </TerritoryRealtimeContext.Provider>
       </Suspense>
       </MeetingProvider>
