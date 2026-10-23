@@ -7,11 +7,17 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: () => ({ select: mock.sele
 import { useServiceSuggestions } from './useServiceSuggestions'
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); vi.clearAllMocks() })
 it.each([
-  [true, 'true', true],
-  [false, 'true', false],
-  [true, 'false', false],
-])('home=%s demo=%s uses narrowed read=%s', async (home, demo, narrow) => {
+  [true, 'true', undefined, true],
+  [false, 'true', undefined, false],
+  [true, 'false', undefined, false],
+  [true, undefined, undefined, false],
+  [true, undefined, 'true', true],
+  [false, undefined, 'true', false],
+  [true, 'true', 'false', false],
+  [true, undefined, 'false', false],
+])('home=%s demo=%s flag=%s uses narrowed read=%s', async (home, demo, flag, narrow) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_HOME_SUGGESTION_BODY_ENABLED', flag)
   mock.home.mockResolvedValue([])
   mock.select.mockReturnValue({ order: mock.order })
   mock.order.mockResolvedValue({ data: [], error: null })

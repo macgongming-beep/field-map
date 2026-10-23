@@ -34,6 +34,18 @@ it('reads lightweight visible index then only the selected visible body', async 
   expect(mock.calls.filter(c => c[1] === 'eq' && c[2] === 'is_visible')).toHaveLength(2)
   expect(mock.calls).toContainEqual(['service_suggestions', 'limit', 1])
 })
+it('requests newest-created first so equal last-used dates retain the newer creation', async () => {
+  mock.results = [{ data: [
+    { id: 8, created_at: '2026-10-20', last_used_at: '2026-10-21' },
+    { id: 7, created_at: '2026-10-10', last_used_at: '2026-10-21' },
+  ], error: null }, { data: [{ id: 8 }], error: null }]
+  expect(await readHomeServiceSuggestion()).toEqual([{ id: 8 }])
+  expect(mock.calls.filter(c => c[1] === 'order')).toEqual([
+    ['service_suggestions', 'order', 'created_at', { ascending: false }],
+    ['service_suggestions', 'order', 'id'],
+  ])
+  expect(mock.calls).toContainEqual(['service_suggestions', 'eq', 'id', 8])
+})
 it('does not request a body for an empty index', async () => {
   mock.results = [{ data: [], error: null }]
   expect(await readHomeServiceSuggestion()).toEqual([])

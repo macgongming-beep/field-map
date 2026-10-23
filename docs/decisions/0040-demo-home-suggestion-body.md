@@ -1,6 +1,12 @@
 # 0040 - Demo home suggestion body read
 
 Only the home useServiceSuggestions(true) caller opts in under VITE_DEMO_MODE.
+Follow-up: VITE_HOME_SUGGESTION_BODY_ENABLED overrides the demo fallback.
+Unset production remains full; explicit false disables even demo; true enables
+only the home caller. Admin remains full. This is a build-time switch: changing
+it requires a rebuild/deploy and clients applying the update. No production flag
+or deployment was changed by this follow-up. Added production/admin/false gate
+tests and a query-order regression for equal last-used dates.
 AdminSuggestions uses the unchanged default full query. Production is unchanged.
 MeetingSuggestions disclosure settings and existing default-open behavior are unchanged.
 
