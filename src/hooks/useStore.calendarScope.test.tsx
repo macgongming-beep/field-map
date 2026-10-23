@@ -2,9 +2,9 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import { SupersededReadError } from './supersededRead'
-import { calendarReadScope } from './calendarReadScope'
+import { calendarReadScope, calendarWindowEnabled } from './calendarReadScope'
 
-const state = vi.hoisted(() => ({ scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null }))
+const state = vi.hoisted(() => ({ scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null }))
 vi.mock('./calendarReadScope', async importOriginal => ({ ...await importOriginal<typeof import('./calendarReadScope')>(), readScopedCalendar: state.scoped }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: () => Promise.resolve({ data: null, error: null }),
@@ -16,13 +16,13 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     q.then = (resolve: (value: unknown) => void) => {
       state.reads.push(table)
       if (table === 'calendar_events' && state.pendingFull) { const pending = state.pendingFull; state.pendingFull = null; return pending.then(resolve) }
-      return Promise.resolve({ data: lookup ? [{ id: 1 }] : table === 'calendar_events' ? state.events : [], error: table === state.failure ? new Error('offline') : null }).then(resolve)
+      return Promise.resolve({ data: lookup ? [{ id: 1 }] : table === 'calendar_events' ? state.events : table === 'event_card_assignments' ? state.assignments : [], error: table === state.failure ? new Error('offline') : null }).then(resolve)
     }
     return q
   },
 } }))
 const old = { id: 1, event_date: '2026-08-02', title: 'Old', time: '10:00', event_participants: [{ user_name: 'A', role: '신청' }] }
-beforeEach(() => { state.reads = []; state.events = [old]; state.failure = ''; state.pendingFull = null; state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true') })
+beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true') })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs() })
 
 test('home first load and foreground keep calendar scoped; statistics route restores complete history', async () => {
@@ -209,4 +209,114 @@ test('expired month is fetched again instead of displaying a stale cached snapsh
     await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
     expect(state.scoped).toHaveBeenCalledTimes(3)
   } finally { clock.mockRestore() }
+})
+
+test.each(['/territory', '/map'])('home round trips to %s retain old/future and other-team assignments (current full-read baseline)', async path => {
+  const now = new Date('2026-10-23T12:00:00')
+  state.events = [old, { ...old, id: 2, event_date: '2027-08-08' }]
+  state.assignments = [
+    { id: 1, event_id: 1, user_name: 'A', assigned_card_id: 10, team_key: 'mine' },
+    { id: 2, event_id: 1, user_name: 'Other team', assigned_card_id: 20, team_key: 'other' },
+    { id: 3, event_id: 2, user_name: 'A', assigned_card_id: 30, team_key: 'future' },
+  ]
+  const { result, rerender } = renderHook(({ route }) => useStore(true, 'user', undefined,
+    calendarReadScope(route, route === '/map' ? '?assignmentMap=1' : '', '', false, 'true', now, 'user')),
+  { initialProps: { route: '/' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  for (let trip = 0; trip < 2; trip += 1) {
+    state.reads = []
+    rerender({ route: path })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    expect(state.reads).toEqual(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards'])
+    expect(result.current.calendarEvents.map(event => event.date)).toEqual(['2026-08-02', '2027-08-08'])
+    expect(result.current.calendarEvents[0].cardAssignments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userName: 'A', assignedCardId: 10, teamKey: 'mine' }),
+      expect.objectContaining({ userName: 'Other team', assignedCardId: 20, teamKey: 'other' }),
+    ]))
+    expect(result.current.calendarEvents[1].cardAssignments[0].assignedCardId).toBe(30)
+    state.reads = []
+    rerender({ route: '/' })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    expect(state.reads).toEqual([])
+    expect(state.scoped).toHaveBeenCalledTimes(1)
+  }
+})
+
+test.each(['/territory', '/map'])('personal %s round trips reuse the complete shared event snapshot without full reads', async path => {
+  const now = new Date('2026-10-23T12:00:00')
+  const personal = [{ id: 1, date: '2026-08-02', applicants: ['A'], cardAssignments: [
+    { userName: 'A', assignedCardId: 10 }, { userName: 'Other team', assignedCardId: 20 },
+  ] }, { id: 2, date: '2027-08-08', applicants: [], cardAssignments: [{ userName: 'A', assignedCardId: 30 }] }]
+  state.scoped.mockImplementation(async scope => scope.startsWith('service:') ? personal : [])
+  const { result, rerender } = renderHook(({ route }) => useStore(true, 'user', undefined,
+    calendarReadScope(route, path === '/map' && route === path ? '?assignmentMap=1' : '', '', false, 'true', now, 'user', 'A')),
+  { initialProps: { route: '/' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  for (let trip = 0; trip < 2; trip += 1) {
+    rerender({ route: path })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    expect(result.current.calendarEvents).toEqual(personal)
+    rerender({ route: '/' })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  }
+  expect(state.scoped).toHaveBeenCalledTimes(2)
+  expect(state.reads).toEqual([])
+})
+
+test.each(['foreground', 'realtime:calendar', 'mutation:calendar', 'fetchAll'])('%s invalidates the personal service cache as well as the home cache', async triggeredBy => {
+  const service = 'service:["A","2026-10-23",null]'
+  const home = 'window:2026-10-09:2026-11-30'
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'user', undefined, scope), { initialProps: { scope: service } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ scope: home })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy }) })
+  rerender({ scope: service })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.scoped).toHaveBeenCalledTimes(4)
+})
+
+test('changing role clears personal snapshots before returning to the same scope', async () => {
+  const service = 'service:["A","2026-10-23",null]'
+  const { result, rerender } = renderHook(({ role, scope }: { role: 'user' | 'leader'; scope: string }) => useStore(true, role, undefined, scope),
+    { initialProps: { role: 'user', scope: service } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ role: 'leader', scope: 'full' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  const readsBeforeReturn = state.scoped.mock.calls.length
+  rerender({ role: 'user', scope: service })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.scoped.mock.calls.length).toBeGreaterThan(readsBeforeReturn)
+  expect(state.scoped).toHaveBeenLastCalledWith(service)
+})
+
+test.each(['user', 'leader', 'admin', 'developer'] as const)('production calendar flag narrows only user service routes: %s', async role => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  const scope = calendarReadScope('/map', '?assignmentMap=1', '', false,
+    calendarWindowEnabled() ? 'true' : 'false', new Date('2026-10-23T12:00:00'), role, 'A')
+  const { result } = renderHook(() => useStore(true, role, undefined, scope))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  if (role === 'user') {
+    expect(scope).toBe('service:["A","2026-10-23",1]')
+    expect(state.scoped).toHaveBeenCalledWith(scope)
+    expect(state.reads).not.toContain('calendar_events')
+  } else {
+    expect(scope).toBe('full')
+    expect(state.scoped).not.toHaveBeenCalled()
+    expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
+  }
+})
+
+test('production flag off restores full volunteer service reads', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'false')
+  const scope = calendarReadScope('/territory', '', '', false,
+    calendarWindowEnabled() ? 'true' : 'false', undefined, 'user', 'A')
+  const { result } = renderHook(() => useStore(true, 'user', undefined, scope))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(scope).toBe('full')
+  expect(state.scoped).not.toHaveBeenCalled()
+  expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
 })

@@ -98,7 +98,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
     setCalendarDemand(previous => previous.month === month && previous.full === full ? previous : { month, full })
   }, [])
   const windowedCalendar = calendarWindowEnabled()
-  const calendarScope = calendarReadScope(location.pathname, location.search, calendarDemand.month, calendarDemand.full, windowedCalendar ? 'true' : 'false', undefined, actualRole)
+  const calendarScope = calendarReadScope(location.pathname, location.search, calendarDemand.month, calendarDemand.full, windowedCalendar ? 'true' : 'false', undefined, actualRole, user?.name)
 
   const {
     calendarScopeReady, calendarReadError, retryCalendarRead,
