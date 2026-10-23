@@ -28,7 +28,7 @@ function translateBlockType(type: string, language: AppLanguage): string {
 }
 
 export function ServiceSuggestionsSection({ language = 'ko' }: { language?: AppLanguage }) {
-  const { suggestions, loading } = useServiceSuggestions()
+  const { suggestions, loading } = useServiceSuggestions(true)
   const [currentSuggestion, setCurrentSuggestion] = useState<ServiceSuggestion | null>(null)
 
   useEffect(() => {
