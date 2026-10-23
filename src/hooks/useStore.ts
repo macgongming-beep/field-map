@@ -10,6 +10,7 @@ import { recoverRecipientBuildings, readRecipientBoundaries } from './recipientR
 import { createCardBoundaryReader } from './cardBoundaryRecovery'
 import { createRecipientStoreReader } from '../lib/recipientStore'
 import { fetchCardSummaries } from '../lib/cardSummaries'
+import { cardReadProjection } from './cardReadProjection'
 import { supabase } from '../lib/supabase'
 import { trackFetch } from '../lib/perfTracker'
 import { withLoadDeadline } from '../lib/loadDeadline'
@@ -305,7 +306,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const cardsQueryPromise = (async () => {
           const withLeader = await fetchAllPages((from, to) => supabase
             .from('cards')
-            .select('*, card_assignments(user_name), card_leader_assignments(user_name, created_at)')
+            .select(cardReadProjection(role, Boolean(recipientReader)))
             .order('id')
             .range(from, to))
           if (!withLeader.error) {
@@ -316,7 +317,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           if (message.includes('card_leader_assignments')) {
             setMissingCardLeaderAssignmentsTable(true)
             return fetchAllPages((from, to) => supabase
-              .from('cards').select('*, card_assignments(user_name)').order('id').range(from, to))
+              .from('cards').select(cardReadProjection(role, Boolean(recipientReader), false)).order('id').range(from, to))
           }
           return withLeader
         })()
@@ -327,7 +328,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         }
         measure(cardsRes.data)
         // cards transform은 buildings 의존 — buildingsRef로 항상 최신 buildings 사용
-        const transformedCards = (cardsRes.data as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
+        const transformedCards = (cardsRes.data as unknown as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
         if (recipientReader?.scoped) {
           recipientReader.validateCards(transformedCards.map((card) => card.id))
           const summaries = await fetchCardSummaries(transformedCards.map((card) => card.id))
