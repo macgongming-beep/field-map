@@ -232,3 +232,39 @@ setRegularVisitor for the date, allowing two writes to race. The fixture was
 present as return visit 24 after reload. This registration behavior was not
 changed by the retention or map-route work and must not be reported as a
 clean registration smoke; investigate separately.
+
+## Linked-building live recheck completed (2026-10-23)
+
+- Review commits: `60c615e` (coordinated production opt-in) and `d90e36c`
+  (independent detail-map route correction). Production is unchanged; no flag
+  was enabled there. Do not treat the earlier code approval as approval of
+  this additional routing correction.
+- Demo deployment: `dpl_8hvzTvYpY33tvQkFU2cx5R2E7hy2`, canonical
+  `https://chinese-territory-app-demo.vercel.app`. Applied the normal PWA
+  update and checked the actual document script changed from
+  `index-BxhJRkYV.js` to `index-DhP72BqU.js`.
+- Real demo volunteer, no service scheduled today: list showed test return
+  visit 24 (`배분테스트 주택건물 4-1 104`, building 79 / card 31). Opened
+  `/territory/regular/24`, then its Map button. Corrected destination:
+  `/map?scope=regularVisits&returnVisitId=24&buildingId=79`.
+- The rendered map showed one building and one unit, with the existing
+  background map and card boundary. Opened 104's unit detail and confirmed
+  its building, address, assigned demo volunteer and existing test memo.
+  Other units in that building did not appear in this focused scope.
+- Returned from the map to the same return detail. Then ended only return
+  visit 24 using the normal end dialog with no place issue. No building/unit
+  deletion or visit-history write was performed. The volunteer list showed
+  zero active return visits immediately and after a full reload.
+- Local screenshots (not repository assets):
+  `scratch/demo-linked-map-before.png`,
+  `scratch/demo-linked-map-fixed-d90e36c.png`,
+  `scratch/demo-linked-map-cleaned-d90e36c.png`.
+- Focused component suite: 30 passed. Full suite: **1,859 / 208 files**;
+  lint and TypeScript/Vite build passed. The old-route mutation fails four
+  tests; source restored before the full run and deployment.
+
+Limits: Chrome mobile emulation, not a physical phone test. No new monthly
+egress estimate or network-byte saving measurement. List/detail retention is
+the optimization; entering the regular-visit map still switches to the
+existing full-store map path and can show a loading state. This recheck proves
+the linked fixture survives that transition, not zero-request map navigation.
