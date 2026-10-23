@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   requestFilters: [] as unknown[][],
   unitParent: 20, insertError: false, unitLookupError: false,
   historyColumns: [] as string[],
+  cardColumns: [] as string[],
   calendarFilters: [] as [string, unknown][][],
   calendarResponses: [] as Promise<{ data: Record<string, unknown>[]; error: null }>[],
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
@@ -37,7 +38,11 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     const filters: [string, unknown][] = []
     const q: Record<string, unknown> = {}
     for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'insert']) q[name] = () => q
-    q.select = (columns: string) => { if (table === 'visit_histories') state.historyColumns.push(columns); return q }
+    q.select = (columns: string) => {
+      if (table === 'visit_histories') state.historyColumns.push(columns)
+      if (table === 'cards') state.cardColumns.push(columns)
+      return q
+    }
     q.insert = () => { writing = true; return q }
     q.update = () => { writing = true; return q }
     q.single = () => {
@@ -74,6 +79,7 @@ const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: '
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
   state.creationAction = ''
+  state.cardColumns = []
   state.returnRows = []; state.returnLogs = []
   state.failedTable = ''
   state.requests = []
@@ -88,6 +94,21 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test.each(['user', 'admin'] as const)('demo card reads preserve %s fields and refreshed progress', async role => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const { result } = renderHook(() => useStore(true, role, role === 'user' ? 'Volunteer' : undefined))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const projection = state.cardColumns.find(columns => columns.includes('card_assignments'))!
+  expect(projection.includes('card_leader_assignments(user_name)')).toBe(role === 'user')
+  expect(projection.includes('created_at')).toBe(role === 'admin')
+  if (role === 'user') {
+    state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 1, progress: 100 }, { id: 2, units: 50, completed: 50, progress: 100 }])
+    await act(async () => { await result.current.refetchSlices(['cards'], { triggeredBy: 'foreground' }) })
+    expect(result.current.cards.map(card => card.progress)).toEqual([100, 100])
+    expect(state.cardColumns.filter(columns => columns.includes('card_assignments'))).toEqual([projection, projection])
+  }
+})
 
 test.each((['true', 'false'] as const).flatMap(demo =>
   (['user', 'leader', 'admin', 'developer'] as const).flatMap(role =>
