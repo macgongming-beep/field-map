@@ -39,20 +39,23 @@ beforeEach(() => {
   })
 })
 
-test('only demo volunteers opt in; user, date and explicit target are in the cache key', () => {
+test.each(['user', 'leader'] as const)('only demo service roles opt in (%s); identity and target stay in the cache key', role => {
   expect(scope).toBe('service:["Me","2026-10-23",null]')
   expect(calendarReadScope('/map', '?assignmentMap=5', '', false, 'true', now, 'user', 'Me')).toBe('service:["Me","2026-10-23",5]')
   expect(calendarReadScope('/territory', '?assignmentEvent=5', '', false, 'true', now, 'user', 'Me')).toBe('service:["Me","2026-10-23",5]')
-  for (const role of ['admin', 'developer', 'leader'] as const) expect(calendarReadScope('/map', '', '', false, 'true', now, role, 'Me')).toBe('full')
-  for (const flag of [undefined, 'false']) expect(calendarReadScope('/territory', '', '', false, flag, now, 'user', 'Me')).toBe('full')
+  for (const path of ['/map', '/territory']) expect(calendarReadScope(path, '', '', false, 'true', now, role, 'Me')).toBe(scope)
+  for (const fullRole of ['admin', 'developer'] as const) expect(calendarReadScope('/map', '', '', false, 'true', now, fullRole, 'Me')).toBe('full')
+  for (const flag of [undefined, 'false']) expect(calendarReadScope('/territory', '', '', false, flag, now, role, 'Me')).toBe('full')
+  for (const path of ['/zone', '/stats', '/service-log']) expect(calendarReadScope(path, '', '', false, 'true', now, role, 'Me')).toBe('full')
+  for (const query of ['?openChat=5', '?openEvent=5', '?assignmentMap=nope']) expect(calendarReadScope('/map', query, '', false, 'true', now, role, 'Me')).toBe('full')
   expect(calendarReadScope('/territory', '', '', false, 'true', now, 'user')).toBe('full')
   expect(calendarReadScope('/map', '?assignmentMap=nope', '', false, 'true', now, 'user', 'Me')).toBe('full')
   expect(calendarReadScope('/map', '?openChat=5', '', false, 'true', now, 'user', 'Me')).toBe('full')
   expect(calendarReadScope('/territory', '', '', false, 'true', now, 'user', 'Other')).not.toBe(scope)
 })
 
-test('past/future personal events, all shared teams, multi-card links and other restaurant dates survive', async () => {
-  const rows = await readScopedCalendar(scope)
+test.each(['user', 'leader'] as const)('%s preserves past/future personal events, all shared teams, multi-card links and other restaurant dates', async role => {
+  const rows = await readScopedCalendar(calendarReadScope('/territory', '', '', false, 'true', now, role, 'Me'))
   expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
   expect(rows[0].applicants).toEqual(['Me'])
   expect(rows[0].cardAssignments).toEqual(expect.arrayContaining([
@@ -64,9 +67,22 @@ test('past/future personal events, all shared teams, multi-card links and other 
   expect(state.calls.filter(call => call.columns === '*').every(call => call.filters[0][0] === 'event_id')).toBe(true)
 })
 
-test('an explicit old map target is included even outside personal assignments', async () => {
-  const rows = await readScopedCalendar(calendarReadScope('/map', '?assignmentMap=5', '', false, 'true', now, 'user', 'Me'))
+test.each(['user', 'leader'] as const)('%s explicit old map target is included even outside personal assignments', async role => {
+  const rows = await readScopedCalendar(calendarReadScope('/map', '?assignmentMap=5', '', false, 'true', now, role, 'Me'))
   expect(rows[0].id).toBe(5)
+})
+
+test('leader without a personal card assignment keeps today meeting participants and other teams', async () => {
+  const original = state.query.getMockImplementation()!
+  state.query.mockImplementation(call => {
+    if (call.columns === 'event_id,user_name' || call.table === 'event_restaurant_assignments' || call.table === 'event_card_assignment_cards') return { data: [], error: null }
+    if (call.table === 'calendar_events' && call.columns !== 'id,event_date') return { data: [{ ...events[2], leader_name: 'Me', event_participants: [{ user_name: 'Guest', role: '게스트' }] }], error: null }
+    if (call.table === 'event_card_assignments') return { data: [{ id: 9, event_id: 3, user_name: 'Other team', assigned_card_id: 90, team_key: 'other' }], error: null }
+    return original(call)
+  })
+  const rows = await readScopedCalendar(calendarReadScope('/territory', '', '', false, 'true', now, 'leader', 'Me'))
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ leaders: ['Me'], applicants: ['Guest'], cardAssignments: [{ userName: 'Other team', assignedCardId: 90 }] })
 })
 
 test('empty indexes never turn into an unfiltered event or assignment read', async () => {

@@ -227,14 +227,16 @@ test.each(['/territory', '/map'])('home round trips to %s retain old/future and 
   }
 })
 
-test.each(['/territory', '/map'])('personal %s round trips reuse the complete shared event snapshot without full reads', async path => {
+test.each([
+  ['user', '/territory'], ['user', '/map'], ['leader', '/territory'], ['leader', '/map'],
+] as const)('%s %s round trips reuse the complete shared event snapshot without full reads', async (role, path) => {
   const now = new Date('2026-10-23T12:00:00')
   const personal = [{ id: 1, date: '2026-08-02', applicants: ['A'], cardAssignments: [
     { userName: 'A', assignedCardId: 10 }, { userName: 'Other team', assignedCardId: 20 },
   ] }, { id: 2, date: '2027-08-08', applicants: [], cardAssignments: [{ userName: 'A', assignedCardId: 30 }] }]
   state.scoped.mockImplementation(async scope => scope.startsWith('service:') ? personal : [])
-  const { result, rerender } = renderHook(({ route }) => useStore(true, 'user', undefined,
-    calendarReadScope(route, path === '/map' && route === path ? '?assignmentMap=1' : '', '', false, 'true', now, 'user', 'A')),
+  const { result, rerender } = renderHook(({ route }) => useStore(true, role, undefined,
+    calendarReadScope(route, path === '/map' && route === path ? '?assignmentMap=1' : '', '', false, 'true', now, role, 'A')),
   { initialProps: { route: '/' } })
   await waitFor(() => expect(result.current.loading).toBe(false))
   state.reads = []
