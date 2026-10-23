@@ -4,7 +4,7 @@ import { useStore } from './useStore'
 import { SupersededReadError } from './supersededRead'
 import { calendarReadScope } from './calendarReadScope'
 
-const state = vi.hoisted(() => ({ scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null }))
+const state = vi.hoisted(() => ({ scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null }))
 vi.mock('./calendarReadScope', async importOriginal => ({ ...await importOriginal<typeof import('./calendarReadScope')>(), readScopedCalendar: state.scoped }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: () => Promise.resolve({ data: null, error: null }),
@@ -16,13 +16,13 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     q.then = (resolve: (value: unknown) => void) => {
       state.reads.push(table)
       if (table === 'calendar_events' && state.pendingFull) { const pending = state.pendingFull; state.pendingFull = null; return pending.then(resolve) }
-      return Promise.resolve({ data: lookup ? [{ id: 1 }] : table === 'calendar_events' ? state.events : [], error: table === state.failure ? new Error('offline') : null }).then(resolve)
+      return Promise.resolve({ data: lookup ? [{ id: 1 }] : table === 'calendar_events' ? state.events : table === 'event_card_assignments' ? state.assignments : [], error: table === state.failure ? new Error('offline') : null }).then(resolve)
     }
     return q
   },
 } }))
 const old = { id: 1, event_date: '2026-08-02', title: 'Old', time: '10:00', event_participants: [{ user_name: 'A', role: '신청' }] }
-beforeEach(() => { state.reads = []; state.events = [old]; state.failure = ''; state.pendingFull = null; state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true') })
+beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true') })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs() })
 
 test('home first load and foreground keep calendar scoped; statistics route restores complete history', async () => {
@@ -194,4 +194,35 @@ test('expired month is fetched again instead of displaying a stale cached snapsh
     await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
     expect(state.scoped).toHaveBeenCalledTimes(3)
   } finally { clock.mockRestore() }
+})
+
+test.each(['/territory', '/map'])('home round trips to %s retain old/future and other-team assignments (current full-read baseline)', async path => {
+  const now = new Date('2026-10-23T12:00:00')
+  state.events = [old, { ...old, id: 2, event_date: '2027-08-08' }]
+  state.assignments = [
+    { id: 1, event_id: 1, user_name: 'A', assigned_card_id: 10, team_key: 'mine' },
+    { id: 2, event_id: 1, user_name: 'Other team', assigned_card_id: 20, team_key: 'other' },
+    { id: 3, event_id: 2, user_name: 'A', assigned_card_id: 30, team_key: 'future' },
+  ]
+  const { result, rerender } = renderHook(({ route }) => useStore(true, 'user', undefined,
+    calendarReadScope(route, route === '/map' ? '?assignmentMap=1' : '', '', false, 'true', now, 'user')),
+  { initialProps: { route: '/' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  for (let trip = 0; trip < 2; trip += 1) {
+    state.reads = []
+    rerender({ route: path })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    expect(state.reads).toEqual(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards'])
+    expect(result.current.calendarEvents.map(event => event.date)).toEqual(['2026-08-02', '2027-08-08'])
+    expect(result.current.calendarEvents[0].cardAssignments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userName: 'A', assignedCardId: 10, teamKey: 'mine' }),
+      expect.objectContaining({ userName: 'Other team', assignedCardId: 20, teamKey: 'other' }),
+    ]))
+    expect(result.current.calendarEvents[1].cardAssignments[0].assignedCardId).toBe(30)
+    state.reads = []
+    rerender({ route: '/' })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    expect(state.reads).toEqual([])
+    expect(state.scoped).toHaveBeenCalledTimes(1)
+  }
 })
