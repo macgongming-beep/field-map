@@ -128,3 +128,39 @@ calendar `fde08fc` / evidence `e695049`, and this zone follow-up. Focus on
 unchanged leader card/building scope, all-team hydration, old assignment/map
 targets, cache invalidation, and production gates. External review is pending;
 this document is a handoff, not an external approval.
+
+### Zone live results
+
+Code `b13b881`, demo deployment `dpl_GhBe7y6Dbha2WFfU8rZpiYJbAT4g`, same demo
+alias. Applied the PWA update while signed in as the actual demo leader.
+
+- Before: home-to-zone issued three unbounded calendar/assignment/link requests,
+  approximately 4.8 kB transferred in this small demo.
+- After: cold zone load requested calendar bodies with `id=in.(19)` and
+  assignment rows with `event_id=in.(19)`. It did not request all event bodies.
+- After visiting home, warm home-to-zone issued zero requests matching the
+  calendar/assignment filter (five unrelated requests still occurred).
+- Continuing through all-territory to the general map issued no additional
+  calendar/assignment requests. This live check closes the previous map-trip
+  measurement gap, but does not claim that all network traffic disappeared.
+- Directory still showed nine total cards, six personally assigned cards, both
+  regions, and four restaurants. The checked card retained 6% progress and
+  September 30 last-service date. Region totals remained 17% and 0%.
+- General map retained 74 units (35 residential / 39 commercial).
+- Past service still showed September 13 with demo leader, demo volunteer and
+  User2. Opening September 30 in the calendar retained six applicants, all three
+  teams and other-team card names. The leader's team-allocation control remained
+  visible. No allocation or participant data was changed during verification.
+- Desktop zone/map routing is covered by the selector test and code audit;
+  live UI verification in this run used the 390px mobile viewport.
+
+Local evidence: `/tmp/demo-zone-before-20261023.txt`,
+`/tmp/demo-zone-card-before-20261023.txt`,
+`/tmp/demo-zone-repeat-20261023.txt`, `/tmp/demo-zone-map-after-20261023.txt`,
+`scratch/demo-zone-map-b13b881.png`,
+`scratch/demo-zone-shared-teams-b13b881.png`.
+
+For external review, compare `8867944..b13b881` for the combined leader route
+change; review `a811096` separately for scoped volunteer cards. Decision 0042
+contains that feature's authorization and directory contracts. Production main,
+production Vercel configuration and database schema remain untouched.
