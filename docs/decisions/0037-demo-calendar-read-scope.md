@@ -47,6 +47,33 @@ Independent review identified stale full-read overwrite, incomplete assignment
 readiness, initial cancellation, and unbounded transitions. These were repaired
 before demo release. Final review and live demo verification are recorded below.
 
+### 2026-10-23 demo release
+
+- Implementation: `c8cb803`; independent reviewer approved after running 300
+  tests across 9 files. Full suite: 1,677 tests / 196 files, lint and build pass.
+  The final two local-size instrumentation lines were followed by 29 passing
+  scope/gate tests and the successful deployment build. This JSON estimate is
+  not network transfer or billing.
+- Demo deployment: `dpl_9yCz2ugZT2EuJ9tjgmhDQKCbH8H1`, canonical demo alias,
+  browser entry `/assets/index-CeqecX93.js` after applying the PWA update.
+- Chrome, demo administrator: home -> calendar -> September 13 retained the
+  same three named applicants and three cart participants as before deployment.
+  August historical participants are covered by synthetic regression tests;
+  no production historical records were modified or used as demo fixtures.
+- Home -> statistics -> attendance -> October + September: October Monday
+  10:00 remained 1, Tuesday 13:00 remained 0; September Monday 10:00 remained 4
+  and Sunday 10:00 remained 6. Exclusion dates stayed September 29 - October 4.
+- Full-period export dialog opened; September 13 editing opened with original
+  values and was cancelled without saving. Desktop `openChat=19` moved to the
+  old event and opened its chat, retaining applicants. Desktop does not consume
+  `openEvent` (existing behavior); that route is implemented by mobile.
+- No console errors observed in the smoke test. Real-phone UI, actual exported
+  file contents, authenticated transfer-byte comparison, and production rollout
+  remain outside this verification.
+- Screenshots: `scratch/demo-calendar-scope-applicants-c8cb803.png` and
+  `scratch/demo-calendar-scope-stats-c8cb803.png` (local verification artifacts).
+- `origin/main` remained `8a4ffdcd29616fafd7363f002eefefe7e2d9b5a1`.
+
 ## Measurement limits
 
 This reduces calendar/assignment payloads on home and ordinary calendar reads.
