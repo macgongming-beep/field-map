@@ -55,6 +55,17 @@ test('production explicitly opts in while a false flag overrides demo and roles 
   expect(recipientStoreEnabled('user', '/territory', '', 'true', 'false')).toBe(false)
 })
 
+test.each(['/territory/regular/7', '/territory/regular/7/'])('demo return detail %s retains the user store only', path => {
+  expect(['/territory', path, '/territory'].map(route => recipientStoreEnabled('user', route, '', 'true'))).toEqual([true, true, true])
+  for (const role of ['leader', 'admin', 'developer']) expect(recipientStoreEnabled(role, path, '', 'true')).toBe(false)
+  expect(recipientStoreEnabled('user', path, '', undefined, 'true')).toBe(false)
+  expect(recipientStoreEnabled('user', path, '', 'true', 'false')).toBe(false)
+})
+
+test.each(['/territory/regular/0', '/territory/regular/-1', '/territory/regular/nope', '/territory/regular/7/edit', '/territory/regular/9007199254740992'])('invalid or unsupported detail %s stays full', path => {
+  expect(recipientStoreEnabled('user', path, '', 'true')).toBe(false)
+})
+
 test.each([
   '/settings', '/profile', '/privacy', '/notification-settings',
   '/location-permission-settings', '/settings/profile',

@@ -2,15 +2,17 @@ import { supabase } from '../lib/supabase'
 import { CALENDAR_EVENT_COLUMNS } from './calendarEventRefresh'
 import { toLocalDateString } from '../utils/dateUtils'
 import type { Role } from '../types'
+import { isReturnVisitDetailPath } from '../utils/returnVisitDetailPath'
 import { mergeEventCardAssignments, toCalendarEvent, toEventCardAssignment, type RawCalendarEvent, type RawEventCardAssignment, type RawEventCardAssignmentCard } from './storeTransforms'
 
 export function calendarReadScope(path: string, search: string, month: string, full: boolean, demo?: string, now = new Date(), role?: Role, userName?: string): string {
   const params = new URLSearchParams(search)
+  const returnVisitDetail = role === 'user' && isReturnVisitDetailPath(path)
   // The leader zone reads cards/buildings, not calendar events. Share the service
   // snapshot with its map destination; all card/building stores remain complete.
   if (demo === 'true' && (role === 'user' || role === 'leader') && userName && !params.has('openChat') && !params.has('openEvent')
-    && (path === '/territory' || path === '/map' || (path === '/zone' && role === 'leader'))) {
-    const target = path === '/zone' ? null : params.get(path === '/map' ? 'assignmentMap' : 'assignmentEvent')
+    && (path === '/territory' || path === '/map' || returnVisitDetail || (path === '/zone' && role === 'leader'))) {
+    const target = path === '/zone' || returnVisitDetail ? null : params.get(path === '/map' ? 'assignmentMap' : 'assignmentEvent')
     if (target != null && (!/^\d+$/.test(target) || !Number.isSafeInteger(Number(target)) || Number(target) <= 0)) return 'full'
     return `service:${JSON.stringify([userName, toLocalDateString(now), target == null ? null : Number(target)])}`
   }

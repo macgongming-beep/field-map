@@ -22,6 +22,16 @@ beforeEach(() => {
   state.query.mockReset().mockImplementation(async (table: string) => ({ data: table === 'calendar_events' ? [event] : table === 'event_card_assignments' ? [assignment] : [], error: null }))
 })
 const now = new Date('2026-10-23T12:00:00')
+test('demo user return detail shares service calendar while other roles and production stay full', () => {
+  const list = calendarReadScope('/territory', '', '', false, 'true', now, 'user', 'Me')
+  for (const path of ['/territory/regular/7', '/territory/regular/7/']) {
+    expect(calendarReadScope(path, '', '', false, 'true', now, 'user', 'Me')).toBe(list)
+    for (const role of ['leader', 'admin', 'developer'] as const) expect(calendarReadScope(path, '', '', false, 'true', now, role, 'Me')).toBe('full')
+    for (const demo of [undefined, 'false']) expect(calendarReadScope(path, '', '', false, demo, now, 'user', 'Me')).toBe('full')
+    for (const search of ['?openEvent=5', '?openChat=5']) expect(calendarReadScope(path, search, '', false, 'true', now, 'user', 'Me')).toBe('full')
+  }
+  expect(calendarReadScope('/territory/regular/0', '', '', false, 'true', now, 'user', 'Me')).toBe('full')
+})
 test('month bounds handle leap years and year rollover', () => {
   expect(calendarReadScope('/calendar', '', '2028-02', false, 'true', now)).toBe('window:2028-02-01:2028-02-29')
   expect(calendarReadScope('/', '', '', false, 'true', new Date('2026-12-23T12:00:00'))).toBe('window:2026-12-09:2027-01-31')
