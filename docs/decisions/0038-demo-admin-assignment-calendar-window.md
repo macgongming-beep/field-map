@@ -32,3 +32,26 @@ foreground refresh, and subsequent statistics restoring old participants.
 Independent review and live demo save/list/reload/restoration results will be
 recorded after deployment. No monthly savings estimate is claimed: admin
 allocation frequency and actual transfer bytes have not been measured here.
+
+### 2026-10-23 verification
+
+- Implementation `235ac00`. Independent read-only review approved demo scope;
+  reviewer ran 316 tests / 9 files. Full suite: 1,683 tests / 196 files, lint,
+  build, and diff whitespace checks passed.
+- Demo deployment `dpl_6eJe9UqrZt7QcSHNVDeHBRv4JzkW`, canonical demo alias.
+  PWA update applied; browser script `/assets/index-aZ-xriQn.js` confirmed.
+- Chrome demo administrator, direct `/assignment` entry: assigned the previously
+  unassigned `테스트구 한동 1` card to `데모 관리자`. The assigned list changed from
+  0 to 1 immediately, and unassigned cards from 3 to 2. Reload retained both.
+- Released that test assignment using the normal UI. Assigned list returned to
+  0 and unassigned cards to 3; reload confirmed restoration. The other two
+  leaders remained at 6 cards each. No production writes were performed.
+- From allocation, opened participation statistics and added September beside
+  October. October Monday 10:00 = 1 and Tuesday 13:00 = 0; September Monday
+  10:00 = 4 and Sunday 10:00 = 6, unchanged from pre-change verification.
+- No browser console errors observed. Screenshots saved locally under scratch:
+  `demo-assignment-saved-235ac00.png`, `demo-assignment-restored-235ac00.png`.
+- Browser verification was desktop Chrome, not a physical mobile device.
+  Query behavior assertions are automated integration tests, not a claim of
+  measured browser transfer-byte savings.
+- Production main remains `8a4ffdcd29616fafd7363f002eefefe7e2d9b5a1`.
