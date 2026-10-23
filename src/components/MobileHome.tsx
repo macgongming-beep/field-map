@@ -40,6 +40,7 @@ import { useAdminAttentionCounts } from '../hooks/useAdminAttentionCounts'
 import { confirmDialog, alertDialog } from '../lib/confirm'
 import { resetDemoEnvironment } from '../lib/demoEnvironment'
 import { eventDetailNavigationState, homeEventDetailId } from '../lib/eventDetailNavigation'
+import { calendarWindowEnabled } from '../hooks/calendarReadScope'
 
 type MobileTab = '홈' | '캘린더' | '활동' | '구역' | '지도' | '배정' | '설정'
 
@@ -465,10 +466,11 @@ export function MobileHome({
   // 디자인 v2: 홈에서 "오늘 봉사한 카드" 섹션 제거됨 (활동 탭으로 이동)
   // 토글 상태는 디버그/스위치용으로 보존 — 활동 탭에서 재사용 가능
   const calendarRead = useContext(CalendarReadContext)
-  const homeDetail = import.meta.env.VITE_DEMO_MODE === 'true' && homeEventDetailId(location.pathname, location.search) !== null
+  const windowedCalendar = calendarWindowEnabled()
+  const homeDetail = windowedCalendar && homeEventDetailId(location.pathname, location.search) !== null
   const openHomeEvent = (id: number) => {
-    if (import.meta.env.VITE_DEMO_MODE === 'true') calendarRead?.select('', false)
-    navigate(`${import.meta.env.VITE_DEMO_MODE === 'true' ? '/' : '/calendar'}?openEvent=${id}`, {
+    if (windowedCalendar) calendarRead?.select('', false)
+    navigate(`${windowedCalendar ? '/' : '/calendar'}?openEvent=${id}`, {
       state: eventDetailNavigationState(location),
     })
   }

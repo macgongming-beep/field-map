@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
-import { readScopedCalendar } from './calendarReadScope'
+import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
@@ -124,7 +124,7 @@ async function fetchAllPages<T>(
  * useStore() 를 호출한다). 실측으로 API 만 약 2.2MB · 47개 요청이었다.
  */
 export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string, requestedCalendarScope?: string) {
-  const calendarScopeFeature = import.meta.env.VITE_DEMO_MODE === 'true' && requestedCalendarScope !== undefined
+  const calendarScopeFeature = calendarWindowEnabled() && requestedCalendarScope !== undefined
   const calendarScope = calendarScopeFeature ? requestedCalendarScope : 'full'
   const calendarScopeRef = useRef(calendarScope)
   calendarScopeRef.current = calendarScope

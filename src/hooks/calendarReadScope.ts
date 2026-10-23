@@ -6,12 +6,17 @@ import type { Role } from '../types'
 import { isReturnVisitDetailPath } from '../utils/returnVisitDetailPath'
 import { mergeEventCardAssignments, toCalendarEvent, toEventCardAssignment, type RawCalendarEvent, type RawEventCardAssignment, type RawEventCardAssignmentCard } from './storeTransforms'
 
-export function calendarReadScope(path: string, search: string, month: string, full: boolean, demo?: string, now = new Date(), role?: Role, userName?: string): string {
+export function calendarWindowEnabled(flag = import.meta.env.VITE_CALENDAR_WINDOW_ENABLED, demo = import.meta.env.VITE_DEMO_MODE): boolean {
+  return (flag ?? demo) === 'true'
+}
+
+export function calendarReadScope(path: string, search: string, month: string, full: boolean, featureFlag?: string, now = new Date(), role?: Role, userName?: string): string {
   const params = new URLSearchParams(search)
-  const returnVisitDetail = role === 'user' && isReturnVisitDetailPath(path)
+  // Decision 0049 is still demo-only, independent of the shared calendar flag.
+  const returnVisitDetail = import.meta.env.VITE_DEMO_MODE === 'true' && role === 'user' && isReturnVisitDetailPath(path)
   // The leader zone reads cards/buildings, not calendar events. Share the service
   // snapshot with its map destination; all card/building stores remain complete.
-  if (demo === 'true' && (role === 'user' || role === 'leader') && userName && !params.has('openChat') && !params.has('openEvent')
+  if (featureFlag === 'true' && (role === 'user' || role === 'leader') && userName && !params.has('openChat') && !params.has('openEvent')
     && (path === '/territory' || path === '/map' || returnVisitDetail || (path === '/zone' && role === 'leader'))) {
     const target = path === '/zone' || returnVisitDetail ? null : params.get(path === '/map' ? 'assignmentMap' : 'assignmentEvent')
     if (target != null && (!/^\d+$/.test(target) || !Number.isSafeInteger(Number(target)) || Number(target) <= 0)) return 'full'
@@ -21,7 +26,7 @@ export function calendarReadScope(path: string, search: string, month: string, f
   // window so opening it does not promote a recent snapshot to all history.
   const adminAssignment = path === '/assignment' && (role === 'admin' || role === 'developer')
   const homeDetail = homeEventDetailId(path, search) !== null
-  if (demo !== 'true' || ((path === '/calendar' || homeDetail) && full) || (!adminAssignment && !['/', '/home', '/calendar'].includes(path))) return 'full'
+  if (featureFlag !== 'true' || ((path === '/calendar' || homeDetail) && full) || (!adminAssignment && !['/', '/home', '/calendar'].includes(path))) return 'full'
   if (params.has('openChat') || (params.has('openEvent') && !homeDetail)) return 'full'
   const recent = new Date(now)
   recent.setDate(recent.getDate() - 14)

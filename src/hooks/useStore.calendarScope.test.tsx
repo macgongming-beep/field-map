@@ -22,7 +22,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   },
 } }))
 const old = { id: 1, event_date: '2026-08-02', title: 'Old', time: '10:00', event_participants: [{ user_name: 'A', role: '신청' }] }
-beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true') })
+beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', undefined) })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs() })
 
 test('home first load and foreground keep calendar scoped; statistics route restores complete history', async () => {
@@ -40,12 +40,17 @@ test('home first load and foreground keep calendar scoped; statistics route rest
   expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
   expect(state.reads).toEqual(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards'])
 })
-test('production ignores a requested date scope', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'false')
+test.each([
+  ['false', undefined, false], ['false', 'true', true], ['true', 'false', false],
+] as const)('store scope follows shared flag: demo=%s flag=%s', async (demo, flag, enabled) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', flag)
   const { result } = renderHook(() => useStore(true, 'admin', undefined, 'since:2026-10-09'))
   await waitFor(() => expect(result.current.loading).toBe(false))
-  expect(state.scoped).not.toHaveBeenCalled()
-  expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
+  expect(result.current.calendarScopeReady).toBe(true)
+  expect(state.scoped).toHaveBeenCalledTimes(enabled ? 1 : 0)
+  expect(state.reads.includes('calendar_events')).toBe(!enabled)
+  if (!enabled) expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
 })
 test('admin home to allocation adds no calendar read; save refreshes cards and foreground stays scoped', async () => {
   const now = new Date('2026-10-23T12:00:00')

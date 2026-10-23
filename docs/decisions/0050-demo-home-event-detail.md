@@ -2,7 +2,7 @@
 
 - Status: demo validation
 - Date: 2026-10-23
-- Production: unchanged; mobile entry is gated by VITE_DEMO_MODE
+- Production: unchanged; shared calendar flag follow-up below is pending review/activation
 
 ## Problem
 
@@ -78,3 +78,35 @@ deployment. No production deployment or production DB writes in this task.
 
 Next: independent review and a production opt-in gate before activation.
 Desktop home remains a separate unchanged path.
+
+## Shared production flag follow-up (2026-10-23)
+
+- Replace demo-only home entry/detail, App loading/context and store gates with
+  `calendarWindowEnabled()`, matching the helper already on production main.
+  `(VITE_CALENDAR_WINDOW_ENABLED ?? VITE_DEMO_MODE) === 'true'`: production
+  opt-in works, explicit false disables even demo, unset retains demo fallback.
+- Home detail still uses the existing home snapshot. Editing still promotes
+  to full history; the detail controller stays mounted during that load.
+  Other full consumers remain blocked until complete history is ready.
+- Keep decision 0049's pending return-detail optimization demo-only. Adopting
+  the shared production calendar flag must not silently activate that feature.
+- Production main already contains recipient card and leader calendar scope
+  integration at `8f59b39`; do not reapply those as pending work.
+- Read-only Vercel inspection found production alias Ready at
+  `dpl_5oq5NQcgn1Uhf8nfaZYuGL2CSQaN` (created 2026-10-23 21:27 KST).
+  This inspection alone is not a deployed bundle flag assertion. No production
+  deployment, environment update or DB write was performed for this follow-up.
+- Added actual App wiring tests for provider/scope, production home editor
+  survival during history loading, and full-consumer loading gates. Mobile
+  navigation covers user/leader/admin with enabled and explicitly disabled
+  flags; store tests verify scoped versus full requests under the same matrix.
+- Mutation checks: reverting the shared helper to demo-only fails 15 tests;
+  reverting only App's loading gate to demo-only fails 2 tests. Both restored.
+- Final automated verification: **1,843 tests / 207 files passed**; lint and
+  TypeScript/Vite production build passed. Focused flag/wiring suite: 83 passed.
+- Production integration will immediately follow the already-enabled calendar
+  flag. Rollback by setting that flag false requires rebuild, redeploy and PWA
+  update, and disables other calendar-window optimizations too, not just home
+  detail. This is not an instant or home-only rollback switch.
+- This follow-up changes gating only. The browser verification above is for
+  `9aeb8e8`; it must not be presented as a new production browser verification.

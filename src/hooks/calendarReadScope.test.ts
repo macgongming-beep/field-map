@@ -1,5 +1,5 @@
-import { beforeEach, expect, test, vi } from 'vitest'
-import { calendarReadScope, readScopedCalendar } from './calendarReadScope'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { calendarReadScope, calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { attendanceMeetings } from '../utils/serviceAttendance'
 
 const state = vi.hoisted(() => ({ calls: [] as { table: string; filters: [string, unknown][]; from: number }[], query: vi.fn() }))
@@ -22,6 +22,20 @@ beforeEach(() => {
   state.query.mockReset().mockImplementation(async (table: string) => ({ data: table === 'calendar_events' ? [event] : table === 'event_card_assignments' ? [assignment] : [], error: null }))
 })
 const now = new Date('2026-10-23T12:00:00')
+afterEach(() => vi.unstubAllEnvs())
+test.each([
+  [undefined, undefined, false], [undefined, 'true', true],
+  ['true', 'false', true], ['false', 'true', false], ['false', undefined, false],
+] as const)('shared calendar flag %s with demo %s resolves to %s', (flag, demo, enabled) => {
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', flag)
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  expect(calendarWindowEnabled()).toBe(enabled)
+})
+test('production opt-in does not enable the pending demo return-detail optimization', () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  expect(calendarReadScope('/territory/regular/7', '', '', false, 'true', now, 'user', 'Me')).toBe('full')
+  expect(calendarReadScope('/territory', '', '', false, 'true', now, 'user', 'Me')).toMatch(/^service:/)
+})
 test.each(['user', 'leader', 'admin', 'developer'] as const)('home detail keeps the %s home snapshot until editing demands history', role => {
   const home = calendarReadScope('/', '', '', false, 'true', now, role, 'Me')
   expect(calendarReadScope('/', '?openEvent=17', '', false, 'true', now, role, 'Me')).toBe(home)
@@ -32,6 +46,7 @@ test.each(['user', 'leader', 'admin', 'developer'] as const)('home detail keeps 
   }
 })
 test('demo user return detail shares service calendar while other roles and production stay full', () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
   const list = calendarReadScope('/territory', '', '', false, 'true', now, 'user', 'Me')
   for (const path of ['/territory/regular/7', '/territory/regular/7/']) {
     expect(calendarReadScope(path, '', '', false, 'true', now, 'user', 'Me')).toBe(list)

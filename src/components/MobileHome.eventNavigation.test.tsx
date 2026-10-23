@@ -22,8 +22,14 @@ function Location() {
 
 afterEach(() => vi.unstubAllEnvs())
 
-test.each(['user', 'leader', 'admin'] as const)('demo %s home opens the detail without visiting the calendar route', role => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each((['user', 'leader', 'admin'] as const).flatMap(role => [
+  { role, demo: 'true', flag: undefined, enabled: true },
+  { role, demo: 'false', flag: 'true', enabled: true },
+  { role, demo: 'true', flag: 'false', enabled: false },
+  { role, demo: 'false', flag: undefined, enabled: false },
+]))('$role home navigation: demo=$demo flag=$flag', ({ role, demo, flag, enabled }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', flag)
   const select = vi.fn()
   const props = { language: 'ko', actualRole: role, viewMode: role, currentVisitor: 'Me', currentUser: { id: 1, name: 'Me', role }, allUsers: [],
     cards: [], buildings: [], calendarEvents: [], serviceSessions: [], visitHistories: [], cardBoundaries: [],
@@ -32,19 +38,9 @@ test.each(['user', 'leader', 'admin'] as const)('demo %s home opens the detail w
     <MobileHome {...props} /><Location />
   </CalendarReadContext.Provider></MemoryRouter>)
   fireEvent.click(screen.getByRole('button', { name: 'open home event' }))
-  expect(screen.getByRole('status').textContent).toBe('/?openEvent=17')
-  expect(screen.getByText('detail only')).toBeTruthy()
-  expect(screen.queryByText('calendar grid')).toBeNull()
-  expect(select).toHaveBeenCalledWith('', false)
-})
-
-test('production home keeps the existing calendar entry', () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'false')
-  const props = { language: 'ko', actualRole: 'user', viewMode: 'user', currentVisitor: 'Me', currentUser: { id: 1, name: 'Me', role: 'user' }, allUsers: [],
-    cards: [], buildings: [], calendarEvents: [], serviceSessions: [], visitHistories: [], cardBoundaries: [],
-    notices: [], territoryRegions: [] } as unknown as ComponentProps<typeof MobileHome>
-  render(<MemoryRouter><MobileHome {...props} /><Location /></MemoryRouter>)
-  fireEvent.click(screen.getByRole('button', { name: 'open home event' }))
-  expect(screen.getByRole('status').textContent).toBe('/calendar?openEvent=17')
-  expect(screen.getByText('calendar grid')).toBeTruthy()
+  expect(screen.getByRole('status').textContent).toBe(`${enabled ? '/' : '/calendar'}?openEvent=17`)
+  expect(screen.getByText(enabled ? 'detail only' : 'calendar grid')).toBeTruthy()
+  expect(screen.queryByText(enabled ? 'calendar grid' : 'detail only')).toBeNull()
+  if (enabled) expect(select).toHaveBeenCalledWith('', false)
+  else expect(select).not.toHaveBeenCalled()
 })
