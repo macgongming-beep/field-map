@@ -49,5 +49,50 @@ maps and statistics retain their full-store fallback. Leaders remain full-card.
 - Existing scoped-card tests retain empty cards, grant/revoke changes, progress,
   foreign-response rejection, legacy reads and other-team card-name hydration.
 
-Live demo observations will be appended after deployment. Request counts and
-small-demo bytes are not predictions of production billing savings.
+## Live demo verification
+
+Code `fde08fc`, demo deployment `dpl_EF9PgHJUCeSr4sQ4o9kx1ERHdyNa`, canonical
+alias https://chinese-territory-app-demo.vercel.app. Applied the PWA update.
+Used the actual demo leader and volunteer accounts, not an administrator's
+volunteer view. No production deployment, schema change or business-data write.
+
+- Before: leader home-to-service made three unbounded snapshot reads
+  (calendar_events, event_card_assignments, event_card_assignment_cards).
+- After: leader event-body read was restricted to event ID 19. Warm
+  home-to-service reentry inside two minutes made zero snapshot reads.
+  Three separate header event-metadata reads still occurred. Native DevTools
+  showed approximately 7.6 kB before versus 2.8 kB warm after for the filtered
+  calendar-related group; this excludes unrelated traffic. ServiceWorker
+  delivery rows are not counted as additional network requests.
+- Leader past service stayed at one September meeting. September 13 still
+  displayed the demo leader, demo volunteer and User2. Calendar remained
+  accessible. The full territory directory retained nine cards and both
+  regions; the general map displayed all 74 units.
+- Volunteer cards used `id=in.(1)` for detailed card rows rather than an
+  unfiltered card list. Opening September 30 10:00 still displayed six
+  applicants and all three teams. Other-team card 28 was resolved through
+  `select=id,name&id=in.(28)`, not a full card/building load.
+- Shared progress, empty-card grants/revocations, far-future assignments and
+  leader-without-own-card cases are automated fixtures, not newly created live
+  fixtures in this run. General leader map was visually checked; a repeated
+  map-home-map network sequence is covered by store tests, not a new live
+  measurement. The live request comparison above is home-to-service only.
+
+Evidence (local, not committed): `/tmp/demo-leader-before-20261023.txt`,
+`/tmp/demo-leader-repeat-20261023.txt`,
+`/tmp/demo-volunteer-card-scope-20261023.txt`,
+`scratch/demo-leader-old-team-fde08fc.png`,
+`scratch/demo-leader-map-fde08fc.png`,
+`scratch/demo-volunteer-shared-teams-fde08fc.png`.
+
+## Remaining boundaries
+
+The leader `/zone` route intentionally still requests a full calendar. Thus
+entering the map through that route can still incur a full read first; this
+change does not eliminate every full-calendar path. Unassigned-card lookup
+also remains a separate tiny request. The volunteer card-detail feature still
+needs a reviewed production opt-in before any production rollout.
+
+Request counts and small-demo bytes are not predictions of production billing
+savings. Both changes need production-gate integration and review before use
+outside the demo.
