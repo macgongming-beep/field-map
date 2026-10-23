@@ -89,6 +89,8 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: 'test', type: '주택', lat: 1, lng: 1, warning: false, memo: null,
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
+  // Unrelated store fixtures use full cards; scoped-card tests opt in explicitly.
+  vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'false')
   state.creationAction = ''
   state.cardColumns = []
   state.cardFilters = []; state.ignoreCardFilter = false
@@ -108,8 +110,29 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
 
-test.each([false, true])('scoped cards and summaries retain empty assigned cards and refresh grants (legacy=%s)', async legacy => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each([
+  { demo: 'true', flag: 'true', scoped: true },
+  { demo: undefined, flag: 'true', scoped: true },
+  { demo: 'false', flag: 'true', scoped: true },
+  { demo: 'true', flag: undefined, scoped: true },
+  { demo: 'true', flag: 'false', scoped: false },
+  { demo: undefined, flag: undefined, scoped: false },
+].flatMap(config => [false, true].map(legacy => ({ ...config, legacy }))))(
+  'card scope reaches store reads: demo=$demo flag=$flag legacy=$legacy', async ({ demo, flag, scoped, legacy }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', flag)
+  state.missingLeaderTable = legacy
+  if (scoped) state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }])
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  expect(result.current.cards.map(card => card.id)).toEqual(scoped ? [1] : [1, 2])
+  expect(state.cardFilters).toEqual(scoped ? [[['id', [1]]]] : [[]])
+  expect(state.summaries).toHaveBeenLastCalledWith(scoped ? [1] : [1, 2])
+})
+
+test.each([false, true])('production scoped cards retain empty assigned cards and refresh grants (legacy=%s)', async legacy => {
+  vi.stubEnv('VITE_DEMO_MODE', undefined)
   vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
   state.missingLeaderTable = legacy
   state.buildings = []
@@ -143,8 +166,10 @@ test('scoped cards reject foreign response rows rather than trusting the server 
   expect(state.summaries).not.toHaveBeenCalled()
 })
 
-test.each(['user', 'leader', 'admin', 'developer'] as const)('full store remains complete for %s with scoped flag', async role => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
+test.each(['true', undefined].flatMap(demo =>
+  (['user', 'leader', 'admin', 'developer'] as const).map(role => ({ demo, role }))))(
+  'full store remains complete for $role with scoped flag (demo=$demo)', async ({ demo, role }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
   const { result } = renderHook(() => useStore(true, role))
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(result.current.cards.map(card => card.id)).toEqual([1, 2])

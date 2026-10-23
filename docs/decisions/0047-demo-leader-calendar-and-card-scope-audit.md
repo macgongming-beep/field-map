@@ -164,3 +164,15 @@ For external review, compare `8867944..b13b881` for the combined leader route
 change; review `a811096` separately for scoped volunteer cards. Decision 0042
 contains that feature's authorization and directory contracts. Production main,
 production Vercel configuration and database schema remain untouched.
+
+### External review and remaining release gate
+
+On 2026-10-23 the user relayed Claude's approval of `fde08fc` and `b13b881`.
+The review confirmed unchanged leader card/building scope, all-team hydration
+and the zone consumer audit. Scoped volunteer cards (`a811096`) were accepted
+for behavior, but production activation was withheld because the gate still
+required demo mode. Decision 0042 records the subsequent production opt-in
+correction and its tests; that correction is awaiting external re-review.
+This is not a production deployment record. Once the gate is approved, integrate
+the leader routes with main's existing calendar-window flag and activate scoped
+volunteer cards separately, retaining complete leader/admin/developer cards.
