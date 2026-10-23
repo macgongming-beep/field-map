@@ -28,6 +28,24 @@ test('calendar window production opt-in and explicit demo opt-out', () => {
   expect(calendarWindowEnabled(undefined, 'true')).toBe(true)
   expect(calendarWindowEnabled(undefined, 'false')).toBe(false)
 })
+test.each(['user', 'leader', 'admin', 'developer'] as const)('home detail keeps the %s home snapshot until editing demands history', role => {
+  const home = calendarReadScope('/', '', '', false, 'true', now, role, 'Me')
+  expect(calendarReadScope('/', '?openEvent=17', '', false, 'true', now, role, 'Me')).toBe(home)
+  expect(calendarReadScope('/', '?openEvent=17', '', true, 'true', now, role, 'Me')).toBe('full')
+  for (const flag of [undefined, 'false']) expect(calendarReadScope('/', '?openEvent=17', '', false, flag, now, role, 'Me')).toBe('full')
+  for (const search of ['?openEvent=0', '?openEvent=bad', '?openEvent=17&openChat=17']) {
+    expect(calendarReadScope('/', search, '', false, 'true', now, role, 'Me')).toBe('full')
+  }
+})
+test('unreviewed return detail optimization stays excluded from production', () => {
+  for (const path of ['/territory/regular/7', '/territory/regular/7/']) {
+    expect(calendarReadScope(path, '', '', false, 'true', now, 'user', 'Me')).toBe('full')
+    for (const role of ['leader', 'admin', 'developer'] as const) expect(calendarReadScope(path, '', '', false, 'true', now, role, 'Me')).toBe('full')
+    for (const demo of [undefined, 'false']) expect(calendarReadScope(path, '', '', false, demo, now, 'user', 'Me')).toBe('full')
+    for (const search of ['?openEvent=5', '?openChat=5']) expect(calendarReadScope(path, search, '', false, 'true', now, 'user', 'Me')).toBe('full')
+  }
+  expect(calendarReadScope('/territory/regular/0', '', '', false, 'true', now, 'user', 'Me')).toBe('full')
+})
 test('month bounds handle leap years and year rollover', () => {
   expect(calendarReadScope('/calendar', '', '2028-02', false, 'true', now)).toBe('window:2028-02-01:2028-02-29')
   expect(calendarReadScope('/', '', '', false, 'true', new Date('2026-12-23T12:00:00'))).toBe('window:2026-12-09:2027-01-31')

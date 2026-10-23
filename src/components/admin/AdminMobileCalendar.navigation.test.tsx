@@ -1,8 +1,9 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CalendarEvent } from '../../types'
 import { AdminMobileCalendar } from './AdminMobileCalendar'
+import { CalendarReadContext } from '../../hooks/CalendarReadContext'
 
 vi.mock('../CommentSection', () => ({
   CommentSection: () => <div>comment area</div>,
@@ -28,9 +29,79 @@ const event: CalendarEvent = {
   memo: '',
 }
 
-afterEach(() => vi.restoreAllMocks())
+beforeEach(() => {
+  vi.spyOn(window.history, 'back').mockImplementation(() => {
+    window.history.replaceState({}, '', '/')
+    window.dispatchEvent(new PopStateEvent('popstate', { state: {} }))
+  })
+})
+afterEach(() => { cleanup(); vi.restoreAllMocks() })
+
+function HomeDetail({ events = [event] }: { events?: CalendarEvent[] }) {
+  const location = useLocation()
+  return location.search ? <AdminMobileCalendar detailOnly language="ko" currentVisitor="봉사자" role="user" events={events} /> : <div>home screen</div>
+}
 
 describe('모바일 일정 상세 뒤로가기', () => {
+  it('home detail applies to the selected event and reflects fresh participant props', () => {
+    const apply = vi.fn()
+    const detail = (applicants: string[]) => <MemoryRouter initialEntries={['/?openEvent=17']}>
+      <AdminMobileCalendar detailOnly language="ko" currentVisitor="봉사자" role="user"
+        events={[{ ...event, applicants }]} onApplyToEvent={apply} />
+    </MemoryRouter>
+    const view = render(detail([]))
+    fireEvent.click(screen.getByRole('button', { name: /신청하기/ }))
+    expect(apply).toHaveBeenCalledWith(17)
+    view.rerender(detail(['봉사자', '동료']))
+    expect(screen.getByText('동료')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '신청취소' })).toBeTruthy()
+  })
+
+  it('editing from home explicitly requests full calendar history', async () => {
+    const select = vi.fn()
+    const page = (full: boolean, ready: boolean) => <MemoryRouter initialEntries={['/?openEvent=17']}>
+      <CalendarReadContext.Provider value={{ month: '', full, ready, error: false, select, retry: vi.fn() }}>
+        <AdminMobileCalendar detailOnly language="ko" currentVisitor="관리자" role="admin"
+          events={[{ ...event }]} onUpdateEvent={vi.fn()} />
+      </CalendarReadContext.Provider>
+    </MemoryRouter>
+    const view = render(page(false, true))
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }))
+    fireEvent.click(screen.getByRole('button', { name: '편집' }))
+    await waitFor(() => expect(select).toHaveBeenLastCalledWith('', true))
+    expect(screen.queryByText('comment area')).toBeNull()
+    view.rerender(page(true, false))
+    expect(screen.getByRole('status')).toBeTruthy()
+    view.rerender(page(true, true))
+    expect(screen.getByText('일정 편집')).toBeTruthy()
+    expect(screen.getByPlaceholderText('일정 제목').getAttribute('value')).toBe('传道')
+    expect(screen.queryByText('comment area')).toBeNull()
+  })
+
+  it.each(['button', 'gesture', 'external'] as const)('direct home detail hides the calendar and returns home: %s', async mode => {
+    vi.spyOn(window.history, 'back').mockImplementation(() => {
+      window.history.replaceState({}, '', '/')
+      window.dispatchEvent(new PopStateEvent('popstate', { state: {} }))
+    })
+    render(<MemoryRouter initialEntries={mode === 'external' ? ['/?openEvent=17'] : ['/', {
+      pathname: '/', search: '?openEvent=17', state: { eventDetailReturnTo: '/' },
+    }]} initialIndex={mode === 'external' ? 0 : 1}><HomeDetail /></MemoryRouter>)
+    expect(screen.getByText('comment area')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /2026년.*월/ })).toBeNull()
+    if (mode === 'gesture') act(() => window.history.back())
+    else fireEvent.click(screen.getByRole('button', { name: '뒤로' }))
+    await waitFor(() => expect(screen.getByText('home screen')).toBeTruthy())
+    expect(screen.queryByText('comment area')).toBeNull()
+  })
+
+  it('missing home event has a way home without showing the calendar', async () => {
+    render(<MemoryRouter initialEntries={['/?openEvent=999']}><HomeDetail /></MemoryRouter>)
+    expect(screen.getByRole('status')).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /2026년.*월/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '뒤로' }))
+    await waitFor(() => expect(screen.getByText('home screen')).toBeTruthy())
+  })
+
   it('홈에서 연 상세는 상단 뒤로 버튼으로 홈에 돌아간다', async () => {
     const pushState = vi.spyOn(window.history, 'pushState')
     vi.spyOn(window.history, 'back').mockImplementation(() => {
