@@ -36,3 +36,36 @@ My Service rendering succeeded. The account currently has zero assigned cards,
 so populated card UI and live assignment-change verification remain outstanding;
 transform parity and fresh progress are covered by automated tests, not this UI
 smoke. Screenshot: scratch/demo-card-projection.png. Production unchanged.
+
+## Follow-up live demo smoke (2026-10-23)
+
+User authorized a temporary test card assignment. Used the demo's public client
+and an authenticated demo admin session (not service-role access); the script
+rejects any origin except itjlykpjmlcvanqpmkmc.supabase.co. Existing fixture card
+28 (10 units) had no personal recipients. Added only assignment 4 for the actual
+demo volunteer. The volunteer's My Service view showed one card and ten units.
+
+Inserted marked test history 73 for unit 159 through the demo API. The open
+volunteer map changed without reload from 0/10 (0%) to 1/10 (10%), and its
+building from 0/4 to 1/4 (25%). Changed that test record from absent to met and
+re-entered the card from My Service: the record and percentages persisted.
+An authenticated volunteer compact-card read retained the recipient and both
+leader names; get_card_summaries returned completed=1, units=10, progress=10.
+
+Important distinction: the personal-card link opens /map?cardId=28, which uses
+the full store, whereas My Service uses the compact recipient store. This smoke
+therefore covers recipient listing, full-map realtime updates, and authenticated
+compact projection/summary responses separately. It does not claim an end-to-end
+scoped assignment-map UI test. The My Service card itself does not show a numeric
+percentage. Existing summary/transform semantics exclude absent from completed;
+the map's visited counter includes absent. No counting semantics changed here.
+
+The map was read-only without an active service session, so the test writes used
+the demo API, not the volunteer's visit buttons. No write-UI validation is claimed.
+The first browser tab stopped reacting to clicks; a fresh tab worked normally.
+
+Cleanup: invalidate_visit_history_tx successfully invalidated test history 73
+(audit retained), restored unit 159 to unvisited, and the open map returned to 0%.
+Deleted only test assignment 4; My Service then showed zero assigned cards.
+Existing units, cards, leader assignments and other histories were not changed.
+Proof: scratch/demo-card-projection-progress.png. Production remains unchanged.
