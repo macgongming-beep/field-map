@@ -1,7 +1,7 @@
 # Keep mobile unit-detail controls below the iPhone safe area
 
 - Date: 2026-10-23
-- Status: production integration authorized; deployment verification pending
+- Status: production deployed; physical iPhone verification pending
 
 ## Report and diagnosis
 
@@ -57,3 +57,15 @@ not be described as proof of the user's physical iPhone behavior.
 - No environment, database, access control, data-read or write callback changes.
 - Production suite: 1,761 tests / 201 files passed; lint and TypeScript/Vite
   build passed. Deployed-asset verification follows after deployment.
+
+## Production deployment verified
+
+- Production code commit: `a508b76`; only the five files described above.
+- Production deployment `dpl_5BzM35HQqwHWkNE3eq7L6vSpoYHv` completed and was
+  aliased to `https://chinese-territory-app.vercel.app` successfully.
+- Canonical address returned HTTP 200; served `/assets/index-B0XiZunq.css`
+  contains the unit-detail overflow rule, safe-top/non-shrinking header rule,
+  and min-height:0 scrolling body rule. No environment changes were needed.
+- Installed PWA clients must accept the normal update prompt. This does not
+  prove behavior on physical iPhone hardware; the user will check the top
+  settings button after updating. No production data was edited for testing.
