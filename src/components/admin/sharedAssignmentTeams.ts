@@ -16,7 +16,7 @@ function getAssignmentCardIds(assignment: CalendarEvent['cardAssignments'][numbe
 
 export function buildSharedAssignmentTeams(
   event: CalendarEvent,
-  cards: TerritoryCard[],
+  cards: Pick<TerritoryCard, 'id' | 'name'>[],
   informalAssets: InformalAsset[] = [],
   informalAssignments: EventInformalAssignment[] = [],
   buildings: Building[] = [],

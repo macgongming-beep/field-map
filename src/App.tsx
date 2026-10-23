@@ -23,6 +23,8 @@ import { isAppLanguage, setCurrentLang } from './i18n'
 import { chooseAppScreen } from './utils/appScreen'
 import { recipientPreviewEnabled } from './lib/recipientPreview'
 import { recipientStoreEnabled } from './lib/recipientStore'
+import { recipientCardScopeEnabled } from './lib/recipientCardScope'
+import { ScopedCardContext } from './hooks/useCardDirectory'
 import { syncLanguageToServiceWorker } from './lib/swLanguage'
 import './App.css'
 
@@ -396,6 +398,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
           <AppLoading kind="screen" />
         }
       >
+        <ScopedCardContext.Provider value={recipientCardScopeEnabled(actualRole, Boolean(recipientUser))}>
         <TerritoryRealtimeContext.Provider value={territoryRealtime}>
         <CalendarReadContext.Provider value={import.meta.env.VITE_DEMO_MODE === 'true' ? {
           ...calendarDemand, ready: calendarScopeReady, error: calendarReadError, select: selectCalendarDemand,
@@ -628,6 +631,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
         )}
         </CalendarReadContext.Provider>
         </TerritoryRealtimeContext.Provider>
+        </ScopedCardContext.Provider>
       </Suspense>
       </MeetingProvider>
     </>

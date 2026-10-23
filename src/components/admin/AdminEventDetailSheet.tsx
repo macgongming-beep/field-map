@@ -14,6 +14,8 @@
 import { useMemo, useState } from 'react'
 import type { Building, CalendarEvent, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, Role, TerritoryCard } from '../../types'
 import { buildSharedAssignmentTeams } from './sharedAssignmentTeams'
+import { useSharedCardNames } from '../../hooks/useCardDirectory'
+import { CardDirectoryReadStatus } from '../CardDirectoryReadStatus'
 import { confirmDialog } from '../../lib/confirm'
 import { t, translateKoreanAddress, type AppLanguage } from '../../i18n'
 import { CommentSection, type MentionUser } from '../CommentSection'
@@ -125,14 +127,16 @@ function SharedAssignmentTeams({
   language: AppLanguage
   translatePlaceNames: boolean
 }) {
+  const names = useSharedCardNames(event, cards)
   if (event.assignmentStatus !== 'shared') return null
 
-  const teams = buildSharedAssignmentTeams(event, cards, informalAssets, eventInformalAssignments, buildings, eventRestaurantAssignments)
+  const teams = buildSharedAssignmentTeams(event, names.cards, informalAssets, eventInformalAssignments, buildings, eventRestaurantAssignments)
   if (teams.length === 0) return null
 
   return (
     <section className="shared-assignment-section">
       <SectionHead title={t(language, 'assignment.confirmedTeams')} />
+      <CardDirectoryReadStatus {...names} />
       <div className="shared-assignment-list">
         {teams.map((team, index) => {
           const primaryCard = team.cardNames[0]

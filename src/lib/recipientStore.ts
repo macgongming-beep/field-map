@@ -94,6 +94,7 @@ export function createRecipientStoreReader(userName: string) {
       if (allowed && [...allowed].some((id) => !available.has(id))) throw new Error('A requested card is unavailable')
     },
     get scoped() { return allowed != null },
+    cardIds() { check(); if (!allowed) throw new Error('Missing recipient card scope'); return [...allowed] },
     refresh(calendar?: CalendarEvent[]) { check(); calendarSnapshot = calendar; pending = undefined; api.reader.invalidate() },
     dispose() { active = false; api.dispose() },
   }
