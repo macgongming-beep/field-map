@@ -5,7 +5,7 @@ Date: 2026-10-23
 ## Changes and boundaries
 
 Extend the demo personal service calendar selector to actual role `leader`,
-only on `/map` and `/territory`. Production gates are not changed or deployed.
+on `/map`, `/territory`, and (follow-up) `/zone`. Production gates are not changed or deployed.
 Administrators and developers keep full calendars on these routes. Calendar
 month navigation, statistics, event/chat deep links and editors are unchanged.
 
@@ -87,12 +87,44 @@ Evidence (local, not committed): `/tmp/demo-leader-before-20261023.txt`,
 
 ## Remaining boundaries
 
-The leader `/zone` route intentionally still requests a full calendar. Thus
-entering the map through that route can still incur a full read first; this
-change does not eliminate every full-calendar path. Unassigned-card lookup
-also remains a separate tiny request. The volunteer card-detail feature still
-needs a reviewed production opt-in before any production rollout.
+The first deployment left leader `/zone` on the full calendar. The follow-up
+below removes that route promotion. Unassigned-card lookup remains a separate
+tiny request. The volunteer card-detail feature still needs a reviewed
+production opt-in before any production rollout.
 
 Request counts and small-demo bytes are not predictions of production billing
 savings. Both changes need production-gate integration and review before use
 outside the demo.
+
+## Leader zone follow-up and combined review
+
+MobileHome `/zone` passes cards, buildings, boundaries, histories and resource
+data to AdminMobileZone, but no calendar. Its assigned-card count and filters
+use assignedLeaders/assignedLeader/assignedUsers on cards. DesktopApp `/zone`
+passes those same complete stores to DesktopTerritory or DesktopMap; neither
+consumes calendarEvents. AppHeader has independent event-metadata reads, which
+this change does not suppress.
+
+Only actual demo leaders with a known account name now reuse the same service
+calendar key on `/zone`, `/zone?scope=all`, and `/zone?view=map`. This avoids a
+full calendar read merely to pass through the zone before opening a map. Cards,
+their leader/user assignments, progress, buildings, restaurant requests and
+resource assignment tables are unchanged. No event is filtered by team during
+hydration. Admin/developer/user zone paths, unknown identity, production, and
+openChat/openEvent links retain their previous behavior.
+
+First entry can still need the service reader's index and body requests. This
+is not zero calendar loading at cold start. Warm home-zone-map-service trips
+share the same two-minute snapshot. Mutation/realtime/foreground/manual
+invalidation remains mandatory.
+
+Automated verification: 1,770 tests / 204 files, lint and build passed. New tests
+cover the zone role/gate/view matrix, other-team links and old/future events,
+and the complete home-zone-map-service-home-zone-map store sequence (two scoped
+reads total: home and service, zero unbounded calendar reads).
+
+Review together: volunteer card scope `a811096` (contract 0042), leader service
+calendar `fde08fc` / evidence `e695049`, and this zone follow-up. Focus on
+unchanged leader card/building scope, all-team hydration, old assignment/map
+targets, cache invalidation, and production gates. External review is pending;
+this document is a handoff, not an external approval.

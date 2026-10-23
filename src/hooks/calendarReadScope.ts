@@ -6,11 +6,11 @@ import { mergeEventCardAssignments, toCalendarEvent, toEventCardAssignment, type
 
 export function calendarReadScope(path: string, search: string, month: string, full: boolean, demo?: string, now = new Date(), role?: Role, userName?: string): string {
   const params = new URLSearchParams(search)
-  // Both service screens consume today's complete meetings and personal history.
-  // Leaders retain full card/building stores; this only limits calendar events.
+  // The leader zone reads cards/buildings, not calendar events. Share the service
+  // snapshot with its map destination; all card/building stores remain complete.
   if (demo === 'true' && (role === 'user' || role === 'leader') && userName && !params.has('openChat') && !params.has('openEvent')
-    && (path === '/territory' || path === '/map')) {
-    const target = params.get(path === '/map' ? 'assignmentMap' : 'assignmentEvent')
+    && (path === '/territory' || path === '/map' || (path === '/zone' && role === 'leader'))) {
+    const target = path === '/zone' ? null : params.get(path === '/map' ? 'assignmentMap' : 'assignmentEvent')
     if (target != null && (!/^\d+$/.test(target) || !Number.isSafeInteger(Number(target)) || Number(target) <= 0)) return 'full'
     return `service:${JSON.stringify([userName, toLocalDateString(now), target == null ? null : Number(target)])}`
   }

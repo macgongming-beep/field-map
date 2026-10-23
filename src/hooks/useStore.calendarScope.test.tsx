@@ -251,6 +251,25 @@ test.each([
   expect(state.reads).toEqual([])
 })
 
+test('leader home-zone-map-service round trips share one complete team snapshot without full calendar promotion', async () => {
+  const now = new Date('2026-10-23T12:00:00')
+  const teams = [{ id: 1, date: '2026-08-02', applicants: ['A', 'Other'], cardAssignments: [
+    { userName: 'A', assignedCardId: 10 }, { userName: 'Other', assignedCardId: 20 },
+  ] }]
+  state.scoped.mockImplementation(async scope => scope.startsWith('service:') ? teams : [])
+  const { result, rerender } = renderHook(({ route }) => useStore(true, 'leader', undefined,
+    calendarReadScope(route, '', '', false, 'true', now, 'leader', 'A')), { initialProps: { route: '/' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  for (const route of ['/zone', '/map', '/territory', '/', '/zone', '/map']) {
+    rerender({ route })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    if (route !== '/') expect(result.current.calendarEvents).toEqual(teams)
+  }
+  expect(state.scoped).toHaveBeenCalledTimes(2)
+  expect(state.reads).toEqual([])
+})
+
 test.each(['foreground', 'realtime:calendar', 'mutation:calendar', 'fetchAll'])('%s invalidates the personal service cache as well as the home cache', async triggeredBy => {
   const service = 'service:["A","2026-10-23",null]'
   const home = 'window:2026-10-09:2026-11-30'

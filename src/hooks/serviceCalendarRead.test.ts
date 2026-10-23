@@ -46,12 +46,32 @@ test.each(['user', 'leader'] as const)('only demo service roles opt in (%s); ide
   for (const path of ['/map', '/territory']) expect(calendarReadScope(path, '', '', false, 'true', now, role, 'Me')).toBe(scope)
   for (const fullRole of ['admin', 'developer'] as const) expect(calendarReadScope('/map', '', '', false, 'true', now, fullRole, 'Me')).toBe('full')
   for (const flag of [undefined, 'false']) expect(calendarReadScope('/territory', '', '', false, flag, now, role, 'Me')).toBe('full')
-  for (const path of ['/zone', '/stats', '/service-log']) expect(calendarReadScope(path, '', '', false, 'true', now, role, 'Me')).toBe('full')
+  for (const path of ['/stats', '/service-log']) expect(calendarReadScope(path, '', '', false, 'true', now, role, 'Me')).toBe('full')
   for (const query of ['?openChat=5', '?openEvent=5', '?assignmentMap=nope']) expect(calendarReadScope('/map', query, '', false, 'true', now, role, 'Me')).toBe('full')
   expect(calendarReadScope('/territory', '', '', false, 'true', now, 'user')).toBe('full')
   expect(calendarReadScope('/map', '?assignmentMap=nope', '', false, 'true', now, 'user', 'Me')).toBe('full')
   expect(calendarReadScope('/map', '?openChat=5', '', false, 'true', now, 'user', 'Me')).toBe('full')
   expect(calendarReadScope('/territory', '', '', false, 'true', now, 'user', 'Other')).not.toBe(scope)
+})
+
+test('only the actual demo leader zone shares the service snapshot, including all-card and desktop-map views', () => {
+  for (const search of ['', '?scope=all', '?view=map', '?region=Other&dong=Other']) {
+    expect(calendarReadScope('/zone', search, '', false, 'true', now, 'leader', 'Me')).toBe(scope)
+  }
+  for (const role of ['user', 'admin', 'developer', undefined] as const) {
+    expect(calendarReadScope('/zone', '?scope=all', '', false, 'true', now, role, 'Me')).toBe('full')
+  }
+  for (const flag of ['false', undefined]) expect(calendarReadScope('/zone', '', '', false, flag, now, 'leader', 'Me')).toBe('full')
+  expect(calendarReadScope('/zone', '', '', false, 'true', now, 'leader')).toBe('full')
+  for (const search of ['?openChat=5', '?openEvent=5']) expect(calendarReadScope('/zone', search, '', false, 'true', now, 'leader', 'Me')).toBe('full')
+})
+
+test('leader zone retains complete other-team assignments and old/future restaurant events', async () => {
+  const rows = await readScopedCalendar(calendarReadScope('/zone', '?scope=all', '', false, 'true', now, 'leader', 'Me'))
+  expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
+  expect(rows[0].cardAssignments).toEqual(expect.arrayContaining([
+    expect.objectContaining({ userName: 'Other', assignedCardIds: [21], teamKey: 'other' }),
+  ]))
 })
 
 test.each(['user', 'leader'] as const)('%s preserves past/future personal events, all shared teams, multi-card links and other restaurant dates', async role => {
