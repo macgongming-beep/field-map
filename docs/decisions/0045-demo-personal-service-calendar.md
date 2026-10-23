@@ -40,6 +40,42 @@ independent reads must be counted separately.
 Automated coverage includes old and future personal assignments, other teams,
 multi-card links, restaurant dates, explicit old event links, empty indexes,
 pagination, foreign-response rejection, index failures, route round trips and
-cache invalidation. Live demo results will be recorded after deployment.
+cache invalidation.
+
+## Live demo verification
+
+Code commit: `ac5cf73`. Demo deployment:
+`dpl_F1vfSVpbG2BdbMEwtgZFHMMCxRMp`, alias
+`https://chinese-territory-app-demo.vercel.app`. Applied the waiting PWA update
+before measuring. Production was not deployed or modified.
+
+- Full suite: 1,761 tests / 204 files passed. Build and lint passed.
+- Volunteer first home-to-service entry: six calendar/index requests. Event
+  bodies were restricted to IDs 19, 51, 98, not an unbounded calendar query.
+  Four additional recipient-scope requests remained; do not count those as
+  eliminated by this change.
+- Home-to-service repeat within two minutes: zero filtered calendar/assignment
+  requests, versus three unbounded snapshot requests in the preceding baseline.
+- Home-to-assignment-map repeat, twice: zero calendar SNAPSHOT reads. Three
+  separate header reads still occurred (own participant events, cart application
+  events, and leader event metadata). This is not zero overall network traffic.
+- Small demo snapshot transfer: approximately 6.8 kB on the first scoped read,
+  versus 4.8 kB for the old full snapshot. The added indexes cost more than the
+  small demo body saving on first entry. Warm round trips are the measured win;
+  first-entry production savings are not established by this test.
+- Mobile past service count stayed at three. Opened September 13, September 30,
+  and October 5 details. September 13 still displayed the demo volunteer, demo
+  leader and User2; September 30 retained the demo administrator teammate;
+  October 5 retained the test administrator leader and demo volunteer.
+- Different-team shared cards, multi-card links and far-future assignments are
+  covered by automated fixtures. No new live shared-team fixture was created.
+  The map request-count fixture (event 19) displayed zero cards before and after;
+  it is not a claim that live shared-card pins were exhaustively verified.
+
+Local request evidence: `/tmp/demo-service-calendar-first-20261023.txt`,
+`/tmp/demo-service-calendar-repeat-20261023.txt`, and
+`/tmp/demo-map-calendar-repeat{,2}-20261023.txt`. These are native DevTools
+observations; ServiceWorker delivery rows were not counted as second requests.
+UI proof: `scratch/demo-service-old-team-ac5cf73.png` (not committed).
 
 No monthly or production billing saving is inferred from demo byte sizes.
