@@ -226,3 +226,52 @@ test.each(['/territory', '/map'])('home round trips to %s retain old/future and 
     expect(state.scoped).toHaveBeenCalledTimes(1)
   }
 })
+
+test.each(['/territory', '/map'])('personal %s round trips reuse the complete shared event snapshot without full reads', async path => {
+  const now = new Date('2026-10-23T12:00:00')
+  const personal = [{ id: 1, date: '2026-08-02', applicants: ['A'], cardAssignments: [
+    { userName: 'A', assignedCardId: 10 }, { userName: 'Other team', assignedCardId: 20 },
+  ] }, { id: 2, date: '2027-08-08', applicants: [], cardAssignments: [{ userName: 'A', assignedCardId: 30 }] }]
+  state.scoped.mockImplementation(async scope => scope.startsWith('service:') ? personal : [])
+  const { result, rerender } = renderHook(({ route }) => useStore(true, 'user', undefined,
+    calendarReadScope(route, path === '/map' && route === path ? '?assignmentMap=1' : '', '', false, 'true', now, 'user', 'A')),
+  { initialProps: { route: '/' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  for (let trip = 0; trip < 2; trip += 1) {
+    rerender({ route: path })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    expect(result.current.calendarEvents).toEqual(personal)
+    rerender({ route: '/' })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  }
+  expect(state.scoped).toHaveBeenCalledTimes(2)
+  expect(state.reads).toEqual([])
+})
+
+test.each(['foreground', 'realtime:calendar', 'mutation:calendar', 'fetchAll'])('%s invalidates the personal service cache as well as the home cache', async triggeredBy => {
+  const service = 'service:["A","2026-10-23",null]'
+  const home = 'window:2026-10-09:2026-11-30'
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'user', undefined, scope), { initialProps: { scope: service } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ scope: home })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy }) })
+  rerender({ scope: service })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.scoped).toHaveBeenCalledTimes(4)
+})
+
+test('changing role clears personal snapshots before returning to the same scope', async () => {
+  const service = 'service:["A","2026-10-23",null]'
+  const { result, rerender } = renderHook(({ role, scope }: { role: 'user' | 'leader'; scope: string }) => useStore(true, role, undefined, scope),
+    { initialProps: { role: 'user', scope: service } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ role: 'leader', scope: 'full' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  const readsBeforeReturn = state.scoped.mock.calls.length
+  rerender({ role: 'user', scope: service })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.scoped.mock.calls.length).toBeGreaterThan(readsBeforeReturn)
+  expect(state.scoped).toHaveBeenLastCalledWith(service)
+})

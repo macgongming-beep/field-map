@@ -436,7 +436,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           measure(events)
           if (scope !== calendarScopeRef.current || version !== calendarReadVersion.current) throw new SupersededReadError('Calendar scope superseded')
           setCalendarEvents(events)
-          if (scope.startsWith('window:')) {
+          if (scope.startsWith('window:') || scope.startsWith('service:')) {
             calendarWindows.current.delete(scope)
             calendarWindows.current.set(scope, { events, at: Date.now() })
             if (calendarWindows.current.size > 6) calendarWindows.current.delete(calendarWindows.current.keys().next().value!)

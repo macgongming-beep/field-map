@@ -4,12 +4,18 @@ import { toLocalDateString } from '../utils/dateUtils'
 import type { Role } from '../types'
 import { mergeEventCardAssignments, toCalendarEvent, toEventCardAssignment, type RawCalendarEvent, type RawEventCardAssignment, type RawEventCardAssignmentCard } from './storeTransforms'
 
-export function calendarReadScope(path: string, search: string, month: string, full: boolean, demo?: string, now = new Date(), role?: Role): string {
+export function calendarReadScope(path: string, search: string, month: string, full: boolean, demo?: string, now = new Date(), role?: Role, userName?: string): string {
+  const params = new URLSearchParams(search)
+  if (demo === 'true' && role === 'user' && userName && !params.has('openChat') && !params.has('openEvent')
+    && (path === '/territory' || path === '/map')) {
+    const target = params.get(path === '/map' ? 'assignmentMap' : 'assignmentEvent')
+    if (target != null && (!/^\d+$/.test(target) || !Number.isSafeInteger(Number(target)) || Number(target) <= 0)) return 'full'
+    return `service:${JSON.stringify([userName, toLocalDateString(now), target == null ? null : Number(target)])}`
+  }
   // Admin card allocation does not consume historical events. Share the home
   // window so opening it does not promote a recent snapshot to all history.
   const adminAssignment = path === '/assignment' && (role === 'admin' || role === 'developer')
   if (demo !== 'true' || (path === '/calendar' && full) || (!adminAssignment && !['/', '/home', '/calendar'].includes(path))) return 'full'
-  const params = new URLSearchParams(search)
   if (params.has('openChat') || params.has('openEvent')) return 'full'
   const recent = new Date(now)
   recent.setDate(recent.getDate() - 14)
@@ -35,6 +41,7 @@ async function pages<T>(query: (from: number, to: number) => PromiseLike<{ data:
 
 /** Complete participants and assignments for every returned event, including old months. */
 export async function readScopedCalendar(scope: string) {
+  if (scope.startsWith('service:')) return readServiceCalendar(scope)
   const match = /^(?:since:(\d{4}-\d{2}-\d{2})|window:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2}))$/.exec(scope)
   if (!match) throw new Error('Invalid calendar scope')
   const since = match[1] ?? match[2]
@@ -43,6 +50,10 @@ export async function readScopedCalendar(scope: string) {
   const events = await pages<RawCalendarEvent>((from, to) => supabase.from('calendar_events')
     .select(CALENDAR_EVENT_COLUMNS).gte('event_date', since).lte('event_date', until ?? '9999-12-31').order('event_date').order('time').order('id').range(from, to))
   if (events.some(e => !Number.isSafeInteger(e.id) || e.event_date < since || (until && e.event_date > until))) throw new Error('Invalid scoped calendar event')
+  return hydrateCalendarAssignments(events)
+}
+
+async function hydrateCalendarAssignments(events: RawCalendarEvent[]) {
   const assignments: RawEventCardAssignment[] = []
   const linked: RawEventCardAssignmentCard[] = []
   const ids = [...new Set(events.map(e => e.id))]
@@ -58,4 +69,36 @@ export async function readScopedCalendar(scope: string) {
   }
   const merged = mergeEventCardAssignments(assignments.map(toEventCardAssignment), linked)
   return events.map(event => toCalendarEvent(event, merged.filter(a => a.eventId === event.id)))
+}
+
+async function readServiceCalendar(scope: string) {
+  const parsed: unknown = JSON.parse(scope.slice('service:'.length))
+  if (!Array.isArray(parsed) || parsed.length !== 3) throw new Error('Invalid service calendar scope')
+  const [userName, today, target] = parsed as unknown[]
+  if (typeof userName !== 'string' || !userName || typeof today !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(today)
+    || (target !== null && (typeof target !== 'number' || !Number.isSafeInteger(target) || target <= 0))) throw new Error('Invalid service calendar scope')
+  const [todayRows, mine, restaurants] = await Promise.all([
+    pages<{ id: number; event_date: string }>((from, to) => supabase.from('calendar_events')
+      .select('id,event_date').eq('event_date', today).order('id').range(from, to)),
+    pages<{ event_id: number; user_name: string }>((from, to) => supabase.from('event_card_assignments')
+      .select('event_id,user_name').eq('user_name', userName).order('id').range(from, to)),
+    // Map unit details display other people's restaurant assignment dates too.
+    // Keep this small index complete rather than silently hiding those dates.
+    pages<{ event_id: number }>((from, to) => supabase.from('event_restaurant_assignments')
+      .select('event_id').order('id').range(from, to)),
+  ])
+  if (todayRows.some(row => row.event_date !== today) || mine.some(row => row.user_name !== userName)) throw new Error('Invalid service calendar index')
+  const ids = [...new Set([...todayRows.map(row => row.id), ...mine.map(row => row.event_id),
+    ...restaurants.map(row => row.event_id), ...(target == null ? [] : [target])])]
+  if (ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid service calendar event id')
+  const events: RawCalendarEvent[] = []
+  for (let start = 0; start < ids.length; start += 100) {
+    const batch = ids.slice(start, start + 100)
+    const rows = await pages<RawCalendarEvent>((from, to) => supabase.from('calendar_events')
+      .select(CALENDAR_EVENT_COLUMNS).in('id', batch).order('id').range(from, to))
+    if (rows.some(row => !batch.includes(row.id))) throw new Error('Invalid service calendar event')
+    events.push(...rows)
+  }
+  // Never filter these rows by user: shared assignments need every team in the event.
+  return (await hydrateCalendarAssignments(events)).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
 }
