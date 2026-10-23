@@ -1,5 +1,6 @@
 import { teamServiceEnabled } from '../config/teamService'
-import { useMemo, useState } from 'react'
+import { useContext, useMemo, useState } from 'react'
+import { CalendarReadContext } from '../hooks/CalendarReadContext'
 import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '../utils/cardServiceScope'
 import { FontScalePicker } from './FontScalePicker'
 import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
@@ -463,6 +464,7 @@ export function MobileHome({
   )
   // 디자인 v2: 홈에서 "오늘 봉사한 카드" 섹션 제거됨 (활동 탭으로 이동)
   // 토글 상태는 디버그/스위치용으로 보존 — 활동 탭에서 재사용 가능
+  const calendarRead = useContext(CalendarReadContext)
   const [todayCardsCollapsed, setTodayCardsCollapsed] = useState(() =>
     window.localStorage.getItem('mobileTodaySessionsCollapsed') === 'true'
   )
@@ -924,11 +926,12 @@ export function MobileHome({
                   language={language}
                   subtitle={(() => {
                     const now = new Date()
-                    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+                    const ym = calendarRead?.month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+                    if (calendarRead && !calendarRead.ready) return undefined
                     const count = calendarEvents.filter((e) => e.date.startsWith(ym)).length
                     return t(language, 'calendar.subtitleCount')
-                      .replace('{year}', String(now.getFullYear()))
-                      .replace('{month}', String(now.getMonth() + 1))
+                      .replace('{year}', ym.slice(0, 4))
+                      .replace('{month}', String(Number(ym.slice(5))))
                       .replace('{count}', String(count))
                   })()}
                   userId={currentUser.id}

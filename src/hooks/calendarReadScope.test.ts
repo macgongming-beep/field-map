@@ -8,6 +8,7 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: (table: string) => {
   const q = {
     select: () => q, order: () => q,
     gte: (key: string, value: string) => { filters.push([key, value]); return q },
+    lte: (key: string, value: string) => { filters.push([key, value]); return q },
     in: (key: string, value: number[]) => { filters.push([key, value]); return q },
     range: (from: number) => { state.calls.push({ table, filters, from }); return state.query(table, from, filters) },
   }
@@ -21,10 +22,19 @@ beforeEach(() => {
   state.query.mockReset().mockImplementation(async (table: string) => ({ data: table === 'calendar_events' ? [event] : table === 'event_card_assignments' ? [assignment] : [], error: null }))
 })
 const now = new Date('2026-10-23T12:00:00')
+test('month bounds handle leap years and year rollover', () => {
+  expect(calendarReadScope('/calendar', '', '2028-02', false, 'true', now)).toBe('window:2028-02-01:2028-02-29')
+  expect(calendarReadScope('/', '', '', false, 'true', new Date('2026-12-23T12:00:00'))).toBe('window:2026-12-09:2027-01-31')
+})
+test('bounded read rejects future rows outside the requested month', async () => {
+  state.query.mockResolvedValue({ data: [{ ...event, event_date: '2027-08-08' }], error: null })
+  await expect(readScopedCalendar('window:2026-08-01:2026-08-31')).rejects.toThrow('Invalid scoped')
+  expect(state.calls).toHaveLength(1)
+})
 test('demo home uses recent and future dates; calendar expands to any old month', () => {
-  expect(calendarReadScope('/', '', '', false, 'true', now)).toBe('since:2026-10-09')
-  expect(calendarReadScope('/calendar', '', '2026-08', false, 'true', now)).toBe('since:2026-08-01')
-  expect(calendarReadScope('/calendar', '', '2027-01', false, 'true', now)).toBe('since:2026-10-09')
+  expect(calendarReadScope('/', '', '', false, 'true', now)).toBe('window:2026-10-09:2026-11-30')
+  expect(calendarReadScope('/calendar', '', '2026-08', false, 'true', now)).toBe('window:2026-08-01:2026-08-31')
+  expect(calendarReadScope('/calendar', '', '2027-01', false, 'true', now)).toBe('window:2027-01-01:2027-01-31')
 })
 test.each(['/stats', '/stats/attendance', '/assignment', '/territory', '/map'])('full consumer %s never loses old history', path => {
   expect(calendarReadScope(path, '', '2026-08', false, 'true', now)).toBe('full')
@@ -45,10 +55,10 @@ test.each(['user', 'leader', undefined] as const)('non-admin %s allocation stays
   expect(calendarReadScope('/assignment', '', '', false, 'true', now, role)).toBe('full')
 })
 test('old month keeps applicants, guests, assignments and attendance counts', async () => {
-  const rows = await readScopedCalendar('since:2026-08-01')
+  const rows = await readScopedCalendar('window:2026-08-01:2026-08-31')
   expect(rows[0]).toMatchObject({ applicants: ['A', 'Guest'], guests: ['Guest'], cardAssignments: [{ assignedCardId: 10 }] })
   expect(attendanceMeetings(rows, '2026-08', now)[0].count).toBe(2)
-  expect(state.calls[0].filters).toEqual([['event_date', '2026-08-01']])
+  expect(state.calls[0].filters).toEqual([['event_date', '2026-08-01'], ['event_date', '2026-08-31']])
   expect(state.calls.slice(1).every(c => JSON.stringify(c.filters) === JSON.stringify([['event_id', [7]]]))).toBe(true)
 })
 test('empty month does not request either entire assignment table', async () => {
