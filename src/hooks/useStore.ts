@@ -304,7 +304,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const cardsQueryPromise = (async () => {
           const withLeader = await fetchAllPages((from, to) => supabase
             .from('cards')
-            .select(cardReadProjection(role, Boolean(recipientReader)))
+            .select(cardReadProjection(role))
             .order('id')
             .range(from, to))
           if (!withLeader.error) {
@@ -315,7 +315,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           if (message.includes('card_leader_assignments')) {
             setMissingCardLeaderAssignmentsTable(true)
             return fetchAllPages((from, to) => supabase
-              .from('cards').select(cardReadProjection(role, Boolean(recipientReader), false)).order('id').range(from, to))
+              .from('cards').select(cardReadProjection(role, false)).order('id').range(from, to))
           }
           return withLeader
         })()

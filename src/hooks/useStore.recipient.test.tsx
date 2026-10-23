@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   unitParent: 20, insertError: false, unitLookupError: false,
   historyColumns: [] as string[],
   cardColumns: [] as string[],
+  missingLeaderTable: false,
   calendarFilters: [] as [string, unknown][][],
   calendarResponses: [] as Promise<{ data: Record<string, unknown>[]; error: null }>[],
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
@@ -34,11 +35,13 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   from: (table: string) => {
     let lookup = false
     let writing = false
+    let selected = ''
     let range: [number, number] = [0, 999]
     const filters: [string, unknown][] = []
     const q: Record<string, unknown> = {}
     for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'insert']) q[name] = () => q
     q.select = (columns: string) => {
+      selected = columns
       if (table === 'visit_histories') state.historyColumns.push(columns)
       if (table === 'cards') state.cardColumns.push(columns)
       return q
@@ -54,6 +57,9 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     q.range = (from: number, to: number) => { range = [from, to]; return q }
     q.limit = () => { lookup = true; return q }
     q.then = async (resolve: (value: unknown) => void) => {
+      if (table === 'cards' && state.missingLeaderTable && selected.includes('card_leader_assignments')) {
+        return resolve({ data: null, error: { message: 'card_leader_assignments missing' } })
+      }
       state.reads.push(writing ? `${table}:insert` : table)
       if (table === 'service_sessions') state.sessionFilters.push(filters)
       if (table === 'restaurant_requests' && !writing) state.requestFilters.push(filters)
@@ -80,6 +86,7 @@ const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: '
 beforeEach(() => {
   state.creationAction = ''
   state.cardColumns = []
+  state.missingLeaderTable = false
   state.returnRows = []; state.returnLogs = []
   state.failedTable = ''
   state.requests = []
@@ -95,19 +102,35 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
 
-test.each(['user', 'admin'] as const)('demo card reads preserve %s fields and refreshed progress', async role => {
+test.each(['user', 'leader', 'admin', 'developer'] as const)('demo card reads preserve %s fields and refreshed progress', async role => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')
   const { result } = renderHook(() => useStore(true, role, role === 'user' ? 'Volunteer' : undefined))
   await waitFor(() => expect(result.current.loading).toBe(false))
   const projection = state.cardColumns.find(columns => columns.includes('card_assignments'))!
-  expect(projection.includes('card_leader_assignments(user_name)')).toBe(role === 'user')
-  expect(projection.includes('created_at')).toBe(role === 'admin')
+  expect(projection.includes('card_leader_assignments(user_name)')).toBe(role === 'user' || role === 'leader')
+  expect(projection.includes('created_at')).toBe(role === 'admin' || role === 'developer')
   if (role === 'user') {
     state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 1, progress: 100 }, { id: 2, units: 50, completed: 50, progress: 100 }])
     await act(async () => { await result.current.refetchSlices(['cards'], { triggeredBy: 'foreground' }) })
     expect(result.current.cards.map(card => card.progress)).toEqual([100, 100])
     expect(state.cardColumns.filter(columns => columns.includes('card_assignments'))).toEqual([projection, projection])
   }
+})
+
+test.each(['user', 'leader', 'admin', 'developer'] as const)('production opt-in wires %s modern and legacy reads', async role => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CARD_COMPACT_READ_ENABLED', 'true')
+  state.missingLeaderTable = true
+  const { result } = renderHook(() => useStore(true, role))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  const base = role === 'user' || role === 'leader' ? 'id,name,area,region,type,status,leader_name' : '*'
+  const leaders = role === 'user' || role === 'leader' ? 'user_name' : 'user_name, created_at'
+  expect(state.cardColumns.filter(c => c.includes('card_assignments'))).toEqual([
+    `${base}, card_assignments(user_name), card_leader_assignments(${leaders})`,
+    `${base}, card_assignments(user_name)`,
+  ])
+  expect(result.current.cards.map(c => c.name)).toEqual(['card1', 'card2'])
 })
 
 test.each((['true', 'false'] as const).flatMap(demo =>
