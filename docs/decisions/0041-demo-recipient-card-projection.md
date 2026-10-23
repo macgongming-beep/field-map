@@ -69,3 +69,30 @@ Cleanup: invalidate_visit_history_tx successfully invalidated test history 73
 Deleted only test assignment 4; My Service then showed zero assigned cards.
 Existing units, cards, leader assignments and other histories were not changed.
 Proof: scratch/demo-card-projection-progress.png. Production remains unchanged.
+
+## Follow-up opt-in and role expansion
+
+VITE_CARD_COMPACT_READ_ENABLED overrides VITE_DEMO_MODE. Unset production keeps
+the full projection; explicit false disables even demo. True enables compact
+reads for actual user and leader roles, with or without a recipient reader.
+Admin/developer retain all assignment timestamps, including when using a
+volunteer preview. App passes actualRole into useStore. The sole date consumer,
+DesktopAdminAssignment, is rendered only in admin view; leaders cannot select
+that view. Unknown runtime roles default to the full projection.
+
+No card filtering, cache, permission or refresh-frequency changes. All card IDs
+and summaries are still read. Restricting cards to assigned IDs is a separate
+change requiring a consumer/scope audit. 18,536 bytes above contains both leader
+names and dates and is separately compressed; it is not the marginal date cost.
+
+Added flag/role tests and useStore modern-to-legacy fallback wiring tests for all
+four roles, including non-recipient user reads. Full verification: 1,711 tests /
+199 files, lint and build passed. This expanded gate is review-ready, not yet
+deployed to demo or production; the live smoke above applies to 0c85817 only.
+The flag is build-time: rollback requires redeployment and PWA update.
+
+Release status cross-check (2026-10-23): origin/main is 73950ee. Calendar window
+opt-in 2d7979a and home suggestion opt-in 73950ee are already recorded as enabled
+in production decisions 0039/0040 in the production checkout. The live canonical
+production HTML still serves index-BSRxiqj3.js, matching that release. This task
+did not enable or redeploy production and did not perform new billing analysis.
