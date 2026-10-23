@@ -3,6 +3,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { RestaurantCatalog } from './RestaurantCatalog'
 import type { TerritoryCard } from '../types'
+import { ScopedCardContext } from '../hooks/useCardDirectory'
+const directory = vi.hoisted(() => vi.fn())
+vi.mock('../lib/cardDirectory', () => ({ readCardDirectory: directory }))
 const api = vi.hoisted(() => ({ page: vi.fn(), detail: vi.fn() }))
 vi.mock('../lib/restaurantCatalog', () => ({ createRestaurantCatalog: () => api }))
 vi.mock('../lib/msg', () => ({ msg: (value: string) => value }))
@@ -10,6 +13,16 @@ const item = (id: number) => ({ building_id: id, unit_id: null, card_id: 1, name
 const props = { search: '', cards: [{ id: 1, region: 'A', area: 'A1' }] as TerritoryCard[], language: 'ko' as const, translatePlaceNames: false, onSelect: vi.fn(), onAdd: vi.fn() }
 beforeEach(() => { vi.clearAllMocks(); api.page.mockResolvedValue({ items: [item(1)], more: false }) })
 afterEach(() => { cleanup(); vi.useRealTimers() })
+test('scoped volunteer can browse a region and neighborhood outside their cards', async () => {
+  directory.mockResolvedValue([{ id: 22, name: 'Outside', region: 'B', area: 'B1' }])
+  render(<ScopedCardContext.Provider value><RestaurantCatalog {...props} /></ScopedCardContext.Provider>)
+  await screen.findByRole('option', { name: 'B' })
+  expect(api.page).not.toHaveBeenCalled()
+  fireEvent.change(screen.getByLabelText('지역 선택'), { target: { value: 'B' } })
+  await screen.findByRole('option', { name: 'B1' })
+  fireEvent.change(screen.getByLabelText('동 선택'), { target: { value: 'B1' } })
+  await waitFor(() => expect(api.page).toHaveBeenCalledWith({ search: '', region: 'B', area: 'B1', all: false }, undefined))
+})
 test('opening performs no query; a region loads one page and a rerender does not reload', async () => {
   vi.useFakeTimers()
   const view = render(<RestaurantCatalog {...props} />)

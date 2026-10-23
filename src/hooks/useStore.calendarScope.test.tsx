@@ -242,14 +242,16 @@ test.each(['/territory', '/map'])('home round trips to %s retain old/future and 
   }
 })
 
-test.each(['/territory', '/map'])('personal %s round trips reuse the complete shared event snapshot without full reads', async path => {
+test.each([
+  ['user', '/territory'], ['user', '/map'], ['leader', '/territory'], ['leader', '/map'],
+] as const)('%s %s round trips reuse the complete shared event snapshot without full reads', async (role, path) => {
   const now = new Date('2026-10-23T12:00:00')
   const personal = [{ id: 1, date: '2026-08-02', applicants: ['A'], cardAssignments: [
     { userName: 'A', assignedCardId: 10 }, { userName: 'Other team', assignedCardId: 20 },
   ] }, { id: 2, date: '2027-08-08', applicants: [], cardAssignments: [{ userName: 'A', assignedCardId: 30 }] }]
   state.scoped.mockImplementation(async scope => scope.startsWith('service:') ? personal : [])
-  const { result, rerender } = renderHook(({ route }) => useStore(true, 'user', undefined,
-    calendarReadScope(route, path === '/map' && route === path ? '?assignmentMap=1' : '', '', false, 'true', now, 'user', 'A')),
+  const { result, rerender } = renderHook(({ route }) => useStore(true, role, undefined,
+    calendarReadScope(route, path === '/map' && route === path ? '?assignmentMap=1' : '', '', false, 'true', now, role, 'A')),
   { initialProps: { route: '/' } })
   await waitFor(() => expect(result.current.loading).toBe(false))
   state.reads = []
@@ -259,6 +261,27 @@ test.each(['/territory', '/map'])('personal %s round trips reuse the complete sh
     expect(result.current.calendarEvents).toEqual(personal)
     rerender({ route: '/' })
     await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  }
+  expect(state.scoped).toHaveBeenCalledTimes(2)
+  expect(state.reads).toEqual([])
+})
+
+test('leader home-zone-map-service round trips share one complete team snapshot without full calendar promotion', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', undefined)
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  const now = new Date('2026-10-23T12:00:00')
+  const teams = [{ id: 1, date: '2026-08-02', applicants: ['A', 'Other'], cardAssignments: [
+    { userName: 'A', assignedCardId: 10 }, { userName: 'Other', assignedCardId: 20 },
+  ] }]
+  state.scoped.mockImplementation(async scope => scope.startsWith('service:') ? teams : [])
+  const { result, rerender } = renderHook(({ route }) => useStore(true, 'leader', undefined,
+    calendarReadScope(route, '', '', false, calendarWindowEnabled() ? 'true' : 'false', now, 'leader', 'A')), { initialProps: { route: '/' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  for (const route of ['/zone', '/map', '/territory', '/', '/zone', '/map']) {
+    rerender({ route })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    if (route !== '/') expect(result.current.calendarEvents).toEqual(teams)
   }
   expect(state.scoped).toHaveBeenCalledTimes(2)
   expect(state.reads).toEqual([])
@@ -291,15 +314,17 @@ test('changing role clears personal snapshots before returning to the same scope
   expect(state.scoped).toHaveBeenLastCalledWith(service)
 })
 
-test.each(['user', 'leader', 'admin', 'developer'] as const)('production calendar flag narrows only user service routes: %s', async role => {
+test.each((['user', 'leader', 'admin', 'developer'] as const).flatMap(role =>
+  ['/map', '/territory', '/zone'].map(path => ({ role, path }))))('production calendar gate preserves role boundaries: $role $path', async ({ role, path }) => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
   vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
-  const scope = calendarReadScope('/map', '?assignmentMap=1', '', false,
+  const query = path === '/map' ? '?assignmentMap=1' : path === '/territory' ? '?assignmentEvent=1' : ''
+  const scope = calendarReadScope(path, query, '', false,
     calendarWindowEnabled() ? 'true' : 'false', new Date('2026-10-23T12:00:00'), role, 'A')
   const { result } = renderHook(() => useStore(true, role, undefined, scope))
   await waitFor(() => expect(result.current.loading).toBe(false))
-  if (role === 'user') {
-    expect(scope).toBe('service:["A","2026-10-23",1]')
+  if (role === 'leader' || (role === 'user' && path !== '/zone')) {
+    expect(scope).toBe(`service:["A","2026-10-23",${path === '/zone' ? 'null' : '1'}]`)
     expect(state.scoped).toHaveBeenCalledWith(scope)
     expect(state.reads).not.toContain('calendar_events')
   } else {
@@ -309,12 +334,13 @@ test.each(['user', 'leader', 'admin', 'developer'] as const)('production calenda
   }
 })
 
-test('production flag off restores full volunteer service reads', async () => {
+test.each((['user', 'leader'] as const).flatMap(role =>
+  ['/map', '/territory', '/zone'].map(path => ({ role, path }))))('production flag off restores full reads: $role $path', async ({ role, path }) => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
   vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'false')
-  const scope = calendarReadScope('/territory', '', '', false,
-    calendarWindowEnabled() ? 'true' : 'false', undefined, 'user', 'A')
-  const { result } = renderHook(() => useStore(true, 'user', undefined, scope))
+  const scope = calendarReadScope(path, '', '', false,
+    calendarWindowEnabled() ? 'true' : 'false', undefined, role, 'A')
+  const { result } = renderHook(() => useStore(true, role, undefined, scope))
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(scope).toBe('full')
   expect(state.scoped).not.toHaveBeenCalled()

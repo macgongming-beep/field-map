@@ -11,6 +11,7 @@ import { createCardBoundaryReader } from './cardBoundaryRecovery'
 import { createRecipientStoreReader } from '../lib/recipientStore'
 import { fetchCardSummaries } from '../lib/cardSummaries'
 import { cardReadProjection } from './cardReadProjection'
+import { recipientCardScopeEnabled } from '../lib/recipientCardScope'
 import { supabase } from '../lib/supabase'
 import { trackFetch } from '../lib/perfTracker'
 import { withLoadDeadline } from '../lib/loadDeadline'
@@ -302,13 +303,27 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           })))
         }
 
-        // cards에 card_leader_assignments 컬럼이 없으면 폴백
+        const scope = recipientCardScopeEnabled(role, Boolean(recipientReader)) ? recipientReader!.cardIds() : null
+        const readCards = async (withLeaders: boolean) => {
+          const batches = scope == null ? [null] : Array.from({ length: Math.ceil(scope.length / 100) }, (_, i) => scope.slice(i * 100, (i + 1) * 100))
+          const data: RawCard[] = []
+          for (const batch of batches) {
+            const result = await fetchAllPages((from, to) => {
+              let query = supabase.from('cards').select(cardReadProjection(role, withLeaders)).order('id')
+              if (batch != null) query = query.in('id', batch)
+              return query.range(from, to)
+            })
+            if (result.error) return { data, error: result.error }
+            const rows = result.data as unknown as RawCard[]
+            if (batch != null && rows.some(row => !batch.includes(row.id))) throw new Error('Unexpected recipient card')
+            data.push(...rows)
+          }
+          if (new Set(data.map(row => row.id)).size !== data.length) throw new Error('Duplicate card response')
+          return { data, error: null }
+        }
+        // Legacy-schema fallback keeps the exact same scope.
         const cardsQueryPromise = (async () => {
-          const withLeader = await fetchAllPages((from, to) => supabase
-            .from('cards')
-            .select(cardReadProjection(role))
-            .order('id')
-            .range(from, to))
+          const withLeader = await readCards(true)
           if (!withLeader.error) {
             setMissingCardLeaderAssignmentsTable(false)
             return withLeader
@@ -316,8 +331,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           const message = (withLeader.error as { message?: string })?.message ?? ''
           if (message.includes('card_leader_assignments')) {
             setMissingCardLeaderAssignmentsTable(true)
-            return fetchAllPages((from, to) => supabase
-              .from('cards').select(cardReadProjection(role, false)).order('id').range(from, to))
+            return readCards(false)
           }
           return withLeader
         })()

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Building, TerritoryCard, Unit } from '../types'
 import { createRestaurantCatalog, type RestaurantCatalogItem, type RestaurantCatalogQuery } from '../lib/restaurantCatalog'
 import { msg } from '../lib/msg'
+import { useRestaurantCardDirectory } from '../hooks/useCardDirectory'
+import { CardDirectoryReadStatus } from './CardDirectoryReadStatus'
 import { translateKoreanAddress, type AppLanguage } from '../i18n'
 
 type Props = {
@@ -11,13 +13,15 @@ type Props = {
 }
 
 export function RestaurantCatalog(props: Props) {
+  const directory = useRestaurantCardDirectory(props.cards)
   const [region, setRegion] = useState('')
   const [area, setArea] = useState('')
-  const regions = useMemo(() => [...new Set(props.cards.map(card => card.region || '기타'))].sort(), [props.cards])
-  const areas = useMemo(() => [...new Set(props.cards.filter(card => (card.region || '기타') === region).map(card => card.area).filter(Boolean))].sort(), [props.cards, region])
+  const regions = useMemo(() => [...new Set(directory.cards.map(card => card.region || '기타'))].sort(), [directory.cards])
+  const areas = useMemo(() => [...new Set(directory.cards.filter(card => (card.region || '기타') === region).map(card => card.area).filter(Boolean))].sort(), [directory.cards, region])
   const query = useMemo(() => ({ search: props.search, region: region && region !== '*' ? region : null, area: area || null, all: region === '*' }), [props.search, region, area])
   const enabled = Boolean(props.search.trim() || region)
   return <>
+    <CardDirectoryReadStatus {...directory} />
     <div className="restaurant-catalog-filters">
       <select aria-label={msg('지역 선택')} value={region} onChange={event => { setRegion(event.target.value); setArea('') }}>
         <option value="">{msg('지역 선택')}</option>

@@ -22,6 +22,8 @@ import { msg } from '../lib/msg'
 import { t } from '../i18n'
 import { AssignmentEditor } from './assignment/AssignmentEditor'
 import { buildSharedAssignmentTeams } from './admin/sharedAssignmentTeams'
+import { useSharedCardNames } from '../hooks/useCardDirectory'
+import { CardDirectoryReadStatus } from './CardDirectoryReadStatus'
 import { ParticipantAddContent } from './calendar/ParticipantAddContent'
 import { eventParticipantNameKey, type EventParticipantUser } from '../utils/eventParticipantUsers'
 import { CartApplicantSection } from './calendar/CartApplicantSection'
@@ -967,9 +969,10 @@ function SharedAssignmentTeams({ event, cards, informalAssets = [], eventInforma
   buildings?: Building[]
   eventRestaurantAssignments?: EventRestaurantAssignment[]
 }) {
+  const names = useSharedCardNames(event, cards)
   if (event.assignmentStatus !== 'shared') return null
 
-  const teams = buildSharedAssignmentTeams(event, cards, informalAssets, eventInformalAssignments, buildings, eventRestaurantAssignments)
+  const teams = buildSharedAssignmentTeams(event, names.cards, informalAssets, eventInformalAssignments, buildings, eventRestaurantAssignments)
   if (teams.length === 0) return null
 
   return (
@@ -977,6 +980,7 @@ function SharedAssignmentTeams({ event, cards, informalAssets = [], eventInforma
       <div className="cal-section-head">
         <h3>확정된 팀</h3>
       </div>
+      <CardDirectoryReadStatus {...names} />
       <div className="shared-assignment-list">
         {teams.map((team) => {
           const primaryCard = team.cardNames[0] ?? '카드 미배정'

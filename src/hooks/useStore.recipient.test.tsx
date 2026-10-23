@@ -13,6 +13,8 @@ const state = vi.hoisted(() => ({
   unitParent: 20, insertError: false, unitLookupError: false,
   historyColumns: [] as string[],
   cardColumns: [] as string[],
+  cardFilters: [] as unknown[][],
+  ignoreCardFilter: false,
   missingLeaderTable: false,
   calendarFilters: [] as [string, unknown][][],
   calendarResponses: [] as Promise<{ data: Record<string, unknown>[]; error: null }>[],
@@ -25,6 +27,7 @@ vi.mock('../lib/recipientStore', () => ({ createRecipientStoreReader: () => ({
   validateCards: (ids: number[]) => { if (state.allowed.some((id) => !ids.includes(id))) throw new Error('A requested card is unavailable') },
   read: async () => ({ buildings: state.buildings, boundaries: state.allowed.map((card_id) => ({ card_id, points: [{ lat: 1, lng: 1 }, { lat: 2, lng: 1 }, { lat: 2, lng: 2 }] })) }),
   get scoped() { return true }, allowsCard: (id: number) => state.allowed.includes(id),
+  cardIds: () => [...state.allowed],
 }) }))
 vi.mock('../lib/cardSummaries', () => ({ fetchCardSummaries: state.summaries }))
 vi.mock('./recipientRecovery', () => ({ recoverRecipientBuildings: state.recover, readRecipientBoundaries: state.boundaries }))
@@ -54,6 +57,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       return Promise.resolve({ data: table === 'service_sessions' ? { id: 777 } : { id: filters.find(([key]) => key === 'id')?.[1], building_id: state.unitParent }, error: state.unitLookupError ? new Error('offline') : null })
     }
     q.eq = (key: string, value: unknown) => { filters.push([key, value]); return q }
+    q.in = (key: string, value: unknown) => { filters.push([key, value]); return q }
     q.range = (from: number, to: number) => { range = [from, to]; return q }
     q.limit = () => { lookup = true; return q }
     q.then = async (resolve: (value: unknown) => void) => {
@@ -67,7 +71,8 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       if (table === 'calendar_events' && !writing && state.calendarResponses.length) {
         return resolve(await state.calendarResponses.shift())
       }
-      const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
+      if (table === 'cards' && !lookup) state.cardFilters.push(filters)
+      const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].filter(id => state.ignoreCardFilter || filters.every(([key, value]) => key !== 'id' || !Array.isArray(value) || value.includes(id))).map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
         : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
         : table === 'return_visits' ? writing ? [{ id: 7 }] : state.returnRows
         : table === 'return_visit_logs' ? state.returnLogs
@@ -84,8 +89,11 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: 'test', type: '주택', lat: 1, lng: 1, warning: false, memo: null,
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
+  // Unrelated store fixtures use full cards; scoped-card tests opt in explicitly.
+  vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'false')
   state.creationAction = ''
   state.cardColumns = []
+  state.cardFilters = []; state.ignoreCardFilter = false
   state.missingLeaderTable = false
   state.returnRows = []; state.returnLogs = []
   state.failedTable = ''
@@ -101,6 +109,72 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test.each([
+  { demo: 'true', flag: 'true', scoped: true },
+  { demo: undefined, flag: 'true', scoped: true },
+  { demo: 'false', flag: 'true', scoped: true },
+  { demo: 'true', flag: undefined, scoped: true },
+  { demo: 'true', flag: 'false', scoped: false },
+  { demo: undefined, flag: undefined, scoped: false },
+].flatMap(config => [false, true].map(legacy => ({ ...config, legacy }))))(
+  'card scope reaches store reads: demo=$demo flag=$flag legacy=$legacy', async ({ demo, flag, scoped, legacy }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', flag)
+  state.missingLeaderTable = legacy
+  if (scoped) state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }])
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  expect(result.current.cards.map(card => card.id)).toEqual(scoped ? [1] : [1, 2])
+  expect(state.cardFilters).toEqual(scoped ? [[['id', [1]]]] : [[]])
+  expect(state.summaries).toHaveBeenLastCalledWith(scoped ? [1] : [1, 2])
+})
+
+test.each([false, true])('production scoped cards retain empty assigned cards and refresh grants (legacy=%s)', async legacy => {
+  vi.stubEnv('VITE_DEMO_MODE', undefined)
+  vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
+  state.missingLeaderTable = legacy
+  state.buildings = []
+  state.summaries.mockResolvedValue([{ id: 1, units: 0, completed: 0, progress: 0 }])
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  expect(result.current.cards.map(card => card.id)).toEqual([1])
+  expect(state.cardFilters).toEqual([[['id', [1]]]])
+  expect(state.summaries).toHaveBeenLastCalledWith([1])
+  state.allowed = [2]
+  state.summaries.mockResolvedValue([{ id: 2, units: 10, completed: 5, progress: 50 }])
+  await act(async () => { await result.current.refetchSlices(['cards']) })
+  expect(result.current.cards.map(card => [card.id, card.progress])).toEqual([[2, 50]])
+  expect(state.summaries).toHaveBeenLastCalledWith([2])
+  state.allowed = []
+  state.summaries.mockResolvedValue([])
+  const count = state.cardFilters.length
+  await act(async () => { await result.current.refetchSlices(['cards']) })
+  expect(result.current.cards).toEqual([])
+  expect(state.cardFilters).toHaveLength(count)
+})
+
+test('scoped cards reject foreign response rows rather than trusting the server filter', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
+  state.ignoreCardFilter = true
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).not.toBeNull()
+  expect(result.current.cards).toEqual([])
+  expect(state.summaries).not.toHaveBeenCalled()
+})
+
+test.each(['true', undefined].flatMap(demo =>
+  (['user', 'leader', 'admin', 'developer'] as const).map(role => ({ demo, role }))))(
+  'full store remains complete for $role with scoped flag (demo=$demo)', async ({ demo, role }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, role))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.cards.map(card => card.id)).toEqual([1, 2])
+  expect(state.cardFilters).toEqual([[]])
+})
 
 test.each(['user', 'leader', 'admin', 'developer'] as const)('demo card reads preserve %s fields and refreshed progress', async role => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')
