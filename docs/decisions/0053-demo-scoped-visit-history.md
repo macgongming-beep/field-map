@@ -1,6 +1,6 @@
 # Separate recipient visit histories from full statistics
 
-- Status: demo implementation verified automatically; deployed UI verification pending
+- Status: demo deployed and UI save/cancel/statistics verified; production unchanged
 - Date: 2026-10-26
 - Related: 0015 recipient loading, 0049 return-detail retention, 0052 recent sessions
 
@@ -53,6 +53,48 @@ freeze the data: normal foreground/realtime/manual refresh is unchanged.
   explicit false, calendar disabled, old month, personal service and deep links
   are covered. Shared/history/attendance tests remain unchanged and pass.
 - No DB schema, RLS, write permission or production configuration change.
+
+## Deployed demo verification
+
+Code commit: `6d06d81`. Demo deployment: `dpl_Bdmgmdgnyv2jB88GqnEfhpCTknbc`.
+Canonical demo served `/assets/index-DK7fbrA4.js`; the PWA update was applied
+before testing. The compiled store contains the scoped-history path. No
+production deployment or environment variable was changed.
+
+Using the actual demo recipient account, a disposable event (101) assigned
+existing card 1. Browser actions, not a direct record insert, saved a missing
+visit for building 1 / unit 2 (102):
+
+- Before: unit status unvisited; no valid unit-2 history; three valid global
+  histories (IDs 1, 2 and 41).
+- Save: history 74 appeared in unit detail as one record. The building changed
+  from 1/3 to 2/3 and the assignment map from 2/16 to 3/16.
+- Desktop statistics with the same recipient account showed total 4, met 1,
+  absent 2, excluded 1, including the original record outside card 1.
+- The unit-detail menu invalidated the test record through the normal UI. The
+  detail returned to zero records; building/map totals returned to 1/3 and 2/16.
+- Desktop statistics returned to total 3 (one of each result). A demo DB read
+  independently confirmed unit 2 unvisited, history 74 invalidated and original
+  valid histories 1, 2 and 41 unchanged.
+- The disposable event and its two generated sessions (143, 144) were removed;
+  the invalidated history remains as the normal audit trail. No existing
+  assignment, session or valid visit was deleted.
+
+`scripts/smokeScopedHistoryDemo.mjs` provides guarded demo fixture setup, read-only
+checks and cleanup, with credentials supplied via `DEMO_ENV_FILE`. It refuses a
+non-demo Supabase origin and never prints the authentication token.
+
+Home -> personal settings -> home rendered without the global loading screen.
+The assertion of zero additional **store** requests comes from integration
+tests, not browser wire capture. Settings may still request their own login
+history and home may reload its suggestion. Network transfer bytes were not
+captured by this browser tool, so no MB reduction is claimed.
+
+UI evidence (local scratch screenshots): `demo-scoped-history-saved.png`,
+`demo-scoped-history-cancelled.png`, `demo-scoped-history-statistics-four.png`,
+`demo-scoped-history-statistics-restored.png`. Mobile checks used a 430x900
+browser viewport, not a physical phone. Mobile has no `/stats` view; complete
+statistics were checked in the desktop layout. Viewport was reset afterward.
 
 ## Rollout
 
