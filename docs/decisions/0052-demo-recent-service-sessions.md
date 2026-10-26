@@ -1,6 +1,6 @@
 # Recent personal service-session reads
 
-- Status: demo deployed; production unchanged, review pending
+- Status: reviewed and enabled in production; live request inspection pending
 - Date: 2026-10-26
 - Related: 0018 personal-session loading, 0021 session-only post-save refresh
 
@@ -96,10 +96,44 @@ Chrome native control timed out; UI checks used the in-app browser instead.
 
 ## Rollout and limits
 
-No production deployment, database schema change, RLS change or production write.
-Production activation requires separate approval and a build with
-`VITE_RECENT_SESSIONS_ENABLED=true`. Roll back with explicit false and rebuild;
-installed clients must apply the update. Other optimizations remain independent.
+Production activation was separately approved after review of `897bcc9`.
+On 2026-10-26 the change was integrated onto production base `7fd4e80` as
+`2ce5ef0`, pushed to main, and deployed with
+`VITE_RECENT_SESSIONS_ENABLED=true`. No other feature flag was changed, and no
+schema/RLS change or test-record write was performed in production.
+
+Roll back with explicit false and rebuild; installed clients must apply the
+update. This restores legacy behavior, including the existing personal-recipient
+flag, not necessarily an all-user read for every role. Other optimizations remain
+independent.
+
+### Production verification
+
+- Production-base integration: 1,854 tests across 207 files, lint and build passed.
+  This excludes unrelated demo-only tests/features from the 1,889-test demo base.
+- READY deployment `dpl_8JvEQoKdG3757EV1tehgQgPAdpz4` was promoted to
+  https://chinese-territory-app.vercel.app.
+- Canonical HTML references `/assets/index-Az3qSMLK.js`. Its store chunk is
+  `/assets/TerritoryReportView-C2yb9CaF.js`, byte-identical to the inspected
+  candidate (SHA-256
+  `a71c1fda06f59099008e29af0f660fcd9e464ca18ad476dea8e65e1603b98cac`).
+- Compiled scope defaults to enabled, restricts user/leader/admin by authenticated
+  `user_name` and `service_date` cutoff, and retains all-page reads. Actual
+  developer is excluded from both the recent scope and legacy user-only filter.
+  Desktop statistics still consume the complete session array.
+- `useStore.recipient.test.tsx` covers developer historical data across users and
+  1,001 rows/pages on initial and repeated reads. The user requested code/test
+  verification only for developer statistics; no production developer login or
+  role change was attempted.
+- Applied the normal PWA update in the authenticated production admin session.
+  An already-waiting older update required a second update to reach
+  `index-Az3qSMLK.js`. Profile and home rendered normally; home retained 609 cards
+  and 3,268 units. Local screenshot:
+  `/tmp/field-map-recent-sessions-production-home.png`.
+- Native Chrome access timed out, and the in-app browser does not expose network
+  capture. Therefore the exact live request URL/response was NOT independently
+  observed. Enabled compiled filtering and UI success are confirmed, but are not
+  reported as a captured production request or measured byte saving.
 
 This reduces rows per repeated ordinary read, not the number of refresh triggers.
 Developers intentionally still read full history. Demo rows and API smoke do not
