@@ -7,6 +7,7 @@ export function makeServiceSessionMutations(deps: {
   fetchAll: () => Promise<void>
   serviceSessions: ServiceSession[]
   buildings: Building[]
+  narrowSessionRead?: boolean
 }) {
   const { fetchAll, serviceSessions, buildings } = deps
 
@@ -143,7 +144,18 @@ export function makeServiceSessionMutations(deps: {
   }
 
   const endServiceSession = async (sessionId: number) => {
-    const targetSession = serviceSessions.find((session) => session.id === sessionId)
+    let targetSession: Pick<ServiceSession, 'calendarEventId' | 'primaryCardId' | 'timeSlot'> | undefined = serviceSessions.find((session) => session.id === sessionId)
+    // An explicit old-session action still needs its logging metadata even when
+    // ordinary screens no longer keep that session's history in memory.
+    if (!targetSession && deps.narrowSessionRead) {
+      const { data, error } = await supabase.from('service_sessions')
+        .select('id, calendar_event_id, primary_card_id, time_slot').eq('id', sessionId).single()
+      if (error || data?.id !== sessionId) {
+        reportMutationError(msg('봉사 세션을 종료하지 못했습니다.'), error ?? new Error('Session unavailable'))
+        return
+      }
+      targetSession = { calendarEventId: data.calendar_event_id, primaryCardId: data.primary_card_id, timeSlot: data.time_slot }
+    }
     const result = await supabase
       .from('service_sessions')
       .update({ status: 'ended', ended_at: new Date().toISOString() })

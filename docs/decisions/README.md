@@ -30,6 +30,8 @@
 
 ## 새 기록 틀
 
+봉사 세션 반복 조회: [0052 최근 본인 세션과 전체 통계 분리](0052-demo-recent-service-sessions.md)
+
 아이폰 세대 상세 헤더: [0051 세대 상세 안전 영역](0051-unit-detail-safe-area.md)
 모바일 홈 일정 바로 열기: [0050 데모 홈 일정 상세](0050-demo-home-event-detail.md)
 재방문 상세 유지·지도 경로 운영 적용: [0049 재방문 상세 조회 유지](0049-demo-return-detail-store-retention.md)
