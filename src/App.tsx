@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { calendarReadScope, calendarWindowEnabled } from './hooks/calendarReadScope'
+import { useSettingsCalendarScope } from './hooks/useSettingsCalendarScope'
 import { CalendarReadContext } from './hooks/CalendarReadContext'
 import { homeEventDetailId } from './lib/eventDetailNavigation'
 import { Toast } from './components/Toast'
@@ -104,7 +105,9 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
     setCalendarDemand(previous => previous.month === month && previous.full === full ? previous : { month, full })
   }, [])
   const windowedCalendar = calendarWindowEnabled()
-  const calendarScope = calendarReadScope(location.pathname, location.search, calendarDemand.month, calendarDemand.full, windowedCalendar ? 'true' : 'false', undefined, actualRole, user?.name)
+  const requestedScope = calendarReadScope(location.pathname, location.search, calendarDemand.month, calendarDemand.full, windowedCalendar ? 'true' : 'false', undefined, actualRole, user?.name)
+  const homeScope = calendarReadScope('/', '', '', false, windowedCalendar ? 'true' : 'false', undefined, actualRole, user?.name)
+  const calendarScope = useSettingsCalendarScope(requestedScope, location.pathname, location.search, homeScope, windowedCalendar)
 
   const {
     calendarScopeReady, calendarReadError, retryCalendarRead,
