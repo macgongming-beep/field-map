@@ -5,6 +5,7 @@ import { useStore } from './useStore'
 import type { RawBuilding } from './storeTransforms'
 import { recipientStoreEnabled } from '../lib/recipientStore'
 import { calendarReadScope, calendarWindowEnabled } from './calendarReadScope'
+import { makeServiceSessionMutations } from './storeMutations/serviceSessions'
 
 const state = vi.hoisted(() => ({
   creationAction: '' as '' | 'created' | 'existing',
@@ -21,6 +22,8 @@ const state = vi.hoisted(() => ({
   calendarFilters: [] as [string, unknown][][],
   calendarResponses: [] as Promise<{ data: Record<string, unknown>[]; error: null }>[],
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
+  sessionCutoffs: [] as (string | undefined)[],
+  failedSessionPage: -1,
   buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
 }))
 vi.mock('../lib/recipientStore', async importOriginal => ({ ...await importOriginal<typeof import('../lib/recipientStore')>(), createRecipientStoreReader: () => ({
@@ -41,6 +44,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     let lookup = false
     let writing = false
     let selected = ''
+    let sessionCutoff: string | undefined
     let range: [number, number] = [0, 999]
     const filters: [string, unknown][] = []
     const q: Record<string, unknown> = {}
@@ -59,6 +63,10 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       return Promise.resolve({ data: table === 'service_sessions' ? { id: 777 } : table === 'informal_groups' ? { id: 7 } : { id: filters.find(([key]) => key === 'id')?.[1], building_id: state.unitParent }, error: state.unitLookupError ? new Error('offline') : null })
     }
     q.eq = (key: string, value: unknown) => { filters.push([key, value]); return q }
+    q.gte = (key: string, value: string) => {
+      if (table === 'service_sessions' && key === 'service_date') sessionCutoff = value
+      return q
+    }
     q.in = (key: string, value: unknown) => { filters.push([key, value]); return q }
     q.range = (from: number, to: number) => { range = [from, to]; return q }
     q.limit = () => { lookup = true; return q }
@@ -67,7 +75,10 @@ vi.mock('../lib/supabase', () => ({ supabase: {
         return resolve({ data: null, error: { message: 'card_leader_assignments missing' } })
       }
       state.reads.push(writing ? `${table}:insert` : table)
-      if (table === 'service_sessions') state.sessionFilters.push(filters)
+      if (table === 'service_sessions') {
+        state.sessionFilters.push(filters)
+        state.sessionCutoffs.push(sessionCutoff)
+      }
       if (table === 'restaurant_requests' && !writing) state.requestFilters.push(filters)
       if (table === 'calendar_events' && !writing) state.calendarFilters.push([...filters])
       if (table === 'calendar_events' && !writing && state.calendarResponses.length) {
@@ -81,8 +92,9 @@ vi.mock('../lib/supabase', () => ({ supabase: {
         : writing && table === 'buildings' ? [{ id: filters.find(([key]) => key === 'id')?.[1] }]
         : writing && (table === 'units' || table === 'informal_groups' || table === 'informal_assets') ? [{ id: 100 }]
         : table === 'restaurant_requests' ? writing ? [{ id: 61 }] : state.requests.filter(row => filters.every(([key, value]) => row[key] === value))
-        : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(range[0], range[1] + 1) : []
-      return resolve({ data, error: (!writing && table === state.failedTable) || (writing && state.insertError) ? new Error('offline') : null })
+        : table === 'service_sessions' ? state.sessions.filter((row) => filters.every(([key, value]) => row[key] === value)
+          && (!sessionCutoff || (typeof row.service_date === 'string' && row.service_date >= sessionCutoff))).slice(range[0], range[1] + 1) : []
+      return resolve({ data, error: (!writing && (table === state.failedTable || (table === 'service_sessions' && range[0] === state.failedSessionPage))) || (writing && state.insertError) ? new Error('offline') : null })
     }
     return q
   },
@@ -103,6 +115,8 @@ beforeEach(() => {
   state.requestFilters = []
   state.unitParent = 20; state.insertError = false; state.unitLookupError = false; state.historyColumns = []
   state.sessions = []; state.sessionFilters = []
+  state.sessionCutoffs = []
+  state.failedSessionPage = -1
   state.calendarFilters = []
   state.calendarResponses = []
   state.changed.mockReset()
@@ -110,7 +124,103 @@ beforeEach(() => {
   state.buildings = [building]; state.allowed = [1]; state.reads = []
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
-afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test.each(['user', 'leader', 'admin'] as const)('recent sessions keep today, ended and recent cards on initial/recovery/manual reads: %s', async role => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 9, 26, 0, 15))
+  state.sessions = [
+    { id: 1, user_name: 'Me', service_date: '2026-10-26', started_at: '2026-10-25T15:05:00Z', status: 'active', primary_card_id: 1 },
+    { id: 2, user_name: 'Me', service_date: '2026-10-26', status: 'ended', ended_at: '2026-10-25T15:06:00Z' },
+    { id: 3, user_name: 'Me', service_date: '2026-10-18', status: 'ended', assigned_card_id: 2 },
+    { id: 4, user_name: 'Me', service_date: '2020-01-01', status: 'ended' },
+    { id: 5, user_name: 'Other', service_date: '2026-10-26', status: 'active' },
+    { id: 6, user_name: 'Me', service_date: '2026-10-28', status: 'active' },
+    { id: 7, user_name: 'Me', service_date: '2026-10-26', status: 'expired' },
+    { id: 8, user_name: 'Me', service_date: null, status: 'ended' },
+  ]
+  // No recipient reader: full-store routes and privileged roles also narrow.
+  const { result } = renderHook(() => useStore(true, role, undefined, undefined, 'Me'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  expect(result.current.serviceSessions.map(s => s.id)).toEqual([1, 2, 3, 6, 7])
+  expect(result.current.serviceSessions[2].assignedCardId).toBe(2)
+  await act(async () => { await result.current.refetchSlices(['visits'], { triggeredBy: 'foreground' }) })
+  await act(async () => { await result.current.refetchAll() })
+  expect(state.sessionFilters).toEqual(Array.from({ length: 3 }, () => [['user_name', 'Me']]))
+  expect(state.sessionCutoffs).toEqual(Array(3).fill('2026-10-18'))
+  vi.setSystemTime(new Date(2026, 9, 27, 0, 15))
+  await act(async () => { await result.current.refetchSlices(['visits'], { triggeredBy: 'foreground' }) })
+  expect(state.sessionCutoffs.at(-1)).toBe('2026-10-19')
+  expect(result.current.serviceSessions.map(s => s.id)).toEqual([1, 2, 6, 7])
+})
+
+test.each(['user', 'leader', 'admin'] as const)('recent session start/end refresh keeps status, time and history linkage: %s', async role => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 9, 26, 12))
+  localStorage.setItem('currentVisitor', 'Me')
+  const { result } = renderHook(() => useStore(true, role, undefined, undefined, 'Me'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const histories = result.current.visitHistories
+  state.sessions = [{ id: 777, user_name: 'Me', service_date: '2026-10-26', started_at: '2026-10-26T03:00:00Z', status: 'active', primary_card_id: 1 }]
+  state.reads = []
+  await act(async () => { expect(await result.current.startServiceSession({ role, timeSlot: '오후', primaryCardId: 1 })).toBe(777) })
+  const mutations = makeServiceSessionMutations({ fetchAll: async () => {}, buildings: [], serviceSessions: result.current.serviceSessions })
+  expect(mutations.getRecordServiceSession()?.id).toBe(777)
+  expect(result.current.serviceSessions[0].status).toBe('active')
+  state.sessions[0] = { ...state.sessions[0], status: 'ended', ended_at: '2026-10-26T04:00:00Z' }
+  await act(async () => { await result.current.endServiceSession(777) })
+  expect(result.current.serviceSessions[0].endedAt).toBe('2026-10-26T04:00:00Z')
+  expect(result.current.serviceSessions[0].status).toBe('ended')
+  expect(result.current.visitHistories).toBe(histories)
+  expect(state.reads).not.toContain('visit_histories')
+  expect(state.sessionCutoffs.filter(Boolean).every(date => date === '2026-10-18')).toBe(true)
+})
+
+test.each([
+  { role: 'developer' as const, demo: 'true', flag: undefined },
+  { role: 'admin' as const, demo: 'false', flag: undefined },
+  { role: 'admin' as const, demo: 'true', flag: 'false' },
+])('developer statistics/disabled flag keep every historical page: $role $demo $flag', async ({ role, demo, flag }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RECENT_SESSIONS_ENABLED', flag)
+  state.sessions = Array.from({ length: 1001 }, (_, id) => ({ id, user_name: id % 2 ? 'Me' : 'Other', service_date: '2020-01-01', started_at: '2020-01-01T00:00:00Z', ended_at: '2020-01-01T01:00:00Z', status: 'ended' }))
+  const { result } = renderHook(() => useStore(true, role, undefined, undefined, 'Me'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.serviceSessions).toHaveLength(1001)
+  expect(result.current.serviceSessions.filter(s => s.userName === 'Other')).toHaveLength(501)
+  await act(async () => { await result.current.refetchSlices(['visits'], { triggeredBy: 'foreground' }) })
+  expect(result.current.serviceSessions).toHaveLength(1001)
+  expect(state.sessionFilters).toEqual([[], [], [], []])
+  expect(state.sessionCutoffs.every(date => date === undefined)).toBe(true)
+})
+
+test('recent reads are paginated and a failure preserves the last complete snapshot until retry', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 9, 26, 12))
+  state.sessions = Array.from({ length: 1001 }, (_, id) => ({ id, user_name: 'Me', service_date: '2026-10-26', status: 'active' }))
+  const { result } = renderHook(() => useStore(true, 'admin', undefined, undefined, 'Me'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.serviceSessions).toHaveLength(1001)
+  expect(state.sessionCutoffs).toEqual(['2026-10-18', '2026-10-18'])
+  const previous = result.current.serviceSessions
+  const histories = result.current.visitHistories
+  state.failedTable = 'service_sessions'
+  await act(async () => { await expect(result.current.refetchSlices(['visits'], { triggeredBy: 'foreground' })).rejects.toThrow('Service session data load failed') })
+  expect(result.current.serviceSessions).toBe(previous)
+  expect(result.current.visitHistories).toBe(histories)
+  state.failedTable = ''
+  state.failedSessionPage = 1000
+  await act(async () => { await expect(result.current.refetchSlices(['serviceSessions'])).rejects.toThrow('Service session data load failed') })
+  expect(result.current.serviceSessions).toBe(previous)
+  state.failedSessionPage = -1
+  state.sessions[0] = { ...state.sessions[0], status: 'ended' }
+  await act(async () => { await result.current.refetchSlices(['serviceSessions']) })
+  expect(result.current.serviceSessions[0].status).toBe('ended')
+})
 
 test.each([
   { demo: 'true', flag: undefined, calendar: 'true' },

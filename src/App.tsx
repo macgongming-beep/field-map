@@ -13,6 +13,7 @@ import { applyFontScale, loadFontScale } from './lib/fontScale'
 import { PwaInstallBanner } from './components/PwaInstall'
 import { PullToRefresh } from './components/PullToRefresh'
 import { useStore } from './hooks/useStore'
+import { recentSessionsEnabled } from './hooks/serviceSessionReadScope'
 import { useCalendarRealtime } from './hooks/useCalendarRealtime'
 import { usePlaceDeletionRealtime } from './hooks/usePlaceDeletionRealtime'
 import { useUnitCreationRealtime } from './hooks/useUnitCreationRealtime'
@@ -75,7 +76,9 @@ function App() {
   const location = useLocation()
   const recipient = Boolean(auth.user) && recipientStoreEnabled(auth.user!.role, location.pathname,
     location.search, import.meta.env.VITE_DEMO_MODE, import.meta.env.VITE_RECIPIENT_STORE_ENABLED)
-  return <AppSession key={`${auth.user?.id ?? 'guest'}:${recipient ? 'recipient' : 'full'}`}
+  // A rename/role change must not reuse a narrow session snapshot or its pending reads.
+  const sessionIdentity = recentSessionsEnabled() ? JSON.stringify([auth.user?.name, auth.user?.role]) : ''
+  return <AppSession key={`${auth.user?.id ?? 'guest'}:${recipient ? 'recipient' : 'full'}:${sessionIdentity}`}
     auth={auth} recipientUser={recipient ? auth.user!.name : undefined} />
 }
 
@@ -222,7 +225,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
     registerRestaurant,
     approveRestaurantRequest,
     rejectRestaurantRequest,
-  } = useStore(storeEnabled, actualRole, recipientUser, calendarScope)
+  } = useStore(storeEnabled, actualRole, recipientUser, calendarScope, user?.name)
 
   // Phase 2: 캘린더/배정 Realtime → calendar slice만 refetch
   // (useUserChats가 이 책임을 갖고 있었으나 전체 fetchAll 호출하던 증폭점 제거)

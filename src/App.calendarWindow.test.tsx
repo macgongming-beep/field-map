@@ -6,12 +6,15 @@ import App from './App'
 import { CalendarReadContext } from './hooks/CalendarReadContext'
 
 const state = vi.hoisted(() => ({
-  ready: true, scope: '',
+  ready: true, scope: '', sessionUser: undefined as string | undefined, role: '', mounts: 0,
   auth: { user: { id: 1, name: 'Admin', role: 'admin' }, allUsers: [], loading: false },
 }))
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => state.auth }))
-vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, _role: string, _user: string, scope: string) => {
+vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string, _user: string, scope: string, sessionUser?: string) => {
+  useState(() => { state.mounts += 1; return null })
   state.scope = scope
+  state.sessionUser = sessionUser
+  state.role = role
   return { loading: false, error: null, calendarScopeReady: state.ready, calendarReadError: false }
 } }))
 vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: () => {} }))
@@ -38,8 +41,35 @@ function CalendarConsumer() {
 }
 beforeEach(() => {
   state.ready = true
+  state.mounts = 0
+  state.auth.user = { id: 1, name: 'Admin', role: 'admin' }
   window.localStorage.clear()
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+})
+
+test.each(['user', 'leader', 'admin', 'developer'])('session reads get authenticated identity and actual %s role on a full-store route', async role => {
+  state.auth.user = { id: 1, name: 'Authenticated', role }
+  localStorage.setItem('currentVisitor', 'Stale cached name')
+  render(<MemoryRouter initialEntries={['/settings']}><App /></MemoryRouter>)
+  await waitFor(() => expect(state.sessionUser).toBe('Authenticated'))
+  expect(state.role).toBe(role)
+})
+
+test('recent session identity changes replace the store, while navigation retains it', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  const view = render(<MemoryRouter initialEntries={['/settings']}><App /></MemoryRouter>)
+  await screen.findByText('window context')
+  const initial = state.mounts
+  state.auth.user = { ...state.auth.user, name: 'Renamed' }
+  view.rerender(<MemoryRouter initialEntries={['/settings']}><App /></MemoryRouter>)
+  expect(state.sessionUser).toBe('Renamed')
+  expect(state.mounts).toBe(initial + 1)
+  state.auth.user = { ...state.auth.user, role: 'developer' }
+  view.rerender(<MemoryRouter initialEntries={['/settings']}><App /></MemoryRouter>)
+  expect(state.role).toBe('developer')
+  expect(state.mounts).toBe(initial + 2)
+  fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+  expect(state.mounts).toBe(initial + 2)
 })
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 

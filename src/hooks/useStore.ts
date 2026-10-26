@@ -3,6 +3,7 @@ import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
+import { recentSessionScope } from './serviceSessionReadScope'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
@@ -123,7 +124,7 @@ async function fetchAllPages<T>(
  * 예전에는 로그인 화면에서도 전부 받았다 (App.tsx 는 인증 판단보다 먼저
  * useStore() 를 호출한다). 실측으로 API 만 약 2.2MB · 47개 요청이었다.
  */
-export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string, requestedCalendarScope?: string) {
+export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string, requestedCalendarScope?: string, sessionUserName?: string) {
   const calendarScopeFeature = calendarWindowEnabled() && requestedCalendarScope !== undefined
   const calendarScope = calendarScopeFeature ? requestedCalendarScope : 'full'
   const calendarScopeRef = useRef(calendarScope)
@@ -369,6 +370,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       case 'serviceSessions':
       case 'visits': {
         const sessionsOnly = slice === 'serviceSessions'
+        // Recompute the cutoff per read, including foreground recovery after midnight.
+        const sessionScope = recentSessionScope(role, sessionUserName)
         // Phase 5 projection + 기간 필터
         // visit_histories: 최근 12개월만 (이전 데이터는 별도 통계 RPC 필요 시)
         const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
@@ -387,12 +390,15 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
             let query = supabase
             .from('service_sessions')
             .select('id, user_name, role, calendar_event_id, started_at, ended_at, service_date, time_slot, status, primary_card_id, assigned_card_id, assignment_id, source, memo, created_at')
-            // Only personal recipient views opt in. Statistics still mount a full store.
-            if ((import.meta.env.VITE_PERSONAL_SESSIONS_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
+            if (sessionScope) {
+              query = query.eq('user_name', sessionScope.userName).gte('service_date', sessionScope.since)
+            } else if ((import.meta.env.VITE_PERSONAL_SESSIONS_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
               && role === 'user' && recipientReader && recipientUser) {
               query = query.eq('user_name', recipientUser)
             }
-            return query.order('started_at', { ascending: false }).range(from, to)
+            query = query.order('started_at', { ascending: false })
+            if (sessionScope) query = query.order('id')
+            return query.range(from, to)
           }),
         ])
 
@@ -400,7 +406,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           throw new Error('Visit data load failed', { cause: visitsRes.error })
         }
         // A post-save read failure must preserve the previous snapshot and surface.
-        if (sessionsOnly && sessionsRes.error) {
+        if ((sessionsOnly || sessionScope) && sessionsRes.error) {
           throw new Error('Service session data load failed', { cause: sessionsRes.error })
         }
 
@@ -663,7 +669,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
     }
-  }, [recipientReader, recipientUser, role, calendarScopeFeature])
+  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
@@ -1205,6 +1211,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     makeServiceSessionMutations({
       fetchAll: refetchServiceSessions,
       serviceSessions, buildings,
+      narrowSessionRead: Boolean(recentSessionScope(role, sessionUserName)),
     })
 
   const { assignCardToEventParticipant, assignCardsToEventParticipantsBulk } =
