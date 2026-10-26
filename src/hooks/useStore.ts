@@ -4,6 +4,7 @@ import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { recentSessionScope } from './serviceSessionReadScope'
+import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
@@ -135,6 +136,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const calendarWindows = useRef(new Map<string, { events: CalendarEvent[]; at: number }>())
   // App keys this store by account/read mode. Never mix partial and full snapshots.
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
+  const scopedHistories = scopedVisitHistoryEnabled(role, Boolean(recipientReader))
+  const historyReadVersion = useRef(0)
   useEffect(() => {
     recipientReader?.resume()
     return () => recipientReader?.dispose()
@@ -212,6 +215,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     | 'cards'
     | 'cardBoundaries'
     | 'visits'
+    | 'visitHistories'
     | 'serviceSessions'
     | 'calendar'
     | 'resources'
@@ -247,6 +251,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const scoped = await recipientReader?.read()
         if (scoped) {
           const next = scoped.buildings.map(toBuilding)
+          if (scopedHistories) {
+            ++historyReadVersion.current
+            const ids = new Set(next.flatMap(building => building.units.map(unit => unit.id)))
+            setVisitHistories(current => current.filter(history => ids.has(history.unitId)))
+          }
           buildingsRef.current = next
           setBuildings(next)
           return 0
@@ -368,8 +377,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       }
 
       case 'serviceSessions':
+      case 'visitHistories':
       case 'visits': {
         const sessionsOnly = slice === 'serviceSessions'
+        const historiesOnly = slice === 'visitHistories'
+        const historyVersion = scopedHistories && !sessionsOnly ? ++historyReadVersion.current : null
         // Recompute the cutoff per read, including foreground recovery after midnight.
         const sessionScope = recentSessionScope(role, sessionUserName)
         // Phase 5 projection + 기간 필터
@@ -379,14 +391,17 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         //   숫자가 조용히 줄어든다. 반드시 끝까지 받는다.
         //   (예전에는 봉사 세션을 100개만 받아 누적 시간이 절반만 나왔다)
         const [visitsRes, sessionsRes] = await Promise.all([
-          sessionsOnly || historiesRecovered ? Promise.resolve({ data: [], error: null }) : fetchAllPages((from, to) => supabase
+          sessionsOnly || historiesRecovered ? Promise.resolve({ data: [], error: null })
+            : scopedHistories ? readScopedVisitHistories(buildingsRef.current.flatMap(building => building.units.map(unit => unit.id)), oneYearAgo)
+              .then(data => ({ data, error: null }))
+            : fetchAllPages((from, to) => supabase
             .from('visit_histories')
-            .select('id, unit_id, visitor_name, result, time_slot, memo, visited_at, service_session_id, special_period_id, invitation_left, created_at, created_by_user_id, visit_type')
+            .select(VISIT_HISTORY_COLUMNS)
             .is('invalidated_at', null)
             .gte('created_at', oneYearAgo)
             .order('created_at', { ascending: false })
             .range(from, to)),
-          fetchAllPages((from, to) => {
+          historiesOnly ? Promise.resolve({ data: [], error: null }) : fetchAllPages((from, to) => {
             let query = supabase
             .from('service_sessions')
             .select('id, user_name, role, calendar_event_id, started_at, ended_at, service_date, time_slot, status, primary_card_id, assigned_card_id, assignment_id, source, memo, created_at')
@@ -413,6 +428,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         measure(visitsRes.data)
         measure(sessionsRes.data)
 
+        if (historyVersion !== null && historyVersion !== historyReadVersion.current) {
+          throw new SupersededReadError('Visit history read superseded')
+        }
+
         if (sessionsOnly) {
           // Starting/ending a session does not change visit histories.
         } else if (historiesRecovered) {
@@ -422,7 +441,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         } else {
           setVisitHistories((visitsRes.data as RawVisitHistory[]).map(toVisitHistory))
         }
-        setServiceSessions(sessionsRes.error
+        if (!historiesOnly) setServiceSessions(sessionsRes.error
           ? []
           : (sessionsRes.data as RawServiceSession[]).map(toServiceSession))
 
@@ -669,7 +688,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
     }
-  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName])
+  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
@@ -695,6 +714,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           requested.delete('calendar')
         }
         const refreshTerritory = slices.some((slice) => ['calendar', 'resources', 'returnVisits', 'buildings', 'cards', 'cardBoundaries'].includes(slice))
+        // Reassignment can add/remove units even when no visit was written.
+        if (scopedHistories && refreshTerritory && !requested.has('visits')) requested.add('visitHistories')
         if (refreshTerritory) for (const slice of ['buildings', 'cards', 'cardBoundaries'] as const) requested.add(slice)
         const recovery = options?.triggeredBy === 'foreground' || options?.triggeredBy?.startsWith('realtime:')
         if (refreshTerritory && recovery && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
@@ -706,7 +727,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
               if (requested.has('cardBoundaries')) setCardBoundaries(await readRecipientBoundaries(ids))
               requested.delete('buildings')
               requested.delete('cardBoundaries')
-              // Histories remain global for statistics; scoped recovery cannot replace them.
+              // Scoped histories are reread for the current units; legacy statistics stay global.
               await Promise.all([...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups, options?.strictAssets)))
               return
             }
@@ -824,7 +845,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       void promise.then(clear, clear)
     }
     return promise
-  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader])
+  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader, scopedHistories])
 
   // 기존 fetchAll: 모든 slice + auto_close 부수효과 유지 (100% 후방호환)
   const fetchAll = useCallback(async (recovery = false) => {
@@ -984,11 +1005,15 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         ...visible.filter((b) => !existing.has(b.id)),
       ]
     })
+    // A delayed pre-save scoped read must not overwrite this authoritative update.
+    if (scopedHistories) ++historyReadVersion.current
+    const visibleUnits = new Set(buildingsRef.current.flatMap(building => building.units.map(unit => unit.id)))
     setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)
       || (!incomingUnitIds.has(h.unitId) && unaffectedUnitIds.has(h.unitId))),
     ...data.histories.filter((h) => incomingUnitIds.has(h.unitId))]
+      .filter(h => !scopedHistories || visibleUnits.has(h.unitId))
       .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
-  }, [applyBuildingsChange, recipientReader])
+  }, [applyBuildingsChange, recipientReader, scopedHistories])
 
   useEffect(() => { syncBuildingsRef.current = syncChangedBuildings }, [syncChangedBuildings])
 

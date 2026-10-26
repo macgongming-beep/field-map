@@ -4,7 +4,8 @@ import type { RawBuilding, RawUnit, RawVisitHistory } from '../hooks/storeTransf
 
 export const RECIPIENT_BUILDING_COLUMNS = 'id, card_id, name, address, type, lat, lng, warning, access_status, memo, is_restaurant, units_surveyed, building_access_events(id, action, visitor_name, visited_at, time_slot, memo, created_at)'
 export const RECIPIENT_UNIT_COLUMNS = 'id, building_id, number, status, is_chinese, is_restaurant, usage_type, memo, regular_visits(visitor_name, registered_at)'
-export const RECIPIENT_HISTORY_COLUMNS = 'id, unit_id, visitor_name, result, time_slot, memo, visited_at, service_session_id, special_period_id, invitation_left, created_at, created_by_user_id, visit_type'
+export { VISIT_HISTORY_COLUMNS as RECIPIENT_HISTORY_COLUMNS } from '../hooks/scopedVisitHistory'
+import { VISIT_HISTORY_COLUMNS as RECIPIENT_HISTORY_COLUMNS } from '../hooks/scopedVisitHistory'
 
 type BoundaryRow = { card_id: number; points: unknown; updated_at: string | null }
 export type RecipientCardDetails = {

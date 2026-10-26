@@ -6,6 +6,7 @@ import type { RawBuilding } from './storeTransforms'
 import { recipientStoreEnabled } from '../lib/recipientStore'
 import { calendarReadScope, calendarWindowEnabled } from './calendarReadScope'
 import { makeServiceSessionMutations } from './storeMutations/serviceSessions'
+import { useSettingsCalendarScope } from './useSettingsCalendarScope'
 
 const state = vi.hoisted(() => ({
   creationAction: '' as '' | 'created' | 'existing',
@@ -15,6 +16,8 @@ const state = vi.hoisted(() => ({
   requestFilters: [] as unknown[][],
   unitParent: 20, insertError: false, unitLookupError: false,
   historyColumns: [] as string[],
+  historyRows: [] as Record<string, unknown>[], historyFilters: [] as unknown[][],
+  historyResponse: null as null | Promise<{ data: Record<string, unknown>[]; error: null }>,
   cardColumns: [] as string[],
   cardFilters: [] as unknown[][],
   ignoreCardFilter: false,
@@ -85,8 +88,12 @@ vi.mock('../lib/supabase', () => ({ supabase: {
         return resolve(await state.calendarResponses.shift())
       }
       if (table === 'cards' && !lookup) state.cardFilters.push(filters)
+      if (table === 'visit_histories' && !writing) {
+        state.historyFilters.push([...filters])
+        if (state.historyResponse) { const pending = state.historyResponse; state.historyResponse = null; return resolve(await pending) }
+      }
       const data = table === 'cards' ? lookup ? [{ id: 1 }] : [1, 2].filter(id => state.ignoreCardFilter || filters.every(([key, value]) => key !== 'id' || !Array.isArray(value) || value.includes(id))).map((id) => ({ id, name: `card${id}`, card_assignments: [], type: '전체', area: '', region: '', status: '미배정' }))
-        : table === 'visit_histories' ? [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
+        : table === 'visit_histories' ? state.historyRows.filter(row => filters.every(([key, value]) => !Array.isArray(value) || value.includes(row[key]))).slice(range[0], range[1] + 1)
         : table === 'return_visits' ? writing ? [{ id: 7 }] : state.returnRows
         : table === 'return_visit_logs' ? state.returnLogs
         : writing && table === 'buildings' ? [{ id: filters.find(([key]) => key === 'id')?.[1] }]
@@ -105,6 +112,9 @@ const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: '
 beforeEach(() => {
   // Unrelated store fixtures use full cards; scoped-card tests opt in explicitly.
   vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'false')
+  vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'false')
+  state.historyRows = [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
+  state.historyFilters = []; state.historyResponse = null
   state.creationAction = ''
   state.cardColumns = []
   state.cardFilters = []; state.ignoreCardFilter = false
@@ -125,6 +135,121 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+function enableScopedHistories() {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'true')
+  state.historyRows.push({ ...state.historyRows[0], id: 901, unit_id: 100, visitor_name: 'Another visitor' })
+}
+
+test('scoped history reads on initial/foreground/manual keep every visitor in loaded units only', async () => {
+  enableScopedHistories()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+  expect(result.current.visitHistories[0].visitor).toBe('Another visitor')
+  for (const triggeredBy of ['foreground', 'fetchAll']) {
+    await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy }) })
+    expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+  }
+  expect(state.historyFilters.every(filters => JSON.stringify(filters) === JSON.stringify([['unit_id', [100]]]))).toBe(true)
+})
+
+test('statistics route remount restores global histories; returning restores scoped snapshot', async () => {
+  enableScopedHistories()
+  function Session({ scoped }: { scoped: boolean }) {
+    const store = useStore(true, 'user', scoped ? 'Volunteer' : undefined)
+    return <output data-testid="histories">{store.loading ? 'loading' : store.visitHistories.map(h => h.id).join(',')}</output>
+  }
+  function Route({ path }: { path: string }) {
+    const scoped = recipientStoreEnabled('user', path, '', 'true', 'true')
+    return <Session key={String(scoped)} scoped={scoped} />
+  }
+  const { rerender } = render(<Route path="/territory" />)
+  await waitFor(() => expect(screen.getByTestId('histories').textContent).toBe('901'))
+  rerender(<Route path="/stats" />)
+  await waitFor(() => expect(screen.getByTestId('histories').textContent).toBe('900,901'))
+  expect(state.historyFilters.at(-1)).toEqual([])
+  rerender(<Route path="/territory" />)
+  await waitFor(() => expect(screen.getByTestId('histories').textContent).toBe('901'))
+})
+
+test.each(['leader', 'admin', 'developer'] as const)('non-recipient %s retains global histories', async role => {
+  enableScopedHistories()
+  const { result } = renderHook(() => useStore(true, role))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([900, 901])
+  expect(state.historyFilters).toEqual([[]])
+})
+
+test('scope-only reassignment loads new history and removes revoked history without rereading sessions', async () => {
+  enableScopedHistories()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.buildings = [{ ...building, id: 20, card_id: 2, units: [{ ...building.units[0], id: 200, building_id: 20 }] }]
+  state.allowed = [2]
+  state.historyRows.push({ ...state.historyRows[0], id: 902, unit_id: 200 })
+  state.reads = []
+  await act(async () => { await result.current.refetchSlices(['calendar']) })
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([902])
+  expect(state.reads).not.toContain('service_sessions')
+  state.allowed = []; state.buildings = []; state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['calendar']) })
+  expect(result.current.visitHistories).toEqual([])
+  expect(state.historyFilters).toEqual([])
+})
+
+test('scoped save/cancel updates status and records without overwriting from a late read', async () => {
+  enableScopedHistories()
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings[0]
+  let resolve!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.historyResponse = new Promise(done => { resolve = done })
+  let old!: Promise<void>
+  await act(async () => { old = result.current.refetchSlices(['visitHistories']); void old.catch(() => {}) })
+  const history = { id: 902, unitId: 100, visitor: 'Volunteer', result: '부재', timeSlot: '오전', visitedAt: '2026-10-26', createdAt: '2026-10-26T00:00:00Z' }
+  state.changed.mockResolvedValueOnce({ buildings: [{ ...before, units: before.units.map(u => ({ ...u, status: '부재' })) }], histories: [history] })
+  await act(async () => { await result.current.updateUnitStatus(10, 100, '부재') })
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([902])
+  await act(async () => {
+    resolve({ data: [state.historyRows[1]], error: null })
+    await expect(old).rejects.toThrow('Visit history read superseded')
+  })
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([902])
+  state.changed.mockResolvedValueOnce({ buildings: [before], histories: [] })
+  await act(async () => { await result.current.undoLatestVisit(10, 100) })
+  expect(result.current.buildings[0].units[0].status).toBe('미방문')
+  expect(result.current.visitHistories).toEqual([])
+})
+
+test('failed scoped read preserves prior history, without unfiltered fallback', async () => {
+  enableScopedHistories()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const old = result.current.visitHistories
+  state.failedTable = 'visit_histories'
+  await act(async () => { await expect(result.current.refetchSlices(['visitHistories'])).rejects.toThrow('offline') })
+  expect(result.current.visitHistories).toBe(old)
+  expect(state.historyFilters.at(-1)).toEqual([['unit_id', [100]]])
+})
+
+test('personal settings round trip makes no new calendar request', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  const home = 'window:2026-10-12:2026-11-30'
+  const { result, rerender } = renderHook(({ path }) => {
+    const scope = useSettingsCalendarScope(path === '/' ? home : 'full', path, '', home, true)
+    return useStore(true, 'user', 'Volunteer', scope)
+  }, { initialProps: { path: '/' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  for (const path of ['/settings', '/settings/profile', '/']) await act(async () => { rerender({ path }) })
+  expect(state.reads).toEqual([])
+})
 
 test.each(['user', 'leader', 'admin'] as const)('recent sessions keep today, ended and recent cards on initial/recovery/manual reads: %s', async role => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')

@@ -1,9 +1,9 @@
 import { supabase } from '../lib/supabase'
+import { VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
 import { toBuilding, toVisitHistory, type RawBuilding, type RawUnit, type RawVisitHistory } from './storeTransforms'
 
 export const BUILDING_PROJECTION = 'id, card_id, name, address, type, lat, lng, warning, access_status, memo, is_restaurant, units_surveyed, building_access_events(id, action, visitor_name, visited_at, time_slot, memo, created_at)'
 const UNIT_PROJECTION = 'id, building_id, number, status, is_chinese, is_restaurant, usage_type, memo, regular_visits(visitor_name, registered_at)'
-const HISTORY_PROJECTION = 'id, unit_id, visitor_name, result, time_slot, memo, visited_at, service_session_id, special_period_id, invitation_left, created_at, created_by_user_id, visit_type'
 
 async function pages<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
   const rows: T[] = []
@@ -24,7 +24,7 @@ export async function fetchChangedBuildings(ids: number[]) {
     .select(UNIT_PROJECTION).in('building_id', ids).order('id').range(from, to))
   const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
   const histories = await pages<RawVisitHistory>((from, to) => supabase.from('visit_histories')
-    .select(`${HISTORY_PROJECTION}, units!inner(building_id)`)
+    .select(`${VISIT_HISTORY_COLUMNS}, units!inner(building_id)`)
     .in('units.building_id', ids).is('invalidated_at', null)
     .gte('created_at', oneYearAgo.toISOString()).order('id').range(from, to))
   return {
