@@ -21,7 +21,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   from: (table: string) => {
     const q: Record<string, unknown> = {}
     let lookup = false
-    for (const key of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'delete', 'insert']) q[key] = () => q
+    for (const key of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'delete', 'insert', 'upsert']) q[key] = () => q
     q.limit = () => { lookup = true; return q }
     q.then = (resolve: (value: unknown) => void) => {
       state.reads.push(table)
@@ -462,6 +462,27 @@ test('navigation cannot reuse a newly filled cache while resource recovery is st
   await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
   expect(state.scoped).toHaveBeenCalledTimes(3)
   await act(async () => { release({ data: [], error: null }); await pending })
+})
+
+test.each(['true', 'false'])('self application uses narrow refresh only in demo=%s', async demo => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  localStorage.setItem('currentVisitor', 'New applicant')
+  state.events = [{ ...old, allow_applications: true }]
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, 'full'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  state.participants.mockResolvedValue(new Map([[1, { applicants: ['A', 'New applicant'], assigned: [], guests: [] }]]))
+  try {
+    await act(async () => { await result.current.applyToEvent(1) })
+    if (demo === 'true') {
+      expect(state.participants).toHaveBeenCalledExactlyOnceWith([1])
+      expect(state.reads).toEqual(['event_participants'])
+      expect(result.current.calendarEvents[0].applicants).toContain('New applicant')
+    } else {
+      expect(state.participants).not.toHaveBeenCalled()
+      expect(state.reads).toContain('calendar_events')
+    }
+  } finally { localStorage.removeItem('currentVisitor') }
 })
 
 test('participants wait for an older full read and never expand invisible events', async () => {

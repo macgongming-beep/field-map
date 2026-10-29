@@ -5,6 +5,7 @@ import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEve
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
 import { readCalendarParticipants } from './calendarParticipants'
+import { assertUnassignedCalendarEvent } from './calendarApplicationRefresh'
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
@@ -1361,6 +1362,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     addParticipantToEvent,
   } = makeCalendarMutations({
     fetchAll: refetchCalendar,
+    refreshApplication: import.meta.env.VITE_DEMO_MODE === 'true' ? async (eventId, cancelled) => {
+      if (!calendarEventsRef.current.some(event => event.id === eventId)) throw new Error('Calendar event not loaded')
+      if (cancelled) await assertUnassignedCalendarEvent(eventId)
+      await refreshCalendarParticipants([eventId])
+    } : undefined,
     refreshUpdatedEvent: (import.meta.env.VITE_CALENDAR_EVENT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? refreshUpdatedEvent : undefined,
     refetchAfterParticipantRemoval: refetchCalendarAndVisits,
