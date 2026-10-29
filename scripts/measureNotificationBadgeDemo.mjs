@@ -39,9 +39,11 @@ try {
   const client = await context.newCDPSession(page)
   await client.send('Network.enable')
   const reads = []
+  let preflights = 0
   const byRequest = new Map()
   client.on('Network.responseReceived', ({ requestId, response }) => {
     if (!response.url.includes('/rest/v1/rpc/get_my_notifications')) return
+    if (response.status === 204) { preflights += 1; return }
     const read = { metadata: new URL(response.url).searchParams.get('select') === columns, status: response.status, protocol: response.protocol, encodedBytes: null }
     reads.push(read)
     byRequest.set(requestId, read)
@@ -63,11 +65,24 @@ try {
   await page.screenshot({ path: '/tmp/notification-badge-demo-open.png', fullPage: true })
   const badgeResponse = page.waitForResponse((response) => response.url().includes('/rpc/get_my_notifications') && new URL(response.url()).searchParams.get('select') === columns)
   await page.getByRole('button', { name: '닫기', exact: true }).click()
-  await badgeResponse
+  await (await badgeResponse).finished()
   await page.waitForLoadState('networkidle')
   assert.ok(reads.at(-1).metadata, 'Closing returns to metadata')
+  let rejectNextFullRead = true
+  await page.route(`${origin}/rest/v1/rpc/get_my_notifications*`, (route) => {
+    if (rejectNextFullRead && route.request().method() === 'POST' && !new URL(route.request().url()).searchParams.has('select')) {
+      rejectNextFullRead = false
+      return route.abort('failed')
+    }
+    return route.continue()
+  })
+  await bell.click()
+  await page.getByRole('alert').waitFor()
+  await page.getByRole('button', { name: '다시 시도', exact: true }).click()
+  await page.locator('.notification-row').first().waitFor()
+  await page.waitForLoadState('networkidle')
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ phase: 'browser', reads, titlesVisible: true, pageErrors: errors, screenshot: '/tmp/notification-badge-demo-open.png' }))
+  console.log(JSON.stringify({ phase: 'browser', reads, preflights, titlesVisible: true, offlineRetryPassed: true, pageErrors: errors, screenshot: '/tmp/notification-badge-demo-open.png' }))
 } finally {
   await browser.close()
 }
