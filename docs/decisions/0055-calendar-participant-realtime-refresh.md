@@ -1,7 +1,9 @@
 # Participant signals must not rebuild recipient territory
 
 - Date: 2026-10-30
-- Status: implemented and measured against demo; production not activated
+- Status: demo deployed (`0cf324f`); production not activated
+- Deployment: `dpl_3WFDaXGbuuCdZcTTnDsZodhKfhRK`, aliased to
+  https://chinese-territory-app-demo.vercel.app
 - Related: 0054 calendar navigation cache coverage
 
 ## Finding and boundary
@@ -42,7 +44,8 @@ rollout consideration; this change does not claim to eliminate all fan-out.
   not lose another event's update. No cache lifetime is renewed.
 - Query failure preserves previous data, exposes the calendar retry state and
   is caught by the App realtime caller. It does not silently replace members
-  with an empty list or trigger a territory fallback.
+  with an empty list or trigger a territory fallback. Real errors are explicitly
+  recorded to Sentry; SupersededReadError is excluded.
 - The existing navigation-reuse flag gates the additional subscriptions. No new
   production flag is enabled. Explicit false removes them after rebuild/update.
 
@@ -81,6 +84,8 @@ and one each of sessions, restaurant assignments, card assignments, return-card
 RPC, territory clock/signals, buildings, boundaries, regions, histories, cards
 and card-summary RPC. The corrected request reads only calendar participants.
 Join and cancellation assertions verify the receiver's actual store contents.
+The final clean-source run used temporary event 108. Cleanup completed and an
+independent fixture-prefix query returned no remaining measurement events.
 
 Limits: not two browser windows/physical phones, not browser Transferred or
 Supabase billing. Static assets, chat, push, map requests and whole-App effects
@@ -88,6 +93,9 @@ are excluded. Counts are per measured scenario, not a monthly saving estimate.
 An initial harness attempt failed because JSDOM's global Event conflicted with
 Node WebSocket; native Event was retained and its temporary fixture removed
 before rerunning successfully. No production DB writes or deployment occurred.
+The harness also isolates each bundled observer module so later scenarios cannot
+reuse an earlier scenario's closed client; an initial repeated run timed out on
+subscription before this harness correction. The final full run passed.
 
 ## Next
 
