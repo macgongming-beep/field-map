@@ -179,7 +179,9 @@ export function AppHeaderActionButtons({
   const [openNotifications, setOpenNotifications] = useState(false)
   const [openChat, setOpenChat] = useState(false)
   const [headerChatTarget, setHeaderChatTarget] = useState<HeaderChatTarget>(null)
-  const { notifications: notifList, markRead: notifMarkRead, markAllRead: notifMarkAllRead, clearReadNotifications: notifClearRead } = useNotifications(userId ?? null)
+  const notificationBadgeOnly = import.meta.env.VITE_DEMO_MODE === 'true' && !openNotifications
+  const { notifications: notifList, markRead: notifMarkRead, markAllRead: notifMarkAllRead, clearReadNotifications: notifClearRead,
+    loading: notifLoading, error: notifError, detailsReady: notifDetailsReady, refetch: notifRefetch } = useNotifications(userId ?? null, { badgeOnly: notificationBadgeOnly })
   const { totalUnread, markChatReadLocally } = useUserChats(userId ?? null, userName, {
     badgeOnly: import.meta.env.VITE_DEMO_MODE === 'true',
   })
@@ -296,7 +298,10 @@ export function AppHeaderActionButtons({
               userId={userId ?? null}
               userName={userName}
               onClose={() => setOpenNotifications(false)}
-              notifications={visibleNotifications}
+              notifications={notifDetailsReady ? visibleNotifications : []}
+              loading={notifLoading}
+              error={notifError}
+              onRetry={notifRefetch}
               markRead={notifMarkRead}
               markAllRead={notifMarkAllRead}
               clearReadNotifications={notifClearRead}
