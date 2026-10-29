@@ -5,7 +5,7 @@ import { SupersededReadError } from './supersededRead'
 import { calendarReadScope, calendarWindowEnabled } from './calendarReadScope'
 import { useCalendarRealtime } from './useCalendarRealtime'
 
-const state = vi.hoisted(() => ({ callbacks: new Map<string, (payload?: unknown) => void>(), participants: vi.fn(), scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null, pendingResource: null as Promise<unknown> | null }))
+const state = vi.hoisted(() => ({ probe: vi.fn(), callbacks: new Map<string, (payload?: unknown) => void>(), participants: vi.fn(), scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null, pendingResource: null as Promise<unknown> | null }))
 vi.mock('./calendarParticipants', () => ({ readCalendarParticipants: state.participants }))
 vi.mock('./calendarReadScope', async importOriginal => ({ ...await importOriginal<typeof import('./calendarReadScope')>(), readScopedCalendar: state.scoped }))
 vi.mock('../lib/supabase', () => ({ supabase: {
@@ -21,13 +21,20 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   from: (table: string) => {
     const q: Record<string, unknown> = {}
     let lookup = false
+    let projection = '', id: unknown
     for (const key of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'delete', 'insert', 'upsert']) q[key] = () => q
+    q.select = (value: string) => { projection = value; return q }
+    q.eq = (column: string, value: unknown) => { if (column === 'id') id = value; return q }
+    q.single = () => {
+      state.reads.push(`${table}:probe`)
+      return state.probe({ table, projection, id })
+    }
     q.limit = () => { lookup = true; return q }
     q.then = (resolve: (value: unknown) => void) => {
       state.reads.push(table)
       if (table === 'informal_assets' && state.pendingResource) return state.pendingResource.then(resolve)
       if (table === 'calendar_events' && state.pendingFull) { const pending = state.pendingFull; state.pendingFull = null; return pending.then(resolve) }
-      return Promise.resolve({ data: lookup ? [{ id: 1 }] : table === 'calendar_events' ? state.events : table === 'event_card_assignments' ? state.assignments : [], error: table === state.failure ? new Error('offline') : null }).then(resolve)
+      return Promise.resolve({ data: lookup || table === 'event_participants' ? [{ id: 1 }] : table === 'calendar_events' ? state.events : table === 'event_card_assignments' ? state.assignments : [], error: table === state.failure ? new Error('offline') : null }).then(resolve)
     }
     return q
   },
@@ -464,8 +471,12 @@ test('navigation cannot reuse a newly filled cache while resource recovery is st
   await act(async () => { release({ data: [], error: null }); await pending })
 })
 
-test.each(['true', 'false'])('self application uses narrow refresh only in demo=%s', async demo => {
+test.each([
+  ['true', undefined, true], ['false', undefined, false],
+  ['true', 'false', false], ['false', 'true', true], ['false', 'false', false],
+] as const)('self application gate demo=%s flag=%s narrow=%s', async (demo, flag, narrow) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_APPLICATION_REFRESH_ENABLED', flag)
   localStorage.setItem('currentVisitor', 'New applicant')
   state.events = [{ ...old, allow_applications: true }]
   const { result } = renderHook(() => useStore(true, 'leader', undefined, 'full'))
@@ -474,13 +485,48 @@ test.each(['true', 'false'])('self application uses narrow refresh only in demo=
   state.participants.mockResolvedValue(new Map([[1, { applicants: ['A', 'New applicant'], assigned: [], guests: [] }]]))
   try {
     await act(async () => { await result.current.applyToEvent(1) })
-    if (demo === 'true') {
+    if (narrow) {
       expect(state.participants).toHaveBeenCalledExactlyOnceWith([1])
       expect(state.reads).toEqual(['event_participants'])
       expect(result.current.calendarEvents[0].applicants).toContain('New applicant')
     } else {
       expect(state.participants).not.toHaveBeenCalled()
       expect(state.reads).toContain('calendar_events')
+    }
+  } finally { localStorage.removeItem('currentVisitor') }
+})
+
+test.each(['unassigned', 'shared', 'offline'] as const)('actual cancellation probes server and recovers %s state', async status => {
+  // Enable only the new production flag: it must not depend on navigation reuse.
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CALENDAR_APPLICATION_REFRESH_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'false')
+  localStorage.setItem('currentVisitor', 'A')
+  state.events = [{ ...old, allow_applications: true }]
+  const { result } = renderHook(() => useStore(true, 'user', undefined, 'full'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  state.probe.mockReset().mockImplementation(async () => {
+    expect(state.reads[0]).toBe('event_participants')
+    expect(state.participants).not.toHaveBeenCalled()
+    return { data: { id: 1, assignment_shared_at: status === 'shared' ? '2026-10-30T01:00:00Z' : null,
+      assignment_team_informal: null, assignment_team_scopes: {} }, error: status === 'offline' ? new Error('offline') : null }
+  })
+  // The local snapshot is stale; the server has already removed this participant.
+  state.events = [{ ...old, event_participants: [] }]
+  state.participants.mockResolvedValue(new Map([[1, { applicants: [], assigned: [], guests: [] }]]))
+  try {
+    await act(async () => { await result.current.applyToEvent(1) })
+    expect(state.probe).toHaveBeenCalledExactlyOnceWith({ table: 'calendar_events', id: 1,
+      projection: 'id,assignment_shared_at,assignment_team_informal,assignment_team_scopes' })
+    expect(result.current.calendarEvents[0].applicants).toEqual([])
+    if (status === 'unassigned') {
+      expect(state.participants).toHaveBeenCalledExactlyOnceWith([1])
+      expect(state.reads).toEqual(['event_participants', 'calendar_events:probe'])
+    } else {
+      expect(state.participants).not.toHaveBeenCalled()
+      expect(state.reads).toEqual(expect.arrayContaining(['calendar_events', 'event_card_assignments',
+        'event_card_assignment_cards', 'visit_histories', 'service_sessions']))
     }
   } finally { localStorage.removeItem('currentVisitor') }
 })

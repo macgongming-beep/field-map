@@ -1,5 +1,12 @@
 import { supabase } from '../lib/supabase'
 
+export function calendarApplicationRefreshEnabled(
+  flag = import.meta.env.VITE_CALENDAR_APPLICATION_REFRESH_ENABLED,
+  demo = import.meta.env.VITE_DEMO_MODE,
+) {
+  return (flag ?? demo) === 'true'
+}
+
 // DELETE may have cleaned up a team assigned after the local snapshot was read.
 // The cleanup trigger advances assignment_shared_at even when the last team leaves.
 export async function assertUnassignedCalendarEvent(eventId: number) {
