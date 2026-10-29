@@ -69,7 +69,7 @@ localStorage.setItem('currentVisitor', user.name)
 const { renderHook, waitFor, act, cleanup } = await import('@testing-library/react')
 const results = []
 try {
-  for (const scenario of (process.argv.includes('--followups') ? ['followup-overlap', 'followup-failure'] : ['before-visible', 'after-visible', 'after-offscreen'])) {
+  for (const scenario of (process.argv.includes('--self-application') ? ['self-application', 'self-application-cart'] : process.argv.includes('--followups') ? ['followup-overlap', 'followup-failure'] : ['before-visible', 'after-visible', 'after-offscreen'])) {
     let phase = 'initial', subscribed = false, completed = 0, channelStatus = 'not-started'
     let invalidateOnce = false, failOnce = false, invalidate = () => {}
     const samples = []
@@ -106,6 +106,7 @@ try {
     const root = process.cwd()
     const bundle = await rolldown({ input: '\0participant-entry', transform: { define: { 'import.meta.env': JSON.stringify({
       DEV: false, VITE_DEMO_MODE: 'true', VITE_TERRITORY_REALTIME_ENABLED: 'true', VITE_SUPABASE_URL: origin,
+      VITE_CART_APPLICATIONS_ENABLED: scenario === 'self-application-cart' ? 'true' : 'false',
     }) } }, plugins: [{ name: 'participant-measurement', resolveId(id) {
       if (id === '\0participant-entry') return id
       if (id.endsWith('/supabase')) return '\0participant-client'
@@ -115,6 +116,7 @@ try {
       if (id === '\0participant-entry') return `
         import { useStore } from ${JSON.stringify(resolve('src/hooks/useStore.ts'))};
         import { useCalendarRealtime } from ${JSON.stringify(resolve('src/hooks/useCalendarRealtime.ts'))};
+        export function useDriverStore(name, scope) { return useStore(true, 'user', name, scope, name) }
         export function useObservedStore(name, scope) {
           const store = useStore(true, 'user', name, scope, name);
           const done = globalThis.__participantMeasurement.completed;
@@ -128,7 +130,8 @@ try {
         return { code: execFileSync('git', ['show', `adf6d37:${id.slice(root.length + 1)}`], { encoding: 'utf8' }), moduleType: id.endsWith('.tsx') ? 'tsx' : 'ts' }
       }
     } }] })
-    let hook
+    let hook, driverHook, driverClient
+    const driverSamples = []
     try {
       const { output } = await bundle.generate({ format: 'esm', codeSplitting: false })
       // A new observer needs a new module instance, not a cached reference to
@@ -137,6 +140,31 @@ try {
       const day = scenario === 'after-offscreen' ? '2000-01-01' : today
       hook = renderHook(() => module.useObservedStore(user.name, `window:${day}:${day}`))
       await waitFor(() => { assert.equal(hook.result.current.loading, false); assert.equal(hook.result.current.error, null); assert.equal(subscribed, true, `${scenario} channel: ${channelStatus}`) }, { timeout: 45000 })
+      if (scenario.startsWith('self-application')) {
+        driverClient = createClient(origin, key, { auth: { ...auth, storageKey: `driver-${scenario}` }, global: {
+          headers: { 'x-session-token': user.token }, fetch: async (input, init) => {
+            const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url)
+            if (url.origin !== origin) throw Error('Cross-project driver request rejected')
+            if (url.pathname.endsWith('/auto_close_stale_sessions')) return new Response('null', { status: 200 })
+            const method = init?.method ?? 'GET'
+            const endpoint = url.pathname.split('/').pop()
+            if (method !== 'GET' && !['territory_sync_clock', 'get_card_summaries', 'get_recipient_return_visit_card_ids',
+              'event_participants', 'log_service_action', 'toggle_event_application_tx'].includes(endpoint)) throw Error(`Driver write rejected: ${endpoint}`)
+            const label = phase
+            const response = await fetch(input, init)
+            if (endpoint === 'toggle_event_application_tx') {
+              const value = await response.clone().json()
+              console.log(JSON.stringify({ scenario, operation: label, ok: value?.ok, state: value?.state }))
+            }
+            driverSamples.push({ phase: label, endpoint, method, status: response.status, select: url.searchParams.get('select') })
+            return response
+          },
+        } })
+        globalThis.__participantMeasurement.client = driverClient
+        const driver = await import(`data:text/javascript;base64,${Buffer.from(output[0].code + '\n// driver: ' + scenario).toString('base64')}`)
+        driverHook = renderHook(() => driver.useDriverStore(user.name, `window:${today}:${today}`))
+        await waitFor(() => { assert.equal(driverHook.result.current.loading, false); assert.equal(driverHook.result.current.error, null) }, { timeout: 45000 })
+      }
       invalidate = () => hook.result.current.invalidateCalendarCache()
       if (scenario === 'followup-failure') {
         phase = 'injected-failure'; failOnce = true
@@ -151,11 +179,20 @@ try {
         invalidateOnce = scenario === 'followup-overlap'
         const before = completed
         await act(async () => {
-          if (operation === 'join') unwrap(await writer.from('event_participants').insert({ event_id: event.id, user_name: admin.name, role: '신청' }))
+          if (driverHook) await driverHook.result.current.applyToEvent(event.id)
+          else if (operation === 'join') unwrap(await writer.from('event_participants').insert({ event_id: event.id, user_name: admin.name, role: '신청' }))
           else unwrap(await writer.from('event_participants').delete().eq('event_id', event.id).eq('user_name', admin.name))
           await waitFor(() => assert.ok(completed > before), { timeout: 20000 })
         })
-        if (scenario !== 'after-offscreen') assert.equal(hook.result.current.calendarEvents.find(e => e.id === event.id)?.applicants.includes(admin.name), operation === 'join')
+        const applicant = driverHook ? user.name : admin.name
+        if (scenario !== 'after-offscreen') assert.equal(hook.result.current.calendarEvents.find(e => e.id === event.id)?.applicants.includes(applicant), operation === 'join')
+        if (driverHook) {
+          assert.equal(driverHook.result.current.calendarEvents.find(e => e.id === event.id)?.applicants.includes(applicant), operation === 'join')
+          const reads = driverSamples.filter(s => s.phase === operation && s.method === 'GET')
+          assert.ok(reads.every(s => s.endpoint === 'calendar_events'), JSON.stringify(reads))
+          assert.equal(reads.length, operation === 'join' ? 1 : 2)
+          results.push({ scenario, operation, driverReads: reads })
+        }
         const requests = samples.filter(s => s.phase === operation)
         assert.ok(requests.every(r => r.status < 400))
         const byEndpoint = Object.fromEntries([...new Set(requests.map(s => s.endpoint))].map(endpoint => [endpoint, requests.filter(s => s.endpoint === endpoint).length]))
@@ -166,8 +203,10 @@ try {
         if (scenario === 'followup-failure') assert.deepEqual(byEndpoint, { calendar_events: 1 })
       }
     } finally {
+      driverHook?.unmount(); await driverClient?.removeAllChannels(); driverClient?.realtime.disconnect()
       hook?.unmount(); cleanup(); await client.removeAllChannels(); client.realtime.disconnect(); await bundle.close()
       unwrap(await writer.from('event_participants').delete().eq('event_id', event.id).eq('user_name', admin.name))
+      unwrap(await writer.from('event_participants').delete().eq('event_id', event.id).eq('user_name', user.name))
     }
   }
   console.log(JSON.stringify({ project: 'demo', eventId: event.id, results,

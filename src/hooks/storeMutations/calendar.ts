@@ -47,9 +47,15 @@ export function makeCalendarMutations(deps: {
   fetchAll: () => Promise<void>
   refetchAfterParticipantRemoval?: () => Promise<void>
   refreshUpdatedEvent?: (eventId: number) => Promise<void>
+  refreshApplication?: (eventId: number, cancelled: boolean) => Promise<void>
   calendarEvents: CalendarEvent[]
 }) {
   const { fetchAll, refetchAfterParticipantRemoval, calendarEvents } = deps
+  const refreshApplication = async (eventId: number, cancelled: boolean) => {
+    if (!deps.refreshApplication) return fetchAll()
+    try { await deps.refreshApplication(eventId, cancelled) }
+    catch { await (cancelled ? refetchAfterParticipantRemoval ?? fetchAll : fetchAll)() }
+  }
 
   const usesTeamAssignments = (event?: CalendarEvent) => teamServiceEnabled()
     && !!event && (event.assignmentTeamInformal != null
@@ -272,7 +278,7 @@ export function makeCalendarMutations(deps: {
           })
         }
       }
-      await fetchAll()
+      await refreshApplication(eventId, Boolean(isApplied))
       showToast(isApplied ? msg('신청이 취소됐습니다') : msg('일정에 신청됐습니다'))
       return
     }
@@ -293,8 +299,10 @@ export function makeCalendarMutations(deps: {
       reportMutationError(msg('봉사 신청을 저장하지 못했습니다.'), result.error ?? new Error('신청 처리 실패'))
       return
     }
-    await fetchAll()
     const state = (result.data as { state?: string }).state
+    // Switching application kinds also changes cart application data.
+    if (state === 'applied' || state === 'cancelled') await refreshApplication(eventId, state === 'cancelled')
+    else await fetchAll()
     showToast(state === 'cancelled' ? msg('신청이 취소됐습니다') : state === 'switched' ? msg('봉사 신청으로 변경됐습니다') : msg('일정에 신청됐습니다'))
   }
 
