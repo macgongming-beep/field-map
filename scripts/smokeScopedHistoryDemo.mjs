@@ -5,8 +5,14 @@ import { createClient } from '@supabase/supabase-js'
 const mode = process.argv[2]
 if (!['setup', 'check', 'cleanup'].includes(mode) || !process.env.DEMO_ENV_FILE) throw new Error('Explicit demo environment and mode required')
 const config = parseEnv(readFileSync(process.env.DEMO_ENV_FILE, 'utf8'))
+for (const key of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'TEST_LOGIN_ID', 'TEST_LOGIN_PIN']) {
+  if (process.env[key]) config[key] = process.env[key]
+}
 const origin = 'https://itjlykpjmlcvanqpmkmc.supabase.co'
 if (config.VITE_SUPABASE_URL !== origin) throw new Error('Demo project mismatch')
+if (!config.VITE_SUPABASE_ANON_KEY || !config.TEST_LOGIN_ID || !config.TEST_LOGIN_PIN) {
+  throw new Error('Explicit demo key and test account required')
+}
 const statePath = '/tmp/field-map-scoped-history-demo.json'
 const options = { auth: { persistSession: false, autoRefreshToken: false } }
 const unwrap = ({ data, error }) => { if (error) throw error; return data }

@@ -226,6 +226,33 @@ test('scoped save/cancel updates status and records without overwriting from a l
   expect(result.current.visitHistories).toEqual([])
 })
 
+test('late scoped read after cancellation cannot resurrect the invalidated record', async () => {
+  enableScopedHistories()
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings[0]
+  const history = { id: 902, unitId: 100, visitor: 'Volunteer', result: '부재', timeSlot: '오전', visitedAt: '2026-10-26', createdAt: '2026-10-26T00:00:00Z' }
+  state.changed.mockResolvedValueOnce({ buildings: [{ ...before, units: before.units.map(u => ({ ...u, status: '부재' })) }], histories: [history] })
+  await act(async () => { await result.current.updateUnitStatus(10, 100, '부재') })
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([902])
+
+  let resolve!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.historyResponse = new Promise(done => { resolve = done })
+  let pending!: Promise<void>
+  await act(async () => { pending = result.current.refetchSlices(['visitHistories']); void pending.catch(() => {}) })
+  state.changed.mockResolvedValueOnce({ buildings: [before], histories: [] })
+  await act(async () => { await result.current.undoLatestVisit(10, 100) })
+  expect(result.current.visitHistories).toEqual([])
+  await act(async () => {
+    resolve({ data: [{ ...state.historyRows[1], id: 902 }], error: null })
+    await expect(pending).rejects.toThrow('Visit history read superseded')
+  })
+  expect(result.current.buildings[0].units[0].status).toBe('미방문')
+  expect(result.current.visitHistories).toEqual([])
+})
+
 test('failed scoped read preserves prior history, without unfiltered fallback', async () => {
   enableScopedHistories()
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
