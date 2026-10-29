@@ -540,6 +540,8 @@ test('unmount discards invalidated participant response without retry', async ()
   let patch!: Promise<void>
   act(() => { patch = result.current.refreshCalendarParticipants([1]) })
   await waitFor(() => expect(state.participants).toHaveBeenCalledTimes(1))
+  // Without lifecycle cleanup, this invalidation would retry after unmount.
+  act(() => { result.current.invalidateCalendarCache() })
   unmount()
   await act(async () => { release(new Map()); await patch })
   expect(state.participants).toHaveBeenCalledTimes(1)
