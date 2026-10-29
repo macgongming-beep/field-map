@@ -81,7 +81,9 @@ visit for building 1 / unit 2 (102):
   assignment, session or valid visit was deleted.
 
 `scripts/smokeScopedHistoryDemo.mjs` provides guarded demo fixture setup, read-only
-checks and cleanup, with credentials supplied via `DEMO_ENV_FILE`. It refuses a
+checks and cleanup, with configuration supplied via `DEMO_ENV_FILE`; explicitly
+supplied process variables may override the demo URL/key and test credentials.
+It requires explicit credentials and refuses a
 non-demo Supabase origin and never prints the authentication token.
 
 Home -> personal settings -> home rendered without the global loading screen.
@@ -95,6 +97,47 @@ UI evidence (local scratch screenshots): `demo-scoped-history-saved.png`,
 `demo-scoped-history-statistics-restored.png`. Mobile checks used a 430x900
 browser viewport, not a physical phone. Mobile has no `/stats` view; complete
 statistics were checked in the desktop layout. Viewport was reset afterward.
+
+## Repeat verification and review handoff (2026-10-29)
+
+The same deployed demo code (`6d06d81`) was tested again, without changing the
+application bundle or production. A new disposable event (102) assigned card 1
+to the demo recipient. Saving and cancelling were performed through the UI:
+
+| Check | Observed result |
+| --- | --- |
+| Save absent visit for building 1 / unit 2 (102) | Detail showed history 75; building 2/3, map 3/16 |
+| Open desktop statistics as the same recipient | Total 4; met 1, absent 2, excluded 1 |
+| Cancel through detail menu and confirm invalidation | Detail returned to zero records; DB unit status unvisited |
+| Reopen statistics | Total 3; met 1, absent 1, excluded 1; October visits 0 |
+| Independent demo DB check | Original valid IDs 1, 2, 41 unchanged, including unit 240 outside the assigned card |
+| Cleanup | Test event and generated sessions removed; history 75 retained invalidated as audit trail |
+
+A new store regression test starts a scoped read while a saved record exists,
+cancels that record through `undoLatestVisit`, then releases the stale response.
+It requires rejection of that response and verifies that neither the history nor
+the visited unit status reappears. This complements the existing save/read race
+test. The focused reader/store/settings suite passed 187 tests.
+The final full suite passed 1,911 tests across 212 files; lint and build passed.
+
+Review entry points:
+
+- Implementation: `6d06d81`; initial verification: `dc90267`.
+- `src/hooks/scopedVisitHistory.ts`: all visitors within loaded units, annual
+  window, invalidation filter, complete pagination, strict response validation.
+- `src/hooks/useStore.ts` and `src/hooks/useStore.recipient.test.tsx`: scope
+  grant/revoke, targeted save/cancel, stale-response rejection, failure retention,
+  statistics remount with a complete annual snapshot, privileged-role behavior.
+- `src/hooks/useSettingsCalendarScope.ts`: only personal settings retain scope;
+  explicit false, calendar-disabled, admin/statistics/editor/deep-link behavior.
+- Review the production opt-in gates and rollback before enabling either feature.
+  No production rollout is part of this verification.
+
+Fresh local evidence in `scratch/`: `demo-history-review-saved-1029.png`,
+`demo-history-review-stats-four-1029.png`, `demo-history-review-cancelled-1029.png`,
+`demo-history-review-stats-restored-1029.png`. These are browser viewport checks,
+not a physical-phone or two-device realtime test. No wire-byte or monthly-saving
+claim is made. Browser viewport was restored and the demo returned to home.
 
 ## Rollout
 
