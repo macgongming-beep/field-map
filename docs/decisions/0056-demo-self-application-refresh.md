@@ -1,6 +1,6 @@
 # 0056: Demo self-application participant refresh
 
-Status: demo only; production opt-in is implemented but not activated.
+Status: production opt-in activated after review and explicit user approval.
 Date: 2026-10-30
 
 ## Scope
@@ -81,3 +81,21 @@ This flag does not disable the separate realtime/navigation optimizations.
   makes all three cancellation integration cases fail. Ignoring explicit false
   makes the demo-off integration case fail. Restored code passes focused tests.
 - Final full verification: 1,984 tests / 217 files passed, lint and build passed.
+
+## Production activation: 2026-10-30
+
+- User authorized rollout and reserved real team cancellation for their own test.
+- Cherry-picked 779ab27 and 374e90d as 4052715 and 745e42e on production main.
+  No unrelated demo functionality was imported.
+- Added VITE_CALENDAR_APPLICATION_REFRESH_ENABLED=true to Production only.
+  Existing flags were left unchanged.
+- Production-base verification: 1,949 tests / 214 files, lint and build pass.
+- Inspected candidate, then promoted dpl_7QMoHUWZMZXc4FFgrWVpxH6dHazd.
+  Canonical index-C9RfdUwV.js loads TerritoryReportView-C-Qf8Lbm.js, identical
+  to the inspected candidate. Compiled application gate defaults to true,
+  cancellation awaits assignment-state validation, and broad removal recovery
+  remains wired. This verifies deployed activation, not an actual production write.
+- No production application/cancellation or DB test writes were performed.
+  User must apply the PWA update before their team-cancellation smoke check.
+- Rollback: set the application flag false and redeploy, or restore preceding
+  deployment dpl_EJBCw5vDKJCJNCaLtaweniLeNfDS. Clients need the app update.
