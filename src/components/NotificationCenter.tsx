@@ -186,6 +186,9 @@ export function NotificationCenter({
   markRead,
   markAllRead,
   clearReadNotifications,
+  loading = false,
+  error = false,
+  onRetry,
 }: {
   language?: AppLanguage
   userId: number | null
@@ -195,6 +198,9 @@ export function NotificationCenter({
   markRead: (id: number) => Promise<void>
   markAllRead: () => Promise<void>
   clearReadNotifications?: () => Promise<void>
+  loading?: boolean
+  error?: boolean
+  onRetry?: () => Promise<void>
 }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -352,6 +358,15 @@ export function NotificationCenter({
             <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--muted)' }}>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{t(language, 'header.notiLoginTitle')}</p>
               <p style={{ margin: '6px 0 0', fontSize: 12.5 }}>{t(language, 'header.notiLoginDesc')}</p>
+            </div>
+          ) : error ? (
+            <div role="alert" style={{ padding: '40px 20px', textAlign: 'center' }}>
+              <p>{t(language, 'meeting.failed')}</p>
+              <button type="button" onClick={() => { void onRetry?.() }}>{t(language, 'meeting.retry')}</button>
+            </div>
+          ) : loading && !hasAny ? (
+            <div role="status" style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--muted)' }}>
+              {t(language, 'common.loading')}
             </div>
           ) : !hasAny ? (
             <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--muted)' }}>
