@@ -16,6 +16,8 @@ import { PullToRefresh } from './components/PullToRefresh'
 import { useStore } from './hooks/useStore'
 import { recentSessionsEnabled } from './hooks/serviceSessionReadScope'
 import { useCalendarRealtime } from './hooks/useCalendarRealtime'
+import { Sentry } from './lib/sentry'
+import { SupersededReadError } from './hooks/supersededRead'
 import { usePlaceDeletionRealtime } from './hooks/usePlaceDeletionRealtime'
 import { useUnitCreationRealtime } from './hooks/useUnitCreationRealtime'
 import { TerritoryRealtimeContext } from './hooks/territoryRealtimeContext'
@@ -110,7 +112,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   const calendarScope = useSettingsCalendarScope(requestedScope, location.pathname, location.search, homeScope, windowedCalendar)
 
   const {
-    calendarScopeReady, calendarReadError, retryCalendarRead,
+    calendarScopeReady, calendarReadError, retryCalendarRead, invalidateCalendarCache, refreshCalendarParticipants,
     cards,
     buildings,
     visitHistories,
@@ -233,8 +235,18 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   // Phase 2: 캘린더/배정 Realtime → calendar slice만 refetch
   // (useUserChats가 이 책임을 갖고 있었으나 전체 fetchAll 호출하던 증폭점 제거)
   useCalendarRealtime(() => {
-    void refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' })
-  }, { enabled: storeEnabled })   // 로그인 전에는 웹소켓을 열지 않는다
+    void refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' }).catch(error => {
+      if (!(error instanceof SupersededReadError)) Sentry.captureException(error)
+      console.warn('[calendar realtime] sync failed:', error)
+    })
+  }, { enabled: storeEnabled, invalidate: invalidateCalendarCache,
+    onParticipants: ids => {
+      void refreshCalendarParticipants(ids).catch(error => {
+        if (!(error instanceof SupersededReadError)) Sentry.captureException(error)
+        console.warn('[calendar participants realtime] sync failed:', error)
+      })
+    },
+  })   // 로그인 전에는 웹소켓을 열지 않는다
 
   // 다른 사용자가 장소 삭제를 승인해도 전체 화면을 새로고침하지 않는다.
   // 삭제로 함께 바뀌는 구역 자료만 백그라운드에서 다시 받아 현재 화면을 유지한다.

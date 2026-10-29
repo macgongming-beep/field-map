@@ -5,7 +5,8 @@ import { SupersededReadError } from './supersededRead'
 import { calendarReadScope, calendarWindowEnabled } from './calendarReadScope'
 import { useCalendarRealtime } from './useCalendarRealtime'
 
-const state = vi.hoisted(() => ({ callbacks: new Map<string, () => void>(), scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null }))
+const state = vi.hoisted(() => ({ callbacks: new Map<string, (payload?: unknown) => void>(), participants: vi.fn(), scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null, pendingResource: null as Promise<unknown> | null }))
+vi.mock('./calendarParticipants', () => ({ readCalendarParticipants: state.participants }))
 vi.mock('./calendarReadScope', async importOriginal => ({ ...await importOriginal<typeof import('./calendarReadScope')>(), readScopedCalendar: state.scoped }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   channel: () => {
@@ -24,6 +25,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     q.limit = () => { lookup = true; return q }
     q.then = (resolve: (value: unknown) => void) => {
       state.reads.push(table)
+      if (table === 'informal_assets' && state.pendingResource) return state.pendingResource.then(resolve)
       if (table === 'calendar_events' && state.pendingFull) { const pending = state.pendingFull; state.pendingFull = null; return pending.then(resolve) }
       return Promise.resolve({ data: lookup ? [{ id: 1 }] : table === 'calendar_events' ? state.events : table === 'event_card_assignments' ? state.assignments : [], error: table === state.failure ? new Error('offline') : null }).then(resolve)
     }
@@ -31,7 +33,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   },
 } }))
 const old = { id: 1, event_date: '2026-08-02', title: 'Old', time: '10:00', event_participants: [{ user_name: 'A', role: '신청' }] }
-beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', undefined) })
+beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.pendingResource = null; state.participants.mockReset().mockResolvedValue(new Map()); state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', undefined) })
 afterEach(() => { cleanup(); state.callbacks.clear(); vi.useRealTimers(); vi.unstubAllEnvs() })
 
 test('home first load and foreground keep calendar scoped; statistics route restores complete history', async () => {
@@ -418,21 +420,78 @@ test('another participant joining refreshes home coverage before next-month reus
   state.scoped.mockResolvedValue([event])
   const { result, rerender } = renderHook(({ scope }) => {
     const store = useStore(true, 'leader', undefined, scope)
-    useCalendarRealtime(() => { void store.refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' }) }, { debounceMs: 0 })
+    useCalendarRealtime(() => { void store.refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' }) }, {
+      debounceMs: 0, invalidate: store.invalidateCalendarCache,
+      onParticipants: ids => { void store.refreshCalendarParticipants(ids) },
+    })
     return store
   }, { initialProps: { scope: 'window:2026-10-16:2026-11-30' } })
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(state.callbacks.has('event_participants')).toBe(true)
   state.scoped.mockResolvedValue([{ ...event, applicants: ['A', 'Other team'] }])
+  state.participants.mockResolvedValue(new Map([[2, { applicants: ['A', 'Other team'], assigned: [], guests: [] }]]))
   vi.useFakeTimers()
   await act(async () => {
-    state.callbacks.get('event_participants')!()
+    state.callbacks.get('event_participants')!({ new: { event_id: 2 } })
     await vi.advanceTimersByTimeAsync(1)
   })
   vi.useRealTimers()
   await waitFor(() => expect(result.current.calendarEvents[0].applicants).toEqual(['A', 'Other team']))
+  expect(state.scoped).toHaveBeenCalledTimes(1)
+  expect(state.participants).toHaveBeenCalledExactlyOnceWith([2])
   rerender({ scope: 'window:2026-11-01:2026-11-30' })
   await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
   expect(result.current.calendarEvents[0].applicants).toEqual(['A', 'Other team'])
   expect(state.scoped).toHaveBeenCalledTimes(2)
+})
+
+test('navigation cannot reuse a newly filled cache while resource recovery is still pending', async () => {
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'leader', undefined, scope), {
+    initialProps: { scope: 'window:2026-10-01:2026-10-31' },
+  })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let release!: (value: unknown) => void
+  state.pendingResource = new Promise(resolve => { release = resolve })
+  let pending!: Promise<void>
+  act(() => { pending = result.current.refetchSlices(['resources'], { triggeredBy: 'mutation:resources' }) })
+  rerender({ scope: 'window:2026-10-16:2026-11-30' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.scoped).toHaveBeenCalledTimes(2)
+  rerender({ scope: 'window:2026-11-01:2026-11-30' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.scoped).toHaveBeenCalledTimes(3)
+  await act(async () => { release({ data: [], error: null }); await pending })
+})
+
+test('participants wait for an older full read and never expand invisible events', async () => {
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, 'full'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let release!: (value: unknown) => void
+  state.pendingFull = new Promise(resolve => { release = resolve })
+  let full!: Promise<void>, patch!: Promise<void>
+  act(() => { full = result.current.refetchSlices(['calendar']); patch = result.current.refreshCalendarParticipants([1]) })
+  expect(state.participants).not.toHaveBeenCalled()
+  state.participants.mockResolvedValue(new Map([[1, { applicants: ['New'], assigned: [], guests: [] }]]))
+  await act(async () => { release({ data: [old], error: null }); await full; await patch })
+  expect(result.current.calendarEvents[0].applicants).toEqual(['New'])
+  state.participants.mockClear()
+  await act(async () => { await result.current.refreshCalendarParticipants([999]) })
+  expect(state.participants).not.toHaveBeenCalled()
+})
+
+test('a second participant signal retains first dirty event when an old response is discarded', async () => {
+  state.scoped.mockResolvedValue([1, 2].map(id => ({ id, date: '2026-10-30', applicants: ['Old'], cardAssignments: [] })))
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let release!: (value: unknown) => void
+  state.participants.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+  let first!: Promise<void>, second!: Promise<void>
+  act(() => { first = result.current.refreshCalendarParticipants([1]) })
+  await waitFor(() => expect(state.participants).toHaveBeenCalledTimes(1))
+  act(() => { second = result.current.refreshCalendarParticipants([2]) })
+  state.participants.mockResolvedValue(new Map([1, 2].map(id => [id, { applicants: ['New'], assigned: [], guests: [] }])))
+  await act(async () => { release(new Map([[1, { applicants: ['Stale'] }]])); await first; await second })
+  expect(state.participants).toHaveBeenLastCalledWith([1, 2])
+  expect(result.current.calendarEvents.map(event => event.applicants)).toEqual([['New'], ['New']])
 })

@@ -2,6 +2,8 @@
 
 - Date: 2026-10-30
 - Status: demo deployed and browser smoke checked; production unchanged
+- Follow-up: 0055 separates participant signals from territory recovery. Do not
+  promote the original broad participant subscription without that correction.
 - Related: 0043 bounded windows, 0045 personal calendar, 0047 leader routes, 0053 scoped histories
 
 ## Audit and scope

@@ -1151,6 +1151,31 @@ test('recipient group rename reports failed strict recovery without losing build
   expect(result.current.buildings.map(b => b.id)).toEqual([10])
 })
 
+test.each([[7], null] as (number[] | null)[])('participant-only recovery %j does not refresh recipient territory or histories', async ids => {
+  const event = { id: 7, event_date: '2026-10-30', time: '10:00', event_participants: [{ user_name: 'Volunteer', role: '입명' }] }
+  state.calendarResponses.push(Promise.resolve({ data: [event], error: null }))
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.calendarEvents[0].applicants).toEqual(['Volunteer'])
+  const buildings = result.current.buildings, histories = result.current.visitHistories, cards = result.current.cards
+  state.reads = []; state.calendarFilters = []; state.refresh.mockClear(); state.unchanged.mockClear()
+  state.calendarResponses.push(Promise.resolve({ data: [{ ...event, event_participants: [...event.event_participants, { user_name: 'Other', role: '게스트' }] }], error: null }))
+  await act(async () => { await result.current.refreshCalendarParticipants(ids) })
+  expect(state.reads).toEqual(['calendar_events'])
+  expect(state.calendarFilters).toEqual([[['id', [7]]]])
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(state.unchanged).not.toHaveBeenCalled()
+  expect(result.current.buildings).toBe(buildings)
+  expect(result.current.visitHistories).toBe(histories)
+  expect(result.current.cards).toBe(cards)
+  expect(result.current.calendarEvents[0].applicants).toEqual(['Volunteer', 'Other'])
+  expect(result.current.calendarEvents[0].assigned).toEqual(['Volunteer'])
+  expect(result.current.calendarEvents[0].guests).toEqual(['Other'])
+  state.reads = []
+  await act(async () => { await result.current.refreshCalendarParticipants([999]) })
+  expect(state.reads).toEqual([])
+})
+
 test('a moved-out building disappears without dropping its globally retained history', async () => {
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
