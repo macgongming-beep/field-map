@@ -15,7 +15,8 @@ import { calendarNavigationReuseEnabled } from './calendarNavigationCache'
 
 export function useCalendarRealtime(
   onChange: () => void,
-  options?: { enabled?: boolean; debounceMs?: number },
+  options?: { enabled?: boolean; debounceMs?: number; invalidate?: () => void;
+    onParticipants?: (eventIds: number[] | null) => void },
 ) {
   const enabled = options?.enabled !== false
   const debounceMs = options?.debounceMs ?? 2000  // 연속 이벤트 묶음 처리
@@ -23,14 +24,39 @@ export function useCalendarRealtime(
   // 콜백 ref로 클로저 갱신 비용 줄임
   const cbRef = useRef(onChange)
   useEffect(() => { cbRef.current = onChange }, [onChange])
+  const optionsRef = useRef(options)
+  useEffect(() => { optionsRef.current = options }, [options])
 
   useEffect(() => {
     if (!enabled) return
 
     let pending: ReturnType<typeof setTimeout> | null = null
-    const trigger = () => {
+    let broad = false
+    let unknownParticipant = false
+    const participantIds = new Set<number>()
+    const schedule = () => {
+      if (calendarNavigationReuseEnabled()) optionsRef.current?.invalidate?.()
       if (pending) clearTimeout(pending)
-      pending = setTimeout(() => cbRef.current(), debounceMs)
+      pending = setTimeout(() => {
+        pending = null
+        const all = broad
+        const ids = unknownParticipant ? null : [...participantIds]
+        broad = false
+        unknownParticipant = false
+        participantIds.clear()
+        if (all) cbRef.current()
+        else optionsRef.current?.onParticipants?.(ids)
+      }, debounceMs)
+    }
+    const trigger = () => { broad = true; schedule() }
+    const participants = (payload: { new?: { event_id?: unknown }; old?: { event_id?: unknown } }) => {
+      const ids = [payload?.new?.event_id, payload?.old?.event_id]
+        .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0)
+      // DELETE may expose only the primary key. Refresh loaded participants,
+      // never guess the parent or expand to territory reads.
+      if (!ids.length) unknownParticipant = true
+      ids.forEach(id => participantIds.add(id))
+      schedule()
     }
 
     let channel = supabase
@@ -41,7 +67,7 @@ export function useCalendarRealtime(
     if (calendarNavigationReuseEnabled()) {
       channel = channel
         .on('postgres_changes', { event: '*', schema: 'public', table: 'event_restaurant_assignments' }, trigger)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_participants' }, trigger)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_participants' }, participants)
     }
     if (CART_APPLICATIONS_ENABLED) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'event_cart_applications' }, trigger)

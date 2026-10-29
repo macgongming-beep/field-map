@@ -4,6 +4,7 @@ import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
+import { readCalendarParticipants } from './calendarParticipants'
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
@@ -162,9 +163,17 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const [visitHistories, setVisitHistories] = useState<VisitHistory[]>([])
   const [serviceSessions, setServiceSessions] = useState<ServiceSession[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
+  const calendarEventsRef = useRef<CalendarEvent[]>([])
+  const publishCalendarEvents = useCallback((events: CalendarEvent[]) => {
+    calendarEventsRef.current = events
+    setCalendarEvents(events)
+  }, [])
   const recipientCalendarRef = useRef<CalendarEvent[] | undefined>(undefined)
   const calendarReadVersion = useRef(0)
   const calendarReadsPending = useRef(0)
+  const calendarReadsIdle = useRef(Promise.resolve())
+  const resolveCalendarReadsIdle = useRef<(() => void) | undefined>(undefined)
+  const dirtyParticipantIds = useRef<Set<number> | null>(new Set())
   const calendarSnapshotComplete = useRef(false)
   const [cardBoundaries, setCardBoundaries] = useState<CardBoundary[]>([])
   const boundaryReader = useRef(createCardBoundaryReader())
@@ -462,13 +471,15 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const version = ++calendarReadVersion.current
         const cacheEpoch = calendarCacheEpoch.current
         const scope = calendarScopeRef.current
-        calendarReadsPending.current += 1
+        if (calendarReadsPending.current++ === 0) {
+          calendarReadsIdle.current = new Promise(resolve => { resolveCalendarReadsIdle.current = resolve })
+        }
         try {
         if (scope !== 'full') {
           const events = await withLoadDeadline(readScopedCalendar(scope))
           measure(events)
           if (scope !== calendarScopeRef.current || version !== calendarReadVersion.current) throw new SupersededReadError('Calendar scope superseded')
-          setCalendarEvents(events)
+          publishCalendarEvents(events)
           if ((!calendarNavigationReuseEnabled() || cacheEpoch === calendarCacheEpoch.current)
             && (scope.startsWith('window:') || scope.startsWith('service:'))) {
             calendarWindows.current.delete(scope)
@@ -517,7 +528,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           && (version !== calendarReadVersion.current || scope !== calendarScopeRef.current)) {
           throw new SupersededReadError('Calendar read superseded')
         }
-        setCalendarEvents(transformedEvents)
+        publishCalendarEvents(transformedEvents)
         recipientCalendarRef.current = transformedEvents
         calendarSnapshotComplete.current = !eventCardAssignmentsRes.error && !eventAssignmentCardsRes.error
         setLoadedCalendarScope(scope)
@@ -533,7 +544,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         } catch (error) {
           if (!(error instanceof SupersededReadError) && scope === calendarScopeRef.current && version === calendarReadVersion.current) setCalendarReadError(true)
           throw error
-        } finally { calendarReadsPending.current -= 1 }
+        } finally {
+          if (--calendarReadsPending.current === 0) resolveCalendarReadsIdle.current?.()
+        }
       }
 
       case 'resources': {
@@ -697,7 +710,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
     }
-  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories])
+  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories, publishCalendarEvents])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
@@ -1171,7 +1184,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       ? undefined : readCalendarNavigationCache(calendarWindows.current, calendarScope)
     if (cached) {
       ++calendarReadVersion.current
-      setCalendarEvents(cached)
+      publishCalendarEvents(cached)
       recipientCalendarRef.current = undefined
       calendarSnapshotComplete.current = false
       setLoadedCalendarScope(calendarScope)
@@ -1179,7 +1192,38 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       return
     }
     void fetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }).catch(() => { /* calendar gate exposes retry */ })
-  }, [calendarScope, enabled, fetchSlices, clearCalendarWindows])
+  }, [calendarScope, enabled, fetchSlices, clearCalendarWindows, publishCalendarEvents])
+  const refreshCalendarParticipants = useCallback((eventIds: number[] | null): Promise<void> => {
+    clearCalendarWindows()
+    if (eventIds === null) dirtyParticipantIds.current = null
+    else eventIds.forEach(id => dirtyParticipantIds.current?.add(id))
+    const epoch = calendarCacheEpoch.current
+    ++calendarRefreshesPending.current
+    const work = async () => {
+      // A membership signal can arrive during initial/full loading. Patch after
+      // that read rather than superseding it or letting it overwrite the patch.
+      while (calendarReadsPending.current) await calendarReadsIdle.current
+      if (epoch !== calendarCacheEpoch.current) return
+      const scope = calendarScopeRef.current
+      const version = calendarReadVersion.current
+      const dirty = dirtyParticipantIds.current
+      const ids = calendarEventsRef.current.filter(event => dirty === null || dirty.has(event.id)).map(event => event.id)
+      if (!ids.length) { dirtyParticipantIds.current = new Set(); return }
+      const participants = await withLoadDeadline(readCalendarParticipants(ids))
+      if (epoch !== calendarCacheEpoch.current || version !== calendarReadVersion.current || scope !== calendarScopeRef.current) return
+      const update = (events: CalendarEvent[]) => events.map(event => participants.has(event.id)
+        ? { ...event, ...participants.get(event.id)! } : event)
+      publishCalendarEvents(update(calendarEventsRef.current))
+      if (recipientCalendarRef.current) recipientCalendarRef.current = update(recipientCalendarRef.current)
+      dirtyParticipantIds.current = new Set()
+    }
+    const next = recipientQueue.current.catch(() => {}).then(work)
+    recipientQueue.current = next
+    return next.catch(error => {
+      if (epoch === calendarCacheEpoch.current) setCalendarReadError(true)
+      throw error
+    }).finally(() => { --calendarRefreshesPending.current })
+  }, [clearCalendarWindows, publishCalendarEvents])
   const refreshUpdatedEvent = useCallback(async (eventId: number) => {
     clearCalendarWindows()
     if (!calendarSnapshotComplete.current || calendarReadsPending.current || !recipientCalendarRef.current?.some(event => event.id === eventId)) {
@@ -1191,8 +1235,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     const next = recipientCalendarRef.current.map(current => current.id === eventId ? event : current)
       .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
     recipientCalendarRef.current = next
-    setCalendarEvents(next)
-  }, [clearCalendarWindows])
+    publishCalendarEvents(next)
+  }, [clearCalendarWindows, publishCalendarEvents])
   const refreshMovedBuilding = useCallback(async (buildingId: number) => {
     if (buildingFullReadsPending.current) throw new Error('Building snapshot refresh in progress')
     const version = buildingFullReadVersion.current
@@ -1447,6 +1491,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     territoryRealtime,
     refetchAll: fetchAll,
     refetchSlices: fetchSlices,
+    invalidateCalendarCache: clearCalendarWindows,
+    refreshCalendarParticipants,
     applyPlaceDeletionSignal,
     syncCreatedUnits,
     syncChangedBuildings,
