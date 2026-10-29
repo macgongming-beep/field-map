@@ -41,8 +41,27 @@ are the largest remaining billing item.
   Playwright. It logs counts/sizes, not tokens or notification content. Browser
   transfer measurements and decoded JSON sizes are separate; neither establishes
   monthly billable savings.
-- Live demo/deployment results will be recorded after verification. No physical
-  phone or OS push delivery test has been performed in this change.
+- No physical phone or OS push delivery test has been performed in this change.
 - Authenticated demo RPC parity: one row, same ID/read state and metadata;
   decoded JSON 267 bytes full versus 160 bytes metadata. This tiny fixture is
   not representative of production, and these are not compressed transfer sizes.
+
+## Deployed demo verification
+
+- Code commit: `429140a`; demo deployment:
+  `dpl_C7aNxmJ3kFfAAwJtU5y1JDZDorwg`, canonical entry `index-Dlo3SnCA.js`.
+- A separate Chromium mobile viewport (430 x 932), with service workers blocked,
+  opened the actual canonical demo. The app-internal browser connector was
+  unavailable. This is not an installed-PWA or physical-phone check.
+- Closed header / opened panel / closed panel produced three successful RPC
+  reads: metadata / full / metadata. Real notification title and body rendered.
+- CDP `Network.loadingFinished.encodedDataLength` for those H3 responses was
+  899 / 1,003 / 898 bytes in the final run. CORS preflights are counted separately
+  by the script. These browser-reported sizes are not Supabase billing evidence.
+  For this one-row fixture the per-read difference is only about 100 bytes, and
+  opening/closing adds reads compared with the old full-response header.
+- Aborted the next full-body POST in the test browser. The panel showed an error
+  with retry; retry loaded the real content. No page errors occurred.
+- No notification rows were created, deleted or marked read in the live check;
+  read/all-read/delete behavior is covered by automated hook/panel tests.
+- Production deployment and configuration were not changed.
