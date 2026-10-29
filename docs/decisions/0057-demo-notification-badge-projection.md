@@ -89,3 +89,33 @@ are the largest remaining billing item.
   899 B metadata versus 1,003 B full for one row, not a production savings estimate.
 - This follow-up prepares the switches only. Neither production flags nor any
   deployment were changed; the deployed demo remains `429140a` until next rollout.
+
+## Production activation (2026-10-30 KST)
+
+- Following approval of both implementations and independent flags, production
+  cherry-picks are `0fc1643` (chat badge), `1400d96` (notifications), `7a5a271`
+  (verification), and `e6430f2` (opt-ins). No other demo changes were merged.
+- Set Production `VITE_NOTIFICATION_BADGE_ONLY_ENABLED=true` and
+  `VITE_CHAT_BADGE_ONLY_ENABLED=true`; all other configuration was left unchanged.
+- Production branch verification: 1,987 tests / 217 files, lint and build pass.
+  The count differs from demo because unreleased demo changes remain excluded.
+- Built without assigning the canonical domain, inspected the candidate assets,
+  then pushed the approved code to main and promoted:
+  `dpl_2SqsKmApw3WgJviBTn7rWZm77H7n`.
+  Candidate: https://chinese-territory-jluiko8kb-gms-projects-3b3e1c8b.vercel.app
+  Canonical: https://chinese-territory-app.vercel.app
+- Canonical entry: `index-D1dqzqfz.js`; header chunk:
+  `MeetingSettings-ihb4t4pW.js`. Its SHA-256 is
+  `e9d6ef00a8c702cb78558518b7cf06748f438f31bfb192f5c95ed94184b6d332`.
+- The compiled header passes notification `badgeOnly: !openNotifications` and
+  chat `badgeOnly: true`. Full chat consumers still use `{ realtime: false }`
+  without badge-only mode. Notification metadata projection is present.
+- Canonical returns HTTP 200, header chunk is byte-identical to the verified
+  candidate, and the served service worker precaches that new chunk.
+- Browser connection was unavailable. These are deployed-bundle checks, not
+  authenticated production UI/network checks. No production notification was
+  marked read or deleted, and no application database rows were written.
+- Remaining user smoke check after applying the PWA update: bell count and full
+  bodies, all-read clearing the count, and chat participant/locked presentation.
+- Rollback either flag to `false`, rebuild/redeploy, and have clients apply the
+  update. Each flag is independent; no database rollback is needed.
