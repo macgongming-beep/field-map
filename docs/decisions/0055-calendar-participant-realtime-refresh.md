@@ -143,4 +143,19 @@ participant-display-only event, in any future narrowing.
   subsequent join/cancel each needed one participant request and showed correctly.
   Fixture event 110 and participants were removed in finally.
 - This is not physical-phone or full browser UI verification, and request counts
-  are not billing-byte measurements. Production is unchanged by these followups.
+  are not billing-byte measurements. Production was unchanged during demo testing.
+
+## Followup production rollout: 2026-10-30
+
+- User authorized rollout after review. Applied only 8b187fb and e6c6665 as
+  production commits 8322192 and 8c70197. Existing navigation flag stays true.
+- Production-base verification: 1,921 tests / 212 files, lint and build pass.
+- Promoted dpl_EJBCw5vDKJCJNCaLtaweniLeNfDS. Canonical entry is
+  index-armALm-U.js; TerritoryReportView-BST4tZcO.js matches the inspected
+  candidate byte-for-byte. Confirmed compiled true flag, lifecycle/retry loop,
+  foreground error reset, and no background calendar-error setter.
+- No production DB writes or participant fixture creation. Physical two-device
+  smoke test remains outstanding; clients must apply the PWA update.
+- Previous deployment dpl_2PY65KBCqwN3b8JXnumrM3bc24a6 remains the rollback
+  target for these fixes. Flag-off disables navigation/participant optimization
+  more broadly, not just these fixes; any rollback requires client update.
