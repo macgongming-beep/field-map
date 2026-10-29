@@ -1,14 +1,18 @@
 # 0056: Demo self-application participant refresh
 
-Status: demo only; production rollout requires review and an explicit gate decision.
+Status: demo only; production opt-in is implemented but not activated.
 Date: 2026-10-30
 
 ## Scope
 
 Ordinary self service application and cancellation refresh participants instead
-of the calendar/recipient territory bundle. The callback is wired only when
-VITE_DEMO_MODE is true. No database, notification, authorization or write-path
-changes. Production retains the existing callback fallback.
+of the calendar/recipient territory bundle. The shared gate is
+`(VITE_CALENDAR_APPLICATION_REFRESH_ENABLED ?? VITE_DEMO_MODE) === 'true'`.
+Explicit false disables it even in demo; absent configuration preserves demo
+defaults and leaves production off. It is independent of
+VITE_CALENDAR_NAVIGATION_REUSE_ENABLED. No database, notification, authorization
+or write-path changes. Production retains the existing callback fallback until
+explicitly enabled and redeployed.
 
 ## Safety contracts
 
@@ -56,4 +60,24 @@ changes. Production retains the existing callback fallback.
 
 Demo deployment only. No production writes or flag changes are authorized here.
 Before production, review cancellation metadata assumptions, callback gate and
-cart switching exclusion. Roll back the demo deployment to restore old reads.
+cart switching exclusion. For production activation set
+VITE_CALENDAR_APPLICATION_REFRESH_ENABLED=true and rebuild/redeploy. To roll
+back set it to false and rebuild/redeploy; clients must apply the PWA update.
+This flag does not disable the separate realtime/navigation optimizations.
+
+## Review followup: 2026-10-30
+
+- Added useStore integration cancellation cases, using the real server-guard
+  helper over a mocked query transport rather than mocking away the helper.
+  Verify the participant write precedes the exact assignment metadata query and
+  no narrow participant read starts before that query.
+- Confirmed unassigned response uses only the participant patch. Shared timestamp
+  or server failure must skip that patch and read calendar, both assignment tables,
+  visit_histories and service_sessions. The resulting list removes the applicant.
+  These cases run with production mode and the new flag on, navigation reuse off.
+- Store-level flag matrix covers demo default, production default, production
+  opt-in, explicit demo false and explicit production false.
+- Mutation verification: removing the assertUnassignedCalendarEvent invocation
+  makes all three cancellation integration cases fail. Ignoring explicit false
+  makes the demo-off integration case fail. Restored code passes focused tests.
+- Final full verification: 1,984 tests / 217 files passed, lint and build passed.
