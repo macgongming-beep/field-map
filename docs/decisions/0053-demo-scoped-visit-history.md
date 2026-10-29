@@ -1,6 +1,6 @@
 # Separate recipient visit histories from full statistics
 
-- Status: demo deployed and UI save/cancel/statistics verified; production unchanged
+- Status: reviewed and enabled in production; admin statistics verified unchanged
 - Date: 2026-10-26
 - Related: 0015 recipient loading, 0049 return-detail retention, 0052 recent sessions
 
@@ -141,7 +141,42 @@ claim is made. Browser viewport was restored and the demo returned to home.
 
 ## Rollout
 
-Demo only for this task. Production remains unchanged. Separate review and
-authorization are required before production opt-in. Explicit false plus rebuild
-restores the prior global recipient history / settings calendar behavior. PWA
-clients must apply an update. No monthly or production-byte saving is claimed.
+After review of `6d06d81` and `81313c9`, the user separately authorized production
+activation. The approved changes were cherry-picked onto production base
+`3a2ff1e` as `aba22a5`, `c371cad` and `1fec83e`, then pushed to main. The single
+merge conflict retained production's existing `strictGroups` call signature;
+unrelated demo-only `strictAssets` behavior was not imported.
+
+Production variables are now `VITE_SCOPED_VISIT_HISTORY_ENABLED=true` and
+`VITE_SETTINGS_CALENDAR_RETENTION_ENABLED=true`. No other flag, DB schema or RLS
+was changed. Explicit false plus rebuild restores the prior global recipient
+history / settings calendar behavior. PWA clients must apply an update.
+
+### Production verification
+
+- Production-base suite: 1,876 tests / 209 files, lint and build passed. This
+  excludes unrelated demo-only tests from the 1,911-test demo branch.
+- Candidate deployment `dpl_Ao4qNMbmAAQDdkWtZu8ESh8WBsYQ` was built using the
+  production project/environment, verified READY, then promoted to
+  https://chinese-territory-app.vercel.app.
+- Canonical HTML serves `/assets/index-Dd9qNrdl.js`. Both entry and store chunk
+  match the inspected candidate byte-for-byte. Store:
+  `/assets/TerritoryReportView-ym6ExxRl.js`, SHA-256
+  `fdb56376d112e78d5bd7874c0bb00481090afcc8ac87f1ec3313b529ad5726f6`.
+- Compiled history gate is enabled and still requires actual `user` role and a
+  recipient reader. Unit-ID batching, invalidation/date filters and stale-read
+  guard are present; statistics/privileged reads retain the global branch.
+- Compiled settings retention is enabled, requires calendar windows, and excludes
+  openEvent/openChat deep links. The candidate uses the production Supabase origin.
+- Applied the normal PWA update in the existing administrator session and checked
+  the DOM script URL is the new entry. Statistics before and after: total 1,314,
+  met 346, absent 568, excluded 399; October 222 visits / 46 met; 3,272 units.
+  These displayed values were unchanged.
+- Local UI evidence:
+  `/Users/gm/Documents/New project/field-map-recipient-perf/scratch/production-scoped-history-stats.png`.
+- No production visit was saved or cancelled. Actual volunteer-role wire requests
+  were not captured; enabled compiled filtering and integration tests are the
+  evidence for that path. Save/cancel remains verified on demo only.
+
+No monthly or production-byte saving is claimed. Compare usage after installed
+clients apply the update, using matched time windows and active-account counts.
