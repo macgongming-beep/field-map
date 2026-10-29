@@ -103,3 +103,21 @@ Review this correction before enabling navigation reuse in production. A full
 two-browser UI/network capture remains useful to include chat and App effects.
 Treat restaurant reassignment as authorization/membership recovery, not as a
 participant-display-only event, in any future narrowing.
+# Production rollout: 2026-10-30
+
+- Approved changes only: production commits 362e73a, e667adf, 775d0f2,
+  6ece875. Production main was fast-forwarded to 6ece875.
+- Enabled VITE_CALENDAR_NAVIGATION_REUSE_ENABLED=true in Production.
+- Verified production-base tests: 1,917 tests / 212 files, lint and build pass.
+- Promoted deployment dpl_2PY65KBCqwN3b8JXnumrM3bc24a6 after candidate
+  asset inspection. Canonical entry: index-IQX2eZWX.js. Canonical store chunk
+  TerritoryReportView-BON_tL2q.js exactly matches the inspected candidate.
+  Its compiled navigation flag defaults to true and participant reads select
+  only id,event_participants(user_name,role).
+- No production DB mutations were performed for verification. Real two-device
+  participant update verification remains a user smoke check after PWA update.
+- Separate followups: clear stale background participant error on a new read;
+  reschedule dirty participant patches invalidated by unrelated resource epochs.
+- Rollback: set VITE_CALENDAR_NAVIGATION_REUSE_ENABLED=false and redeploy;
+  clients must apply the application update. No DB rollback is needed.
+
