@@ -14,8 +14,13 @@ const rows = ['assignment', 'notice', 'comment'].map((type, i) => ({ id: i + 1, 
 beforeEach(() => { const root = document.createElement('div'); root.id = 'root'; document.body.appendChild(root) })
 afterEach(() => { cleanup(); document.getElementById('root')?.remove(); vi.unstubAllEnvs(); vi.restoreAllMocks(); mocks.rpc.mockReset() })
 
-test('demo header loads metadata until opened, then shows full content and marks read', async () => {
-  vi.stubEnv('VITE_DEMO_MODE', 'true')
+test.each([
+  ['true', undefined],
+  ['false', 'true'],
+  [undefined, 'true'],
+] as const)('enabled header loads metadata then full content and marks read: demo=%s flag=%s', async (demo, flag) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_NOTIFICATION_BADGE_ONLY_ENABLED', flag)
   const select = vi.fn().mockResolvedValue({ data: rows.map(({ title: _title, body: _body, ...rest }) => rest), error: null })
   let resolveFull!: (reply: unknown) => void
   const full = new Promise((resolve) => { resolveFull = resolve })
@@ -36,8 +41,14 @@ test('demo header loads metadata until opened, then shows full content and marks
   expect(screen.getByRole('button', { name: '알림' })).toBeTruthy()
 })
 
-test.each(['false', undefined])('production keeps the full RPC read (%s)', async (demo) => {
+test.each([
+  ['false', undefined],
+  [undefined, undefined],
+  ['true', 'false'],
+  ['false', 'false'],
+] as const)('disabled header keeps full RPC read: demo=%s flag=%s', async (demo, flag) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_NOTIFICATION_BADGE_ONLY_ENABLED', flag)
   const select = vi.fn()
   mocks.rpc.mockReturnValue(Object.assign(Promise.resolve({ data: rows, error: null }), { select }))
   render(<MemoryRouter><AppHeaderActionButtons userId={10} /></MemoryRouter>)
