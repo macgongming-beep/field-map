@@ -11,6 +11,7 @@ import { useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { subscribeWithRecovery } from '../lib/realtimeRecovery'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
+import { calendarNavigationReuseEnabled } from './calendarNavigationCache'
 
 export function useCalendarRealtime(
   onChange: () => void,
@@ -37,6 +38,11 @@ export function useCalendarRealtime(
       .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, trigger)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_card_assignments' }, trigger)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_card_assignment_cards' }, trigger)
+    if (calendarNavigationReuseEnabled()) {
+      channel = channel
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_restaurant_assignments' }, trigger)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_participants' }, trigger)
+    }
     if (CART_APPLICATIONS_ENABLED) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'event_cart_applications' }, trigger)
     }

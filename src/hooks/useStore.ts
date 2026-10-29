@@ -3,6 +3,7 @@ import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
+import { calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
@@ -133,7 +134,13 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const [loadedCalendarScope, setLoadedCalendarScope] = useState<string | null>(null)
   const [calendarReadError, setCalendarReadError] = useState(false)
   // Session-local, bounded display cache. Never used as an authorization snapshot.
-  const calendarWindows = useRef(new Map<string, { events: CalendarEvent[]; at: number }>())
+  const calendarWindows = useRef(new Map<string, CalendarSnapshot>())
+  const calendarCacheEpoch = useRef(0)
+  const calendarRefreshesPending = useRef(0)
+  const clearCalendarWindows = useCallback(() => {
+    ++calendarCacheEpoch.current
+    calendarWindows.current.clear()
+  }, [])
   // App keys this store by account/read mode. Never mix partial and full snapshots.
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
   const scopedHistories = scopedVisitHistoryEnabled(role, Boolean(recipientReader))
@@ -453,6 +460,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
       case 'calendar': {
         const version = ++calendarReadVersion.current
+        const cacheEpoch = calendarCacheEpoch.current
         const scope = calendarScopeRef.current
         calendarReadsPending.current += 1
         try {
@@ -461,7 +469,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           measure(events)
           if (scope !== calendarScopeRef.current || version !== calendarReadVersion.current) throw new SupersededReadError('Calendar scope superseded')
           setCalendarEvents(events)
-          if (scope.startsWith('window:') || scope.startsWith('service:')) {
+          if ((!calendarNavigationReuseEnabled() || cacheEpoch === calendarCacheEpoch.current)
+            && (scope.startsWith('window:') || scope.startsWith('service:'))) {
             calendarWindows.current.delete(scope)
             calendarWindows.current.set(scope, { events, at: Date.now() })
             if (calendarWindows.current.size > 6) calendarWindows.current.delete(calendarWindows.current.keys().next().value!)
@@ -700,7 +709,18 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   ): Promise<void> => {
     // Navigation can reuse recently read months; writes/recovery/manual refresh
     // invalidate every month, including those not currently visible.
-    if (slices.includes('calendar') && options?.triggeredBy !== 'navigation:calendar') calendarWindows.current.clear()
+    const invalidatesCalendar = options?.triggeredBy !== 'navigation:calendar'
+      && (slices.includes('calendar') || (calendarNavigationReuseEnabled() && slices.includes('resources')))
+    if (invalidatesCalendar) clearCalendarWindows()
+    const trackRefresh = invalidatesCalendar && calendarNavigationReuseEnabled()
+    if (trackRefresh) ++calendarRefreshesPending.current
+    const track = (promise: Promise<void>) => {
+      if (trackRefresh) {
+        const done = () => { --calendarRefreshesPending.current }
+        void promise.then(done, done)
+      }
+      return promise
+    }
     if (recipientReader) {
       const work = async () => {
         const baseline = slices.includes('visits')
@@ -753,7 +773,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       territoryCheckpoint.snapshot = next
       const clear = () => { if (territoryCheckpoint.snapshot === next) territoryCheckpoint.snapshot = null }
       void next.then(clear, clear)
-      return next
+      return track(next)
     }
     // Only recovery callers share reads. A post-mutation refresh must not join a
     // query that started before the write and could return an older snapshot.
@@ -844,8 +864,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       const clear = () => { if (territoryCheckpoint.snapshot === promise) territoryCheckpoint.snapshot = null }
       void promise.then(clear, clear)
     }
-    return promise
-  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader, scopedHistories])
+    return track(promise)
+  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader, scopedHistories, clearCalendarWindows])
 
   // 기존 fetchAll: 모든 slice + auto_close 부수효과 유지 (100% 후방호환)
   const fetchAll = useCallback(async (recovery = false) => {
@@ -1136,16 +1156,22 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     [fetchSlices],
   )
   const previousCalendarScope = useRef(calendarScope)
-  useEffect(() => { calendarWindows.current.clear() }, [role, recipientUser])
+  const calendarCacheIdentity = useRef({ role, recipientUser })
+  useEffect(() => {
+    const previous = calendarCacheIdentity.current
+    if (previous.role !== role || previous.recipientUser !== recipientUser) clearCalendarWindows()
+    calendarCacheIdentity.current = { role, recipientUser }
+  }, [role, recipientUser, clearCalendarWindows])
   useEffect(() => {
     const changed = previousCalendarScope.current !== calendarScope
     previousCalendarScope.current = calendarScope
-    if (!enabled) { calendarWindows.current.clear(); return }
+    if (!enabled) { clearCalendarWindows(); return }
     if (!changed) return
-    const cached = calendarWindows.current.get(calendarScope)
-    if (cached && Date.now() - cached.at >= 0 && Date.now() - cached.at < 120_000) {
+    const cached = calendarNavigationReuseEnabled() && calendarRefreshesPending.current > 0
+      ? undefined : readCalendarNavigationCache(calendarWindows.current, calendarScope)
+    if (cached) {
       ++calendarReadVersion.current
-      setCalendarEvents(cached.events)
+      setCalendarEvents(cached)
       recipientCalendarRef.current = undefined
       calendarSnapshotComplete.current = false
       setLoadedCalendarScope(calendarScope)
@@ -1153,9 +1179,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       return
     }
     void fetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }).catch(() => { /* calendar gate exposes retry */ })
-  }, [calendarScope, enabled, fetchSlices])
+  }, [calendarScope, enabled, fetchSlices, clearCalendarWindows])
   const refreshUpdatedEvent = useCallback(async (eventId: number) => {
-    calendarWindows.current.clear()
+    clearCalendarWindows()
     if (!calendarSnapshotComplete.current || calendarReadsPending.current || !recipientCalendarRef.current?.some(event => event.id === eventId)) {
       throw new Error('Complete calendar snapshot required')
     }
@@ -1166,7 +1192,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
     recipientCalendarRef.current = next
     setCalendarEvents(next)
-  }, [])
+  }, [clearCalendarWindows])
   const refreshMovedBuilding = useCallback(async (buildingId: number) => {
     if (buildingFullReadsPending.current) throw new Error('Building snapshot refresh in progress')
     const version = buildingFullReadVersion.current
