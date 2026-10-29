@@ -174,6 +174,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const calendarReadsIdle = useRef(Promise.resolve())
   const resolveCalendarReadsIdle = useRef<(() => void) | undefined>(undefined)
   const dirtyParticipantIds = useRef<Set<number> | null>(new Set())
+  const participantLifecycle = useRef(0)
+  useEffect(() => {
+    const generation = ++participantLifecycle.current
+    return () => { participantLifecycle.current = generation + 1 }
+  }, [enabled, role, recipientUser])
   const calendarSnapshotComplete = useRef(false)
   const [cardBoundaries, setCardBoundaries] = useState<CardBoundary[]>([])
   const boundaryReader = useRef(createCardBoundaryReader())
@@ -466,6 +471,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       }
 
       case 'calendar': {
+        setCalendarReadError(false)
         const version = ++calendarReadVersion.current
         const cacheEpoch = calendarCacheEpoch.current
         const scope = calendarScopeRef.current
@@ -1169,32 +1175,37 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     clearCalendarWindows()
     if (eventIds === null) dirtyParticipantIds.current = null
     else eventIds.forEach(id => dirtyParticipantIds.current?.add(id))
-    const epoch = calendarCacheEpoch.current
+    const lifecycle = participantLifecycle.current
     ++calendarRefreshesPending.current
     const work = async () => {
-      // A membership signal can arrive during initial/full loading. Patch after
-      // that read rather than superseding it or letting it overwrite the patch.
-      while (calendarReadsPending.current) await calendarReadsIdle.current
-      if (epoch !== calendarCacheEpoch.current) return
-      const scope = calendarScopeRef.current
-      const version = calendarReadVersion.current
-      const dirty = dirtyParticipantIds.current
-      const ids = calendarEventsRef.current.filter(event => dirty === null || dirty.has(event.id)).map(event => event.id)
-      if (!ids.length) { dirtyParticipantIds.current = new Set(); return }
-      const participants = await withLoadDeadline(readCalendarParticipants(ids))
-      if (epoch !== calendarCacheEpoch.current || version !== calendarReadVersion.current || scope !== calendarScopeRef.current) return
-      const update = (events: CalendarEvent[]) => events.map(event => participants.has(event.id)
-        ? { ...event, ...participants.get(event.id)! } : event)
-      publishCalendarEvents(update(calendarEventsRef.current))
-      if (recipientCalendarRef.current) recipientCalendarRef.current = update(recipientCalendarRef.current)
-      dirtyParticipantIds.current = new Set()
+      // Retry invalidated responses, not network failures. Each attempt uses the
+      // current visible snapshot; never wait on our own recipient queue.
+      while (lifecycle === participantLifecycle.current) {
+        // A membership signal can arrive during initial/full loading. Patch after
+        // that read rather than superseding it or letting it overwrite the patch.
+        while (calendarReadsPending.current) await calendarReadsIdle.current
+        if (lifecycle !== participantLifecycle.current) return
+        const epoch = calendarCacheEpoch.current
+        const scope = calendarScopeRef.current
+        const version = calendarReadVersion.current
+        const dirty = dirtyParticipantIds.current
+        const ids = calendarEventsRef.current.filter(event => dirty === null || dirty.has(event.id)).map(event => event.id)
+        if (!ids.length) { dirtyParticipantIds.current = new Set(); return }
+        const participants = await withLoadDeadline(readCalendarParticipants(ids))
+        if (lifecycle !== participantLifecycle.current) return
+        if (epoch !== calendarCacheEpoch.current || version !== calendarReadVersion.current || scope !== calendarScopeRef.current) continue
+        const update = (events: CalendarEvent[]) => events.map(event => participants.has(event.id)
+          ? { ...event, ...participants.get(event.id)! } : event)
+        publishCalendarEvents(update(calendarEventsRef.current))
+        if (recipientCalendarRef.current) recipientCalendarRef.current = update(recipientCalendarRef.current)
+        dirtyParticipantIds.current = new Set()
+        return
+      }
     }
     const next = recipientQueue.current.catch(() => {}).then(work)
     recipientQueue.current = next
-    return next.catch(error => {
-      if (epoch === calendarCacheEpoch.current) setCalendarReadError(true)
-      throw error
-    }).finally(() => { --calendarRefreshesPending.current })
+    // The caller reports background failures without marking visible data unreadable.
+    return next.finally(() => { --calendarRefreshesPending.current })
   }, [clearCalendarWindows, publishCalendarEvents])
   const refreshUpdatedEvent = useCallback(async (eventId: number) => {
     clearCalendarWindows()

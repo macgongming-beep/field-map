@@ -480,6 +480,71 @@ test('participants wait for an older full read and never expand invisible events
   expect(state.participants).not.toHaveBeenCalled()
 })
 
+test('background participant failure does not poison loading an uncached month', async () => {
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'leader', undefined, scope), { initialProps: { scope: 'full' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.participants.mockRejectedValueOnce(new Error('offline'))
+  await act(async () => { await expect(result.current.refreshCalendarParticipants([1])).rejects.toThrow('offline') })
+  expect(result.current.calendarReadError).toBe(false)
+  expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
+  let release!: (value: unknown[]) => void
+  state.scoped.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+  rerender({ scope: 'window:2026-11-01:2026-11-30' })
+  await waitFor(() => expect(state.scoped).toHaveBeenCalled())
+  expect(result.current.calendarScopeReady).toBe(false)
+  expect(result.current.calendarReadError).toBe(false)
+  await act(async () => { release([]) })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+})
+
+test('a foreground calendar failure still shows error and retry clears it before completion', async () => {
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, 'full'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.failure = 'calendar_events'
+  await act(async () => { await expect(result.current.refetchSlices(['calendar'])).rejects.toThrow() })
+  expect(result.current.calendarReadError).toBe(true)
+  state.failure = ''
+  let release!: (value: unknown) => void
+  state.pendingFull = new Promise(resolve => { release = resolve })
+  let retry!: Promise<void>
+  act(() => { retry = result.current.refetchSlices(['calendar']) })
+  await waitFor(() => expect(result.current.calendarReadError).toBe(false))
+  await act(async () => { release({ data: [old], error: null }); await retry })
+  expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
+})
+
+test('resource invalidation retries dirty participants without another realtime signal', async () => {
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, 'full'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  let release!: (value: unknown) => void
+  state.participants.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+  let patch!: Promise<void>
+  act(() => { patch = result.current.refreshCalendarParticipants([1]) })
+  await waitFor(() => expect(state.participants).toHaveBeenCalledTimes(1))
+  await act(async () => { await result.current.refetchSlices(['resources']) })
+  state.participants.mockResolvedValue(new Map([[1, { applicants: ['Fresh'], assigned: [], guests: [] }]]))
+  await act(async () => { release(new Map([[1, { applicants: ['Stale'] }]])); await patch })
+  expect(state.participants).toHaveBeenCalledTimes(2)
+  expect(state.participants).toHaveBeenLastCalledWith([1])
+  expect(result.current.calendarEvents[0].applicants).toEqual(['Fresh'])
+  expect(state.reads).not.toContain('calendar_events')
+  expect(state.reads).not.toContain('buildings')
+})
+
+test('unmount discards invalidated participant response without retry', async () => {
+  const { result, unmount } = renderHook(() => useStore(true, 'leader', undefined, 'full'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let release!: (value: unknown) => void
+  state.participants.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+  let patch!: Promise<void>
+  act(() => { patch = result.current.refreshCalendarParticipants([1]) })
+  await waitFor(() => expect(state.participants).toHaveBeenCalledTimes(1))
+  unmount()
+  await act(async () => { release(new Map()); await patch })
+  expect(state.participants).toHaveBeenCalledTimes(1)
+})
+
 test('a second participant signal retains first dirty event when an old response is discarded', async () => {
   state.scoped.mockResolvedValue([1, 2].map(id => ({ id, date: '2026-10-30', applicants: ['Old'], cardAssignments: [] })))
   const { result } = renderHook(() => useStore(true, 'leader', undefined, 'window:2026-10-01:2026-10-31'))

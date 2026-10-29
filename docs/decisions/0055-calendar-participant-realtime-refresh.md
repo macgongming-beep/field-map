@@ -121,3 +121,26 @@ participant-display-only event, in any future narrowing.
 - Rollback: set VITE_CALENDAR_NAVIGATION_REUSE_ENABLED=false and redeploy;
   clients must apply the application update. No DB rollback is needed.
 
+# Demo followups: 2026-10-30
+
+- Background participant failures reject to the existing reporting caller but no
+  longer set the foreground calendar error. Starting a calendar read clears its
+  previous foreground error; real calendar failures still expose retry.
+- An epoch/version/scope-invalidated participant response keeps dirty IDs and
+  retries against the latest loaded snapshot after pending calendar reads settle.
+  It does not wait on its own recipient queue. Network failures are not retried
+  by this loop. Account/role/enabled lifecycle change or unmount stops the work.
+- Added four store tests: background failure then uncached month loading, genuine
+  foreground failure then retry, resources invalidation without a second signal,
+  and unmount without retry. Existing overlapping-signal test still passes.
+- Full suite: 1,956 tests / 215 files. Removing the invalidation retry makes the
+  new resource-overlap test fail (one request instead of two).
+- Real demo verification via measureParticipantRealtimeDemo.mjs --followups:
+  two authenticated clients, real DB/WebSocket, application hooks under JSDOM.
+  Injected cache invalidation during join and cancel responses produced two
+  participant-only calendar requests each and correct final applicants. Injected
+  persistent observer HTTP 503 rejected without poisoning calendar readiness;
+  subsequent join/cancel each needed one participant request and showed correctly.
+  Fixture event 110 and participants were removed in finally.
+- This is not physical-phone or full browser UI verification, and request counts
+  are not billing-byte measurements. Production is unchanged by these followups.

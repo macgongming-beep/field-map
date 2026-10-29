@@ -69,8 +69,9 @@ localStorage.setItem('currentVisitor', user.name)
 const { renderHook, waitFor, act, cleanup } = await import('@testing-library/react')
 const results = []
 try {
-  for (const scenario of ['before-visible', 'after-visible', 'after-offscreen']) {
+  for (const scenario of (process.argv.includes('--followups') ? ['followup-overlap', 'followup-failure'] : ['before-visible', 'after-visible', 'after-offscreen'])) {
     let phase = 'initial', subscribed = false, completed = 0, channelStatus = 'not-started'
+    let invalidateOnce = false, failOnce = false, invalidate = () => {}
     const samples = []
     const client = createClient(origin, key, { auth: { ...auth, storageKey: `participant-measurement-${scenario}` }, global: {
       headers: { 'x-session-token': user.token },
@@ -80,7 +81,13 @@ try {
         if (url.pathname.endsWith('/auto_close_stale_sessions')) return new Response('null', { status: 200 })
         if ((init?.method ?? 'GET') !== 'GET' && !['territory_sync_clock', 'get_card_summaries', 'get_recipient_return_visit_card_ids'].includes(url.pathname.split('/').pop())) throw Error('Observer write rejected')
         const label = phase
+        const narrow = url.searchParams.get('select') === 'id,event_participants(user_name,role)'
+        if (narrow && failOnce) {
+          samples.push({ phase: label, endpoint: 'calendar_events', status: 503 })
+          return new Response(JSON.stringify({ message: 'Injected demo observer failure' }), { status: 503 })
+        }
         const response = await fetch(input, init)
+        if (narrow && invalidateOnce) { invalidateOnce = false; invalidate() }
         samples.push({ phase: label, endpoint: url.pathname.split('/').pop(), status: response.status })
         return response
       },
@@ -130,8 +137,18 @@ try {
       const day = scenario === 'after-offscreen' ? '2000-01-01' : today
       hook = renderHook(() => module.useObservedStore(user.name, `window:${day}:${day}`))
       await waitFor(() => { assert.equal(hook.result.current.loading, false); assert.equal(hook.result.current.error, null); assert.equal(subscribed, true, `${scenario} channel: ${channelStatus}`) }, { timeout: 45000 })
+      invalidate = () => hook.result.current.invalidateCalendarCache()
+      if (scenario === 'followup-failure') {
+        phase = 'injected-failure'; failOnce = true
+        await act(async () => { await assert.rejects(hook.result.current.refreshCalendarParticipants([event.id])) })
+        failOnce = false
+        assert.equal(hook.result.current.calendarReadError, false)
+        assert.equal(hook.result.current.calendarScopeReady, true)
+        results.push({ scenario, failureReported: true, visibleCalendarError: false })
+      }
       for (const operation of ['join', 'cancel']) {
         phase = operation
+        invalidateOnce = scenario === 'followup-overlap'
         const before = completed
         await act(async () => {
           if (operation === 'join') unwrap(await writer.from('event_participants').insert({ event_id: event.id, user_name: admin.name, role: '신청' }))
@@ -145,6 +162,8 @@ try {
         results.push({ scenario, operation, requests: requests.length, byEndpoint })
         if (scenario === 'after-visible') assert.deepEqual(byEndpoint, { calendar_events: 1 })
         if (scenario === 'after-offscreen') assert.equal(requests.length, 0)
+        if (scenario === 'followup-overlap') assert.deepEqual(byEndpoint, { calendar_events: 2 })
+        if (scenario === 'followup-failure') assert.deepEqual(byEndpoint, { calendar_events: 1 })
       }
     } finally {
       hook?.unmount(); cleanup(); await client.removeAllChannels(); client.realtime.disconnect(); await bundle.close()
