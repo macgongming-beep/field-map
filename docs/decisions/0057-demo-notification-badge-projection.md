@@ -5,7 +5,8 @@
 The header previously fetched up to 50 complete notification rows while its
 notification panel was closed. Visible-document polling repeats this every
 60 seconds. This change omits titles and bodies while closed, then requests the
-original full RPC response when the panel opens. Header wiring is demo-only.
+original full RPC response when the panel opens. Initially header wiring was
+demo-only; the independent build-time opt-ins below now prepare production use.
 Production configuration, database functions, permissions, push delivery, chat
 messages, polling intervals and the 50-row limit are unchanged.
 
@@ -26,8 +27,8 @@ are the largest remaining billing item.
 - No persistent notification cache is introduced. Closed/open mode changes each
   cause one read; this can add requests for frequent panel toggling. Measure the
   tradeoff, not just projected body savings.
-- Production still uses the full response. A production opt-in gate and review
-  are required before enabling this optimization there.
+- Production keeps the full response unless its notification opt-in is explicitly
+  enabled. Review and production rollout remain separate from this code change.
 
 ## Verification
 
@@ -65,3 +66,26 @@ are the largest remaining billing item.
 - No notification rows were created, deleted or marked read in the live check;
   read/all-read/delete behavior is covered by automated hook/panel tests.
 - Production deployment and configuration were not changed.
+
+## Production opt-in follow-up
+
+- Notifications: `VITE_NOTIFICATION_BADGE_ONLY_ENABLED`.
+- Header chat badge: `VITE_CHAT_BADGE_ONLY_ENABLED` (decision 0036 loader).
+- Each uses `(flag ?? VITE_DEMO_MODE) === 'true'`, independently. Unset on
+  production leaves the old reads; explicit `false` disables even on demo.
+- Notification mode still additionally requires the panel to be closed.
+  Opening fetches full notification content regardless of either flag. Neither
+  flag changes the full chat list in GlobalChatModal or NotificationCenter.
+- No role, cache key, RPC, subscription, polling or write logic was changed in
+  this follow-up. No database migration or server count RPC was added.
+- Enable or roll back each flag independently. A build, redeployment and client
+  PWA update are required; this is not a live server switch.
+- Verification: 55 focused tests; 2,010 tests across 219 files; lint/build pass.
+  Tests cover production on/off/unset, demo inheritance, explicit false, independent
+  combinations, and real header/panel body loading and read actions.
+- Mutation check: reverting both header gates to demo-only caused 9 of 17 header
+  tests to fail. Restoring the opt-ins returned all 55 focused tests to passing.
+- The authenticated demo byte comparison above is unchanged: H3 transfer roughly
+  899 B metadata versus 1,003 B full for one row, not a production savings estimate.
+- This follow-up prepares the switches only. Neither production flags nor any
+  deployment were changed; the deployed demo remains `429140a` until next rollout.
