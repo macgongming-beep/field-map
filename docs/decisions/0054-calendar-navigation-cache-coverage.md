@@ -1,7 +1,7 @@
 # Reuse complete calendar coverage on frequent navigation
 
 - Date: 2026-10-30
-- Status: demo verification in progress; production unchanged
+- Status: demo deployed and browser smoke checked; production unchanged
 - Related: 0043 bounded windows, 0045 personal calendar, 0047 leader routes, 0053 scoped histories
 
 ## Audit and scope
@@ -65,7 +65,38 @@ Only memory is reused; no new personal data is persisted on the device.
   navigation is tested; the old participants must not return from cache.
 - Realtime tests check opt-in subscriptions, debounce, cleanup and another person
   joining before a containing home window is reused for next-month navigation.
-- Browser demo verification and final suite results are recorded below when done.
+- Full suite: 1,942 tests in 214 files passed; lint and production build passed.
+- Independent review found the missing participant subscription; it was added
+  with an integrated realtime/store test before commit `adf6d37`. Follow-up
+  review confirmed that finding closed with no remaining blocker from that review.
+
+### Demo browser verification (2026-10-30)
+
+- Code: `adf6d37`; demo deployment `dpl_6MAPQR3Vtyq6NtLUR5u8zyWRg4sQ`.
+  Alias: https://chinese-territory-app-demo.vercel.app.
+  Applied the PWA update and observed entry `index-BUIgwVXP.js` in the page.
+- Volunteer: temporary demo event 103 appeared in home and October calendar
+  with one applicant, and in My Service with card 1. My Service -> map -> back
+  -> home -> calendar -> My Service -> map retained the assignment and 16 units.
+  October contained seven events while the fixture existed; November showed
+  its empty state. The existing October 5 past assignment still showed its
+  leader and the demo volunteer after these trips.
+- Leader: signed in with the demo leader account; zone retained nine cards
+  (six assigned leader cards). Its whole-zone map showed 74 units. Home -> zone
+  returned to the same nine-card list. No card/building scope was narrowed here.
+- Removed temporary event 103 and its fixture assignments using the demo-only
+  guarded cleanup. No new visit history was created; unit 2 remained unvisited,
+  existing three active histories remained, and no fixture session remained.
+- Local screenshots: `scratch/demo-calendar-nav-map-adf6d37.png`,
+  `scratch/demo-calendar-nav-leader-zone-adf6d37.png`, and
+  `scratch/demo-calendar-nav-zone-return-adf6d37.png`.
+- Limits: browser smoke used the in-app browser, not physical phones. Additional
+  read elimination is established by instrumented store tests, not a browser
+  network/Transferred capture. Cross-team preservation and another participant
+  joining are covered by automated tests; a live two-device join was not run.
+  A transient loading state was observed on month navigation; this is not a
+  claim that every transition is instantaneous or that no request occurs on
+  any navigation. Review and live concurrency validation precede production.
 
 Request-count assertions above are instrumented tests, not wire captures. No
 monthly saving, foreground saving or production-byte claim is made.
@@ -82,4 +113,5 @@ lengthening the cooldown or hiding real-time participant/comment updates.
 
 Set the new flag to false and rebuild/redeploy; installed clients apply the PWA
 update. This restores exact-key navigation caching and removes the additional
-restaurant subscription. No production activation is included in this task.
+restaurant and participant subscriptions. No production activation is included
+in this task.
