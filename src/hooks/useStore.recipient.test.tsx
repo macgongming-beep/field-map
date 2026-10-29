@@ -142,6 +142,66 @@ function enableScopedHistories() {
   state.historyRows.push({ ...state.historyRows[0], id: 901, unit_id: 100, visitor_name: 'Another visitor' })
 }
 
+test.each([false, true])('assigned-map navigation recipient request reuse=%s without rereading buildings/cards/histories', async enabled => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', String(enabled))
+  const base = 'service:["Volunteer","2026-10-30",null]'
+  const target = 'service:["Volunteer","2026-10-30",7]'
+  state.calendarResponses.push(
+    Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30' }], error: null }),
+    Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30', time: '10:00', title: 'Shared', event_participants: [
+      { user_name: 'Volunteer', role: '신청' }, { user_name: 'Other team', role: '신청' },
+    ] }], error: null }),
+  )
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'user', 'Volunteer', scope), { initialProps: { scope: base } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.calendarEvents[0].applicants).toEqual(['Volunteer', 'Other team'])
+  const histories = result.current.visitHistories
+  const buildings = result.current.buildings
+  state.reads = []
+  state.refresh.mockClear()
+  rerender({ scope: target })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  if (enabled) {
+    expect(state.reads).toEqual([])
+    expect(state.refresh).not.toHaveBeenCalled()
+    expect(result.current.calendarEvents[0].applicants).toEqual(['Volunteer', 'Other team'])
+    expect(result.current.buildings).toBe(buildings)
+    expect(result.current.visitHistories).toBe(histories)
+  } else {
+    expect(state.reads).toContain('calendar_events')
+    expect(state.reads).toContain('cards')
+    expect(state.reads).toContain('visit_histories')
+    expect(state.refresh).toHaveBeenCalled()
+  }
+})
+
+test('queued refresh invalidation cannot be repopulated by an older recipient calendar read', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  const home = 'window:2026-10-16:2026-11-30'
+  const month = 'window:2026-11-01:2026-11-30'
+  const row = { id: 7, event_date: '2026-11-02', time: '10:00', title: 'Shared', event_participants: [{ user_name: 'Old', role: '신청' }] }
+  state.calendarResponses.push(Promise.resolve({ data: [row], error: null }))
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'user', 'Volunteer', scope), { initialProps: { scope: home } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.calendarResponses.push(new Promise(done => { release = done }))
+  let first!: Promise<void>
+  act(() => { first = result.current.refetchSlices(['calendar'], { triggeredBy: 'foreground' }) })
+  await waitFor(() => expect(state.calendarResponses).toHaveLength(0))
+  state.calendarResponses.push(Promise.resolve({ data: [], error: new Error('offline') } as never))
+  let second!: Promise<unknown>
+  act(() => { second = result.current.refetchSlices(['calendar'], { triggeredBy: 'mutation:calendar' }).catch(error => error) })
+  await act(async () => { release({ data: [row], error: null }); await first; expect(await second).toBeInstanceOf(Error) })
+  state.calendarResponses.push(Promise.resolve({ data: [{ ...row, event_participants: [{ user_name: 'New', role: '신청' }] }], error: null }))
+  state.calendarFilters = []
+  rerender({ scope: month })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.calendarFilters).toHaveLength(1)
+  expect(result.current.calendarEvents[0].applicants).toEqual(['New'])
+})
+
 test('scoped history reads on initial/foreground/manual keep every visitor in loaded units only', async () => {
   enableScopedHistories()
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))

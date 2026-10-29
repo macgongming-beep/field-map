@@ -3,10 +3,19 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import { SupersededReadError } from './supersededRead'
 import { calendarReadScope, calendarWindowEnabled } from './calendarReadScope'
+import { useCalendarRealtime } from './useCalendarRealtime'
 
-const state = vi.hoisted(() => ({ scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null }))
+const state = vi.hoisted(() => ({ callbacks: new Map<string, () => void>(), scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null }))
 vi.mock('./calendarReadScope', async importOriginal => ({ ...await importOriginal<typeof import('./calendarReadScope')>(), readScopedCalendar: state.scoped }))
 vi.mock('../lib/supabase', () => ({ supabase: {
+  channel: () => {
+    const channel = {
+      on: (_kind: string, filter: { table: string }, callback: () => void) => { state.callbacks.set(filter.table, callback); return channel },
+      subscribe: vi.fn(),
+    }
+    return channel
+  },
+  removeChannel: vi.fn(),
   rpc: () => Promise.resolve({ data: null, error: null }),
   from: (table: string) => {
     const q: Record<string, unknown> = {}
@@ -22,8 +31,8 @@ vi.mock('../lib/supabase', () => ({ supabase: {
   },
 } }))
 const old = { id: 1, event_date: '2026-08-02', title: 'Old', time: '10:00', event_participants: [{ user_name: 'A', role: '신청' }] }
-beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true') })
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs() })
+beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', undefined) })
+afterEach(() => { cleanup(); state.callbacks.clear(); vi.useRealTimers(); vi.unstubAllEnvs() })
 
 test('home first load and foreground keep calendar scoped; statistics route restores complete history', async () => {
   const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'since:2026-10-09' } })
@@ -345,4 +354,85 @@ test.each((['user', 'leader'] as const).flatMap(role =>
   expect(scope).toBe('full')
   expect(state.scoped).not.toHaveBeenCalled()
   expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
+})
+
+test.each(['user', 'leader'] as const)('%s service to assigned map reuses all teams and home round trips issue no further reads', async role => {
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  const now = new Date('2026-10-30T12:00:00')
+  const teams = [{ id: 7, date: '2026-08-02', applicants: ['A', 'Other'], cardAssignments: [
+    { userName: 'A', assignedCardId: 10 }, { userName: 'Other', assignedCardId: 20 },
+  ] }, { id: 8, date: '2027-08-08', applicants: [], cardAssignments: [] }]
+  state.scoped.mockImplementation(async scope => scope.startsWith('service:') ? teams : [])
+  const { result, rerender } = renderHook(({ route, search }) => useStore(true, role, undefined,
+    calendarReadScope(route, search, '', false, 'true', now, role, 'A')),
+  { initialProps: { route: '/', search: '' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ route: '/territory', search: '' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  state.reads = []
+  for (const [route, search] of [['/map', '?assignmentMap=7'], ['/territory', '?assignmentEvent=7'], ['/', ''],
+    ['/territory', ''], ['/map', '?assignmentMap=8'], ...(role === 'leader' ? [['/zone', '']] : [])]) {
+    rerender({ route, search })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    if (route !== '/') expect(result.current.calendarEvents).toEqual(teams)
+  }
+  expect(state.scoped).toHaveBeenCalledTimes(2)
+  expect(state.reads).toEqual([])
+})
+
+test.each(['foreground', 'realtime:calendar', 'mutation:calendar', 'fetchAll', 'mutation:resources'])('%s prevents reusing a pre-change service snapshot for an assigned map', async triggeredBy => {
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  state.scoped.mockResolvedValue([{ id: 7, date: '2026-08-02', applicants: ['A', 'Other'], cardAssignments: [] }])
+  const base = 'service:["A","2026-10-30",null]'
+  const target = 'service:["A","2026-10-30",7]'
+  const home = 'window:2026-10-16:2026-11-30'
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'leader', undefined, scope), { initialProps: { scope: base } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ scope: home })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  state.scoped.mockResolvedValue([{ id: 7, date: '2026-08-02', applicants: ['New'], cardAssignments: [] }])
+  await act(async () => { await result.current.refetchSlices([triggeredBy === 'mutation:resources' ? 'resources' : 'calendar'], { triggeredBy }) })
+  rerender({ scope: target })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.scoped).toHaveBeenCalledTimes(triggeredBy === 'mutation:resources' ? 3 : 4)
+  expect(result.current.calendarEvents[0].applicants).toEqual(['New'])
+})
+
+test.each([true, false])('home covering next-month calendar reuse follows flag=%s', async enabled => {
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', String(enabled))
+  state.scoped.mockImplementation(async scope => scope === 'window:2026-11-01:2026-11-30'
+    ? [{ id: 2, date: '2026-11-02', applicants: ['Other'], cardAssignments: [] }]
+    : [{ id: 1, date: '2026-10-30', applicants: ['A'], cardAssignments: [] }, { id: 2, date: '2026-11-02', applicants: ['Other'], cardAssignments: [] }])
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'window:2026-10-16:2026-11-30' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ scope: 'window:2026-11-01:2026-11-30' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(result.current.calendarEvents.map(e => e.id)).toEqual([2])
+  expect(result.current.calendarEvents[0].applicants).toEqual(['Other'])
+  expect(state.scoped).toHaveBeenCalledTimes(enabled ? 1 : 2)
+})
+
+test('another participant joining refreshes home coverage before next-month reuse', async () => {
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  const event = { id: 2, date: '2026-11-02', applicants: ['A'], cardAssignments: [] }
+  state.scoped.mockResolvedValue([event])
+  const { result, rerender } = renderHook(({ scope }) => {
+    const store = useStore(true, 'leader', undefined, scope)
+    useCalendarRealtime(() => { void store.refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' }) }, { debounceMs: 0 })
+    return store
+  }, { initialProps: { scope: 'window:2026-10-16:2026-11-30' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.callbacks.has('event_participants')).toBe(true)
+  state.scoped.mockResolvedValue([{ ...event, applicants: ['A', 'Other team'] }])
+  vi.useFakeTimers()
+  await act(async () => {
+    state.callbacks.get('event_participants')!()
+    await vi.advanceTimersByTimeAsync(1)
+  })
+  vi.useRealTimers()
+  await waitFor(() => expect(result.current.calendarEvents[0].applicants).toEqual(['A', 'Other team']))
+  rerender({ scope: 'window:2026-11-01:2026-11-30' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(result.current.calendarEvents[0].applicants).toEqual(['A', 'Other team'])
+  expect(state.scoped).toHaveBeenCalledTimes(2)
 })
