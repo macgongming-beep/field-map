@@ -56,6 +56,8 @@
 
 방문기록 복귀 중복 읽기: [0058 데모 완전성 기반 복구](0058-demo-scoped-history-recovery.md)
 
+저장·실시간 겹침 비용: [0059 데모 건물 갱신 대기열](0059-demo-visit-realtime-refresh-queue.md)
+
 ```markdown
 # 제목
 

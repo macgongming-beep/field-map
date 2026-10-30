@@ -43,6 +43,8 @@ const writer = createClient(origin, key, { auth: { ...auth, storageKey: 'history
 const title = `history-recovery-measurement-${Date.now()}`
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
 const realtimeMode = process.argv.includes('--realtime')
+const queueMode = process.argv.includes('--queue')
+if (queueMode && !realtimeMode) throw Error('--queue requires --realtime')
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const originalWarn = console.warn
 if (realtimeMode) console.warn = (...args) => {
@@ -102,7 +104,10 @@ try {
   const assigned = unwrap(await writer.rpc('assign_cards_bulk_tx', { p_token: admin.token, p_event_id: event.id,
     p_assignments: [{ userName: user.name, cardIds: [building.card_id], teamKey: null }], p_status: 'confirmed', p_expected_shared_at: null }))
   assert.equal(assigned?.ok, true)
-  for (const { enabled, delayMs } of (realtimeMode ? [0, 250] : [0]).flatMap(delayMs => [false, true].map(enabled => ({ enabled, delayMs })))) {
+  const variants = (realtimeMode ? [0, 250] : [0]).flatMap(delayMs => [false, true].map(flag => ({
+    enabled: queueMode ? true : flag, queued: queueMode && flag, delayMs,
+  })))
+  for (const { enabled, queued, delayMs } of variants) {
     let phase = 'initial'
     let subscribed = false
     const samples = []
@@ -152,6 +157,7 @@ try {
     const bundle = await rolldown({ input: '\0history-entry', transform: { define: { 'import.meta.env': JSON.stringify({
       DEV: false, VITE_DEMO_MODE: 'true', VITE_TERRITORY_REALTIME_ENABLED: 'true', VITE_SUPABASE_URL: origin,
       VITE_SCOPED_HISTORY_RECOVERY_ENABLED: String(enabled),
+      VITE_VISIT_REALTIME_QUEUE_ENABLED: String(queued),
     }) } }, plugins: [{ name: 'history-measurement', resolveId(id) {
       if (id === '\0history-entry') return id
       if (id.endsWith('/supabase')) return '\0history-client'
@@ -194,7 +200,7 @@ try {
     let hook, statisticsClient
     try {
       const { output } = await bundle.generate({ format: 'esm', codeSplitting: false })
-      const module = await import(`data:text/javascript;base64,${Buffer.from(output[0].code + '\n// ' + enabled + ':' + delayMs).toString('base64')}`)
+      const module = await import(`data:text/javascript;base64,${Buffer.from(output[0].code + '\n// ' + enabled + ':' + queued + ':' + delayMs).toString('base64')}`)
       if (realtimeMode) {
         const view = render(module.mountProbe(user.name, `window:${today}:${today}`))
         hook = { result: { get current() { return globalThis.__historyMeasurement.store } }, unmount: () => view.unmount() }
@@ -227,7 +233,10 @@ try {
             assert.equal(hook.result.current.visitHistories.some(h => h.unitId === unit.id), operation === 'save')
             const dbIds = (await activeRecords()).filter(h => h.unit_id === unit.id).map(h => h.id)
             assert.deepEqual(hook.result.current.visitHistories.filter(h => h.unitId === unit.id).map(h => h.id), dbIds)
-            results.push({ enabled, delayMs, cycle, operation, foregroundRequests: rows.length,
+            const cycleRows = samples.slice(sampleStart)
+            results.push({ enabled, queued, delayMs, cycle, operation, foregroundRequests: rows.length,
+              cycleRequests: cycleRows.length, cycleGetRequests: cycleRows.filter(r => r.method === 'GET').length,
+              cycleEndpoints: Object.fromEntries([...new Set(cycleRows.map(r => r.endpoint))].sort().map(endpoint => [endpoint, cycleRows.filter(r => r.endpoint === endpoint).length])),
               scopedHistoryReads: rows.filter(r => r.scoped).length, deltaHistoryReads: rows.filter(r => r.delta).length,
               cycleHistoryReads: samples.slice(sampleStart).filter(r => r.endpoint === 'visit_histories' && r.method === 'GET').length,
               writeSignals: writeTrace.filter(t => t.kind === 'signal').length,
