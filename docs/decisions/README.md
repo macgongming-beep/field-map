@@ -62,6 +62,8 @@
 
 복구·대기열·캐시 화면 운영 opt-in 준비: [0061 운영 스위치와 조합 시험](0061-recovery-and-cached-screen-production-gates.md)
 
+데모 화면 이동·홈 조회 정리: [0065 범위 확인 후 복구와 홈 본문 재사용](0065-demo-navigation-recovery-home-reads.md)
+
 ```markdown
 # 제목
 
