@@ -15,7 +15,17 @@ const meta = { id: 5, collectionId: 1, eventId: 3, titleKo: '모임 제목', tit
 function Driver() { const navigate = useNavigate(); return <><button onClick={() => navigate('/calendar')}>calendar</button><button onClick={() => navigate('/')}>home</button><MeetingHome language="ko" position="after_service" /></> }
 function mount() { const root = document.createElement('div'); root.id = 'root'; document.body.append(root); return render(<MemoryRouter><MeetingProvider userId={9} canManage={false} language="ko"><Driver /></MeetingProvider></MemoryRouter>, { container: root }) }
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); api.fetchMeetingCollections.mockResolvedValue([group]); api.fetchMeetingNoteMetas.mockResolvedValue([meta]); api.fetchMeetingNote.mockResolvedValue({ ...meta, bodyKo: '본문 전체', bodyZh: '' }) })
-afterEach(() => { cleanup(); document.body.replaceChildren() })
+afterEach(() => { cleanup(); document.body.replaceChildren(); vi.unstubAllEnvs() })
+it('opts home metadata into revalidation only in demo and still checks hidden collections on return', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  mount(); await screen.findByText('순회방문')
+  expect(api.fetchMeetingNoteMetas).toHaveBeenCalledWith([1], true)
+  api.fetchMeetingCollections.mockResolvedValue([]); api.fetchMeetingNoteMetas.mockResolvedValue([])
+  fireEvent.click(screen.getByText('calendar')); fireEvent.click(screen.getByText('home'))
+  await waitFor(() => expect(screen.queryByText('순회방문')).toBeNull())
+  expect(api.fetchMeetingCollections).toHaveBeenCalledTimes(2)
+  expect(api.fetchMeetingNoteMetas).toHaveBeenLastCalledWith([], true)
+})
 it('fetches no body on home or list, reads only after successful article load', async () => {
   mount()
   await screen.findByText('순회방문')

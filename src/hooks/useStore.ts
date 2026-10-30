@@ -674,6 +674,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       }
 
       case 'communication': {
+        // The retired notice UI has no consumers; bell/maintenance alerts are separate.
+        if (import.meta.env.VITE_DEMO_MODE === 'true') return 0
         const noticesRes = await supabase.from('notices').select('*').order('created_at', { ascending: false }).limit(50)
         measure(noticesRes.data)
         setNotices(noticesRes.error ? [] : (noticesRes.data as RawNotice[]).map(toNotice))
@@ -808,7 +810,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         if (scopedHistories && refreshTerritory && !requested.has('visits')) requested.add('visitHistories')
         if (refreshTerritory) for (const slice of ['buildings', 'cards', 'cardBoundaries'] as const) requested.add(slice)
         const recovery = options?.triggeredBy === 'foreground' || options?.triggeredBy?.startsWith('realtime:')
-        if (refreshTerritory && recovery && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
+        const navigationRecovery = import.meta.env.VITE_DEMO_MODE === 'true' && historyRecovery
+          && options?.triggeredBy === 'navigation:calendar'
+        if (refreshTerritory && (recovery || navigationRecovery) && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
           && territoryCheckpoint.baseline && syncBuildingsRef.current) {
           try {
             const ids = await recipientReader.unchangedScope(freshCalendar)

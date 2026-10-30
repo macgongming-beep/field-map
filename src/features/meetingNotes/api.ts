@@ -4,6 +4,11 @@ import type { MeetingCollection, MeetingNote, MeetingNoteMeta, NoteDraft } from 
 
 export const NOTE_META_COLUMNS = 'id,event_id,collection_id,title_ko,title_zh,list_title_ko,list_title_zh,excerpt_ko,excerpt_zh,reading_minutes_ko,reading_minutes_zh,event_date_snapshot,event_time_snapshot,event_place_snapshot,event_leader_snapshot,updated_at,archived_at'
 type Row = Record<string, unknown>
+let homeMetas: { token: string; scope: string; at: number; rows: MeetingNoteMeta[] } | null = null
+let homeGeneration = 0
+export function invalidateHomeMeetingMetas() { homeMetas = null; ++homeGeneration }
+const manifest = (rows: { id: number; collectionId: number; updatedAt: string }[]) =>
+  JSON.stringify(rows.map(row => [row.id, row.collectionId, row.updatedAt]).sort((a, b) => Number(a[0]) - Number(b[0])))
 function collection(row: Row): MeetingCollection {
   return { id: Number(row.id), nameKo: String(row.name_ko), nameZh: String(row.name_zh), startDate: String(row.start_date), endDate: String(row.end_date), homeVisibleUntil: String(row.home_visible_until), homePosition: row.home_position as MeetingCollection['homePosition'], homeEnabled: row.home_enabled !== false, collapseSuggestions: Boolean(row.collapse_suggestions), updatedAt: String(row.updated_at), archivedAt: row.archived_at as string | null }
 }
@@ -19,11 +24,33 @@ export async function fetchMeetingCollections(mode?: 'home' | 'trash'): Promise<
   if (error) throw error
   return (data ?? []).map(collection)
 }
-export async function fetchMeetingNoteMetas(collectionIds: number[]): Promise<MeetingNoteMeta[]> {
-  if (!collectionIds.length) return []
+export async function fetchMeetingNoteMetas(collectionIds: number[], homeReuse = false): Promise<MeetingNoteMeta[]> {
+  const reuse = homeReuse && import.meta.env.VITE_DEMO_MODE === 'true'
+  const token = getAuthToken()
+  const generation = homeGeneration
+  const started = Date.now()
+  const scope = JSON.stringify([...collectionIds].sort((a, b) => a - b))
+  const check = () => {
+    if (reuse && (getAuthToken() !== token || generation !== homeGeneration)) throw new Error('Home meeting metadata superseded')
+  }
+  if (reuse && homeMetas?.token !== token) homeMetas = null
+  if (!collectionIds.length) { if (reuse) homeMetas = null; return [] }
+  const existing = homeMetas
+  if (reuse && token && existing?.scope === scope && started >= existing.at && started - existing.at < 120_000) {
+    // Always authorize visibility/deletion/version from the server before reusing text.
+    const { data, error } = await supabase.from('service_meeting_notes').select('id,collection_id,updated_at')
+      .in('collection_id', collectionIds).is('archived_at', null).order('id')
+    if (error) throw error
+    check()
+    const index = (data ?? []).map(row => ({ id: Number(row.id), collectionId: Number(row.collection_id), updatedAt: String(row.updated_at) }))
+    if (manifest(index) === manifest(existing.rows)) return existing.rows
+  }
   const { data, error } = await supabase.from('service_meeting_notes').select(NOTE_META_COLUMNS).in('collection_id', collectionIds).is('archived_at', null).order('event_date_snapshot', { ascending: false }).order('event_time_snapshot', { ascending: false }).order('id')
   if (error) throw error
-  return (data ?? []).map(meta)
+  check()
+  const rows = (data ?? []).map(meta)
+  if (reuse && token) homeMetas = { token, scope, at: started, rows }
+  return rows
 }
 export async function fetchMeetingNote(id: number): Promise<MeetingNote> {
   const { data, error } = await supabase.from('service_meeting_notes').select(`${NOTE_META_COLUMNS},body_ko,body_zh`).eq('id', id).is('archived_at', null).single()
@@ -43,6 +70,7 @@ async function saveResult(name: string, args: Row): Promise<number> {
   if (error) throw error
   if (data?.conflict) throw new MeetingConflict()
   if (!data?.ok || !data.id) throw new Error('meeting.failed')
+  invalidateHomeMeetingMetas()
   return Number(data.id)
 }
 export function saveMeetingCollection(draft: Omit<MeetingCollection, 'id' | 'updatedAt'>, existing?: MeetingCollection, archive = false) {

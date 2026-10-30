@@ -9,7 +9,7 @@ const root = 'https://chinese-territory-app-demo.vercel.app'
 const db = 'https://itjlykpjmlcvanqpmkmc.supabase.co'
 const browser = await chromium.launch({ headless: true })
 try {
-  for (const role of ['VOLUNTEER', 'LEADER', 'ADMIN']) {
+  for (const role of process.env.MEASUREMENT_ROLES?.split(',') ?? ['VOLUNTEER', 'LEADER', 'ADMIN']) {
     const id = config[`TEST_${role}_ID`], pin = config[`TEST_${role}_PIN`]
     if (!id || !pin) throw Error(`Missing ${role} demo credentials`)
     const context = await browser.newContext({ viewport: { width: 430, height: 932 }, isMobile: true, deviceScaleFactor: 1, serviceWorkers: 'block' })
@@ -29,7 +29,7 @@ try {
         errors.push(`blocked write ${endpoint}`)
         return route.abort()
       }
-      if (request.method() !== 'OPTIONS') requests.push({ phase, endpoint, method: request.method() })
+      if (request.method() !== 'OPTIONS') requests.push({ phase, endpoint, method: request.method(), select: url.searchParams.get('select') })
       return route.continue()
     })
     page.on('pageerror', error => errors.push(error.message))
@@ -65,8 +65,22 @@ try {
           endpoints: Object.fromEntries([...new Set(rows.map(r => r.endpoint))].map(endpoint => [endpoint, rows.filter(r => r.endpoint === endpoint).length])),
           loadingMounts: await page.evaluate(start => window.__navLoading.length - start, loadingStart) })
       }
+      if (process.argv.includes('--months')) {
+        await page.evaluate(() => { history.pushState(null, '', '/calendar'); dispatchEvent(new PopStateEvent('popstate')) })
+        await page.waitForTimeout(1500)
+        for (let month = 1; month <= 2; month++) {
+          phase = `uncached-month-${month}`
+          const start = requests.length
+          // The month title sits between the previous/next buttons.
+          await page.locator('h3').filter({ hasText: /2026|2027/ }).locator('..').locator('button').first().click()
+          await page.waitForFunction(() => !document.querySelector('.app-loading') && !!document.querySelector('.bottom-nav'), undefined, { timeout: 60000 })
+          await page.waitForTimeout(3000)
+          const rows = requests.slice(start)
+          results.push({ phase, requests: rows.length, reads: rows })
+        }
+      }
       await page.screenshot({ path: `/tmp/demo-navigation-${role.toLowerCase()}-${process.env.MEASUREMENT_LABEL ?? 'run'}.png` })
-      console.log(JSON.stringify({ role, entry, results, errors }))
+      console.log(JSON.stringify({ role, entry, results, initialNotices: requests.filter(r => r.phase === 'login' && r.endpoint === 'notices').length, errors }))
       if (errors.length) throw Error('Browser errors or unexpected writes detected')
     } catch (error) {
       console.error(JSON.stringify({ role, phase, error: error.message, errors, page: (await page.locator('body').innerText()).slice(0, 1200) }))
