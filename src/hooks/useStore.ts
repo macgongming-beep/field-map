@@ -8,6 +8,7 @@ import { readCalendarParticipants } from './calendarParticipants'
 import { assertUnassignedCalendarEvent, calendarApplicationRefreshEnabled } from './calendarApplicationRefresh'
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
+import { createHistoryCoverage, historyScope, scopedHistoryRecoveryEnabled } from './scopedHistoryRecovery'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
@@ -146,7 +147,17 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // App keys this store by account/read mode. Never mix partial and full snapshots.
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
   const scopedHistories = scopedVisitHistoryEnabled(role, Boolean(recipientReader))
+  const historyRecovery = scopedHistoryRecoveryEnabled(scopedHistories)
+  const historyCoverage = useRef(createHistoryCoverage()).current
+  const historyReadsPending = useRef(0)
+  const historySyncsPending = useRef(0)
   const historyReadVersion = useRef(0)
+  useEffect(() => () => {
+    if (historyRecovery) {
+      historyCoverage.invalidate()
+      ++historyReadVersion.current
+    }
+  }, [historyCoverage, historyRecovery])
   useEffect(() => {
     recipientReader?.resume()
     return () => recipientReader?.dispose()
@@ -265,6 +276,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
     switch (slice) {
       case 'buildings': {
+        if (historyRecovery) historyCoverage.invalidate()
         const fullVersion = ++buildingFullReadVersion.current
         buildingFullReadsPending.current += 1
         try {
@@ -401,74 +413,93 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       case 'visits': {
         const sessionsOnly = slice === 'serviceSessions'
         const historiesOnly = slice === 'visitHistories'
-        const historyVersion = scopedHistories && !sessionsOnly ? ++historyReadVersion.current : null
-        // Recompute the cutoff per read, including foreground recovery after midnight.
-        const sessionScope = recentSessionScope(role, sessionUserName)
-        // Phase 5 projection + 기간 필터
-        // visit_histories: 최근 12개월만 (이전 데이터는 별도 통계 RPC 필요 시)
-        const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
-        // ⚠ 통계가 이 데이터로 계산된다 — 한 페이지(1,000행)에서 잘리면
-        //   숫자가 조용히 줄어든다. 반드시 끝까지 받는다.
-        //   (예전에는 봉사 세션을 100개만 받아 누적 시간이 절반만 나왔다)
-        const [visitsRes, sessionsRes] = await Promise.all([
-          sessionsOnly || historiesRecovered ? Promise.resolve({ data: [], error: null })
-            : scopedHistories ? readScopedVisitHistories(buildingsRef.current.flatMap(building => building.units.map(unit => unit.id)), oneYearAgo)
-              .then(data => ({ data, error: null }))
-            : fetchAllPages((from, to) => supabase
-            .from('visit_histories')
-            .select(VISIT_HISTORY_COLUMNS)
-            .is('invalidated_at', null)
-            .gte('created_at', oneYearAgo)
-            .order('created_at', { ascending: false })
-            .range(from, to)),
-          historiesOnly ? Promise.resolve({ data: [], error: null }) : fetchAllPages((from, to) => {
-            let query = supabase
-            .from('service_sessions')
-            .select('id, user_name, role, calendar_event_id, started_at, ended_at, service_date, time_slot, status, primary_card_id, assigned_card_id, assignment_id, source, memo, created_at')
-            if (sessionScope) {
-              query = query.eq('user_name', sessionScope.userName).gte('service_date', sessionScope.since)
-            } else if ((import.meta.env.VITE_PERSONAL_SESSIONS_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
-              && role === 'user' && recipientReader && recipientUser) {
-              query = query.eq('user_name', recipientUser)
+        const coverageRead = historyRecovery && !sessionsOnly && !historiesRecovered
+          ? historyCoverage.begin(historyScope(buildingsRef.current)) : null
+        if (historyRecovery && !sessionsOnly) ++historyReadsPending.current
+        try {
+          const historyVersion = scopedHistories && !sessionsOnly ? ++historyReadVersion.current : null
+          // Recompute the cutoff per read, including foreground recovery after midnight.
+          const sessionScope = recentSessionScope(role, sessionUserName)
+          // Phase 5 projection + 기간 필터
+          // visit_histories: 최근 12개월만 (이전 데이터는 별도 통계 RPC 필요 시)
+          const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString()
+          // ⚠ 통계가 이 데이터로 계산된다 — 한 페이지(1,000행)에서 잘리면
+          //   숫자가 조용히 줄어든다. 반드시 끝까지 받는다.
+          //   (예전에는 봉사 세션을 100개만 받아 누적 시간이 절반만 나왔다)
+          const [visitsRes, sessionsRes] = await Promise.all([
+            sessionsOnly || historiesRecovered ? Promise.resolve({ data: [], error: null })
+              : scopedHistories ? readScopedVisitHistories(buildingsRef.current.flatMap(building => building.units.map(unit => unit.id)), oneYearAgo)
+                .then(data => ({ data, error: null }))
+              : fetchAllPages((from, to) => supabase
+              .from('visit_histories')
+              .select(VISIT_HISTORY_COLUMNS)
+              .is('invalidated_at', null)
+              .gte('created_at', oneYearAgo)
+              .order('created_at', { ascending: false })
+              .range(from, to)),
+            historiesOnly ? Promise.resolve({ data: [], error: null }) : fetchAllPages((from, to) => {
+              let query = supabase
+              .from('service_sessions')
+              .select('id, user_name, role, calendar_event_id, started_at, ended_at, service_date, time_slot, status, primary_card_id, assigned_card_id, assignment_id, source, memo, created_at')
+              if (sessionScope) {
+                query = query.eq('user_name', sessionScope.userName).gte('service_date', sessionScope.since)
+              } else if ((import.meta.env.VITE_PERSONAL_SESSIONS_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
+                && role === 'user' && recipientReader && recipientUser) {
+                query = query.eq('user_name', recipientUser)
+              }
+              query = query.order('started_at', { ascending: false })
+              if (sessionScope) query = query.order('id')
+              return query.range(from, to)
+            }),
+          ])
+
+          if (visitsRes.error) {
+            throw new Error('Visit data load failed', { cause: visitsRes.error })
+          }
+          // A post-save read failure must preserve the previous snapshot and surface.
+          if ((sessionsOnly || sessionScope) && sessionsRes.error) {
+            throw new Error('Service session data load failed', { cause: sessionsRes.error })
+          }
+
+          measure(visitsRes.data)
+          measure(sessionsRes.data)
+
+          if (historyVersion !== null && historyVersion !== historyReadVersion.current) {
+            throw new SupersededReadError('Visit history read superseded')
+          }
+
+          if (sessionsOnly) {
+            // Starting/ending a session does not change visit histories.
+          } else if (historiesRecovered) {
+            if (historyRecovery && (!historyCoverage.canReuse(historyScope(buildingsRef.current)) || historySyncsPending.current)) {
+              throw new SupersededReadError('History coverage changed during recovery')
             }
-            query = query.order('started_at', { ascending: false })
-            if (sessionScope) query = query.order('id')
-            return query.range(from, to)
-          }),
-        ])
+            // Match the full/targeted SQL created_at >= cutoff contract (NULL is excluded).
+            setVisitHistories((current) => current.filter((history) =>
+              history.createdAt != null && Date.parse(history.createdAt) >= Date.parse(oneYearAgo)))
+          } else {
+            setVisitHistories((visitsRes.data as RawVisitHistory[]).map(toVisitHistory))
+            if (coverageRead) {
+              if (historySyncsPending.current) historyCoverage.invalidate()
+              else historyCoverage.commit(coverageRead, historyScope(buildingsRef.current))
+            }
+          }
+          if (!historiesOnly) setServiceSessions(sessionsRes.error
+            ? []
+            : (sessionsRes.data as RawServiceSession[]).map(toServiceSession))
 
-        if (visitsRes.error) {
-          throw new Error('Visit data load failed', { cause: visitsRes.error })
+          if (sessionsRes.error) {
+            console.warn('봉사 세션 로드 실패.', sessionsRes.error)
+          }
+          return approxBytes
+        } catch (error) {
+          // An authoritative save may supersede a read without damaging an already
+          // complete snapshot. Scope changes and failed syncs invalidate it separately.
+          if (historyRecovery && !sessionsOnly && !(error instanceof SupersededReadError)) historyCoverage.invalidate()
+          throw error
+        } finally {
+          if (historyRecovery && !sessionsOnly) --historyReadsPending.current
         }
-        // A post-save read failure must preserve the previous snapshot and surface.
-        if ((sessionsOnly || sessionScope) && sessionsRes.error) {
-          throw new Error('Service session data load failed', { cause: sessionsRes.error })
-        }
-
-        measure(visitsRes.data)
-        measure(sessionsRes.data)
-
-        if (historyVersion !== null && historyVersion !== historyReadVersion.current) {
-          throw new SupersededReadError('Visit history read superseded')
-        }
-
-        if (sessionsOnly) {
-          // Starting/ending a session does not change visit histories.
-        } else if (historiesRecovered) {
-          // Match the full/targeted SQL created_at >= cutoff contract (NULL is excluded).
-          setVisitHistories((current) => current.filter((history) =>
-            history.createdAt != null && Date.parse(history.createdAt) >= Date.parse(oneYearAgo)))
-        } else {
-          setVisitHistories((visitsRes.data as RawVisitHistory[]).map(toVisitHistory))
-        }
-        if (!historiesOnly) setServiceSessions(sessionsRes.error
-          ? []
-          : (sessionsRes.data as RawServiceSession[]).map(toServiceSession))
-
-        if (sessionsRes.error) {
-          console.warn('봉사 세션 로드 실패.', sessionsRes.error)
-        }
-        return approxBytes
       }
 
       case 'calendar': {
@@ -695,7 +726,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
     }
-  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories, publishCalendarEvents])
+  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories, publishCalendarEvents, historyRecovery, historyCoverage])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
@@ -741,15 +772,19 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           try {
             const ids = await recipientReader.unchangedScope(freshCalendar)
             if (ids != null) {
+              const completeBefore = historyRecovery && !historyReadsPending.current && !historySyncsPending.current
+                && historyCoverage.canReuse(historyScope(buildingsRef.current))
               await recoverRecipientBuildings(ids, buildingsRef.current.map((b) => b.id), territoryCheckpoint, syncBuildingsRef.current)
               if (requested.has('cardBoundaries')) setCardBoundaries(await readRecipientBoundaries(ids))
               requested.delete('buildings')
               requested.delete('cardBoundaries')
-              // Scoped histories are reread for the current units; legacy statistics stay global.
-              await Promise.all([...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups)))
+              const reuseHistories = completeBefore && !historyReadsPending.current && !historySyncsPending.current
+                && historyCoverage.canReuse(historyScope(buildingsRef.current))
+              await Promise.all([...requested].map((slice) => fetchSlice(slice, false, reuseHistories, options?.strictGroups)))
               return
             }
           } catch {
+            if (historyRecovery) historyCoverage.invalidate()
             // Scope/metadata/delta failures fall back to a fresh scoped snapshot, never all buildings.
           }
         }
@@ -863,7 +898,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       void promise.then(clear, clear)
     }
     return track(promise)
-  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader, scopedHistories, clearCalendarWindows])
+  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader, scopedHistories, clearCalendarWindows, historyRecovery, historyCoverage])
 
   // 기존 fetchAll: 모든 slice + auto_close 부수효과 유지 (100% 후방호환)
   const fetchAll = useCallback(async (recovery = false) => {
@@ -912,6 +947,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
   useEffect(() => {
     if (!enabled) {
+      if (historyRecovery) historyCoverage.invalidate()
       // 로그인 전에는 받지 않는다. 다만 loading 을 반드시 내려야 한다 —
       // 안 그러면 로그인 화면이 '데이터 불러오는 중' 에서 멈춘다 (App.tsx)
       fetchStartedRef.current = false
@@ -946,7 +982,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     }).catch((error: unknown) => {
       console.error('[initial load] failed:', error)
     })
-  }, [fetchAll, enabled, territoryCheckpoint])
+  }, [fetchAll, enabled, territoryCheckpoint, historyRecovery, historyCoverage])
 
   // PWA 백그라운드 → 포어그라운드 복귀 시 자동 갱신
   // (브라우저 새로고침이 없는 PWA에서 최신 데이터 확보)
@@ -996,42 +1032,56 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
   // Realtime updates only the affected buildings and their visit histories.
   const syncChangedBuildings = useCallback(async (buildingIds: number[], requireFresh = false) => {
-    const versions = new Map(buildingIds.map((id) => {
-      const version = (realtimeVersionsRef.current.get(id) ?? 0) + 1
-      realtimeVersionsRef.current.set(id, version)
-      return [id, version]
-    }))
-    const data = await fetchChangedBuildings(buildingIds)
-    // A previous map's in-flight read must not overwrite a newer map's response.
-    const ids = new Set(buildingIds.filter((id) => versions.get(id) === realtimeVersionsRef.current.get(id)))
-    if (requireFresh && ids.size !== new Set(buildingIds).size) throw new SupersededReadError('Building refresh superseded')
-    const updated = data.buildings.filter((b) => ids.has(b.id))
-    const unitIds = new Set([
-      ...buildingsRef.current.filter((b) => ids.has(b.id)).flatMap((b) => b.units.map((u) => u.id)),
-      ...updated.flatMap((b) => b.units.map((u) => u.id)),
-    ])
-    const visible = updated.filter((b) => !recipientReader || recipientReader.allowsCard(b.cardId))
-    const updatedById = new Map(visible.map((b) => [b.id, b]))
-    // A destination can arrive before the old building's removal snapshot.
-    const incomingUnitIds = new Set(updated.flatMap((b) => b.units.map((u) => u.id)))
-    const unaffectedUnitIds = new Set(buildingsRef.current.filter((b) => !ids.has(b.id))
-      .flatMap((b) => b.units.map((u) => u.id)))
-    applyBuildingsChange((current) => {
-      const existing = new Set(current.map((b) => b.id))
-      return [
-        ...current.flatMap((b) => ids.has(b.id) ? (updatedById.has(b.id) ? [updatedById.get(b.id)!] : []) : [b]),
-        ...visible.filter((b) => !existing.has(b.id)),
-      ]
-    })
-    // A delayed pre-save scoped read must not overwrite this authoritative update.
-    if (scopedHistories) ++historyReadVersion.current
-    const visibleUnits = new Set(buildingsRef.current.flatMap(building => building.units.map(unit => unit.id)))
-    setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)
-      || (!incomingUnitIds.has(h.unitId) && unaffectedUnitIds.has(h.unitId))),
-    ...data.histories.filter((h) => incomingUnitIds.has(h.unitId))]
-      .filter(h => !scopedHistories || visibleUnits.has(h.unitId))
-      .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
-  }, [applyBuildingsChange, recipientReader, scopedHistories])
+    if (historyRecovery) ++historySyncsPending.current
+    const fullVersion = buildingFullReadVersion.current
+    try {
+      const versions = new Map(buildingIds.map((id) => {
+        const version = (realtimeVersionsRef.current.get(id) ?? 0) + 1
+        realtimeVersionsRef.current.set(id, version)
+        return [id, version]
+      }))
+      const data = await fetchChangedBuildings(buildingIds)
+      // A previous map's in-flight read must not overwrite a newer map's response.
+      const ids = new Set(buildingIds.filter((id) => versions.get(id) === realtimeVersionsRef.current.get(id)))
+      if ((requireFresh || historyRecovery) && ids.size !== new Set(buildingIds).size) throw new SupersededReadError('Building refresh superseded')
+      if (historyRecovery && (fullVersion !== buildingFullReadVersion.current || buildingFullReadsPending.current)) {
+        throw new SupersededReadError('Building scope changed during recovery')
+      }
+      const previousScope = historyRecovery ? historyScope(buildingsRef.current) : ''
+      const updated = data.buildings.filter((b) => ids.has(b.id))
+      const unitIds = new Set([
+        ...buildingsRef.current.filter((b) => ids.has(b.id)).flatMap((b) => b.units.map((u) => u.id)),
+        ...updated.flatMap((b) => b.units.map((u) => u.id)),
+      ])
+      const visible = updated.filter((b) => !recipientReader || recipientReader.allowsCard(b.cardId))
+      const updatedById = new Map(visible.map((b) => [b.id, b]))
+      // A destination can arrive before the old building's removal snapshot.
+      const incomingUnitIds = new Set(updated.flatMap((b) => b.units.map((u) => u.id)))
+      const unaffectedUnitIds = new Set(buildingsRef.current.filter((b) => !ids.has(b.id))
+        .flatMap((b) => b.units.map((u) => u.id)))
+      applyBuildingsChange((current) => {
+        const existing = new Set(current.map((b) => b.id))
+        return [
+          ...current.flatMap((b) => ids.has(b.id) ? (updatedById.has(b.id) ? [updatedById.get(b.id)!] : []) : [b]),
+          ...visible.filter((b) => !existing.has(b.id)),
+        ]
+      })
+      // A delayed pre-save scoped read must not overwrite this authoritative update.
+      if (scopedHistories) ++historyReadVersion.current
+      const visibleUnits = new Set(buildingsRef.current.flatMap(building => building.units.map(unit => unit.id)))
+      setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)
+        || (!incomingUnitIds.has(h.unitId) && unaffectedUnitIds.has(h.unitId))),
+      ...data.histories.filter((h) => incomingUnitIds.has(h.unitId))]
+        .filter(h => !scopedHistories || visibleUnits.has(h.unitId))
+        .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
+      if (historyRecovery) historyCoverage.applyDelta(previousScope, historyScope(buildingsRef.current))
+    } catch (error) {
+      if (historyRecovery) historyCoverage.invalidate()
+      throw error
+    } finally {
+      if (historyRecovery) --historySyncsPending.current
+    }
+  }, [applyBuildingsChange, recipientReader, scopedHistories, historyRecovery, historyCoverage])
 
   useEffect(() => { syncBuildingsRef.current = syncChangedBuildings }, [syncChangedBuildings])
 
