@@ -67,6 +67,29 @@ Mutation checks (restored before final validation): removing the pre-apply guard
 fails both delayed save/cancel store tests. Acknowledging the older batch instead
 of carrying it forward fails two queue tests.
 
+## Review Follow-up: Queued Callers During Foreground
+
+Added store-level save AND cancellation tests on 2026-10-31. Both establish a
+complete history baseline, start an older realtime read, perform the actual
+store mutation, then hold the microtask drain after the old batch has finished.
+There is no active building read at this boundary, but the post-write refresh
+is still queued and its caller must not resolve. Foreground recovery must query
+the scoped histories and display the saved/cancelled result before that queue
+is allowed to finish. Releasing the queue must preserve the same final result.
+
+Mutation check: remove ONLY `syncVisitOrRealtime`'s pending-counter increment
+and decrement, leaving `readChangedBuildings`'s active-read counter untouched.
+Both tests fail because foreground makes zero history queries instead of one.
+The mutation was restored; this follow-up changes tests/documentation only.
+Final validation: 2,063 tests / 221 files passed; lint and TypeScript/Vite build
+passed. No new deployment is needed for this test-only change.
+
+Non-blocking review items remain separate: foreground recovery still uses its
+existing strict direct read, and the queue has no postponement-count bound.
+Neither is claimed fixed by these tests. Introducing a bound requires tests for
+whole-batch rejection, all waiting callers and full-repair fallback, rather than
+acknowledging an old or partially applied result. Production remains disabled.
+
 ## Live Demo Measurement
 
 ```sh

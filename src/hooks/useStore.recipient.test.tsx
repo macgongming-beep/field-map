@@ -186,6 +186,53 @@ test.each(['save', 'cancel'] as const)('demo queued %s waits for older realtime 
   expect(state.historyFilters).toEqual([])
 })
 
+test.each(['save', 'cancel'] as const)('foreground rereads histories while queued %s waits between realtime batches', async operation => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings[0]
+  const history = { id: 902, unitId: 100, visitor: 'Volunteer', result: '부재', timeSlot: '오후', visitedAt: '2026-10-30', createdAt: new Date().toISOString() }
+  let release!: () => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { release = () => done({ buildings: [before], histories: [history] }) }))
+  state.changed.mockResolvedValue({ buildings: [before], histories: operation === 'save' ? [history] : [] })
+  let old!: Promise<void>, mutation!: Promise<void>
+  act(() => { old = result.current.territoryRealtime.sync([10]) })
+  await waitFor(() => expect(state.changed).toHaveBeenCalledTimes(1))
+  // Hold microtasks at the next drain: no building read is active during foreground,
+  // but the post-write caller still requires a fresh read before acknowledgement.
+  const drains: VoidFunction[] = []
+  const schedule = vi.spyOn(globalThis, 'queueMicrotask').mockImplementation(callback => { drains.push(callback) })
+  let settled = false
+  act(() => {
+    mutation = (operation === 'save' ? result.current.updateUnitStatus(10, 100, '부재') : result.current.deleteVisitHistory(901, 100))
+      .then(() => { settled = true })
+  })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  await act(async () => { release() })
+  expect(drains.length).toBeGreaterThan(0)
+  expect(state.changed).toHaveBeenCalledTimes(1)
+  expect(settled).toBe(false)
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+  state.historyRows = operation === 'save'
+    ? [{ id: 902, unit_id: 100, visitor_name: 'Volunteer', result: '부재', visited_at: history.visitedAt, created_at: history.createdAt }]
+    : []
+  state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  const foregroundFilters = [...state.historyFilters]
+  const foregroundHistories = result.current.visitHistories.map(h => h.id)
+  expect(settled).toBe(false)
+  schedule.mockRestore()
+  await act(async () => { drains.forEach(drain => drain()); await Promise.all([old, mutation]) })
+  expect(foregroundFilters).toEqual([[['unit_id', [100]]]])
+  expect(foregroundHistories).toEqual(operation === 'save' ? [902] : [])
+  expect(settled).toBe(true)
+  expect(state.changed).toHaveBeenCalledTimes(2)
+  expect(result.current.visitHistories.map(h => h.id)).toEqual(operation === 'save' ? [902] : [])
+})
+
 test('failed queued post-save refresh still falls back and repairs history', async () => {
   enableHistoryRecovery()
   vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')
