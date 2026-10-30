@@ -128,6 +128,40 @@ Local measurement logs: `/tmp/calendar-screens-before.log` and
 `/tmp/calendar-screens-after.log`. Production checkout remains at `5d42a73`;
 no production deployment or configuration change was performed.
 
+## Review Follow-up (2026-10-31)
+
+Added three store-level regression cases without changing application code:
+
+- Fail each of the two assignment tables independently during a full read,
+  navigate home and back within the cache lifetime, and delay the repaired full
+  response. The destination must remain not-ready and make all three fresh reads;
+  the repaired result must contain the other team's card assignment.
+- Start a participant refresh, navigate to a covering range that refills the
+  cache while the participant response is delayed, then navigate to its subset.
+  Capture EVERY render before the fresh response, not only the final hook value.
+  None may advertise the stale cached applicants as ready. Finish the delayed
+  response and verify the cancelled participant is absent and the other team
+  remains; the participant retry reads the current event.
+
+Mutation results (all restored):
+
+- Removing only `navigationEvents`' pending-refresh condition fails the render
+  test: its first frame incorrectly reports ready.
+- Removing only the full-cache assignment-error conditions still passes, for a
+  specific structural reason: cache insertion requires `calendarScopeFeature`,
+  and the earlier assignment-error check already throws when that feature is
+  enabled. No incomplete result reaches the cache. This is redundant defense,
+  not evidence that the reported incomplete-cache failure currently occurs.
+- Bypassing that earlier scope-feature error check AND the cache error checks
+  fails both assignment-table round-trip tests at the premature cache readiness
+  assertion. The tests exercise the missing-assignment cache outcome directly.
+
+The previous queue review's pending-caller gap was independently addressed in
+`93f5c4e`: save/cancel foreground tests fail when only the queued caller's pending
+counter is removed. See decision 0059. Neither follow-up activates production.
+Final validation: 2,066 tests / 221 files, lint and TypeScript/Vite build passed.
+Only tests/documentation changed; no manual demo or production deployment.
+
 ## Rollback
 
 Set `VITE_CALENDAR_CACHED_SCREEN_ENABLED=false` on the demo project and redeploy;

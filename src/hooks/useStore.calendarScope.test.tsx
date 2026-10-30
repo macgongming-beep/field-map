@@ -122,6 +122,74 @@ test('participant cancellation invalidates hidden full snapshot before navigatio
   expect(result.current.calendarEvents[0].applicants).toEqual([])
 })
 
+test.each(['event_card_assignments', 'event_card_assignment_cards'])('failed %s full snapshot cannot be reused after a home round trip', async table => {
+  const home = 'window:2026-10-16:2026-11-30'
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: home } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.failure = table
+  rerender({ scope: 'full' })
+  await waitFor(() => expect(result.current.calendarReadError || result.current.calendarScopeReady).toBe(true))
+  const failedReadWasBlocked = result.current.calendarReadError && !result.current.calendarScopeReady
+  rerender({ scope: home })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  state.failure = ''
+  state.assignments = [{ id: 5, event_id: 1, user_name: 'Other team', assigned_card_id: 20 }]
+  let release!: (value: unknown) => void
+  state.pendingFull = new Promise(resolve => { release = resolve })
+  state.reads = []
+  rerender({ scope: 'full' })
+  const readyBeforeResponse = result.current.calendarScopeReady
+  await act(async () => { release({ data: [old], error: null }) })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(readyBeforeResponse).toBe(false)
+  expect(failedReadWasBlocked).toBe(true)
+  expect(state.reads).toEqual(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards'])
+  expect(result.current.calendarEvents[0].cardAssignments).toEqual([expect.objectContaining({ userName: 'Other team', assignedCardId: 20 })])
+})
+
+test('render never exposes cached applicants while participant refresh is pending across navigation', async () => {
+  const initial = 'window:2026-10-01:2026-10-31'
+  const covering = 'window:2026-10-16:2026-11-30'
+  const target = 'window:2026-11-01:2026-11-30'
+  const stale = { id: 2, date: '2026-11-02', applicants: ['Cancelled', 'Other team'], cardAssignments: [] }
+  state.scoped.mockResolvedValueOnce([{ ...stale, id: 1, date: '2026-10-02' }]).mockResolvedValueOnce([stale])
+  const frames: { scope: string; ready: boolean; applicants: string[] }[] = []
+  const { result, rerender } = renderHook(({ scope }) => {
+    const store = useStore(true, 'leader', undefined, scope)
+    frames.push({ scope, ready: store.calendarScopeReady, applicants: store.calendarEvents.flatMap(e => e.applicants) })
+    return store
+  }, { initialProps: { scope: initial } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let releaseParticipants!: () => void
+  state.participants.mockImplementationOnce(() => new Promise(resolve => {
+    releaseParticipants = () => resolve(new Map([[1, { applicants: ['Cancelled'] }]]))
+  })).mockResolvedValue(new Map([[2, { applicants: ['Other team'] }]]))
+  let pending!: Promise<void>
+  act(() => { pending = result.current.refreshCalendarParticipants(null) })
+  await waitFor(() => expect(state.participants).toHaveBeenCalledTimes(1))
+  // A navigation read can fill a covering cache after the signal cleared it,
+  // while the participant patch is still in flight.
+  rerender({ scope: covering })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  let releaseTarget!: () => void
+  state.scoped.mockImplementationOnce(() => new Promise(resolve => {
+    releaseTarget = () => resolve([{ ...stale, applicants: ['Other team'] }])
+  }))
+  frames.length = 0
+  rerender({ scope: target })
+  const pendingFrames = [...frames]
+  await waitFor(() => expect(state.scoped).toHaveBeenCalledTimes(3))
+  await act(async () => { releaseTarget(); releaseParticipants(); await pending })
+  expect(pendingFrames.length).toBeGreaterThan(0)
+  for (const frame of pendingFrames) {
+    expect(frame.scope).toBe(target)
+    expect(frame.ready).toBe(false)
+  }
+  expect(result.current.calendarScopeReady).toBe(true)
+  expect(result.current.calendarEvents[0].applicants).toEqual(['Other team'])
+  expect(state.participants).toHaveBeenLastCalledWith([2])
+})
+
 test('full snapshot expires without renewal on a cached round trip', async () => {
   let now = 1000000
   const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
