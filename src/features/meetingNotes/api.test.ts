@@ -25,6 +25,23 @@ async function primeHome() {
   q.selects.length = 0
   return { ...q, rows }
 }
+it.each([
+  [undefined, undefined, false], ['false', undefined, false], ['false', 'true', true],
+  [undefined, 'true', true], ['true', undefined, true], ['true', 'false', false], ['false', 'false', false],
+] as const)('meeting metadata reuse opt-in demo=%s flag=%s reused=%s', async (demo, flag, reused) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_HOME_MEETING_META_REUSE_ENABLED', flag)
+  vi.stubEnv('VITE_HOME_SUGGESTION_REUSE_ENABLED', String(!reused))
+  localStorage.setItem('auth_token', 'one')
+  const q = queries(); q.results.push({ data: [note], error: null })
+  const initial = await fetchMeetingNoteMetas([1], true)
+  q.selects.length = 0; q.results.push({ data: [note], error: null })
+  expect(await fetchMeetingNoteMetas([1], true)).toEqual(initial)
+  expect(q.selects).toEqual([reused ? 'id,collection_id,updated_at' : NOTE_META_COLUMNS])
+  q.selects.length = 0; q.results.push({ data: [note], error: null })
+  await fetchMeetingNoteMetas([1])
+  expect(q.selects).toEqual([NOTE_META_COLUMNS])
+})
 it('revalidates meeting IDs and versions before reusing metadata; TTL is not extended', async () => {
   const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
   const q = await primeHome()

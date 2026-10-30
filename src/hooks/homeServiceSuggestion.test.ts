@@ -19,6 +19,22 @@ async function prime() {
   mock.results = [{ data: [index], error: null }, { data: [body], error: null }]
   await readHomeServiceSuggestion(); mock.calls = []
 }
+it.each([
+  [undefined, undefined, false], ['false', undefined, false], ['false', 'true', true],
+  [undefined, 'true', true], ['true', undefined, true], ['true', 'false', false], ['false', 'false', false],
+] as const)('suggestion reuse opt-in demo=%s flag=%s reused=%s', async (demo, flag, reused) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_HOME_SUGGESTION_REUSE_ENABLED', flag)
+  vi.stubEnv('VITE_HOME_MEETING_META_REUSE_ENABLED', String(!reused))
+  localStorage.setItem('auth_token', 'one')
+  mock.results = [{ data: [index], error: null }, { data: [body], error: null }]
+  await readHomeServiceSuggestion(); mock.calls = []
+  mock.results = [{ data: [index], error: null }, { data: [body], error: null }]
+  expect(await readHomeServiceSuggestion()).toEqual([body])
+  expect(mock.calls.filter(c => c[1] === 'select')).toEqual(reused
+    ? [['service_suggestions', 'select', 'id,last_used_at,created_at']]
+    : [['service_suggestions', 'select', 'id,last_used_at,created_at'], ['service_suggestions', 'select', '*']])
+})
 it('revalidates the visible index but reuses the unchanged body without extending its lifetime', async () => {
   const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
   await prime()

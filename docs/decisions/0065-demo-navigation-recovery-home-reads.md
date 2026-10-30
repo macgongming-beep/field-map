@@ -1,5 +1,9 @@
 # Demo navigation recovery and home reads
 
+Activation follow-up: [0066](0066-navigation-home-production-gates.md) adds independent
+production opt-in switches. The implementation/measurements below describe the
+original demo build; they are not evidence of production activation.
+
 - Status: Demo implementation; not approved for production
 - Date: 2026-10-31
 
