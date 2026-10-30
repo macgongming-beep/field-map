@@ -1,4 +1,5 @@
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { useEffect } from 'react'
+import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { useStore } from './useStore'
 import { SupersededReadError } from './supersededRead'
@@ -42,6 +43,127 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 const old = { id: 1, event_date: '2026-08-02', title: 'Old', time: '10:00', event_participants: [{ user_name: 'A', role: '신청' }] }
 beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.pendingResource = null; state.participants.mockReset().mockResolvedValue(new Map()); state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', undefined) })
 afterEach(() => { cleanup(); state.callbacks.clear(); vi.useRealTimers(); vi.unstubAllEnvs() })
+
+test.each(['user', 'leader', 'admin', 'developer'] as const)('%s cached navigation never unmounts the screen or flashes previous-scope events', async role => {
+  const home = 'window:2026-10-16:2026-11-30'
+  const other = role === 'user' || role === 'leader' ? `service:["A","2026-10-30",null]` : 'full'
+  state.scoped.mockImplementation(async scope => scope === home ? [{ id: 7, date: '2026-10-30', applicants: ['Home'], cardAssignments: [] }] : [{ id: 1, date: '2026-08-02', applicants: ['A', 'Other'], cardAssignments: [] }])
+  let mounts = 0
+  const frames: { scope: string; ready: boolean; ids: number[] }[] = []
+  function Screen() { useEffect(() => { ++mounts }, []); return <div>screen</div> }
+  function Probe({ scope }: { scope: string }) {
+    const store = useStore(true, role, undefined, scope)
+    frames.push({ scope, ready: store.calendarScopeReady, ids: store.calendarEvents.map(e => e.id) })
+    return store.loading || !store.calendarScopeReady ? <div>loading</div> : <Screen />
+  }
+  const view = render(<Probe scope={home} />)
+  await waitFor(() => expect(frames.at(-1)?.ready).toBe(true))
+  view.rerender(<Probe scope={other} />)
+  await waitFor(() => expect(frames.at(-1)?.ready).toBe(true))
+  view.rerender(<Probe scope={home} />)
+  await waitFor(() => expect(frames.at(-1)?.ids).toEqual([7]))
+  const baseline = mounts
+  state.reads = []; state.scoped.mockClear(); frames.length = 0
+  for (const scope of [other, home, other, home]) view.rerender(<Probe scope={scope} />)
+  expect(mounts).toBe(baseline)
+  expect(frames.length).toBeGreaterThan(0)
+  for (const frame of frames) {
+    expect(frame.ready).toBe(true)
+    expect(frame.ids).toEqual(frame.scope === home ? [7] : [1])
+  }
+  expect(state.reads).toEqual([])
+  expect(state.scoped).not.toHaveBeenCalled()
+})
+
+test.each(['foreground', 'realtime:calendar', 'mutation:calendar', 'fetchAll'])('%s also invalidates full calendar navigation cache and preserves changed participants/teams', async triggeredBy => {
+  state.assignments = [{ id: 5, event_id: 1, user_name: 'Other', assigned_card_id: 20 }]
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'full' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ scope: 'window:2026-10-16:2026-11-30' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  state.events = [{ ...old, event_participants: [] }]
+  state.assignments = [{ id: 6, event_id: 1, user_name: 'Replacement', assigned_card_id: 30 }]
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy }) })
+  state.reads = []
+  rerender({ scope: 'full' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.reads).toEqual(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards'])
+  expect(result.current.calendarEvents[0].applicants).toEqual([])
+  expect(result.current.calendarEvents[0].cardAssignments).toEqual([expect.objectContaining({ userName: 'Replacement', assignedCardId: 30 })])
+})
+
+test.each([{ demo: 'false', flag: 'true' }, { demo: 'true', flag: 'false' }])('full cache stays off with demo=$demo flag=$flag', async ({ demo, flag }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_CACHED_SCREEN_ENABLED', flag)
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'full' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ scope: 'window:2026-10-16:2026-11-30' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  state.reads = []
+  rerender({ scope: 'full' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.reads).toEqual(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards'])
+})
+
+test('participant cancellation invalidates hidden full snapshot before navigation', async () => {
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'full' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ scope: 'window:2026-10-16:2026-11-30' })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  state.events = [{ ...old, event_participants: [] }]
+  await act(async () => { await result.current.refreshCalendarParticipants([1]) })
+  state.reads = []
+  rerender({ scope: 'full' })
+  expect(result.current.calendarScopeReady).toBe(false)
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.reads).toContain('calendar_events')
+  expect(result.current.calendarEvents[0].applicants).toEqual([])
+})
+
+test('full snapshot expires without renewal on a cached round trip', async () => {
+  let now = 1000000
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+  try {
+    const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'full' } })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const home = 'window:2026-10-16:2026-11-30'
+    rerender({ scope: home })
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    now += 119000
+    state.reads = []
+    rerender({ scope: 'full' })
+    expect(result.current.calendarScopeReady).toBe(true)
+    expect(state.reads).toEqual([])
+    rerender({ scope: home })
+    now += 1001
+    rerender({ scope: 'full' })
+    expect(result.current.calendarScopeReady).toBe(false)
+    await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+    expect(state.reads).toContain('calendar_events')
+  } finally { clock.mockRestore() }
+})
+
+test('full read invalidated while pending cannot repopulate the navigation cache', async () => {
+  const home = 'window:2026-10-16:2026-11-30'
+  const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: home } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let finish!: (value: unknown) => void
+  state.pendingFull = new Promise(resolve => { finish = resolve })
+  rerender({ scope: 'full' })
+  await waitFor(() => expect(state.pendingFull).toBeNull())
+  act(() => result.current.invalidateCalendarCache())
+  await act(async () => { finish({ data: [old], error: null }) })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  rerender({ scope: home })
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  state.reads = []
+  rerender({ scope: 'full' })
+  expect(result.current.calendarScopeReady).toBe(false)
+  await waitFor(() => expect(result.current.calendarScopeReady).toBe(true))
+  expect(state.reads).toContain('calendar_events')
+})
 
 test('home first load and foreground keep calendar scoped; statistics route restores complete history', async () => {
   const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'since:2026-10-09' } })
@@ -220,6 +342,7 @@ test('expired month is fetched again instead of displaying a stale cached snapsh
 })
 
 test.each(['/territory', '/map'])('home round trips to %s retain old/future and other-team assignments (current full-read baseline)', async path => {
+  vi.stubEnv('VITE_CALENDAR_CACHED_SCREEN_ENABLED', 'false')
   const now = new Date('2026-10-23T12:00:00')
   state.events = [old, { ...old, id: 2, event_date: '2027-08-08' }]
   state.assignments = [

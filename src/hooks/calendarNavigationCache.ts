@@ -6,6 +6,11 @@ export function calendarNavigationReuseEnabled(flag = import.meta.env.VITE_CALEN
   return (flag ?? demo) === 'true'
 }
 
+export function calendarCachedScreenEnabled() {
+  return import.meta.env.VITE_DEMO_MODE === 'true' && calendarNavigationReuseEnabled()
+    && (import.meta.env.VITE_CALENDAR_CACHED_SCREEN_ENABLED ?? 'true') === 'true'
+}
+
 function windowBounds(scope: string) {
   const match = /^window:(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})$/.exec(scope)
   return match && match[1] <= match[2] ? [match[1], match[2]] : null

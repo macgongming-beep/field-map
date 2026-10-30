@@ -3,7 +3,7 @@ import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
-import { calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
+import { calendarCachedScreenEnabled, calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
 import { readCalendarParticipants } from './calendarParticipants'
 import { assertUnassignedCalendarEvent, calendarApplicationRefreshEnabled } from './calendarApplicationRefresh'
 import { recentSessionScope } from './serviceSessionReadScope'
@@ -580,6 +580,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           throw new SupersededReadError('Calendar read superseded')
         }
         publishCalendarEvents(transformedEvents)
+        if (calendarScopeFeature && calendarCachedScreenEnabled() && cacheEpoch === calendarCacheEpoch.current
+          && !eventCardAssignmentsRes.error && !eventAssignmentCardsRes.error) {
+          calendarWindows.current.delete(scope)
+          calendarWindows.current.set(scope, { events: transformedEvents, at: Date.now() })
+          if (calendarWindows.current.size > 6) calendarWindows.current.delete(calendarWindows.current.keys().next().value!)
+        }
         recipientCalendarRef.current = transformedEvents
         calendarSnapshotComplete.current = !eventCardAssignmentsRes.error && !eventAssignmentCardsRes.error
         setLoadedCalendarScope(scope)
@@ -1272,6 +1278,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   )
   const previousCalendarScope = useRef(calendarScope)
   const calendarCacheIdentity = useRef({ role, recipientUser })
+  // Read-only display selection: avoid unmounting the entire app for one render
+  // before the navigation effect publishes an already-complete cached snapshot.
+  const navigationEvents = calendarCachedScreenEnabled() && enabled && loadedCalendarScope !== calendarScope
+    && calendarCacheIdentity.current.role === role && calendarCacheIdentity.current.recipientUser === recipientUser
+    && calendarRefreshesPending.current === 0
+    ? readCalendarNavigationCache(calendarWindows.current, calendarScope) : undefined
   useEffect(() => {
     const previous = calendarCacheIdentity.current
     if (previous.role !== role || previous.recipientUser !== recipientUser) clearCalendarWindows()
@@ -1612,12 +1624,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     buildings,
     visitHistories,
     serviceSessions,
-    calendarEvents,
+    calendarEvents: navigationEvents ?? calendarEvents,
     cardBoundaries,
     notices,
     // 로그인했는데 아직 받기 시작도 안 했다면 '불러오는 중' 으로 본다.
     // 그래야 로그인 직후 한 프레임 동안 빈 화면이 그려지지 않는다.
-    calendarScopeReady: loadedCalendarScope === calendarScope,
+    calendarScopeReady: loadedCalendarScope === calendarScope || navigationEvents !== undefined,
     calendarReadError,
     retryCalendarRead: refetchCalendar,
     loading: enabled ? (loading || !fetchStartedRef.current) : false,

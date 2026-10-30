@@ -58,6 +58,8 @@
 
 저장·실시간 겹침 비용: [0059 데모 건물 갱신 대기열](0059-demo-visit-realtime-refresh-queue.md)
 
+화면 왕복 로딩과 전체 일정 재사용: [0060 데모 일정 캐시 화면 유지](0060-demo-calendar-cached-screen.md)
+
 ```markdown
 # 제목
 
