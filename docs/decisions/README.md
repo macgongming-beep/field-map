@@ -62,6 +62,8 @@
 
 복구·대기열·캐시 화면 운영 opt-in 준비: [0061 운영 스위치와 조합 시험](0061-recovery-and-cached-screen-production-gates.md)
 
+운영 기록 복구와 갱신 대기열: [0063 운영 활성화와 검증](0063-production-history-recovery-queue.md)
+
 ```markdown
 # 제목
 
