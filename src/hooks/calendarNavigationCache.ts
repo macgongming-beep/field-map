@@ -7,8 +7,8 @@ export function calendarNavigationReuseEnabled(flag = import.meta.env.VITE_CALEN
 }
 
 export function calendarCachedScreenEnabled() {
-  return import.meta.env.VITE_DEMO_MODE === 'true' && calendarNavigationReuseEnabled()
-    && (import.meta.env.VITE_CALENDAR_CACHED_SCREEN_ENABLED ?? 'true') === 'true'
+  return calendarNavigationReuseEnabled()
+    && (import.meta.env.VITE_CALENDAR_CACHED_SCREEN_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
 }
 
 function windowBounds(scope: string) {

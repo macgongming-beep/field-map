@@ -295,14 +295,22 @@ test('unmount rejects queued post-write work without starting a late full fallba
 })
 
 test.each([
-  { demo: 'false', flag: 'true', serialized: false },
-  { demo: 'true', flag: 'false', serialized: false },
-  { demo: 'true', flag: undefined, serialized: true },
-])('visit queue keeps the demo boundary and explicit rollback ($demo, $flag)', async ({ demo, flag, serialized }) => {
+  { demo: undefined, flag: undefined, recovery: 'true', role: 'user', serialized: false },
+  { demo: 'false', flag: undefined, recovery: 'true', role: 'user', serialized: false },
+  { demo: 'false', flag: 'true', recovery: 'true', role: 'user', serialized: true },
+  { demo: 'false', flag: 'false', recovery: 'true', role: 'user', serialized: false },
+  { demo: 'true', flag: 'false', recovery: 'true', role: 'user', serialized: false },
+  { demo: 'true', flag: undefined, recovery: 'true', role: 'user', serialized: true },
+  { demo: 'false', flag: 'true', recovery: 'false', role: 'user', serialized: false },
+  { demo: 'false', flag: 'true', recovery: 'true', role: 'admin', serialized: false },
+  { demo: 'false', flag: 'true', recovery: 'true', role: 'leader', serialized: false },
+  { demo: 'false', flag: 'true', recovery: 'true', role: 'developer', serialized: false },
+] as const)('visit queue opt-in $demo/$flag recovery=$recovery role=$role', async ({ demo, flag, recovery, role, serialized }) => {
   enableHistoryRecovery()
   vi.stubEnv('VITE_DEMO_MODE', demo)
   vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', flag)
-  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  vi.stubEnv('VITE_SCOPED_HISTORY_RECOVERY_ENABLED', recovery)
+  const { result } = renderHook(() => useStore(true, role, 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   const before = result.current.buildings[0]
   let release!: () => void
@@ -313,8 +321,9 @@ test.each([
   await waitFor(() => expect(state.changed).toHaveBeenCalledTimes(1))
   act(() => { second = result.current.territoryRealtime.sync([10]).catch(error => error) })
   await act(async () => { await Promise.resolve() })
-  expect(state.changed).toHaveBeenCalledTimes(serialized ? 1 : 2)
+  const readsBeforeRelease = state.changed.mock.calls.length
   await act(async () => { release(); await Promise.all([first, second]) })
+  expect(readsBeforeRelease).toBe(serialized ? 1 : 2)
 })
 
 test('complete scoped recovery skips history batches but keeps sessions and manual repair reads', async () => {
@@ -333,14 +342,22 @@ test('complete scoped recovery skips history batches but keeps sessions and manu
   expect(state.historyFilters).toHaveLength(1)
 })
 
-test.each([undefined, 'false'])('history recovery remains off outside demo even with opt-in (%s)', async demo => {
+test.each([
+  { demo: undefined, flag: undefined, reads: 1 },
+  { demo: 'false', flag: undefined, reads: 1 },
+  { demo: 'false', flag: 'true', reads: 0 },
+  { demo: undefined, flag: 'true', reads: 0 },
+  { demo: 'true', flag: 'false', reads: 1 },
+  { demo: 'false', flag: 'false', reads: 1 },
+])('history recovery opt-in controls foreground reads ($demo/$flag)', async ({ demo, flag, reads }) => {
   enableHistoryRecovery()
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_SCOPED_HISTORY_RECOVERY_ENABLED', flag)
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   state.historyFilters = []
   await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
-  expect(state.historyFilters).toHaveLength(1)
+  expect(state.historyFilters).toHaveLength(reads)
 })
 
 test('thirty minute history safety read is not extended by successful delta refreshes', async () => {

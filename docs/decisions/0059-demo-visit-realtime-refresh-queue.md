@@ -1,5 +1,8 @@
 # Demo: coordinate post-visit and realtime building refreshes
 
+Gate policy superseded by [0061](0061-recovery-and-cached-screen-production-gates.md).
+The demo-only statements below describe the original trial; production remains inactive.
+
 - Status: demo deployed and live-hook measured; production unchanged; external review pending
 - Date: 2026-10-30
 - Related: 0058 scoped history recovery and its live realtime measurement

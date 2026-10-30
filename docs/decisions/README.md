@@ -60,6 +60,8 @@
 
 화면 왕복 로딩과 전체 일정 재사용: [0060 데모 일정 캐시 화면 유지](0060-demo-calendar-cached-screen.md)
 
+복구·대기열·캐시 화면 운영 opt-in 준비: [0061 운영 스위치와 조합 시험](0061-recovery-and-cached-screen-production-gates.md)
+
 ```markdown
 # 제목
 

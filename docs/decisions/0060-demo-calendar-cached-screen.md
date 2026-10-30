@@ -1,5 +1,8 @@
 # Demo: reuse complete calendar screens without a loading remount
 
+Gate policy superseded by [0061](0061-recovery-and-cached-screen-production-gates.md).
+The demo-only statements below describe the original trial; production remains inactive.
+
 - Status: demo validation; production unchanged; external review pending
 - Date: 2026-10-30
 - Related: 0054 navigation cache; 0055 participant invalidation

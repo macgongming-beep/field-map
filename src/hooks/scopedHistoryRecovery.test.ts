@@ -32,9 +32,11 @@ test('successful deltas may change coverage but cannot extend its original read-
 })
 
 test.each([
-  [undefined, 'true', true, false], ['false', 'true', true, false],
+  [undefined, undefined, true, false], ['false', undefined, true, false],
+  [undefined, 'true', true, true], ['false', 'true', true, true],
+  ['false', 'false', true, false], ['false', 'true', false, false],
   ['true', undefined, true, true], ['true', 'false', true, false], ['true', 'true', false, false],
-] as const)('demo-only scoped recovery gate %s/%s/%s', (demo, flag, scoped, expected) => {
+] as const)('scoped recovery opt-in gate %s/%s/%s', (demo, flag, scoped, expected) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
   vi.stubEnv('VITE_SCOPED_HISTORY_RECOVERY_ENABLED', flag)
   expect(scopedHistoryRecoveryEnabled(scoped)).toBe(expected)

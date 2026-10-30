@@ -149,7 +149,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
   const scopedHistories = scopedVisitHistoryEnabled(role, Boolean(recipientReader))
   const historyRecovery = scopedHistoryRecoveryEnabled(scopedHistories)
-  const queuedVisitRefresh = historyRecovery && (import.meta.env.VITE_VISIT_REALTIME_QUEUE_ENABLED ?? 'true') === 'true'
+  const queuedVisitRefresh = historyRecovery && (import.meta.env.VITE_VISIT_REALTIME_QUEUE_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
   const visitRefreshQueue = useRef<ReturnType<typeof createBuildingRefreshQueue> | null>(null)
   const historyStoreActive = useRef(enabled)
   const historyCoverage = useRef(createHistoryCoverage()).current

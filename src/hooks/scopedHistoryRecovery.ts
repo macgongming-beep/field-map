@@ -3,8 +3,7 @@ import type { Building } from '../types'
 export const HISTORY_RECHECK_MS = 30 * 60_000
 
 export function scopedHistoryRecoveryEnabled(scoped: boolean) {
-  return scoped && import.meta.env.VITE_DEMO_MODE === 'true'
-    && (import.meta.env.VITE_SCOPED_HISTORY_RECOVERY_ENABLED ?? 'true') === 'true'
+  return scoped && (import.meta.env.VITE_SCOPED_HISTORY_RECOVERY_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
 }
 
 export function historyScope(buildings: Building[]) {

@@ -1,5 +1,8 @@
 # Demo: skip redundant scoped history reads after verified recovery
 
+Gate policy superseded by [0061](0061-recovery-and-cached-screen-production-gates.md).
+The demo-only statements below describe the original trial; production remains inactive.
+
 - Status: code approved in external review; demo trial, production unchanged
 - Date: 2026-10-30
 - Related: 0053 scoped visit histories; recipientRecovery and territory change signals

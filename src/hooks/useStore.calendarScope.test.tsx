@@ -44,7 +44,13 @@ const old = { id: 1, event_date: '2026-08-02', title: 'Old', time: '10:00', even
 beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.pendingResource = null; state.participants.mockReset().mockResolvedValue(new Map()); state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', undefined) })
 afterEach(() => { cleanup(); state.callbacks.clear(); vi.useRealTimers(); vi.unstubAllEnvs() })
 
-test.each(['user', 'leader', 'admin', 'developer'] as const)('%s cached navigation never unmounts the screen or flashes previous-scope events', async role => {
+test.each((['user', 'leader', 'admin', 'developer'] as const).flatMap(role => [
+  { role, demo: 'true', flag: undefined }, { role, demo: 'false', flag: 'true' },
+]))('$role cached navigation demo=$demo never unmounts or flashes previous-scope events', async ({ role, demo, flag }) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_CACHED_SCREEN_ENABLED', flag)
   const home = 'window:2026-10-16:2026-11-30'
   const other = role === 'user' || role === 'leader' ? `service:["A","2026-10-30",null]` : 'full'
   state.scoped.mockImplementation(async scope => scope === home ? [{ id: 7, date: '2026-10-30', applicants: ['Home'], cardAssignments: [] }] : [{ id: 1, date: '2026-08-02', applicants: ['A', 'Other'], cardAssignments: [] }])
@@ -92,10 +98,16 @@ test.each(['foreground', 'realtime:calendar', 'mutation:calendar', 'fetchAll'])(
   expect(result.current.calendarEvents[0].cardAssignments).toEqual([expect.objectContaining({ userName: 'Replacement', assignedCardId: 30 })])
 })
 
-test.each([{ demo: 'false', flag: 'true' }, { demo: 'true', flag: 'false' }])('full cache stays off with demo=$demo flag=$flag', async ({ demo, flag }) => {
+test.each([
+  { demo: undefined, flag: undefined, navigation: 'true' },
+  { demo: 'false', flag: undefined, navigation: 'true' },
+  { demo: 'false', flag: 'false', navigation: 'true' },
+  { demo: 'true', flag: 'false', navigation: 'true' },
+  { demo: 'false', flag: 'true', navigation: 'false' },
+])('full cache stays off with demo=$demo flag=$flag navigation=$navigation', async ({ demo, flag, navigation }) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
   vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
-  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', navigation)
   vi.stubEnv('VITE_CALENDAR_CACHED_SCREEN_ENABLED', flag)
   const { result, rerender } = renderHook(({ scope }) => useStore(true, 'admin', undefined, scope), { initialProps: { scope: 'full' } })
   await waitFor(() => expect(result.current.loading).toBe(false))
