@@ -42,23 +42,59 @@ if (!['admin', 'developer'].includes(admin.role) || user.role !== 'user') throw 
 const writer = createClient(origin, key, { auth: { ...auth, storageKey: 'history-demo-writer' }, global: { headers: { 'x-session-token': admin.token } } })
 const title = `history-recovery-measurement-${Date.now()}`
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
-const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/' })
+const realtimeMode = process.argv.includes('--realtime')
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+const originalWarn = console.warn
+if (realtimeMode) console.warn = (...args) => {
+  // Bundled data-URL stack traces contain megabytes of source. Preserve the
+  // error name/message without dumping the entire measurement module.
+  originalWarn(...args.map(value => value instanceof Error ? { name: value.name, message: value.message } : value))
+}
+const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/', pretendToBeVisual: true })
 const previous = new Map()
 for (const name of ['window', 'document', 'navigator', 'localStorage', 'sessionStorage', 'HTMLElement', 'CustomEvent']) {
   previous.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
   Object.defineProperty(globalThis, name, { configurable: true, value: dom.window[name] })
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
-const { renderHook, waitFor, act, cleanup } = await import('@testing-library/react')
+const { renderHook, render, waitFor, act, cleanup } = await import('@testing-library/react')
 let event, unit
 const results = []
 const activeRecords = async () => unwrap(await writer.from('visit_histories').select('id,unit_id').is('invalidated_at', null)
   .gte('created_at', new Date(Date.now() - 365 * 86400_000).toISOString()).order('id'))
 const originalHistories = await activeRecords()
+async function removeFixtureUnit(id, memo) {
+  const row = unwrap(await writer.from('units').select('id,building_id,number,memo').eq('id', id).single())
+  assert.equal(row.building_id, 1)
+  assert.equal(row.number, '9988')
+  assert.equal(row.memo, memo)
+  assert.ok(memo.startsWith('history-recovery-measurement-'))
+  const histories = unwrap(await writer.from('visit_histories').select('id,memo,invalidated_at').eq('unit_id', id))
+  assert.ok(histories.every(h => h.memo?.startsWith('history-recovery-measurement-') && h.invalidated_at), 'Non-fixture or active history prevents cleanup')
+  assert.equal(unwrap(await writer.from('regular_visits').select('id').eq('unit_id', id)).length, 0)
+  for (const table of ['return_visits', 'phone_surveys', 'event_restaurant_assignments']) {
+    assert.equal(unwrap(await writer.from(table).select('id').eq('unit_id', id)).length, 0, `Non-fixture ${table} prevents cleanup`)
+  }
+  let result = unwrap(await writer.rpc('delete_place_or_request_tx', { p_token: admin.token, p_target_type: 'unit',
+    p_target_id: id, p_note: 'Temporary demo history-recovery measurement cleanup' }))
+  if (result?.action === 'requested') {
+    const request = unwrap(await writer.from('place_change_requests').select('id,unit_id,request_type,note').eq('id', result.request_id).single())
+    assert.equal(request.unit_id, id)
+    assert.equal(request.request_type, 'remove_place')
+    assert.equal(request.note, 'Temporary demo history-recovery measurement cleanup')
+    result = unwrap(await writer.rpc('execute_place_deletion_request_tx', { p_token: admin.token, p_request_id: request.id }))
+  }
+  assert.equal(result?.action, 'deleted')
+  assert.equal(unwrap(await writer.from('units').select('id').eq('id', id)).length, 0)
+}
 try {
   const building = unwrap(await writer.from('buildings').select('id,card_id').eq('id', 1).single())
   assert.equal(building.card_id, 1)
-  assert.equal(unwrap(await writer.from('units').select('id').eq('building_id', building.id).eq('number', '9988')).length, 0)
+  const stale = unwrap(await writer.from('units').select('id,memo').eq('building_id', building.id).eq('number', '9988'))
+  for (const row of stale) {
+    await removeFixtureUnit(row.id, row.memo)
+    console.log(JSON.stringify({ removedStaleFixture: row.id }))
+  }
   unit = unwrap(await writer.from('units').insert({ building_id: building.id, number: '9988', status: '미방문', is_chinese: true, memo: title }).select('id').single())
   event = unwrap(await writer.from('calendar_events').insert({ event_date: today, time: '10:00', title, type: '주택',
     place: 'Demo measurement only', leader_name: admin.name, card_name: '', has_meeting: false, allow_applications: true }).select('id').single())
@@ -66,9 +102,12 @@ try {
   const assigned = unwrap(await writer.rpc('assign_cards_bulk_tx', { p_token: admin.token, p_event_id: event.id,
     p_assignments: [{ userName: user.name, cardIds: [building.card_id], teamKey: null }], p_status: 'confirmed', p_expected_shared_at: null }))
   assert.equal(assigned?.ok, true)
-  for (const enabled of [false, true]) {
+  for (const { enabled, delayMs } of (realtimeMode ? [0, 250] : [0]).flatMap(delayMs => [false, true].map(enabled => ({ enabled, delayMs })))) {
     let phase = 'initial'
+    let subscribed = false
     const samples = []
+    const traces = []
+    const trace = (kind, detail = {}) => traces.push({ phase, kind, at: performance.now(), ...detail })
     localStorage.setItem('auth_token', user.token)
     localStorage.setItem('currentVisitor', user.name)
     const client = createClient(origin, key, { auth: { ...auth, storageKey: `history-demo-user-${enabled}` }, global: { headers: { 'x-session-token': user.token }, fetch: async (input, init) => {
@@ -87,30 +126,119 @@ try {
       const label = phase
       const response = await fetch(input, init)
       const body = await response.clone().arrayBuffer()
+      if (method === 'GET' && delayMs) await sleep(delayMs)
       samples.push({ phase: label, endpoint, method, status: response.status, bytes: body.byteLength,
         scoped: endpoint === 'visit_histories' && url.searchParams.has('unit_id'),
         delta: endpoint === 'visit_histories' && url.searchParams.has('units.building_id') })
       return response
     } } })
-    globalThis.__historyMeasurement = { client }
+    if (realtimeMode) {
+      const channel = client.channel.bind(client)
+      client.channel = (...args) => {
+        const value = channel(...args), subscribe = value.subscribe.bind(value), on = value.on.bind(value)
+        value.on = (type, filter, callback) => on(type, filter, payload => {
+          if (type === 'postgres_changes') trace('signal', { buildingId: payload.new?.building_id })
+          callback(payload)
+        })
+        value.subscribe = callback => subscribe((status, error) => {
+          subscribed = status === 'SUBSCRIBED'
+          trace('channel', { status })
+          callback?.(status, error)
+        })
+        return value
+      }
+    }
+    globalThis.__historyMeasurement = { client, trace }
     const bundle = await rolldown({ input: '\0history-entry', transform: { define: { 'import.meta.env': JSON.stringify({
       DEV: false, VITE_DEMO_MODE: 'true', VITE_TERRITORY_REALTIME_ENABLED: 'true', VITE_SUPABASE_URL: origin,
       VITE_SCOPED_HISTORY_RECOVERY_ENABLED: String(enabled),
     }) } }, plugins: [{ name: 'history-measurement', resolveId(id) {
       if (id === '\0history-entry') return id
       if (id.endsWith('/supabase')) return '\0history-client'
+      if (realtimeMode && id.endsWith('/scopedHistoryRecovery')) return '\0history-coverage'
       if (!id.startsWith('.') && !id.startsWith('/') && !id.startsWith('\0')) return { id: import.meta.resolve(id), external: true }
     }, load(id) {
       if (id === '\0history-client') return 'export const supabase = globalThis.__historyMeasurement.client'
-      if (id === '\0history-entry') return `export { useStore } from ${JSON.stringify(resolve('src/hooks/useStore.ts'))}`
+      if (id === '\0history-coverage') return `
+        import * as original from ${JSON.stringify(resolve('src/hooks/scopedHistoryRecovery.ts'))};
+        export { historyScope, scopedHistoryRecoveryEnabled } from ${JSON.stringify(resolve('src/hooks/scopedHistoryRecovery.ts'))};
+        export function createHistoryCoverage() {
+          const coverage = original.createHistoryCoverage();
+          const trace = globalThis.__historyMeasurement.trace;
+          return { ...coverage,
+            invalidate() { trace('invalidated'); return coverage.invalidate(); },
+            commit(...args) { trace('complete-read'); return coverage.commit(...args); },
+            canReuse(...args) { const reusable = coverage.canReuse(...args); trace('coverage-check', { reusable }); return reusable; }
+          };
+        }`
+      if (id === '\0history-entry') return `
+        import React from 'react';
+        import { useStore } from ${JSON.stringify(resolve('src/hooks/useStore.ts'))};
+        import { useTerritoryRealtime } from ${JSON.stringify(resolve('src/hooks/useTerritoryRealtime.ts'))};
+        import { TerritoryRealtimeContext } from ${JSON.stringify(resolve('src/hooks/territoryRealtimeContext.ts'))};
+        export { useStore };
+        function MapProbe() { useTerritoryRealtime([1]); return null; }
+        export function Probe({ name, scope }) {
+          const store = useStore(true, 'user', name, scope, name);
+          globalThis.__historyMeasurement.store = store;
+          const trace = globalThis.__historyMeasurement.trace;
+          const value = { ...store.territoryRealtime, sync: async ids => {
+            trace('realtime-sync-start');
+            try { await store.territoryRealtime.sync(ids); trace('realtime-sync-success'); }
+            catch(error) { trace('realtime-sync-failed', { name: error.name }); throw error; }
+          }};
+          return React.createElement(TerritoryRealtimeContext.Provider, { value }, store.loading ? null : React.createElement(MapProbe));
+        }
+        export function mountProbe(name, scope) { return React.createElement(Probe, { name, scope }); }`
     } }] })
     let hook, statisticsClient
     try {
       const { output } = await bundle.generate({ format: 'esm', codeSplitting: false })
-      const module = await import(`data:text/javascript;base64,${Buffer.from(output[0].code + '\n// ' + enabled).toString('base64')}`)
-      hook = renderHook(() => module.useStore(true, 'user', user.name, `window:${today}:${today}`, user.name))
+      const module = await import(`data:text/javascript;base64,${Buffer.from(output[0].code + '\n// ' + enabled + ':' + delayMs).toString('base64')}`)
+      if (realtimeMode) {
+        const view = render(module.mountProbe(user.name, `window:${today}:${today}`))
+        hook = { result: { get current() { return globalThis.__historyMeasurement.store } }, unmount: () => view.unmount() }
+      } else hook = renderHook(() => module.useStore(true, 'user', user.name, `window:${today}:${today}`, user.name))
       await waitFor(() => { assert.equal(hook.result.current.loading, false); assert.equal(hook.result.current.error, null) }, { timeout: 45000 })
       assert.ok(hook.result.current.buildings.some(b => b.units.some(u => u.id === unit.id)))
+      if (realtimeMode) {
+        await act(async () => { await waitFor(() => assert.equal(subscribed, true), { timeout: 20000 }); await sleep(3000) })
+        for (let cycle = 1; cycle <= 4; cycle++) {
+          for (const operation of ['save', 'cancel']) {
+            const label = `${cycle}-${operation}`
+            phase = `${label}-write`
+            const traceStart = traces.length, sampleStart = samples.length
+            await act(async () => {
+              if (operation === 'save') await hook.result.current.updateUnitStatus(building.id, unit.id, '부재', title, '오후')
+              else {
+                const record = hook.result.current.visitHistories.find(h => h.unitId === unit.id)
+                assert.ok(record, 'Missing record before cancel')
+                await hook.result.current.deleteVisitHistory(record.id, unit.id)
+              }
+              await sleep(3000)
+            })
+            assert.equal(hook.result.current.visitHistories.some(h => h.unitId === unit.id), operation === 'save')
+            const writeTrace = traces.slice(traceStart)
+            assert.ok(writeTrace.some(t => t.kind === 'signal' && t.buildingId === building.id), 'No actual self-write realtime signal')
+            phase = `${label}-foreground`
+            await act(async () => { await hook.result.current.refetchAll(true) })
+            const rows = samples.filter(s => s.phase === phase)
+            assert.ok(rows.every(r => r.status < 400))
+            assert.equal(hook.result.current.visitHistories.some(h => h.unitId === unit.id), operation === 'save')
+            const dbIds = (await activeRecords()).filter(h => h.unit_id === unit.id).map(h => h.id)
+            assert.deepEqual(hook.result.current.visitHistories.filter(h => h.unitId === unit.id).map(h => h.id), dbIds)
+            results.push({ enabled, delayMs, cycle, operation, foregroundRequests: rows.length,
+              scopedHistoryReads: rows.filter(r => r.scoped).length, deltaHistoryReads: rows.filter(r => r.delta).length,
+              cycleHistoryReads: samples.slice(sampleStart).filter(r => r.endpoint === 'visit_histories' && r.method === 'GET').length,
+              writeSignals: writeTrace.filter(t => t.kind === 'signal').length,
+              writeInvalidations: writeTrace.filter(t => t.kind === 'invalidated').length,
+              realtimeSyncFailures: traces.slice(traceStart).filter(t => t.kind === 'realtime-sync-failed').map(t => t.name),
+              correctRecordState: true })
+            console.log(JSON.stringify({ sample: results.at(-1) }))
+          }
+        }
+        continue
+      }
       const recover = async label => {
         phase = label
         await act(async () => { await hook.result.current.refetchSlices(['buildings', 'cards', 'cardBoundaries', 'visits'], { triggeredBy: 'foreground' }) })
@@ -173,19 +301,28 @@ try {
   if (unit) {
     const rows = unwrap(await writer.from('visit_histories').select('id').eq('unit_id', unit.id).is('invalidated_at', null))
     for (const row of rows) unwrap(await writer.rpc('invalidate_visit_history_tx', { p_token: admin.token, p_history_id: row.id, p_reason: 'Demo verification cleanup' }))
-    unwrap(await writer.from('units').delete().eq('id', unit.id).eq('memo', title))
+    await removeFixtureUnit(unit.id, title)
   }
-  if (event) unwrap(await writer.from('calendar_events').delete().eq('id', event.id).eq('title', title))
+  if (event) {
+    unwrap(await writer.from('calendar_events').delete().eq('id', event.id).eq('title', title))
+    assert.equal(unwrap(await writer.from('calendar_events').select('id').eq('id', event.id)).length, 0)
+  }
   assert.deepEqual(await activeRecords(), originalHistories, 'Original active histories changed')
   await bootstrap.removeAllChannels(); await writer.removeAllChannels()
   cleanup(); dom.window.close()
   delete globalThis.__historyMeasurement; delete globalThis.IS_REACT_ACT_ENVIRONMENT
+  console.warn = originalWarn
   for (const [name, descriptor] of previous) {
     if (descriptor) Object.defineProperty(globalThis, name, descriptor)
     else delete globalThis[name]
   }
 }
-console.log(JSON.stringify({ project: 'demo', results, fixtureCleanup: 'passed',
+console.log(JSON.stringify({ project: 'demo', mode: realtimeMode ? 'live-realtime-cycles' : 'baseline', results, fixtureCleanup: 'passed',
   limitations: ['Application hook state under JSDOM, not physical phone or browser rendering.',
+    ...(realtimeMode ? ['Real map realtime subscription, 4 save/cancel pairs per flag/delay combination; 250ms is added GET response latency, not measured mobile RTT.',
+      'Calls refetchAll(true) directly after 3 seconds to test eligible foreground recovery; does not count skips caused by the 2-minute visibility cooldown. Subscription stays connected, no physical background/reconnect simulation.',
+      'Coverage wrapper logs calls only; original completeness policy is unchanged.'] : []),
     'Decoded response body bytes, not compressed transfer or Supabase billed egress.',
-    'Statistics uses the admin store path with demo data; no developer login or production writes.'] }, null, 2))
+    realtimeMode ? 'Checks record IDs against demo DB after every cycle; does not remeasure statistics in realtime mode.'
+      : 'Statistics uses the admin store path with demo data; no developer login.',
+    'No production writes.'] }, null, 2))
