@@ -44,6 +44,8 @@ const title = `history-recovery-measurement-${Date.now()}`
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' })
 const realtimeMode = process.argv.includes('--realtime')
 const queueMode = process.argv.includes('--queue')
+const navigationMode = process.argv.includes('--navigation')
+if (navigationMode && realtimeMode) throw Error('--navigation is separate from --realtime')
 if (queueMode && !realtimeMode) throw Error('--queue requires --realtime')
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const originalWarn = console.warn
@@ -250,11 +252,11 @@ try {
       }
       const recover = async label => {
         phase = label
-        await act(async () => { await hook.result.current.refetchSlices(['buildings', 'cards', 'cardBoundaries', 'visits'], { triggeredBy: 'foreground' }) })
+        await act(async () => { await hook.result.current.refetchSlices(navigationMode ? ['calendar'] : ['buildings', 'cards', 'cardBoundaries', 'visits'], { triggeredBy: navigationMode ? 'navigation:calendar' : 'foreground' }) })
         const rows = samples.filter(s => s.phase === label)
         assert.ok(rows.every(r => r.status < 400))
         assert.equal(rows.filter(r => r.scoped).length, enabled ? 0 : 1)
-        assert.ok(rows.some(r => r.endpoint === 'service_sessions'))
+        if (!navigationMode) assert.ok(rows.some(r => r.endpoint === 'service_sessions'))
         results.push({ enabled, phase: label, requests: rows.length, scopedHistoryReads: rows.filter(r => r.scoped).length,
           deltaHistoryReads: rows.filter(r => r.delta).length, decodedBodyBytes: rows.reduce((sum, r) => sum + r.bytes, 0) })
       }
@@ -280,6 +282,39 @@ try {
       unwrap(await writer.rpc('invalidate_visit_history_tx', { p_token: admin.token, p_history_id: external.id, p_reason: 'Demo verification' }))
       await recover('external-cancel')
       assert.ok(!hook.result.current.visitHistories.some(h => h.id === external.id))
+      if (navigationMode) {
+        const originalCards = new Set(hook.result.current.buildings.map(b => b.cardId))
+        const candidate = unwrap(await writer.from('buildings').select('id,card_id').order('id'))
+          .find(b => b.card_id && !originalCards.has(b.card_id))
+        assert.ok(candidate, 'No outside-scope demo card for reassignment test')
+        unwrap(await writer.from('event_participants').upsert({ event_id: event.id, user_name: admin.name, role: '입명' }, { onConflict: 'event_id,user_name' }))
+        const assign = async (cardId, includeOther = false) => {
+          const fresh = unwrap(await writer.from('calendar_events').select('assignment_shared_at').eq('id', event.id).single())
+          const assignments = [{ userName: user.name, cardIds: [cardId], teamKey: 'navigation-user', cardScope: '전체', informalAssetIds: [] }]
+          if (includeOther) assignments.push({ userName: admin.name, cardIds: [building.card_id], teamKey: 'navigation-other', cardScope: '전체', informalAssetIds: [] })
+          const result = unwrap(await writer.rpc('assign_team_service_bulk_tx', { p_token: admin.token, p_event_id: event.id,
+            p_assignments: assignments, p_status: 'confirmed', p_expected_shared_at: fresh.assignment_shared_at }))
+          assert.equal(result?.ok, true)
+        }
+        phase = 'navigation-reassigned'
+        await assign(candidate.card_id, true)
+        await act(async () => { await hook.result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }) })
+        assert.ok(hook.result.current.buildings.some(b => b.id === candidate.id), 'New assignment not reflected')
+        assert.ok(hook.result.current.calendarEvents.filter(e => e.id === event.id).flatMap(e => e.cardAssignments ?? [])
+          .some(a => a.userName === user.name && (a.assignedCardIds ?? [a.assignedCardId]).includes(candidate.card_id)), 'New assignment missing from calendar')
+        phase = 'navigation-revoked'
+        // Only the isolated fixture participant is removed; DB cleanup triggers revoke its assignments.
+        unwrap(await writer.from('event_participants').delete().eq('event_id', event.id).eq('user_name', user.name))
+        await act(async () => { await hook.result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }) })
+        assert.ok(!hook.result.current.buildings.some(b => b.cardId === candidate.card_id), 'Revoked card remains visible')
+        assert.ok(!hook.result.current.calendarEvents.filter(e => e.id === event.id).flatMap(e => e.cardAssignments ?? [])
+          .some(a => a.userName === user.name), 'Revoked assignment remains in calendar')
+        assert.ok(hook.result.current.calendarEvents.filter(e => e.id === event.id).flatMap(e => e.cardAssignments ?? [])
+          .some(a => a.userName === admin.name && (a.assignedCardIds ?? [a.assignedCardId]).includes(building.card_id)), 'Other team was lost during cancellation')
+        results.push({ enabled, navigationReassignment: 'passed', navigationCancellation: 'passed' })
+        unwrap(await writer.from('event_participants').insert({ event_id: event.id, user_name: user.name, role: '입명' }))
+        await assign(building.card_id)
+      }
       phase = 'manual'
       await act(async () => { await hook.result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'fetchAll' }) })
       assert.ok(samples.some(r => r.phase === 'manual' && r.scoped))
@@ -326,7 +361,7 @@ try {
     else delete globalThis[name]
   }
 }
-console.log(JSON.stringify({ project: 'demo', mode: realtimeMode ? 'live-realtime-cycles' : 'baseline', results, fixtureCleanup: 'passed',
+console.log(JSON.stringify({ project: 'demo', mode: navigationMode ? 'navigation-recovery' : realtimeMode ? 'live-realtime-cycles' : 'baseline', results, fixtureCleanup: 'passed',
   limitations: ['Application hook state under JSDOM, not physical phone or browser rendering.',
     ...(realtimeMode ? ['Real map realtime subscription, 4 save/cancel pairs per flag/delay combination; 250ms is added GET response latency, not measured mobile RTT.',
       'Calls refetchAll(true) directly after 3 seconds to test eligible foreground recovery; does not count skips caused by the 2-minute visibility cooldown. Subscription stays connected, no physical background/reconnect simulation.',

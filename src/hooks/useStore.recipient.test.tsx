@@ -151,6 +151,88 @@ function enableHistoryRecovery() {
   state.unchanged.mockResolvedValue([1])
 }
 
+test('demo calendar navigation rechecks assignments and recovers changes without a full scoped reload', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear(); state.historyFilters = []
+  // A cancellation by another user must be applied before the history read is skipped.
+  state.changed.mockResolvedValue({ buildings: result.current.buildings, histories: [] })
+  state.recover.mockImplementationOnce(async (_ids, _known, _checkpoint, sync) => { await sync([10]) })
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }) })
+  expect(state.unchanged).toHaveBeenCalledTimes(1)
+  expect(state.recover).toHaveBeenCalledTimes(1)
+  expect(state.changed).toHaveBeenCalledWith([10])
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(state.historyFilters).toEqual([])
+  expect(result.current.visitHistories).toEqual([])
+})
+
+test.each(['reassigned', 'revoked', 'scope failure', 'delta failure'] as const)('demo navigation falls back safely on %s', async reason => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear(); state.historyFilters = []
+  if (reason === 'scope failure') state.unchanged.mockRejectedValueOnce(new Error('scope offline'))
+  else if (reason === 'delta failure') state.recover.mockRejectedValueOnce(new Error('delta offline'))
+  else state.unchanged.mockResolvedValueOnce(null)
+  if (reason === 'reassigned') {
+    state.buildings = [{ ...building, id: 20, card_id: 2, units: [{ ...building.units[0], id: 200, building_id: 20 }] }]
+    state.allowed = [2]
+    state.historyRows.push({ ...state.historyRows[1], id: 902, unit_id: 200 })
+  } else if (reason === 'revoked') { state.buildings = []; state.allowed = [] }
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }) })
+  expect(state.refresh).toHaveBeenCalledTimes(1)
+  expect(result.current.buildings.map(b => b.id)).toEqual(reason === 'reassigned' ? [20] : reason === 'revoked' ? [] : [10])
+  expect(result.current.visitHistories.map(h => h.id)).toEqual(reason === 'reassigned' ? [902] : reason === 'revoked' ? [] : [901])
+  if (reason !== 'revoked') expect(state.historyFilters).toHaveLength(1)
+})
+
+test.each(['fetchAll', 'mutation:calendar', 'mutation:application'])('demo navigation optimization does not narrow %s', async triggeredBy => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear(); state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['calendar', 'visits'], { triggeredBy }) })
+  expect(state.unchanged).not.toHaveBeenCalled()
+  expect(state.refresh).toHaveBeenCalledTimes(1)
+  expect(state.historyFilters).toHaveLength(1)
+  expect(state.reads).toContain('service_sessions')
+})
+
+test('production navigation retains the current full scoped refresh even with history recovery enabled', async () => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear(); state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }) })
+  expect(state.unchanged).not.toHaveBeenCalled()
+  expect(state.refresh).toHaveBeenCalledTimes(1)
+  expect(state.historyFilters).toHaveLength(1)
+})
+
+test('demo navigation still performs the thirty minute history safety read', async () => {
+  enableHistoryRecovery()
+  const start = Date.now()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(start)
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  clock.mockReturnValue(start + 30 * 60_000); state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }) })
+  expect(state.historyFilters).toHaveLength(1)
+})
+
+test.each(['true', 'false'])('legacy notices read is skipped only in demo=%s', async demo => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const { result } = renderHook(() => useStore(true, 'admin'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.reads.includes('notices')).toBe(demo !== 'true')
+  state.reads = []
+  await act(async () => { await result.current.refetchSlices(['communication'], { triggeredBy: 'foreground' }) })
+  expect(state.reads.includes('notices')).toBe(demo !== 'true')
+})
+
 test.each(['save', 'cancel'] as const)('demo queued %s waits for older realtime then reads fresh data without fallback', async operation => {
   enableHistoryRecovery()
   vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')

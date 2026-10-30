@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const mock = vi.hoisted(() => ({ results: [] as Array<{ data: unknown[]; error: unknown }>, calls: [] as unknown[][] }))
 vi.mock('../lib/supabase', () => ({ supabase: { from: (table: string) => {
   const query: Record<string, unknown> = {}
@@ -9,8 +9,57 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: (table: string) => {
   query.then = (resolve: (value: unknown) => void) => Promise.resolve(mock.results.shift()).then(resolve)
   return query
 } } }))
-import { readHomeServiceSuggestion, selectHomeSuggestion } from './homeServiceSuggestion'
-beforeEach(() => { mock.calls = []; mock.results = [] })
+import { invalidateHomeSuggestion, readHomeServiceSuggestion, selectHomeSuggestion } from './homeServiceSuggestion'
+beforeEach(() => { mock.calls = []; mock.results = []; invalidateHomeSuggestion(); localStorage.clear() })
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
+const index = { id: 7, created_at: '2026-10-20', last_used_at: '2026-10-21' }
+const body = { ...index, content: ['body'], is_visible: true }
+async function prime() {
+  vi.stubEnv('VITE_DEMO_MODE', 'true'); localStorage.setItem('auth_token', 'one')
+  mock.results = [{ data: [index], error: null }, { data: [body], error: null }]
+  await readHomeServiceSuggestion(); mock.calls = []
+}
+it('revalidates the visible index but reuses the unchanged body without extending its lifetime', async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+  await prime()
+  clock.mockReturnValue(120000)
+  mock.results = [{ data: [index], error: null }]
+  expect(await readHomeServiceSuggestion()).toEqual([body])
+  expect(mock.calls.filter(c => c[1] === 'select')).toHaveLength(1)
+  clock.mockReturnValue(121000)
+  mock.results = [{ data: [index], error: null }, { data: [body], error: null }]; mock.calls = []
+  await readHomeServiceSuggestion()
+  expect(mock.calls.filter(c => c[1] === 'select')).toHaveLength(2)
+})
+it.each(['edit', 'account', 'invalidate', 'clock', 'production'])('does not reuse a suggestion after %s', async reason => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+  await prime()
+  let next = index
+  if (reason === 'edit') next = { ...index, last_used_at: '2026-10-22' }
+  if (reason === 'account') localStorage.setItem('auth_token', 'two')
+  if (reason === 'invalidate') invalidateHomeSuggestion()
+  if (reason === 'clock') clock.mockReturnValue(999)
+  if (reason === 'production') vi.stubEnv('VITE_DEMO_MODE', 'false')
+  mock.results = [{ data: [next], error: null }, { data: [{ ...body, ...next }], error: null }]
+  await readHomeServiceSuggestion()
+  expect(mock.calls.filter(c => c[1] === 'select')).toHaveLength(2)
+})
+it('never uses cached text after hiding/deleting the selected suggestion or a failed index read', async () => {
+  await prime()
+  mock.results = [{ data: [], error: new Error('offline') }]
+  await expect(readHomeServiceSuggestion()).rejects.toThrow('offline')
+  mock.results = [{ data: [], error: null }]
+  expect(await readHomeServiceSuggestion()).toEqual([])
+})
+it.each(['account', 'invalidate'])('rejects an in-flight suggestion index after %s', async reason => {
+  await prime()
+  const pending = readHomeServiceSuggestion()
+  // Query is asynchronous; the identity/invalidation check runs after resolution.
+  mock.results = [{ data: [index], error: null }]
+  if (reason === 'account') localStorage.setItem('auth_token', 'two')
+  else invalidateHomeSuggestion()
+  await expect(pending).rejects.toThrow('superseded')
+})
 it('preserves effective last-used date with created-date fallback', () => {
   expect(selectHomeSuggestion([
     { id: 1, created_at: '2026-10-20', last_used_at: '2026-10-01' },
