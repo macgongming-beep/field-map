@@ -113,6 +113,7 @@ beforeEach(() => {
   // Unrelated store fixtures use full cards; scoped-card tests opt in explicitly.
   vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'false')
   vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'false')
+  vi.stubEnv('VITE_SCOPED_HISTORY_RECOVERY_ENABLED', 'false')
   state.historyRows = [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
   state.historyFilters = []; state.historyResponse = null
   state.creationAction = ''
@@ -141,6 +142,228 @@ function enableScopedHistories() {
   vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'true')
   state.historyRows.push({ ...state.historyRows[0], id: 901, unit_id: 100, visitor_name: 'Another visitor' })
 }
+
+function enableHistoryRecovery() {
+  enableScopedHistories()
+  vi.stubEnv('VITE_SCOPED_HISTORY_RECOVERY_ENABLED', 'true')
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+  state.unchanged.mockResolvedValue([1])
+}
+
+test('complete scoped recovery skips history batches but keeps sessions and manual repair reads', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.historyFilters).toHaveLength(1)
+  state.reads = []; state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' }) })
+  expect(state.recover).toHaveBeenCalledTimes(2)
+  expect(state.historyFilters).toEqual([])
+  expect(state.reads).toContain('service_sessions')
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'fetchAll' }) })
+  expect(state.historyFilters).toHaveLength(1)
+})
+
+test.each([undefined, 'false'])('history recovery remains off outside demo even with opt-in (%s)', async demo => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toHaveLength(1)
+})
+
+test('thirty minute history safety read is not extended by successful delta refreshes', async () => {
+  enableHistoryRecovery()
+  const start = Date.now()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(start)
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.historyFilters = []
+  clock.mockReturnValue(start + 29 * 60_000)
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toEqual([])
+  clock.mockReturnValue(start + 30 * 60_000)
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toHaveLength(1)
+  clock.mockReturnValue(start + 29 * 60_000)
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toHaveLength(2)
+})
+
+test('reused history prunes expired records locally without another batch', async () => {
+  enableHistoryRecovery()
+  const start = Date.now()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(start)
+  state.historyRows.push({ ...state.historyRows[1], id: 902, created_at: new Date(start - 365 * 86400_000 + 60_000).toISOString() })
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.visitHistories.map(h => h.id)).toContain(902)
+  state.historyFilters = []; clock.mockReturnValue(start + 120_000)
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toEqual([])
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+})
+
+test('failed safety reread does not renew the complete history deadline', async () => {
+  enableHistoryRecovery()
+  const start = Date.now()
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(start)
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  clock.mockReturnValue(start + 30 * 60_000)
+  state.failedTable = 'visit_histories'
+  await act(async () => { await expect(result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' })).rejects.toThrow() })
+  state.failedTable = ''; state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toHaveLength(1)
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+})
+
+test('new building snapshot followed by failed history read cannot reuse the old complete baseline', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.buildings = [{ ...building, units: [...building.units, { ...building.units[0], id: 101 }] }]
+  state.historyRows.push({ ...state.historyRows[1], id: 902, unit_id: 101 })
+  state.failedTable = 'visit_histories'
+  await act(async () => { await expect(result.current.refetchSlices(['buildings', 'visits'])).rejects.toThrow() })
+  state.failedTable = ''; state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toHaveLength(1)
+  expect(result.current.visitHistories.map(h => h.id).sort()).toEqual([901, 902])
+})
+
+test('failed building sync invalidates even an unchanged previously complete scope', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.changed.mockRejectedValueOnce(new Error('sync offline'))
+  await act(async () => { await expect(result.current.syncChangedBuildings([10])).rejects.toThrow('sync offline') })
+  state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toHaveLength(1)
+})
+
+test('superseded history read preserves completeness only after an authoritative save on a complete scope', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.historyResponse = new Promise(done => { release = done })
+  let old!: Promise<unknown>
+  act(() => { old = result.current.refetchSlices(['visitHistories']).catch(error => error) })
+  await waitFor(() => expect(state.historyResponse).toBeNull())
+  const saved = { id: 902, unitId: 100, visitor: 'Volunteer', result: '부재', timeSlot: '오전', visitedAt: '2026-10-30', createdAt: new Date().toISOString() }
+  state.changed.mockResolvedValue({ buildings: result.current.buildings, histories: [saved] })
+  await act(async () => { await result.current.syncChangedBuildings([10]) })
+  await act(async () => { release({ data: [state.historyRows[1]], error: null }); expect(await old).toBeInstanceOf(Error) })
+  state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toEqual([])
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([902])
+})
+
+test('overlapping building recovery does not acknowledge a discarded response when its replacement fails', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let release!: (value: { buildings: typeof result.current.buildings; histories: never[] }) => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { release = done }))
+  state.recover.mockImplementationOnce(async (_ids, _known, _checkpoint, sync) => { await sync([10]) })
+  state.historyFilters = []
+  let recovery!: Promise<void>
+  act(() => { recovery = result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  await waitFor(() => expect(state.changed).toHaveBeenCalledTimes(1))
+  state.changed.mockRejectedValueOnce(new Error('newer sync offline'))
+  await act(async () => { await expect(result.current.syncChangedBuildings([10])).rejects.toThrow('offline') })
+  await act(async () => { release({ buildings: result.current.buildings, histories: [] }); await recovery })
+  expect(state.historyFilters).toHaveLength(1)
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+})
+
+test('strict recipient sync rejects its discarded response even when called without requireFresh', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let release!: (value: { buildings: typeof result.current.buildings; histories: never[] }) => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { release = done }))
+  let old!: Promise<unknown>
+  act(() => { old = result.current.syncChangedBuildings([10]).catch(error => error) })
+  state.changed.mockRejectedValueOnce(new Error('newer sync offline'))
+  await act(async () => { await expect(result.current.syncChangedBuildings([10])).rejects.toThrow('offline') })
+  await act(async () => { release({ buildings: result.current.buildings, histories: [] }); expect(await old).toBeInstanceOf(Error) })
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+})
+
+test('a cancelled incomplete read cannot become complete from one successful building update', async () => {
+  enableHistoryRecovery()
+  state.failedTable = 'visit_histories'
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).not.toBeNull()
+  state.failedTable = ''
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.historyResponse = new Promise(done => { release = done })
+  let old!: Promise<unknown>
+  act(() => { old = result.current.refetchSlices(['visitHistories']).catch(error => error) })
+  await waitFor(() => expect(state.historyResponse).toBeNull())
+  state.changed.mockResolvedValue({ buildings: result.current.buildings, histories: [] })
+  await act(async () => { await result.current.syncChangedBuildings([10]) })
+  await act(async () => { release({ data: [], error: null }); expect(await old).toBeInstanceOf(Error) })
+  state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toHaveLength(1)
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+})
+
+test('a delta started before a full scope reload cannot restore the older building snapshot', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const oldBuildings = result.current.buildings
+  let release!: (value: { buildings: typeof oldBuildings; histories: never[] }) => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { release = done }))
+  let old!: Promise<unknown>
+  act(() => { old = result.current.syncChangedBuildings([10]).catch(error => error) })
+  state.buildings = [{ ...building, name: 'New snapshot' }]
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits']) })
+  await act(async () => { release({ buildings: oldBuildings, histories: [] }); expect(await old).toBeInstanceOf(Error) })
+  expect(result.current.buildings[0].name).toBe('New snapshot')
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+})
+
+test('successful changed-building recovery replaces cancelled records and new units before skipping batches', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const next = { ...result.current.buildings[0], units: [{ ...result.current.buildings[0].units[0], id: 101 }] }
+  const saved = { id: 902, unitId: 101, visitor: 'Other person', result: '부재', timeSlot: '오전', visitedAt: '2026-10-30', createdAt: new Date().toISOString() }
+  state.changed.mockResolvedValue({ buildings: [next], histories: [saved] })
+  state.recover.mockImplementationOnce(async (_ids, _known, _checkpoint, sync) => { await sync([10]) })
+  state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.changed).toHaveBeenCalledWith([10])
+  expect(state.historyFilters).toEqual([])
+  expect(result.current.visitHistories.map(h => [h.id, h.unitId])).toEqual([[902, 101]])
+  state.changed.mockResolvedValue({ buildings: [], histories: [] })
+  state.recover.mockImplementationOnce(async (_ids, _known, _checkpoint, sync) => { await sync([10]) })
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(result.current.buildings).toEqual([])
+  expect(result.current.visitHistories).toEqual([])
+  expect(state.historyFilters).toEqual([])
+})
+
+test.each(['leader', 'admin', 'developer'] as const)('history recovery never narrows %s statistics', async role => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, role))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.historyFilters).toEqual([[]])
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([900, 901])
+})
 
 test.each([false, true])('assigned-map navigation recipient request reuse=%s without rereading buildings/cards/histories', async enabled => {
   enableScopedHistories()

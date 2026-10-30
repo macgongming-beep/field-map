@@ -54,6 +54,8 @@
 
 봉사 참석 통계: [0022 요일·시각별 참석 집계](0022-service-attendance-statistics.md)
 
+방문기록 복귀 중복 읽기: [0058 데모 완전성 기반 복구](0058-demo-scoped-history-recovery.md)
+
 ```markdown
 # 제목
 
