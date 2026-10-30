@@ -1,6 +1,9 @@
 # Demo: coordinate post-visit and realtime building refreshes
 
-- Status: demo validation; production unchanged; external review pending
+Gate policy superseded by [0061](0061-recovery-and-cached-screen-production-gates.md).
+The demo-only statements below describe the original trial; production remains inactive.
+
+- Status: demo deployed and live-hook measured; production unchanged; external review pending
 - Date: 2026-10-30
 - Related: 0058 scoped history recovery and its live realtime measurement
 
@@ -135,3 +138,19 @@ Demo rollback: `VITE_VISIT_REALTIME_QUEUE_ENABLED=false`, rebuild/redeploy, then
 apply the PWA update. Disabling scoped-history recovery also disables this queue.
 Production activation requires a separate reviewed gate change; this work does
 not touch production or add an operational production switch.
+
+## Deployment Verification
+
+Code commit `3fadbc1` deployed only to `chinese-territory-app-demo` on 2026-10-30.
+Deployment: `dpl_9Ungh6tCigu8bWpc4mmLYkEAMFyi`, READY; canonical demo URL HTTP 200.
+The served entry is `/assets/index-M5TXCaZm.js`; its
+`TerritoryReportView-xaEbnCsi.js` dependency contains the new queue, disposal guard
+and unchanged strict scope-version guard. It points to the demo DB. The demo
+project has DEMO and TERRITORY_REALTIME configured and no queue override, so the
+default demo-only queue applies where history recovery is eligible.
+
+No production deployment or environment change was performed. The production
+checkout remains at `5d42a735980583bc4556be8947f4a6f65a3f857c`. Existing demo PWA
+clients must apply the update. Live measurement used source at the deployed code
+commit; it did not drive the newly deployed UI. CUA connection timed out, so
+physical-device/rendered-screen confirmation remains explicitly unverified.
