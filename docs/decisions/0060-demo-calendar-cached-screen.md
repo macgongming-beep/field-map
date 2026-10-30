@@ -87,6 +87,47 @@ stable regression indicators. This is actual rendered Chromium, not a physical
 iPhone/PWA. Cancellation/reassignment safety is tested automatically, not by
 changing real demo assignments in this browser measurement.
 
+## Deployed Browser Results
+
+Code `a701ddb` was deployed only to the demo project. Deployment
+`dpl_F2noWtCr1v4FVuit2YWkMGnMT9SX` is READY and aliased to the canonical demo URL.
+The served entry changed from `index-M5TXCaZm.js` to `index-G9vSxsEj.js`.
+
+Three round trips per role, including first-visit reads:
+
+| Role | All DB HTTP requests before -> after | AppLoading mounts before -> after |
+| --- | --- | --- |
+| Volunteer | 54 -> 44 | 6 -> 1 |
+| Leader | 29 -> 14 | 6 -> 1 |
+| Administrator | 44 -> 25 | 6 -> 1 |
+
+The remaining loading mount is the first service visit. On the second trip:
+
+| Destination | Volunteer before -> after | Leader before -> after | Admin before -> after |
+| --- | --- | --- | --- |
+| Calendar | 0 -> 0 | 0 -> 0 | 1 -> 1 |
+| Service | 2 -> 0 | 2 -> 0 | 7 -> 3 |
+| Zone | Not tested: different store mode | 0 -> 0 | 0 -> 0 |
+| Home | 3 -> 1 | 3 -> 1 | 4 -> 2 |
+
+Every repeated destination has zero AppLoading mounts after the patch. The
+administrator's repeated service visit eliminates all three calendar/assignment
+reads; other requests remain for admin attention and notification refresh.
+Volunteer/leader service visits eliminate settings/notification reads caused by
+the unnecessary remount. Home still reads its suggestion.
+
+These are observed request counts, not billed bytes or monthly savings. The
+before run includes a five-request chat TTL refresh on the third leader/admin
+trip that the after run does not; do not attribute that difference to this patch.
+Initial volunteer calendar/service reads (18/23 requests) remain unchanged and
+are a separate potential follow-up. All three browser runs reported no page
+errors or unexpected writes. End-of-run screenshots render the home normally.
+Physical iPhone/PWA behavior remains untested.
+
+Local measurement logs: `/tmp/calendar-screens-before.log` and
+`/tmp/calendar-screens-after.log`. Production checkout remains at `5d42a73`;
+no production deployment or configuration change was performed.
+
 ## Rollback
 
 Set `VITE_CALENDAR_CACHED_SCREEN_ENABLED=false` on the demo project and redeploy;
