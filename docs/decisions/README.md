@@ -13,7 +13,7 @@
 
 ## 목록
 
-최신 운영 반영: [0062 캐시 화면만 활성화](0062-production-cached-calendar-screen.md)
+최신 운영 반영: [0067 달 이동 복구와 홈 재사용](0067-production-navigation-home-reads.md)
 
 | 번호 | 상태 | 결정 |
 | --- | --- | --- |
