@@ -64,6 +64,8 @@
 
 데모 화면 이동·홈 조회 정리: [0065 범위 확인 후 복구와 홈 본문 재사용](0065-demo-navigation-recovery-home-reads.md)
 
+화면 이동·홈 조회 운영 준비: [0066 독립 스위치와 의존 관계 시험](0066-navigation-home-production-gates.md)
+
 ```markdown
 # 제목
 

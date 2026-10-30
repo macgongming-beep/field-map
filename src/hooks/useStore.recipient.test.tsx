@@ -200,16 +200,32 @@ test.each(['fetchAll', 'mutation:calendar', 'mutation:application'])('demo navig
   expect(state.reads).toContain('service_sessions')
 })
 
-test('production navigation retains the current full scoped refresh even with history recovery enabled', async () => {
+test.each([
+  { demo: undefined, flag: undefined, recovery: 'true', realtime: 'true', enabled: false },
+  { demo: 'false', flag: undefined, recovery: 'true', realtime: 'true', enabled: false },
+  { demo: 'false', flag: 'true', recovery: 'true', realtime: 'true', enabled: true },
+  { demo: undefined, flag: 'true', recovery: 'true', realtime: 'true', enabled: true },
+  { demo: 'true', flag: undefined, recovery: 'true', realtime: 'true', enabled: true },
+  { demo: 'true', flag: 'false', recovery: 'true', realtime: 'true', enabled: false },
+  { demo: 'false', flag: 'false', recovery: 'true', realtime: 'true', enabled: false },
+  { demo: 'false', flag: 'true', recovery: 'false', realtime: 'true', enabled: false },
+  { demo: 'true', flag: 'true', recovery: 'false', realtime: 'true', enabled: false },
+  { demo: 'false', flag: 'true', recovery: 'true', realtime: 'false', enabled: false },
+])('navigation recovery opt-in $demo/$flag history=$recovery realtime=$realtime', async ({ demo, flag, recovery, realtime, enabled }) => {
   enableHistoryRecovery()
-  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_RECOVERY_ENABLED', flag)
+  vi.stubEnv('VITE_SCOPED_HISTORY_RECOVERY_ENABLED', recovery)
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', realtime)
+  vi.stubEnv('VITE_LEGACY_NOTICES_SKIP_ENABLED', String(!enabled))
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   state.refresh.mockClear(); state.historyFilters = []
   await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }) })
-  expect(state.unchanged).not.toHaveBeenCalled()
-  expect(state.refresh).toHaveBeenCalledTimes(1)
-  expect(state.historyFilters).toHaveLength(1)
+  expect(state.unchanged).toHaveBeenCalledTimes(enabled ? 1 : 0)
+  expect(state.recover).toHaveBeenCalledTimes(enabled ? 1 : 0)
+  expect(state.refresh).toHaveBeenCalledTimes(enabled ? 0 : 1)
+  expect(state.historyFilters).toHaveLength(enabled ? 0 : 1)
 })
 
 test('demo navigation still performs the thirty minute history safety read', async () => {
@@ -223,14 +239,19 @@ test('demo navigation still performs the thirty minute history safety read', asy
   expect(state.historyFilters).toHaveLength(1)
 })
 
-test.each(['true', 'false'])('legacy notices read is skipped only in demo=%s', async demo => {
+test.each([
+  [undefined, undefined, false], ['false', undefined, false], ['false', 'true', true],
+  [undefined, 'true', true], ['true', undefined, true], ['true', 'false', false], ['false', 'false', false],
+] as const)('legacy notices opt-in demo=%s flag=%s skipped=%s', async (demo, flag, skipped) => {
   vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_LEGACY_NOTICES_SKIP_ENABLED', flag)
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_RECOVERY_ENABLED', String(!skipped))
   const { result } = renderHook(() => useStore(true, 'admin'))
   await waitFor(() => expect(result.current.loading).toBe(false))
-  expect(state.reads.includes('notices')).toBe(demo !== 'true')
+  expect(state.reads.includes('notices')).toBe(!skipped)
   state.reads = []
   await act(async () => { await result.current.refetchSlices(['communication'], { triggeredBy: 'foreground' }) })
-  expect(state.reads.includes('notices')).toBe(demo !== 'true')
+  expect(state.reads.includes('notices')).toBe(!skipped)
 })
 
 test.each(['save', 'cancel'] as const)('demo queued %s waits for older realtime then reads fresh data without fallback', async operation => {

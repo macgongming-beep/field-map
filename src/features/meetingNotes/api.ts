@@ -7,6 +7,9 @@ type Row = Record<string, unknown>
 let homeMetas: { token: string; scope: string; at: number; rows: MeetingNoteMeta[] } | null = null
 let homeGeneration = 0
 export function invalidateHomeMeetingMetas() { homeMetas = null; ++homeGeneration }
+export function homeMeetingMetaReuseEnabled() {
+  return (import.meta.env.VITE_HOME_MEETING_META_REUSE_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
+}
 const manifest = (rows: { id: number; collectionId: number; updatedAt: string }[]) =>
   JSON.stringify(rows.map(row => [row.id, row.collectionId, row.updatedAt]).sort((a, b) => Number(a[0]) - Number(b[0])))
 function collection(row: Row): MeetingCollection {
@@ -25,7 +28,7 @@ export async function fetchMeetingCollections(mode?: 'home' | 'trash'): Promise<
   return (data ?? []).map(collection)
 }
 export async function fetchMeetingNoteMetas(collectionIds: number[], homeReuse = false): Promise<MeetingNoteMeta[]> {
-  const reuse = homeReuse && import.meta.env.VITE_DEMO_MODE === 'true'
+  const reuse = homeReuse && homeMeetingMetaReuseEnabled()
   const token = getAuthToken()
   const generation = homeGeneration
   const started = Date.now()

@@ -16,6 +16,16 @@ function Driver() { const navigate = useNavigate(); return <><button onClick={()
 function mount() { const root = document.createElement('div'); root.id = 'root'; document.body.append(root); return render(<MemoryRouter><MeetingProvider userId={9} canManage={false} language="ko"><Driver /></MeetingProvider></MemoryRouter>, { container: root }) }
 beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); api.fetchMeetingCollections.mockResolvedValue([group]); api.fetchMeetingNoteMetas.mockResolvedValue([meta]); api.fetchMeetingNote.mockResolvedValue({ ...meta, bodyKo: '본문 전체', bodyZh: '' }) })
 afterEach(() => { cleanup(); document.body.replaceChildren(); vi.unstubAllEnvs() })
+it.each([
+  [undefined, undefined, false], ['false', undefined, false], ['false', 'true', true],
+  [undefined, 'true', true], ['true', undefined, true], ['true', 'false', false], ['false', 'false', false],
+] as const)('home provider metadata opt-in demo=%s flag=%s reused=%s', async (demo, flag, reused) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_HOME_MEETING_META_REUSE_ENABLED', flag)
+  vi.stubEnv('VITE_HOME_SUGGESTION_REUSE_ENABLED', String(!reused))
+  mount(); await screen.findByText('순회방문')
+  expect(api.fetchMeetingNoteMetas.mock.calls).toEqual([reused ? [[1], true] : [[1]]])
+})
 it('opts home metadata into revalidation only in demo and still checks hidden collections on return', async () => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')
   mount(); await screen.findByText('순회방문')

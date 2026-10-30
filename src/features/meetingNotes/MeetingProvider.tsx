@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import type { AppLanguage } from '../../i18n'
-import { fetchMeetingCollections, fetchMeetingNoteMetas } from './api'
+import { fetchMeetingCollections, fetchMeetingNoteMetas, homeMeetingMetaReuseEnabled } from './api'
 import { MeetingContext } from './context'
 import type { MeetingHomeData } from './context'
 import { meetingNotesEnabled } from './model'
@@ -23,7 +23,7 @@ export function MeetingProvider({ userId, canManage, language, children }: { use
     const key = JSON.stringify([userId, token, revision])
     // One metadata request per home entry; StrictMode shares the in-flight request.
     if (inFlight.current?.key !== key) {
-      const promise = fetchMeetingCollections('home').then(async collections => ({ collections, notes: import.meta.env.VITE_DEMO_MODE === 'true'
+      const promise = fetchMeetingCollections('home').then(async collections => ({ collections, notes: homeMeetingMetaReuseEnabled()
         ? await fetchMeetingNoteMetas(collections.map(c => c.id), true)
         : await fetchMeetingNoteMetas(collections.map(c => c.id)) }))
       const entry = { key, promise }

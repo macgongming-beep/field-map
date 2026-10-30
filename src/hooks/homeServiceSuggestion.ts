@@ -15,7 +15,7 @@ export function selectHomeSuggestion(rows: SuggestionIndex[]): number | undefine
 }
 
 export async function readHomeServiceSuggestion() {
-  const reuse = import.meta.env.VITE_DEMO_MODE === 'true'
+  const reuse = (import.meta.env.VITE_HOME_SUGGESTION_REUSE_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
   const token = getAuthToken()
   const version = ++generation
   const started = Date.now()
