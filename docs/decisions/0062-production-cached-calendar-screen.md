@@ -1,7 +1,7 @@
 # Production: cached calendar screens only
 
 - Date: 2026-10-31
-- Status: deployment authorized; verification recorded below after deployment
+- Status: deployed; served production bundle verified
 - Reviewed source: a701ddb, 5a6e115, 55cb779; baseline origin/main 5d42a73
 
 ## Scope
@@ -45,3 +45,24 @@ expiry and stale responses. Main's production role/scope tests are retained.
 Set only VITE_CALENDAR_CACHED_SCREEN_ENABLED=false, rebuild/redeploy, then clients
 apply the PWA update. Calendar navigation reuse can remain true. Keep the other
 two new flags false. Old app instances retain their existing bundle until update.
+
+## Deployment Verification
+
+- Production code commit: 6fe2894 (pushed to main).
+- Deployment: dpl_8a7yovVesfXDg2BfyxBnwcdRy3gS, READY and aliased to
+  https://chinese-territory-app.vercel.app.
+- Followed the canonical page's JavaScript module graph to the served store:
+  `/assets/TerritoryReportView-C8MuIqty.js` (HTTP 200).
+- The compiled cached-screen helper returns the enabled navigation-reuse helper
+  AND true; navigation reuse defaults to the compiled string `true`.
+- Served store selects cached calendar events and marks that same snapshot ready.
+  Visit/realtime queue implementation is absent, consistent with the limited port.
+- Store SHA-256:
+  `8106ee744ddcf1a8f2bc95a973c8c7d5806cbf0166506134b84c2f5ec511fe3d`.
+- Production environment was re-read after changes: cache screen true, history
+  recovery false, visit/realtime queue false; all five prerequisites true.
+- Logged-in production UI navigation was not rechecked: browser connection timed
+  out. User previously confirmed immediate demo navigation. No production records
+  were created or modified for this deployment check.
+- This verification-only documentation update is local, after deployment; it does
+  not trigger another production build.
