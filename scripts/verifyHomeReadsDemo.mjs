@@ -4,10 +4,23 @@ import { pathToFileURL } from 'node:url'
 import { strict as assert } from 'node:assert'
 import { createClient } from '@supabase/supabase-js'
 
-if (!process.env.DEMO_ENV_FILE || !process.env.DEMO_CONFIG_FILE || !process.env.PLAYWRIGHT_MODULE || !process.argv.includes('--confirm-demo')) throw Error('Explicit demo configuration required')
-const config = { ...parseEnv(readFileSync(process.env.DEMO_CONFIG_FILE, 'utf8')), ...parseEnv(readFileSync(process.env.DEMO_ENV_FILE, 'utf8')) }
+if (!process.env.DEMO_ENV_FILE || !process.env.PLAYWRIGHT_MODULE || !process.argv.includes('--confirm-demo')) throw Error('Explicit demo configuration required')
+const config = { ...(process.env.DEMO_CONFIG_FILE ? parseEnv(readFileSync(process.env.DEMO_CONFIG_FILE, 'utf8')) : {}), ...parseEnv(readFileSync(process.env.DEMO_ENV_FILE, 'utf8')) }
 const origin = 'https://itjlykpjmlcvanqpmkmc.supabase.co'
 const root = 'https://chinese-territory-app-demo.vercel.app'
+if (!config.VITE_SUPABASE_URL && !config.VITE_SUPABASE_ANON_KEY) {
+  const html = await (await fetch(root)).text()
+  const path = html.match(/src="(\/assets\/index-[^"]+\.js)"/)?.[1]
+  if (!path) throw Error('Missing demo entry')
+  const entry = await (await fetch(root + path)).text()
+  const paths = [...new Set([...entry.matchAll(/(?:\.\/|assets\/)([A-Za-z0-9_-]+\.js)/g)].map(m => '/assets/' + m[1]))]
+  for (const path of paths) {
+    const asset = await (await fetch(root + path)).text()
+    const url = asset.match(/https:\/\/[a-z]+\.supabase\.co/)?.[0]
+    const key = asset.match(/sb_publishable_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/)?.[0]
+    if (url === origin && key) { config.VITE_SUPABASE_URL = url; config.VITE_SUPABASE_ANON_KEY = key; break }
+  }
+}
 assert.equal(config.VITE_SUPABASE_URL, origin)
 const auth = { persistSession: false, autoRefreshToken: false }
 const unwrap = ({ data, error }) => { if (error) throw error; return data }

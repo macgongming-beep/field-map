@@ -64,6 +64,8 @@
 
 운영 기록 복구와 갱신 대기열: [0063 운영 활성화와 검증](0063-production-history-recovery-queue.md)
 
+데모 화면 이동·홈 조회 정리: [0065 범위 확인 후 복구와 홈 본문 재사용](0065-demo-navigation-recovery-home-reads.md)
+
 ```markdown
 # 제목
 
