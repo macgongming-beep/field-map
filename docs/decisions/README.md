@@ -13,6 +13,8 @@
 
 ## 목록
 
+최신 운영 반영: [0062 캐시 화면만 활성화](0062-production-cached-calendar-screen.md)
+
 | 번호 | 상태 | 결정 |
 | --- | --- | --- |
 | [0001](0001-preserve-orphaned-return-visits.md) | 운영 적용 | 전출·계정 삭제 후에도 정기방문 기록을 보존하고 관리자가 재배정한다 |
