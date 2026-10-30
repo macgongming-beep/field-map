@@ -114,6 +114,7 @@ beforeEach(() => {
   vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'false')
   vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'false')
   vi.stubEnv('VITE_SCOPED_HISTORY_RECOVERY_ENABLED', 'false')
+  vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'false')
   state.historyRows = [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
   state.historyFilters = []; state.historyResponse = null
   state.creationAction = ''
@@ -149,6 +150,125 @@ function enableHistoryRecovery() {
   vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
   state.unchanged.mockResolvedValue([1])
 }
+
+test.each(['save', 'cancel'] as const)('demo queued %s waits for older realtime then reads fresh data without fallback', async operation => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings[0]
+  const history = { id: 902, unitId: 100, visitor: 'Volunteer', result: '부재', timeSlot: '오후', visitedAt: '2026-10-30', createdAt: new Date().toISOString() }
+  let release!: () => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { release = () => done({ buildings: [before], histories: [history] }) }))
+  let releaseFresh!: () => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { releaseFresh = () => done({ buildings: [before], histories: operation === 'save' ? [history] : [] }) }))
+  let old!: Promise<void>, mutation!: Promise<void>
+  act(() => { old = result.current.territoryRealtime.sync([10]) })
+  await waitFor(() => expect(state.changed).toHaveBeenCalledTimes(1))
+  state.reads = []; state.historyFilters = []
+  act(() => { mutation = operation === 'save' ? result.current.updateUnitStatus(10, 100, '부재') : result.current.deleteVisitHistory(901, 100) })
+  // Let the mutation finish its writes and enqueue; the older read is still blocked.
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  expect(state.changed).toHaveBeenCalledTimes(1)
+  await act(async () => { release() })
+  await waitFor(() => expect(state.changed).toHaveBeenCalledTimes(2))
+  // The cancelled/pre-write response must not briefly reappear while the fresh
+  // read is delayed, even though the eventual final result would be correct.
+  expect(result.current.visitHistories.some(h => h.id === 902)).toBe(false)
+  await act(async () => { releaseFresh(); await Promise.all([old, mutation]) })
+  expect(state.changed).toHaveBeenCalledTimes(2)
+  expect(result.current.visitHistories.map(h => h.id)).toEqual(operation === 'save' ? [902] : [])
+  expect(state.reads).not.toContain('service_sessions')
+  state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toEqual([])
+})
+
+test('failed queued post-save refresh still falls back and repairs history', async () => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.changed.mockRejectedValueOnce(new Error('offline'))
+  state.historyFilters = []
+  await act(async () => { await result.current.updateUnitStatus(10, 100, '부재') })
+  expect(state.historyFilters.some(filters => filters.some(([key]) => key === 'unit_id'))).toBe(true)
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+})
+
+test('realtime arriving during a post-save read waits for a fresh combined result', async () => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings[0]
+  let release!: () => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { release = () => done({ buildings: [before], histories: [] }) }))
+  state.changed.mockResolvedValueOnce({ buildings: [before], histories: [] })
+  let save!: Promise<void>, realtime!: Promise<void>
+  act(() => { save = result.current.updateUnitStatus(10, 100, '부재') })
+  await waitFor(() => expect(state.changed).toHaveBeenCalledTimes(1))
+  act(() => { realtime = result.current.territoryRealtime.sync([10]) })
+  expect(state.changed).toHaveBeenCalledTimes(1)
+  state.reads = []
+  await act(async () => { release(); await Promise.all([save, realtime]) })
+  expect(state.changed).toHaveBeenCalledTimes(2)
+  expect(state.reads).not.toContain('service_sessions')
+  state.historyFilters = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.historyFilters).toEqual([])
+})
+
+test('unmount rejects queued post-write work without starting a late full fallback', async () => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')
+  localStorage.setItem('currentVisitor', 'Volunteer')
+  const { result, unmount } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings[0]
+  let release!: () => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { release = () => done({ buildings: [before], histories: [] }) }))
+  let realtime!: Promise<unknown>, save!: Promise<unknown>
+  act(() => { realtime = result.current.territoryRealtime.sync([10]).catch(error => error) })
+  await waitFor(() => expect(state.changed).toHaveBeenCalledTimes(1))
+  act(() => { save = result.current.updateUnitStatus(10, 100, '부재').catch(error => error) })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  state.reads = []
+  unmount()
+  release()
+  expect(await realtime).toMatchObject({ name: 'SupersededReadError' })
+  expect(await save).toMatchObject({ name: 'SupersededReadError' })
+  expect(state.changed).toHaveBeenCalledTimes(1)
+  expect(state.reads).toEqual([])
+})
+
+test.each([
+  { demo: 'false', flag: 'true', serialized: false },
+  { demo: 'true', flag: 'false', serialized: false },
+  { demo: 'true', flag: undefined, serialized: true },
+])('visit queue keeps the demo boundary and explicit rollback ($demo, $flag)', async ({ demo, flag, serialized }) => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', flag)
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings[0]
+  let release!: () => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { release = () => done({ buildings: [before], histories: [] }) }))
+  state.changed.mockResolvedValue({ buildings: [before], histories: [] })
+  let first!: Promise<unknown>, second!: Promise<unknown>
+  act(() => { first = result.current.territoryRealtime.sync([10]).catch(error => error) })
+  await waitFor(() => expect(state.changed).toHaveBeenCalledTimes(1))
+  act(() => { second = result.current.territoryRealtime.sync([10]).catch(error => error) })
+  await act(async () => { await Promise.resolve() })
+  expect(state.changed).toHaveBeenCalledTimes(serialized ? 1 : 2)
+  await act(async () => { release(); await Promise.all([first, second]) })
+})
 
 test('complete scoped recovery skips history batches but keeps sessions and manual repair reads', async () => {
   enableHistoryRecovery()

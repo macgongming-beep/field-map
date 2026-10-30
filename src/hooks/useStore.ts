@@ -9,6 +9,7 @@ import { assertUnassignedCalendarEvent, calendarApplicationRefreshEnabled } from
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
 import { createHistoryCoverage, historyScope, scopedHistoryRecoveryEnabled } from './scopedHistoryRecovery'
+import { createBuildingRefreshQueue } from './buildingRefreshQueue'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
@@ -148,16 +149,27 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
   const scopedHistories = scopedVisitHistoryEnabled(role, Boolean(recipientReader))
   const historyRecovery = scopedHistoryRecoveryEnabled(scopedHistories)
+  const queuedVisitRefresh = historyRecovery && (import.meta.env.VITE_VISIT_REALTIME_QUEUE_ENABLED ?? 'true') === 'true'
+  const visitRefreshQueue = useRef<ReturnType<typeof createBuildingRefreshQueue> | null>(null)
+  const historyStoreActive = useRef(enabled)
   const historyCoverage = useRef(createHistoryCoverage()).current
   const historyReadsPending = useRef(0)
   const historySyncsPending = useRef(0)
   const historyReadVersion = useRef(0)
-  useEffect(() => () => {
-    if (historyRecovery) {
-      historyCoverage.invalidate()
-      ++historyReadVersion.current
+  useEffect(() => {
+    historyStoreActive.current = enabled
+    const buildingVersion = buildingFullReadVersion
+    const historyVersion = historyReadVersion
+    return () => {
+      historyStoreActive.current = false
+      if (historyRecovery) {
+        visitRefreshQueue.current?.reset()
+        ++buildingVersion.current
+        historyCoverage.invalidate()
+        ++historyVersion.current
+      }
     }
-  }, [historyCoverage, historyRecovery])
+  }, [historyCoverage, historyRecovery, enabled])
   useEffect(() => {
     recipientReader?.resume()
     return () => recipientReader?.dispose()
@@ -277,6 +289,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     switch (slice) {
       case 'buildings': {
         if (historyRecovery) historyCoverage.invalidate()
+        if (queuedVisitRefresh) visitRefreshQueue.current?.reset()
         const fullVersion = ++buildingFullReadVersion.current
         buildingFullReadsPending.current += 1
         try {
@@ -726,7 +739,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
     }
-  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories, publishCalendarEvents, historyRecovery, historyCoverage])
+  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories, publishCalendarEvents, historyRecovery, historyCoverage, queuedVisitRefresh])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
@@ -948,6 +961,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   useEffect(() => {
     if (!enabled) {
       if (historyRecovery) historyCoverage.invalidate()
+      if (queuedVisitRefresh) {
+        visitRefreshQueue.current?.reset()
+        ++buildingFullReadVersion.current
+      }
       // 로그인 전에는 받지 않는다. 다만 loading 을 반드시 내려야 한다 —
       // 안 그러면 로그인 화면이 '데이터 불러오는 중' 에서 멈춘다 (App.tsx)
       fetchStartedRef.current = false
@@ -982,7 +999,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     }).catch((error: unknown) => {
       console.error('[initial load] failed:', error)
     })
-  }, [fetchAll, enabled, territoryCheckpoint, historyRecovery, historyCoverage])
+  }, [fetchAll, enabled, territoryCheckpoint, historyRecovery, historyCoverage, queuedVisitRefresh])
 
   // PWA 백그라운드 → 포어그라운드 복귀 시 자동 갱신
   // (브라우저 새로고침이 없는 PWA에서 최신 데이터 확보)
@@ -1031,7 +1048,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   }, [recipientReader])
 
   // Realtime updates only the affected buildings and their visit histories.
-  const syncChangedBuildings = useCallback(async (buildingIds: number[], requireFresh = false) => {
+  const readChangedBuildings = useCallback(async (buildingIds: number[], requireFresh = false, canApply: () => boolean = () => true) => {
     if (historyRecovery) ++historySyncsPending.current
     const fullVersion = buildingFullReadVersion.current
     try {
@@ -1047,6 +1064,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       if (historyRecovery && (fullVersion !== buildingFullReadVersion.current || buildingFullReadsPending.current)) {
         throw new SupersededReadError('Building scope changed during recovery')
       }
+      // A queued post-write read will replace this whole batch before any caller
+      // resolves. Do not briefly resurrect a cancelled record from this response.
+      if (!canApply()) return false
       const previousScope = historyRecovery ? historyScope(buildingsRef.current) : ''
       const updated = data.buildings.filter((b) => ids.has(b.id))
       const unitIds = new Set([
@@ -1075,6 +1095,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         .filter(h => !scopedHistories || visibleUnits.has(h.unitId))
         .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
       if (historyRecovery) historyCoverage.applyDelta(previousScope, historyScope(buildingsRef.current))
+      return true
     } catch (error) {
       if (historyRecovery) historyCoverage.invalidate()
       throw error
@@ -1083,23 +1104,47 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     }
   }, [applyBuildingsChange, recipientReader, scopedHistories, historyRecovery, historyCoverage])
 
+  const syncChangedBuildings = useCallback(async (ids: number[], requireFresh = false) => {
+    await readChangedBuildings(ids, requireFresh)
+  }, [readChangedBuildings])
+  const latestBuildingRead = useRef(readChangedBuildings)
+  useEffect(() => { latestBuildingRead.current = readChangedBuildings }, [readChangedBuildings])
+
   useEffect(() => { syncBuildingsRef.current = syncChangedBuildings }, [syncChangedBuildings])
+
+  const syncVisitOrRealtime = useCallback(async (ids: number[]) => {
+    if (!queuedVisitRefresh) return syncChangedBuildings(ids)
+    if (!historyStoreActive.current) throw new SupersededReadError('Building store disposed')
+    // Count queued callers too: foreground must not reuse histories while a
+    // required post-write read is still waiting behind an older realtime read.
+    ++historySyncsPending.current
+    try {
+      visitRefreshQueue.current ??= createBuildingRefreshQueue((batch, canApply) => latestBuildingRead.current(batch, false, canApply))
+      await visitRefreshQueue.current.read(ids)
+    } catch (error) {
+      historyCoverage.invalidate()
+      throw error
+    } finally {
+      --historySyncsPending.current
+    }
+  }, [queuedVisitRefresh, syncChangedBuildings, historyCoverage])
 
   const refreshVisitUnit = useCallback(async (unitId: number) => {
     const building = buildingsRef.current.find((b) => b.units.some((u) => u.id === unitId))
     try {
       if (!building) throw new Error('Unit is no longer in the local building snapshot')
       // Use the same version guard as realtime; do not join a pre-save read.
-      await syncChangedBuildings([building.id])
+      await syncVisitOrRealtime([building.id])
     } catch {
+      if (queuedVisitRefresh && !historyStoreActive.current) throw new SupersededReadError('Building store disposed')
       // The write already succeeded. Recover authoritative status/history, not
       // just the optimistic patch, if the targeted read is unavailable.
       await fetchSlices(['buildings', 'cards', 'visits'], { triggeredBy: 'mutation:visit-recovery' })
     }
-  }, [fetchSlices, syncChangedBuildings])
+  }, [fetchSlices, syncVisitOrRealtime, queuedVisitRefresh])
 
-  const territoryRealtime = useMemo(() => ({ sync: syncChangedBuildings, checkpoint: territoryCheckpoint }),
-    [syncChangedBuildings, territoryCheckpoint])
+  const territoryRealtime = useMemo(() => ({ sync: syncVisitOrRealtime, checkpoint: territoryCheckpoint }),
+    [syncVisitOrRealtime, territoryCheckpoint])
 
   // 세대 추가/삭제
   const appendUnits = useCallback((buildingId: number, units: Unit[]) => {
