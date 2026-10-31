@@ -68,6 +68,8 @@
 
 연결 재방문 지도 왕복: [0068 데모 봉사자 스토어 유지](0068-demo-linked-return-map-retention.md)
 
+주소만 있는 재방문 지도: [0070 검색 실패 처리와 핀 격리](0070-demo-address-only-return-map.md)
+
 ```markdown
 # 제목
 

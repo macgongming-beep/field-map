@@ -19,6 +19,20 @@ vi.mock('./MobileTerritory', () => ({ MobileTerritory: ({ onOpenRegularVisitMap 
 
 afterEach(() => { cleanup(); vi.unstubAllEnvs() })
 
+test('focused address-only visit does not display other personal return buildings', () => {
+  const visit = { id: 7, buildingId: null, unitId: null, displayName: 'Address visit', address: 'Unlinked address',
+    assignedUserName: 'Me', createdBy: 'Me', createdAt: '2026-10-31' } as ReturnVisit
+  const building = { id: 10, cardId: 3, name: 'Other personal visit', address: 'Other address', type: '주택',
+    lat: 37, lng: 127, units: [{ id: 100, number: '101', isRegularVisit: true, regularVisitor: 'Me' }] } as Building
+  const props = { language: 'en', actualRole: 'user', viewMode: 'user', currentVisitor: 'Me', currentUser: { id: 1, name: 'Me', role: 'user' },
+    allUsers: [], cards: [{ id: 3, assignedUsers: [] }] as TerritoryCard[], buildings: [building],
+    returnVisits: [visit, { ...visit, id: 8, buildingId: 10, unitId: 100, address: 'Other address' }],
+    returnVisitLogs: [], calendarEvents: [], serviceSessions: [], visitHistories: [], cardBoundaries: [],
+    notices: [], territoryRegions: [] } as unknown as ComponentProps<typeof MobileHome>
+  render(<MemoryRouter initialEntries={['/map?scope=regularVisits&returnVisitId=7&addr=Unlinked%20address']}><MobileHome {...props} /></MemoryRouter>)
+  expect(JSON.parse(screen.getByTestId('map-input').textContent!)).toMatchObject({ cards: [], buildings: [], regular: true })
+})
+
 test.each((['user', 'leader'] as const).flatMap(role => [
   { role, path: '/territory/regular/7', button: 'Map' },
   { role, path: '/territory', button: 'open list map' },
