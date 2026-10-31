@@ -627,9 +627,11 @@ export function MobileHome({
       ids.add(focusedRegularVisitBuildingId)
       return ids
     }
+    // An address-only target must not fall back to every other personal visit.
+    if (focusedReturnVisitId != null) return ids
     regularVisitBuildingIds.forEach((id) => ids.add(id))
     return ids
-  }, [focusedRegularVisitBuildingId, isRegularVisitMapScope, regularVisitBuildingIds])
+  }, [focusedRegularVisitBuildingId, focusedReturnVisitId, isRegularVisitMapScope, regularVisitBuildingIds])
   const regularVisitVisibleCardIds = useMemo(() => {
     const ids = new Set<number>()
     if (!isRegularVisitMapScope) return ids

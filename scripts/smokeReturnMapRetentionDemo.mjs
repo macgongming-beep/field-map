@@ -32,6 +32,10 @@ if (mode === 'inspect') {
 } else if (mode === 'setup') {
   const state = existsSync(stateFile) ? JSON.parse(readFileSync(stateFile, 'utf8')) : { marker, ids: [], unit, building }
   if (state.marker !== marker || state.unit.id !== unit.id) throw Error('Fixture state mismatch')
+  if (state.ids.length) {
+    const previous = unwrap(await db.from('return_visits').select('id,ended_at').in('id', state.ids))
+    if (previous.length === state.ids.length && previous.every(row => row.ended_at)) state.ids = []
+  }
   const existing = unwrap(await db.from('return_visits').select('id,display_name').eq('unit_id', unit.id).is('ended_at', null))
   if (existing.some(row => row.display_name !== `${marker} linked`)) throw Error('Unit has a non-test return visit')
   if (!state.ids.length && existing.length === 1) state.ids.push(existing[0].id)

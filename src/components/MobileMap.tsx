@@ -38,6 +38,7 @@ import { getGeocodeCandidates } from '../utils/geocodeCandidates'
 import { candidateBuildingName, candidateBuildingType, candidateFirstUnitName } from '../utils/searchedPlaceDraft'
 import { informalAssetsForMap } from '../utils/informalAssets'
 import { useTerritoryRealtime } from '../hooks/useTerritoryRealtime'
+import { useAddressMapPin } from '../hooks/useAddressMapPin'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
@@ -206,31 +207,7 @@ export function MobileMap({
   const focusedInformalChildId = searchParams.get('informalChildId') ? Number(searchParams.get('informalChildId')) : null
   const addrParam = searchParams.get('addr')
   const pinLabelParam = searchParams.get('pinLabel') ?? addrParam ?? ''
-  const [virtualPinLat, setVirtualPinLat] = useState<number | null>(null)
-  const [virtualPinLng, setVirtualPinLng] = useState<number | null>(null)
-  const [virtualGeocoding, setVirtualGeocoding] = useState(false)
-
-  // addr 파라미터 있으면 geocoding
-  useEffect(() => {
-    if (!addrParam) return
-    const tryGeocode = () => {
-      const naver = (window as any).naver
-      if (!naver?.maps?.Service) { setTimeout(tryGeocode, 500); return }
-      setVirtualGeocoding(true)
-      naver.maps.Service.geocode({ query: addrParam }, (status: any, response: any) => {
-        setVirtualGeocoding(false)
-        if (status === naver.maps.Service.Status.ERROR) { showToast(t(language, 'map.addressNotFound')); return }
-        const result = response?.v2?.addresses?.[0]
-        if (result) {
-          setVirtualPinLat(parseFloat(result.y))
-          setVirtualPinLng(parseFloat(result.x))
-        } else {
-          showToast(t(language, 'map.addressNotFound'))
-        }
-      })
-    }
-    tryGeocode()
-  }, [addrParam, language])
+  const addressPin = useAddressMapPin(addrParam)
 
   // 내비게이션 상태 머신
   // (구) area → region → card → map 4단계 drill
@@ -2050,9 +2027,15 @@ export function MobileMap({
               '--map-toolbar-search-push': `${mapToolbarSearchPush}px`,
             } as React.CSSProperties}
           >
-            {virtualGeocoding && (
-              <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 50, background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 20, pointerEvents: 'none' }}>
+            {addressPin.status === 'loading' && (
+              <div style={{ position: 'absolute', bottom: sheetHeight + 12, left: 12, right: 64, zIndex: 50, background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 8, pointerEvents: 'none' }}>
                 {t(language, 'map.searchingAddress')}
+              </div>
+            )}
+            {addressPin.status === 'error' && (
+              <div role="status" style={{ position: 'absolute', bottom: sheetHeight + 12, left: 12, right: 64, zIndex: 50, background: 'var(--surface, #fff)', color: 'var(--ink-900, #222)', padding: 12, borderRadius: 8, boxShadow: '0 2px 8px #0002', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+                <span>{t(language, 'map.addressNotFound')}</span>
+                <button type="button" onClick={addressPin.retry}>{msg('다시 시도')}</button>
               </div>
             )}
             <MapCanvas
@@ -2140,8 +2123,8 @@ export function MobileMap({
               }}
               previewPinLat={movingInformalPoint?.lat ?? addLat}
               previewPinLng={movingInformalPoint?.lng ?? addLng}
-              virtualPinLat={virtualPinLat}
-              virtualPinLng={virtualPinLng}
+              virtualPinLat={addressPin.point?.lat ?? null}
+              virtualPinLng={addressPin.point?.lng ?? null}
               virtualPinLabel={pinLabelParam}
               onMovePreviewPin={(lat, lng) => {
                 if (movingInformalPoint) {
