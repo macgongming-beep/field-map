@@ -66,6 +66,8 @@
 
 화면 이동·홈 조회 운영 준비: [0066 독립 스위치와 의존 관계 시험](0066-navigation-home-production-gates.md)
 
+연결 재방문 지도 왕복: [0068 데모 봉사자 스토어 유지](0068-demo-linked-return-map-retention.md)
+
 ```markdown
 # 제목
 
