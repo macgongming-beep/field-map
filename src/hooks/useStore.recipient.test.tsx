@@ -985,6 +985,42 @@ test.each([
   expect(state.cardFilters).toEqual([])
 })
 
+test.each(['true', 'false'])('focused return map retains keyed store with calendar=%s', async calendar => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_RETURN_MAP_RETENTION_ENABLED', 'true')
+  vi.stubEnv('VITE_RETURN_DETAIL_RETENTION_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', calendar)
+  vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
+  state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }])
+  const mounted = vi.fn()
+  const now = new Date('2026-10-31T12:00:00')
+  function Session({ url, recipient }: { url: URL; recipient: boolean }) {
+    const scope = calendarReadScope(url.pathname, url.search, '', false, calendar, now, 'user', 'Volunteer')
+    const store = useStore(true, 'user', recipient ? 'Volunteer' : undefined, scope)
+    useEffect(() => { mounted() }, [])
+    return <output data-testid="return-map-store">{store.loading || !store.calendarScopeReady ? 'loading'
+      : `${store.buildings.length}:${store.visitHistories.map(h => h.id).join(',')}`}</output>
+  }
+  function Route({ path }: { path: string }) {
+    const url = new URL(path, 'https://demo.example')
+    const recipient = recipientStoreEnabled('user', url.pathname, url.search, 'true', 'true')
+    return <Session key={`account:${recipient ? 'recipient' : 'full'}`} url={url} recipient={recipient} />
+  }
+  const { rerender } = render(<Route path="/territory" />)
+  await waitFor(() => expect(screen.getByTestId('return-map-store').textContent).toBe('1:901'))
+  state.reads = []
+  state.historyFilters = []
+  for (const path of ['/territory/regular/7', '/map?scope=regularVisits&returnVisitId=7&buildingId=10',
+    '/territory/regular/7', '/territory', '/territory/regular/7',
+    '/map?scope=regularVisits&returnVisitId=7&buildingId=10', '/territory']) {
+    rerender(<Route path={path} />)
+    await waitFor(() => expect(screen.getByTestId('return-map-store').textContent).toBe('1:901'))
+  }
+  expect(mounted).toHaveBeenCalledTimes(1)
+  expect(state.reads).toEqual([])
+  expect(state.historyFilters).toEqual([])
+})
+
 test.each([
   { demo: 'true', flag: 'true', scoped: true },
   { demo: undefined, flag: 'true', scoped: true },
