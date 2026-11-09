@@ -74,6 +74,8 @@
 
 저장 후 실시간 중복 읽기: [0072 데모 변경 번호 확인과 재사용](0072-demo-visit-signal-receipts.md)
 
+신청·취소 본인 명단 중복 읽기: [0074 데모 참가자 행 확인과 재사용](0074-demo-participant-signal-receipts.md)
+
 ```markdown
 # 제목
 

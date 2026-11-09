@@ -112,7 +112,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   const calendarScope = useSettingsCalendarScope(requestedScope, location.pathname, location.search, homeScope, windowedCalendar)
 
   const {
-    calendarScopeReady, calendarReadError, retryCalendarRead, invalidateCalendarCache, refreshCalendarParticipants,
+    calendarScopeReady, calendarReadError, retryCalendarRead, invalidateCalendarCache, refreshCalendarParticipants, skipParticipantSignal,
     cards,
     buildings,
     visitHistories,
@@ -240,6 +240,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
       console.warn('[calendar realtime] sync failed:', error)
     })
   }, { enabled: storeEnabled, invalidate: invalidateCalendarCache,
+    skipParticipantSignal,
     onParticipants: ids => {
       void refreshCalendarParticipants(ids).catch(error => {
         if (!(error instanceof SupersededReadError)) Sentry.captureException(error)

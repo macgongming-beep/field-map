@@ -18,6 +18,30 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 } }))
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); state.callbacks.clear(); vi.clearAllMocks() })
 
+test('own receipt skips early/late duplicate only; another signal and broad assignment still refresh', async () => {
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  vi.useFakeTimers()
+  let covered = false
+  const own = { eventType: 'DELETE', old: { id: 10 } }
+  const onParticipants = vi.fn(), onChange = vi.fn(), invalidate = vi.fn()
+  renderHook(() => useCalendarRealtime(onChange, { onParticipants, invalidate,
+    skipParticipantSignal: signal => covered && signal === own }))
+  state.callbacks.get('event_participants')!(own)
+  covered = true
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  expect(onParticipants).not.toHaveBeenCalled()
+  invalidate.mockClear()
+  state.callbacks.get('event_participants')!(own)
+  expect(invalidate).not.toHaveBeenCalled()
+  state.callbacks.get('event_participants')!({ eventType: 'DELETE', old: { id: 11 } })
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  expect(onParticipants).toHaveBeenCalledExactlyOnceWith(null)
+  state.callbacks.get('event_card_assignments')!()
+  state.callbacks.get('event_participants')!(own)
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  expect(onChange).toHaveBeenCalledOnce()
+})
+
 test.each([true, false])('restaurant assignment invalidation follows navigation reuse flag=%s', async enabled => {
   vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', String(enabled))
   vi.useFakeTimers()

@@ -35,3 +35,15 @@ test('empty input makes no request; large input is bounded; errors stay errors',
   await expect(readCalendarParticipants([7])).rejects.toThrow('offline')
   await expect(readCalendarParticipants([NaN])).rejects.toThrow('Invalid participant event id')
 })
+
+test('proof IDs are opt-in and are published only after a valid complete read', async () => {
+  const callback = vi.fn()
+  state.rows = [{ id: 7, event_participants: [{ id: 20, user_name: 'A', role: '신청' }] }]
+  await readCalendarParticipants([7], callback)
+  expect(state.columns).toEqual(['id,event_participants(id,user_name,role)'])
+  expect(callback).toHaveBeenCalledWith(new Map([[7, [{ id: 20, user_name: 'A', role: '신청' }]]]))
+  callback.mockClear()
+  state.rows = [{ id: 7, event_participants: [{ user_name: 'A', role: '신청' }] }]
+  await expect(readCalendarParticipants([7], callback)).rejects.toThrow('Invalid participant proof rows')
+  expect(callback).not.toHaveBeenCalled()
+})

@@ -12,11 +12,13 @@ import { supabase } from '../lib/supabase'
 import { subscribeWithRecovery } from '../lib/realtimeRecovery'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { calendarNavigationReuseEnabled } from './calendarNavigationCache'
+import type { ParticipantSignal } from './participantSignalReceipts'
 
 export function useCalendarRealtime(
   onChange: () => void,
   options?: { enabled?: boolean; debounceMs?: number; invalidate?: () => void;
-    onParticipants?: (eventIds: number[] | null) => void },
+    onParticipants?: (eventIds: number[] | null) => void;
+    skipParticipantSignal?: (signal: ParticipantSignal) => boolean },
 ) {
   const enabled = options?.enabled !== false
   const debounceMs = options?.debounceMs ?? 2000  // 연속 이벤트 묶음 처리
@@ -32,30 +34,34 @@ export function useCalendarRealtime(
 
     let pending: ReturnType<typeof setTimeout> | null = null
     let broad = false
-    let unknownParticipant = false
-    const participantIds = new Set<number>()
+    let participantSignals: ParticipantSignal[] = []
     const schedule = () => {
       if (calendarNavigationReuseEnabled()) optionsRef.current?.invalidate?.()
       if (pending) clearTimeout(pending)
       pending = setTimeout(() => {
         pending = null
         const all = broad
-        const ids = unknownParticipant ? null : [...participantIds]
+        const signals = participantSignals.filter(signal => !optionsRef.current?.skipParticipantSignal?.(signal))
+        const participantIds = new Set<number>()
+        let unknownParticipant = false
+        for (const signal of signals) {
+          const ids = [signal.new?.event_id, signal.old?.event_id]
+            .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0)
+          if (!ids.length) unknownParticipant = true
+          ids.forEach(id => participantIds.add(id))
+        }
         broad = false
-        unknownParticipant = false
-        participantIds.clear()
+        participantSignals = []
         if (all) cbRef.current()
-        else optionsRef.current?.onParticipants?.(ids)
+        else if (signals.length) optionsRef.current?.onParticipants?.(unknownParticipant ? null : [...participantIds])
       }, debounceMs)
     }
     const trigger = () => { broad = true; schedule() }
-    const participants = (payload: { new?: { event_id?: unknown }; old?: { event_id?: unknown } }) => {
-      const ids = [payload?.new?.event_id, payload?.old?.event_id]
-        .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0)
+    const participants = (payload: ParticipantSignal) => {
+      if (optionsRef.current?.skipParticipantSignal?.(payload)) return
       // DELETE may expose only the primary key. Refresh loaded participants,
       // never guess the parent or expand to territory reads.
-      if (!ids.length) unknownParticipant = true
-      ids.forEach(id => participantIds.add(id))
+      participantSignals.push(payload ?? {})
       schedule()
     }
 

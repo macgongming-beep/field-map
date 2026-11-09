@@ -17,7 +17,7 @@ const safeError = error => ({ name: error?.name, message: error?.message ?? Stri
 async function workerMain() {
   const { JSDOM } = await import('jsdom')
   const { rolldown } = await import('rolldown')
-  const { actor, key, fixture, delayMs, label, mapScope, dedup } = workerData
+  const { actor, key, fixture, delayMs, label, mapScope, dedup, participantDedup } = workerData
   const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/', pretendToBeVisual: true })
   for (const name of ['window', 'document', 'navigator', 'localStorage', 'sessionStorage', 'HTMLElement', 'CustomEvent']) {
     Object.defineProperty(globalThis, name, { configurable: true, value: dom.window[name] })
@@ -33,6 +33,7 @@ async function workerMain() {
   }
   let phase = 'initial', pending = 0, lastActivity = performance.now()
   let holdNextUnits = false, releaseUnits = null
+  let holdNextParticipants = false, releaseParticipants = null
   const samples = [], signals = [], statuses = new Map()
   const client = createClient(origin, key, { auth: { ...auth, storageKey: label }, global: {
     headers: { 'x-session-token': actor.token },
@@ -66,6 +67,12 @@ async function workerMain() {
           await new Promise(resolve => { releaseUnits = resolve })
           releaseUnits = null
         }
+        if (holdNextParticipants && endpoint === 'calendar_events' && method === 'GET'
+          && url.searchParams.get('select')?.startsWith('id,event_participants(')) {
+          holdNextParticipants = false
+          await new Promise(resolve => { releaseParticipants = resolve })
+          releaseParticipants = null
+        }
         if ((method === 'GET' || readRpc.has(endpoint)) && delayMs) await sleep(delayMs)
         samples.push({ phase: startPhase, endpoint, method, read: method === 'GET' || readRpc.has(endpoint),
           query: Object.fromEntries(url.searchParams), status: response.status, decodedBytes: bytes,
@@ -94,6 +101,7 @@ async function workerMain() {
   const { render, waitFor, act, cleanup } = await import('@testing-library/react')
   const flags = { DEV: false, VITE_DEMO_MODE: 'true', VITE_TERRITORY_REALTIME_ENABLED: 'true',
     VITE_VISIT_SIGNAL_DEDUP_ENABLED: String(dedup),
+    VITE_CALENDAR_PARTICIPANT_DEDUP_ENABLED: String(participantDedup),
     VITE_SUPABASE_URL: origin, VITE_CART_APPLICATIONS_ENABLED: 'true', VITE_RECIPIENT_CARD_SCOPE_ENABLED: 'true' }
   const bundle = await rolldown({ input: '\0fanout-entry', transform: { define: { 'import.meta.env': JSON.stringify(flags) } },
     plugins: [{ name: 'fanout-client', resolveId(id) {
@@ -118,6 +126,7 @@ async function workerMain() {
           const fail = error => globalThis.__fanout.errors.push({name: error.name, message: error.message});
           useCalendarRealtime(() => { void store.refetchSlices(['calendar'], {triggeredBy:'realtime:calendar'}).catch(fail); }, {
             invalidate: store.invalidateCalendarCache,
+            skipParticipantSignal: store.skipParticipantSignal,
             onParticipants: ids => { void store.refreshCalendarParticipants(ids).catch(fail); }
           });
           return React.createElement(TerritoryRealtimeContext.Provider, {value:store.territoryRealtime},
@@ -150,6 +159,7 @@ async function workerMain() {
     return { recordIds: store.visitHistories.filter(h => h.unitId === fixture.unit.id).map(h => h.id),
       status: building?.units.find(u => u.id === fixture.unit.id)?.status, buildingName: building?.name,
       applicant: Boolean(store.calendarEvents.find(e => e.id === fixture.application.id)?.applicants.includes(fixture.volunteerName)),
+      applicants: store.calendarEvents.find(e => e.id === fixture.application.id)?.applicants.slice().sort() ?? [],
       error: store.error, loading: store.loading }
   }
   parentPort.postMessage({ ready: true, label, role: actor.role, flags })
@@ -160,6 +170,9 @@ async function workerMain() {
       else if (command === 'hold-next-units') { holdNextUnits = true; result = true }
       else if (command === 'units-held') result = Boolean(releaseUnits)
       else if (command === 'release-units') { releaseUnits?.(); result = true }
+      else if (command === 'hold-next-participants') { holdNextParticipants = true; result = true }
+      else if (command === 'participants-held') result = Boolean(releaseParticipants)
+      else if (command === 'release-participants') { releaseParticipants?.(); result = true }
       else if (command === 'action') {
         await act(async () => {
           if (value === 'save') await current().updateUnitStatus(fixture.building.id, fixture.unit.id, '부재', fixture.tag, '오후')
@@ -259,13 +272,14 @@ async function main() {
   const mapScope = process.argv.includes('--map-scope')
   const repetitions = process.argv.includes('--single-repeat') ? 1 : 3
   const dedup = process.argv.includes('--signal-dedup'), visitsOnly = process.argv.includes('--visits-only')
+  const participantDedup = process.argv.includes('--participant-dedup'), applicationsOnly = process.argv.includes('--applications-only')
   const overlap = process.argv.includes('--overlap')
   const delays = process.argv.includes('--slow') ? [0, 750] : [0, 250]
-  const outputPath = `scratch/mutation-fanout-${dedup ? 'dedup-' : ''}${visitsOnly ? 'visits-' : ''}${mapScope ? 'map-' : ''}results.json`
+  const outputPath = `scratch/mutation-fanout-${participantDedup ? 'participant-dedup-' : ''}${applicationsOnly ? 'applications-' : ''}${dedup ? 'dedup-' : ''}${visitsOnly ? 'visits-' : ''}${mapScope ? 'map-' : ''}results.json`
   const results = [], devices = []
   let commandId = 0
   const launch = (label, actor, delayMs) => new Promise((resolve, reject) => {
-    const worker = new Worker(new URL(import.meta.url), { workerData: { label, actor, key, fixture, delayMs, mapScope, dedup } })
+    const worker = new Worker(new URL(import.meta.url), { workerData: { label, actor, key, fixture, delayMs, mapScope, dedup, participantDedup } })
     const awaiting = new Map()
     const device = { worker, label, call(command, value) {
       return new Promise((resolve, reject) => {
@@ -301,13 +315,22 @@ async function main() {
       const adminA = await launch('administrator', admin, delayMs)
       const group = [userA, userB, adminA]
       for (let repetition = 1; repetition <= repetitions; repetition++) {
-        const actions = visitsOnly ? ['save', 'cancel-visit', 'external-save', 'external-cancel'] : ['save', 'cancel-visit', 'join', 'cancel-application', 'edit', 'restore']
-        if (overlap) actions.push('overlap-save', 'overlap-cancel')
+        const actions = applicationsOnly ? ['join', 'cancel-application', 'external-join', 'external-cancel-application']
+          : visitsOnly ? ['save', 'cancel-visit', 'external-save', 'external-cancel'] : ['save', 'cancel-visit', 'join', 'cancel-application', 'edit', 'restore']
+        if (overlap) actions.push(...(applicationsOnly ? ['overlap-join', 'overlap-cancel-application'] : ['overlap-save', 'overlap-cancel']))
         for (const action of actions) {
           const phase = `${delayMs}-${repetition}-${action}`
           for (const device of group) await device.call('phase', phase)
           const actor = action === 'edit' || action === 'restore' || action.startsWith('external-') ? adminA : userA
-          if (action.startsWith('overlap-')) {
+          if (applicationsOnly && action.startsWith('overlap-')) {
+            await userA.call('hold-next-participants')
+            const mutation = userA.call('action', action === 'overlap-join' ? 'join' : 'cancel-application')
+            const deadline = Date.now() + 20000
+            while (!await userA.call('participants-held')) { assert.ok(Date.now() < deadline, 'No held participant response'); await sleep(50) }
+            await adminA.call('action', action === 'overlap-join' ? 'join' : 'cancel-application')
+            await userA.call('release-participants')
+            await mutation
+          } else if (action.startsWith('overlap-')) {
             await userA.call('hold-next-units')
             const mutation = userA.call('action', action === 'overlap-save' ? 'save' : 'cancel-visit')
             const deadline = Date.now() + 20000
@@ -315,7 +338,8 @@ async function main() {
             await adminA.call('action', action === 'overlap-save' ? 'edit' : 'restore')
             await userA.call('release-units')
             await mutation
-          } else await actor.call('action', action === 'external-save' ? 'save' : action === 'external-cancel' ? 'cancel-visit' : action)
+          } else await actor.call('action', action === 'external-save' ? 'save' : action === 'external-cancel' ? 'cancel-visit'
+            : action === 'external-join' ? 'join' : action === 'external-cancel-application' ? 'cancel-application' : action)
           // Calendar debounce is two seconds; do not count only the first response.
           await sleep(3600)
           const measured = []
@@ -325,7 +349,12 @@ async function main() {
             const saved = action === 'save' || action === 'external-save' || action === 'overlap-save'
             assert.equal(value.snapshot.recordIds.length, saved ? 1 : 0)
             assert.equal(value.snapshot.status, saved ? '부재' : '미방문')
-            assert.equal(value.snapshot.applicant, action === 'join')
+            assert.equal(value.snapshot.applicant, action === 'join' || action === 'overlap-join')
+            if (applicationsOnly) {
+              const expected = action === 'join' ? [user.name] : action === 'external-join' ? [admin.name]
+                : action === 'overlap-join' ? [user.name, admin.name].sort() : []
+              assert.deepEqual(value.snapshot.applicants, expected)
+            }
             assert.equal(value.snapshot.buildingName, tag + (action === 'edit' || action === 'overlap-save' ? '-edited' : ''))
             assert.ok(value.samples.every(s => s.status < 400), JSON.stringify(value.samples.filter(s => s.status >= 400)))
             const reads = value.samples.filter(s => s.read)
@@ -336,7 +365,7 @@ async function main() {
           }
           results.push({ delayMs, repetition, action, measured })
           console.log(JSON.stringify({ delayMs, repetition, action, devices: measured.map(m => ({ device: m.device, ...m.summary })) }))
-          writeFileSync(outputPath, JSON.stringify({ origin, mapScope, dedup, source: 'local hooks + live demo DB', results }, null, 2))
+          writeFileSync(outputPath, JSON.stringify({ origin, mapScope, dedup, participantDedup, applicationsOnly, source: 'local hooks + live demo DB', results }, null, 2))
         }
       }
       for (const device of group) { await device.call('close'); await device.worker.terminate(); devices.splice(devices.indexOf(device), 1) }
@@ -371,7 +400,7 @@ async function main() {
       assert.equal(unwrap(await writer.from('buildings').select('id').eq('id', fixture.building.id)).length, 0)
     }
     await bootstrap.removeAllChannels(); await writer.removeAllChannels()
-    if (results.length) writeFileSync(outputPath, JSON.stringify({ origin, mapScope, dedup, source: 'local hooks + live demo DB', fixtureCleanup: 'passed', results }, null, 2))
+    if (results.length) writeFileSync(outputPath, JSON.stringify({ origin, mapScope, dedup, participantDedup, applicationsOnly, source: 'local hooks + live demo DB', fixtureCleanup: 'passed', results }, null, 2))
     console.log(JSON.stringify({ fixtureCleanup: 'passed', scenarios: results.length }))
   }
 }

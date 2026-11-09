@@ -5,6 +5,7 @@ import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEve
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { calendarCachedScreenEnabled, calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
 import { readCalendarParticipants } from './calendarParticipants'
+import { createParticipantSignalReceipts, participantSignalDedupEnabled, type ParticipantRow, type ParticipantSignal } from './participantSignalReceipts'
 import { assertUnassignedCalendarEvent, calendarApplicationRefreshEnabled } from './calendarApplicationRefresh'
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
@@ -200,10 +201,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const resolveCalendarReadsIdle = useRef<(() => void) | undefined>(undefined)
   const dirtyParticipantIds = useRef<Set<number> | null>(new Set())
   const participantLifecycle = useRef(0)
+  const participantReceipts = useRef(createParticipantSignalReceipts()).current
   useEffect(() => {
     const generation = ++participantLifecycle.current
-    return () => { participantLifecycle.current = generation + 1 }
-  }, [enabled, role, recipientUser])
+    participantReceipts.reset()
+    return () => { participantLifecycle.current = generation + 1; participantReceipts.reset() }
+  }, [enabled, role, recipientUser, sessionUserName, participantReceipts])
   const calendarSnapshotComplete = useRef(false)
   const [cardBoundaries, setCardBoundaries] = useState<CardBoundary[]>([])
   const boundaryReader = useRef(createCardBoundaryReader())
@@ -1326,7 +1329,14 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     }
     void fetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }).catch(() => { /* calendar gate exposes retry */ })
   }, [calendarScope, enabled, fetchSlices, clearCalendarWindows, publishCalendarEvents])
-  const refreshCalendarParticipants = useCallback((eventIds: number[] | null): Promise<void> => {
+  const skipParticipantSignal = useCallback((signal: ParticipantSignal) => {
+    if (!enabled || !participantSignalDedupEnabled() || calendarReadsPending.current) return false
+    return participantReceipts.covers(signal, {
+      epoch: calendarCacheEpoch.current, version: calendarReadVersion.current,
+      scope: calendarScopeRef.current, user: sessionUserName ?? getCurrentVisitor(),
+    }, calendarEventsRef.current.map(event => event.id))
+  }, [enabled, sessionUserName, participantReceipts])
+  const refreshCalendarParticipants = useCallback((eventIds: number[] | null, ownApplication?: { eventId: number; cancelled: boolean }): Promise<void> => {
     clearCalendarWindows()
     if (eventIds === null) dirtyParticipantIds.current = null
     else eventIds.forEach(id => dirtyParticipantIds.current?.add(id))
@@ -1346,13 +1356,21 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const dirty = dirtyParticipantIds.current
         const ids = calendarEventsRef.current.filter(event => dirty === null || dirty.has(event.id)).map(event => event.id)
         if (!ids.length) { dirtyParticipantIds.current = new Set(); return }
-        const participants = await withLoadDeadline(readCalendarParticipants(ids))
+        let proofRows: Map<number, ParticipantRow[]> | undefined
+        const capture = ownApplication && participantSignalDedupEnabled()
+        const participants = await withLoadDeadline(capture
+          ? readCalendarParticipants(ids, rows => { proofRows = rows }) : readCalendarParticipants(ids))
         if (lifecycle !== participantLifecycle.current) return
         if (epoch !== calendarCacheEpoch.current || version !== calendarReadVersion.current || scope !== calendarScopeRef.current) continue
         const update = (events: CalendarEvent[]) => events.map(event => participants.has(event.id)
           ? { ...event, ...participants.get(event.id)! } : event)
         publishCalendarEvents(update(calendarEventsRef.current))
         if (recipientCalendarRef.current) recipientCalendarRef.current = update(recipientCalendarRef.current)
+        if (capture && proofRows?.has(ownApplication.eventId)) {
+          participantReceipts.applied(ownApplication.eventId, proofRows.get(ownApplication.eventId)!, {
+            epoch, version, scope, user: sessionUserName ?? getCurrentVisitor(),
+          }, ownApplication.cancelled ? 'DELETE' : 'INSERT')
+        }
         dirtyParticipantIds.current = new Set()
         return
       }
@@ -1361,7 +1379,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     recipientQueue.current = next
     // The caller reports background failures without marking visible data unreadable.
     return next.finally(() => { --calendarRefreshesPending.current })
-  }, [clearCalendarWindows, publishCalendarEvents])
+  }, [clearCalendarWindows, publishCalendarEvents, sessionUserName, participantReceipts])
   const refreshUpdatedEvent = useCallback(async (eventId: number) => {
     clearCalendarWindows()
     if (!calendarSnapshotComplete.current || calendarReadsPending.current || !recipientCalendarRef.current?.some(event => event.id === eventId)) {
@@ -1519,7 +1537,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     refreshApplication: calendarApplicationRefreshEnabled() ? async (eventId, cancelled) => {
       if (!calendarEventsRef.current.some(event => event.id === eventId)) throw new Error('Calendar event not loaded')
       if (cancelled) await assertUnassignedCalendarEvent(eventId)
-      await refreshCalendarParticipants([eventId])
+      await refreshCalendarParticipants([eventId], { eventId, cancelled })
     } : undefined,
     refreshUpdatedEvent: (import.meta.env.VITE_CALENDAR_EVENT_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' && !recipientReader
       ? refreshUpdatedEvent : undefined,
@@ -1636,6 +1654,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     refetchSlices: fetchSlices,
     invalidateCalendarCache: clearCalendarWindows,
     refreshCalendarParticipants,
+    skipParticipantSignal,
     applyPlaceDeletionSignal,
     syncCreatedUnits,
     syncChangedBuildings,

@@ -633,6 +633,7 @@ test.each([
   ['true', undefined, true], ['false', undefined, false],
   ['true', 'false', false], ['false', 'true', true], ['false', 'false', false],
 ] as const)('self application gate demo=%s flag=%s narrow=%s', async (demo, flag, narrow) => {
+  vi.stubEnv('VITE_CALENDAR_PARTICIPANT_DEDUP_ENABLED', 'false')
   vi.stubEnv('VITE_DEMO_MODE', demo)
   vi.stubEnv('VITE_CALENDAR_APPLICATION_REFRESH_ENABLED', flag)
   localStorage.setItem('currentVisitor', 'New applicant')
@@ -652,6 +653,40 @@ test.each([
       expect(state.reads).toContain('calendar_events')
     }
   } finally { localStorage.removeItem('currentVisitor') }
+})
+
+test.each(['true', 'false'])('actual apply/cancel publishes exact own signal receipts only with dedup=%s', async flag => {
+  vi.stubEnv('VITE_CALENDAR_PARTICIPANT_DEDUP_ENABLED', flag)
+  localStorage.setItem('currentVisitor', 'A')
+  state.events = [{ ...old, event_participants: [], allow_applications: true }]
+  const { result, unmount } = renderHook(() => useStore(true, 'user', undefined, 'full', 'A'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const row = { id: 10, user_name: 'A', role: '신청' }
+  const insert = { eventType: 'INSERT', new: { ...row, event_id: 1 } }
+  const deleted = { eventType: 'DELETE', old: { id: 10 } }
+  state.participants.mockImplementationOnce(async (_ids, onRows) => {
+    expect(result.current.skipParticipantSignal(insert)).toBe(false)
+    onRows?.(new Map([[1, [row]]]))
+    return new Map([[1, { applicants: ['A'], assigned: [], guests: [] }]])
+  })
+  await act(async () => { await result.current.applyToEvent(1) })
+  expect(result.current.calendarEvents[0].applicants).toEqual(['A'])
+  expect(result.current.skipParticipantSignal(insert)).toBe(flag === 'true')
+  state.probe.mockResolvedValue({ data: { id: 1, assignment_shared_at: null, assignment_team_informal: null, assignment_team_scopes: {} }, error: null })
+  state.participants.mockImplementationOnce(async (_ids, onRows) => {
+    expect(result.current.skipParticipantSignal(deleted)).toBe(false)
+    onRows?.(new Map([[1, []]]))
+    return new Map([[1, { applicants: [], assigned: [], guests: [] }]])
+  })
+  await act(async () => { await result.current.applyToEvent(1) })
+  expect(state.probe).toHaveBeenCalled()
+  expect(result.current.calendarEvents[0].applicants).toEqual([])
+  expect(result.current.skipParticipantSignal(deleted)).toBe(flag === 'true')
+  expect(result.current.skipParticipantSignal({ eventType: 'DELETE', old: { id: 11 } })).toBe(false)
+  const skipAfterUnmount = result.current.skipParticipantSignal
+  unmount()
+  expect(skipAfterUnmount(deleted)).toBe(false)
+  localStorage.removeItem('currentVisitor')
 })
 
 test.each(['unassigned', 'shared', 'offline'] as const)('actual cancellation probes server and recovers %s state', async status => {
@@ -703,6 +738,56 @@ test('participants wait for an older full read and never expand invisible events
   state.participants.mockClear()
   await act(async () => { await result.current.refreshCalendarParticipants([999]) })
   expect(state.participants).not.toHaveBeenCalled()
+})
+
+test.each(['shared', 'offline'])('dedup enabled cancellation still uses broad recovery when assignment check is %s', async status => {
+  vi.stubEnv('VITE_CALENDAR_PARTICIPANT_DEDUP_ENABLED', 'true')
+  localStorage.setItem('currentVisitor', 'A')
+  state.events = [{ ...old, allow_applications: true }]
+  const { result } = renderHook(() => useStore(true, 'user', undefined, 'full', 'A'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []
+  state.probe.mockReset().mockResolvedValue({ data: { id: 1, assignment_shared_at: '2026-11-09T00:00:00Z',
+    assignment_team_informal: null, assignment_team_scopes: {} }, error: status === 'offline' ? new Error('offline') : null })
+  state.events = [{ ...old, event_participants: [] }]
+  await act(async () => { await result.current.applyToEvent(1) })
+  expect(state.reads[0]).toBe('event_participants')
+  expect(state.probe).toHaveBeenCalledOnce()
+  expect(state.participants).not.toHaveBeenCalled()
+  expect(state.reads).toEqual(expect.arrayContaining(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards', 'visit_histories', 'service_sessions']))
+  expect(result.current.skipParticipantSignal({ eventType: 'DELETE', old: { id: 1 } })).toBe(false)
+  localStorage.removeItem('currentVisitor')
+})
+
+test.each(['invalidated', 'failed'])('post-write %s response cannot acknowledge a signal before its replacement applies', async outcome => {
+  vi.stubEnv('VITE_CALENDAR_PARTICIPANT_DEDUP_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', undefined, 'full', 'A'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const row = { id: 10, user_name: 'A', role: '신청' }
+  const signal = { eventType: 'INSERT', new: { ...row, event_id: 1 } }
+  let release!: () => void
+  state.participants.mockImplementationOnce(async (_ids, onRows) => {
+    onRows(new Map([[1, [row]]]))
+    await new Promise<void>(resolve => { release = resolve })
+    if (outcome === 'failed') throw new Error('offline')
+    return new Map([[1, { applicants: ['A'], assigned: [], guests: [] }]])
+  }).mockImplementationOnce(async (_ids, onRows) => {
+    expect(result.current.skipParticipantSignal(signal)).toBe(false)
+    onRows(new Map([[1, [row, { id: 11, user_name: 'Other', role: '신청' }]]]))
+    return new Map([[1, { applicants: ['A', 'Other'], assigned: [], guests: [] }]])
+  })
+  let work!: Promise<void>
+  act(() => { work = result.current.refreshCalendarParticipants([1], { eventId: 1, cancelled: false }) })
+  await waitFor(() => expect(state.participants).toHaveBeenCalledOnce())
+  expect(result.current.skipParticipantSignal(signal)).toBe(false)
+  if (outcome === 'invalidated') result.current.invalidateCalendarCache()
+  await act(async () => {
+    release()
+    if (outcome === 'failed') await expect(work).rejects.toThrow('offline')
+    else await work
+  })
+  expect(result.current.skipParticipantSignal(signal)).toBe(outcome === 'invalidated')
+  if (outcome === 'invalidated') expect(result.current.calendarEvents[0].applicants).toEqual(['A', 'Other'])
 })
 
 test('background participant failure does not poison loading an uncached month', async () => {

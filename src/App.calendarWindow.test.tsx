@@ -7,6 +7,7 @@ import { CalendarReadContext } from './hooks/CalendarReadContext'
 
 const state = vi.hoisted(() => ({
   ready: true, scope: '', sessionUser: undefined as string | undefined, role: '', mounts: 0,
+  realtime: vi.fn(), skipSignal: vi.fn(),
   auth: { user: { id: 1, name: 'Admin', role: 'admin' }, allUsers: [], loading: false },
 }))
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => state.auth }))
@@ -15,9 +16,9 @@ vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string,
   state.scope = scope
   state.sessionUser = sessionUser
   state.role = role
-  return { loading: false, error: null, calendarScopeReady: state.ready, calendarReadError: false }
+  return { loading: false, error: null, calendarScopeReady: state.ready, calendarReadError: false, skipParticipantSignal: state.skipSignal }
 } }))
-vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: () => {} }))
+vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: state.realtime }))
 vi.mock('./hooks/usePlaceDeletionRealtime', () => ({ usePlaceDeletionRealtime: () => {} }))
 vi.mock('./hooks/useUnitCreationRealtime', () => ({ useUnitCreationRealtime: () => {} }))
 vi.mock('./components/MobileHome', () => ({ MobileHome: () => <CalendarConsumer /> }))
@@ -40,11 +41,18 @@ function CalendarConsumer() {
   </>
 }
 beforeEach(() => {
+  state.realtime.mockClear()
   state.ready = true
   state.mounts = 0
   state.auth.user = { id: 1, name: 'Admin', role: 'admin' }
   window.localStorage.clear()
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+})
+
+test('App passes store participant receipts into the real-time hook', async () => {
+  render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+  await waitFor(() => expect(state.realtime).toHaveBeenCalled())
+  expect(state.realtime.mock.lastCall?.[1].skipParticipantSignal).toBe(state.skipSignal)
 })
 
 test.each(['user', 'leader', 'admin', 'developer'])('session reads get authenticated identity and actual %s role on a full-store route', async role => {
