@@ -76,6 +76,8 @@
 
 신청·취소 본인 명단 중복 읽기: [0074 데모 참가자 행 확인과 재사용](0074-demo-participant-signal-receipts.md)
 
+로그인 시도 제한과 비로그인 사용자 조회 차단: [0075 데모 로그인 보안](0075-demo-login-attempt-guard.md)
+
 ```markdown
 # 제목
 
