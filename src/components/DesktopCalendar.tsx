@@ -19,6 +19,7 @@ import { PlacePresetEditor, TimePresetEditor } from './admin/AdminMobileCalendar
 import { ExportEventsModal } from './calendar/ExportEventsModal'
 import { ImportEventsModal } from './calendar/ImportEventsModal'
 import { msg } from '../lib/msg'
+import { chatDisabled } from '../lib/chatRetirement'
 import { t } from '../i18n'
 import { AssignmentEditor } from './assignment/AssignmentEditor'
 import { buildSharedAssignmentTeams } from './admin/sharedAssignmentTeams'
@@ -179,7 +180,7 @@ export function DesktopCalendar({
 
   // openChat=<eventId> 쿼리 처리: 해당 일정 날짜로 이동 + 채팅방 열기
   useEffect(() => {
-    const openChatId = searchParams.get('openChat')
+    const openChatId = searchParams.get('openChat') ?? (chatDisabled() ? searchParams.get('openEvent') : null)
     if (!openChatId) return
     const targetEvent = events.find((ev: CalendarEvent) => ev.id === Number(openChatId))
     if (!targetEvent) return
@@ -188,7 +189,7 @@ export function DesktopCalendar({
     setYear(d.getFullYear())
     setMonth(d.getMonth() + 1)
     setSelectedDay(d.getDate())
-    setChatEvent(targetEvent)
+    if (!chatDisabled()) setChatEvent(targetEvent)
 
     // 다음 tick에 스크롤
     setTimeout(() => {
@@ -199,6 +200,7 @@ export function DesktopCalendar({
     // 쿼리 제거
     const next = new URLSearchParams(searchParams)
     next.delete('openChat')
+    if (chatDisabled()) next.delete('openEvent')
     setSearchParams(next, { replace: true })
   }, [events, searchParams, setSearchParams])
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -894,7 +896,7 @@ export function DesktopCalendar({
           )}
         </aside>
       </section>
-      {chatEvent && (
+      {chatEvent && !chatDisabled() && (
         <div className="chat-room-modal-backdrop" onClick={() => setChatEvent(null)}>
           <div className="chat-room-modal" onClick={(event) => event.stopPropagation()}>
             <div className="chat-room-modal__head">
@@ -1315,7 +1317,7 @@ function EventDetailCard({
           targetId={event.id}
           targetType="calendar_event"
           users={mentionUsers}
-          headerRight={
+          headerRight={!chatDisabled() &&
             <button
               type="button"
               onClick={canAccessChat ? onOpenChat : undefined}

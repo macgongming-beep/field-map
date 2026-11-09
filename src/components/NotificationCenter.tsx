@@ -7,6 +7,7 @@ import { normalizeAppLink } from '../utils/appNavigation'
 import { translateNotificationText } from '../lib/notificationText'
 import { msg } from '../lib/msg'
 import { eventDetailNavigationState } from '../lib/eventDetailNavigation'
+import { chatDisabled, isRetiredChatNotification } from '../lib/chatRetirement'
 
 const TYPE_LABEL: Record<NotificationType, { icon: NotificationIconName; color: string; bg: string }> = {
   notice: { icon: 'notice', color: '#2563eb', bg: '#eff4fe' },
@@ -204,7 +205,9 @@ export function NotificationCenter({
 }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { groups: chatGroups, others } = groupChatNotifications(notifications)
+  const disabledChat = chatDisabled()
+  const visible = disabledChat ? notifications.filter(n => !isRetiredChatNotification(n)) : notifications
+  const { groups: chatGroups, others } = disabledChat ? { groups: [], others: visible } : groupChatNotifications(visible)
   const { chats: userChats } = useUserChats(chatGroups.length > 0 ? userId : null, userName ?? null, { realtime: false })
 
   const chatInfoMap = new Map<number, { title: string; participantCount: number; eventDate: string; eventTime: string | null }>()
@@ -220,14 +223,14 @@ export function NotificationCenter({
 
   const totalUnread =
     unreadOthers.length + chatGroups.reduce((sum, g) => sum + g.unreadCount, 0)
-  const hasAny = notifications.length > 0
+  const hasAny = visible.length > 0
 
   async function handleClickItem(n: AppNotification) {
     // 읽음 처리 — 백그라운드 (await 없이 낙관적 반영)
     if (!n.isRead) void markRead(n.id)
 
     // chat/mention 타입은 globalChatModal 이벤트로 처리
-    if (n.type === 'chat' || n.type === 'mention') {
+    if (!disabledChat && (n.type === 'chat' || n.type === 'mention')) {
       const eventId = extractEventIdFromLink(n.link)
       if (eventId) {
         const info = chatInfoMap.get(eventId)

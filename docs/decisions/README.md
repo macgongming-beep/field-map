@@ -84,6 +84,8 @@
 
 채팅 사진 삭제: [0078 운영 미연결 사진 5개 정리](0078-production-chat-image-removal.md)
 
+채팅 비활성화: [0079 데모 조회·쓰기 차단과 댓글 보존](0079-demo-chat-retirement.md)
+
 ```markdown
 # 제목
 

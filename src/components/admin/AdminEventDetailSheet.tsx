@@ -22,6 +22,7 @@ import { CommentSection, type MentionUser } from '../CommentSection'
 import { ParticipantAddContent } from '../calendar/ParticipantAddContent'
 import { eventParticipantNameKey, type EventParticipantUser } from '../../utils/eventParticipantUsers'
 import { msg } from '../../lib/msg'
+import { chatDisabled } from '../../lib/chatRetirement'
 import { CartApplicantSection } from '../calendar/CartApplicantSection'
 import { toPhoneHref } from '../../utils/linkify'
 
@@ -692,7 +693,7 @@ export function AdminEventDetailSheet({
           targetId={event.id}
           targetType="calendar_event"
           users={mentionUsers}
-          headerRight={
+          headerRight={!chatDisabled() &&
             <button
               type="button"
               onClick={openChat}
