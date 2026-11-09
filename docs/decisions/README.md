@@ -80,6 +80,8 @@
 
 로그인 보안 리뷰 보완: [0076 반복 실패 안내와 관리자 초기화](0076-demo-login-guard-review-followup.md)
 
+로그인 보안 운영 적용: [0077 백업과 일회용 계정 검증](0077-production-login-security.md)
+
 ```markdown
 # 제목
 
