@@ -33,10 +33,19 @@ alerts even when they use `openChat`, assignment alerts, or other notification t
 The frontend hides retired chat alerts too, covering stale cached notification lists.
 Delivered OS push notifications cannot be recalled; their old links remain usable.
 
-Previous header code excluded ALL plain comment notifications. With chat retired,
-the header now shows plain comments and comment mentions; legacy notices remain
-hidden. Explicit false preserves previous behavior. Server mention recipient/push
-filters are unchanged. Mention preferences remain visible; only chat preferences hide.
+The initial implementation also exposed previously hidden plain comment notifications.
+That expansion was withdrawn after review: plain `comment` and legacy `notice` alerts
+remain hidden from both badge and list regardless of the chat flag. Comment mentions
+remain visible, as before. Server comment creation and mention recipient/push filters
+are unchanged. Mention preferences remain visible; only chat preferences hide.
+
+Review reported 954 unread comments across 47 production users (maximum 76/person),
+and 33 old chat alerts to delete. These counts are reviewer-provided, not remeasured
+in this follow-up. No production deployment, notification deletion, mark-read bulk
+operation or server trigger change is authorized by that review alone.
+Whether to expose plain comment alerts, mark the backlog read, or stop generating
+them is a separate product decision. New event-change links still use openChat on
+the server; replacing that with openEvent is also a separate compatibility change.
 
 ## Server
 
@@ -113,6 +122,21 @@ Mutation checks (source restored before shipping):
 - Replace the three SQL rejection statements with returns: three tests fail.
 - Delete all mention notifications: preservation test fails.
 - Keep upload INSERT policy: upload-denial test fails.
+
+## Review follow-up: preserve hidden plain comments
+
+The header continues excluding `comment` and `notice` regardless of chat retirement.
+Comment mentions and event-change notifications remain visible. No existing comment
+notification was marked read or deleted by this correction.
+
+- Focused verification: 32 tests across header notifications/badges and retirement
+  logic/SQL passed; lint and build passed. The full-suite count above belongs to the
+  original implementation verification, not a new full-suite run for this correction.
+- Regression fixtures contain 50 notifications, including 44 hidden plain comments.
+  Both badge-only and full reads show the same three eligible notifications, before
+  and after opening the panel; hidden comments never appear in the panel.
+- Mutation: restoring the original retirement-dependent comment filter fails both
+  cases, showing badge 47 instead of 3. Corrected source was restored and retested.
 
 ## Rollback and production
 

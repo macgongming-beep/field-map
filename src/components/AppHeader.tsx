@@ -189,10 +189,11 @@ export function AppHeaderActionButtons({
   const { totalUnread, markChatReadLocally } = useUserChats(userId ?? null, userName, {
     badgeOnly: (import.meta.env.VITE_CHAT_BADGE_ONLY_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true',
   })
-  // Retired chat alerts disappear from both badge and list. Comment mentions remain.
+  // Keep the existing plain-comment/notice exclusions. Retiring chat must not
+  // expose accumulated hidden comments; comment mentions remain visible.
   const visibleNotifications = useMemo(
-    () => notifList.filter((notification) => notification.type !== 'notice'
-      && (disabledChat ? !isRetiredChatNotification(notification) : notification.type !== 'comment')),
+    () => notifList.filter((notification) => notification.type !== 'notice' && notification.type !== 'comment'
+      && (!disabledChat || !isRetiredChatNotification(notification))),
     [notifList, disabledChat],
   )
   const visibleUnreadCount = useMemo(

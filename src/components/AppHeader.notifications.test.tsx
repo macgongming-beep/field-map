@@ -13,21 +13,27 @@ vi.mock('./GlobalChatModal', () => ({ GlobalChatModal: () => null }))
 const rows = ['assignment', 'notice', 'comment'].map((type, i) => ({ id: i + 1, user_id: 10, type, title: `Title ${type}`, body: `Body ${type}`, link: null, related_id: null, is_read: false, created_at: '2026-10-30' }))
 beforeEach(() => { vi.stubEnv('VITE_CHAT_DISABLED', 'false'); const root = document.createElement('div'); root.id = 'root'; document.body.appendChild(root) })
 
-test('retired chat hides chat alerts/buttons but preserves comment, comment mention and event-change alerts', async () => {
+test.each(['true', 'false'])('retired chat keeps old comments hidden but preserves comment mentions and event changes: badgeOnly=%s', async (badgeOnly) => {
   vi.stubEnv('VITE_CHAT_DISABLED', 'true')
-  vi.stubEnv('VITE_NOTIFICATION_BADGE_ONLY_ENABLED', 'false')
+  vi.stubEnv('VITE_NOTIFICATION_BADGE_ONLY_ENABLED', badgeOnly)
   const extra = [
     { type: 'chat', link: '/calendar?openChat=20', title: 'old chat' },
     { type: 'mention', link: '/calendar?openChat=20', title: 'old chat mention' },
     { type: 'mention', link: '/calendar?openEvent=20', title: 'comment mention' },
     { type: 'event_change', link: '/calendar?openChat=20', title: 'event edit' },
   ].map((item, i) => ({ ...rows[0], id: 100 + i, ...item }))
-  mocks.rpc.mockResolvedValue({ data: [...rows, ...extra], error: null })
+  const backlog = Array.from({ length: 43 }, (_, i) => ({ ...rows[2], id: 200 + i, title: `hidden comment ${i}` }))
+  const data = [...rows, ...extra, ...backlog]
+  mocks.rpc.mockImplementation(() => Object.assign(Promise.resolve({ data, error: null }), {
+    select: vi.fn().mockResolvedValue({ data: data.map(({ title: _title, body: _body, ...metadata }) => metadata), error: null }),
+  }))
   render(<MemoryRouter><AppHeaderActionButtons userId={10} /></MemoryRouter>)
   await act(async () => {})
   expect(screen.queryByRole('button', { name: /채팅/ })).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: /알림.*4/ }))
-  expect(screen.getByText('Title comment')).toBeTruthy()
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /알림.*3/ })) })
+  expect(screen.getByRole('button', { name: /알림.*3/ })).toBeTruthy()
+  expect(screen.queryByText('Title comment')).toBeNull()
+  expect(screen.queryAllByText(/hidden comment/)).toHaveLength(0)
   expect(screen.getByText('comment mention')).toBeTruthy()
   expect(screen.getByText('event edit')).toBeTruthy()
   expect(screen.queryByText('old chat')).toBeNull()
