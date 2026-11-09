@@ -87,6 +87,14 @@ Browser verification on deployed demo (mobile-width in-app browser):
 Actual browser check is distinct from the ten-minute hook network harness; no claim
 of a physical iPhone or push-delivery test is made.
 
+Ten-minute measurement completed: **600,032 ms, HTTP requests 0, realtime channels 0**.
+`scripts/measureChatRetirementDemo.mjs` mounted the actual hook in badge and full
+modes plus chat room/modal/notification-center components, with a real Supabase
+client and real timers in jsdom. It forced refresh and dispatched visibility/online
+events each minute. Login was performed once before the measurement and excluded.
+This isolates chat-owned requests, not all application traffic. Raw result is in
+`scratch/chat-retirement-ten-minute-results.json`.
+
 ## Tests
 
 - Full suite: 2,306 tests, 231 files; lint and build pass.
