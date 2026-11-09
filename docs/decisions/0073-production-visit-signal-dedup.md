@@ -1,7 +1,7 @@
 # Production visit signal deduplication
 
 - Date: 2026-11-09
-- Status: integration verified; production deployment pending
+- Status: production enabled and served bundle verified
 - Approved source: `92fdd61`; external review and explicit deployment approval
 - Production baseline: `fb9e38b`
 - Related: 0071 fanout measurements, 0072 exact signal receipts
@@ -30,7 +30,8 @@ Actual values read from the `chinese-territory-app` Vercel Production settings:
 - VITE_DEMO_MODE unset
 - VITE_VISIT_SIGNAL_DEDUP_ENABLED initially unset
 
-Only the final new setting is to be added as true. Existing settings remain
+Only the final new setting was added as true. A before/after comparison of all
+VITE settings confirmed this was the only change. Existing settings remain
 unchanged. The previous production deployment URL is
 https://chinese-territory-475m0a3by-gms-projects-3b3e1c8b.vercel.app.
 
@@ -41,6 +42,19 @@ the compiled default dedup gate must be true, the existing queue dependency
 must remain enabled, and realtime must call the signal-aware callback. The
 role/scoped-history gate continues excluding admin, leader and developer.
 No logged-in production write test is claimed unless separately recorded.
+
+Production commit `cc1b2ce` deployed successfully on 2026-11-09:
+
+- Deployment: `dpl_GgoPNMhgmKYiJ58Gw1QjsSpUhDRa` (Ready, Production)
+- URL: https://chinese-territory-iyy52b5sf-gms-projects-3b3e1c8b.vercel.app
+- Canonical alias: https://chinese-territory-app.vercel.app
+- The canonical service worker references `TerritoryReportView-DDugu7SJ.js`.
+  TypeScript AST inspection of that served chunk confirmed the dedup helper's
+  compiled default is `true`, while its existing queue dependency remains on.
+- Served `useTerritoryRealtime-Dn7sEbkD.js` includes the signal-aware callback;
+  `mapUtils-BXruzWXu.js` includes signal-proof validation.
+- This verifies the delivered code/configuration, not an authenticated production
+  save/cancel network trace. No production application records were changed.
 
 Production integration: 2,210 tests / 223 files passed, including save/cancel
 with DEMO=false. Lint and build passed. This count excludes unrelated demo-only
