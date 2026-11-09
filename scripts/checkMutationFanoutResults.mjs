@@ -8,6 +8,7 @@ for (const path of paths) {
   const run = JSON.parse(readFileSync(path, 'utf8'))
   assert.equal(run.origin, 'https://itjlykpjmlcvanqpmkmc.supabase.co')
   assert.ok(run.results.length > 0)
+  if (run.applicationsOnly) assert.equal(run.fixtureCleanup, 'passed')
   for (const result of run.results) {
     assert.equal(result.measured.length, 3)
     for (const device of result.measured) {
@@ -19,7 +20,12 @@ for (const path of paths) {
       assert.equal(device.snapshot.status, saved ? '부재' : '미방문')
       assert.equal(device.snapshot.recordIds.length, saved ? 1 : 0)
       assert.deepEqual(device.snapshot.recordIds, result.measured[0].snapshot.recordIds)
-      assert.equal(device.snapshot.applicant, result.action === 'join')
+      assert.equal(device.snapshot.applicant, result.action === 'join' || result.action === 'overlap-join')
+      if (run.applicationsOnly) {
+        assert.deepEqual(device.snapshot.applicants, result.measured[0].snapshot.applicants)
+        assert.equal(device.snapshot.applicants.length, result.action === 'overlap-join' ? 2
+          : ['join', 'external-join'].includes(result.action) ? 1 : 0)
+      }
       assert.equal(device.snapshot.buildingName, result.measured[0].snapshot.buildingName)
       assert.equal(device.snapshot.buildingName.endsWith('-edited'), result.action === 'edit' || result.action === 'overlap-save')
       assert.ok(device.signals.length, 'No real realtime signal observed')
@@ -36,6 +42,11 @@ for (const path of paths) {
         if (sample.endpoint === 'calendar_events') {
           assert.ok(sample.query.id)
           assert.ok(!sample.query.select.includes('*'))
+        }
+        if (run.applicationsOnly) {
+          assert.equal(sample.endpoint, 'calendar_events')
+          assert.ok(sample.query.select.startsWith('id,event_participants(')
+            || sample.query.select === 'id,assignment_shared_at,assignment_team_informal,assignment_team_scopes')
         }
       }
     }

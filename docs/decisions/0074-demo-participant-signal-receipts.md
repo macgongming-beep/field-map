@@ -1,7 +1,8 @@
 # Demo self-application participant signal receipts
 
 - Date: 2026-11-09
-- Status: live demo data verification passed; demo deployment pending; production unchanged
+- Status: demo deployed and verified; external review pending; production unchanged
+- Implementation: `eb99b23`
 - Related: 0055 participant realtime, 0056 application refresh, 0071 fanout audit
 
 ## Scope
@@ -118,3 +119,25 @@ Local reports: `scratch/mutation-fanout-applications-map-results.json` and
 `scratch/mutation-fanout-participant-dedup-applications-map-results.json`.
 Team cancellation is covered by mutation/store regression tests, not by these
 unassigned live fixtures. Physical-phone and deployed UI tests are not claimed.
+
+The checked-in result validator also passed for both reports: 72 consistent
+snapshots, 153 total requests, 121 reads and zero unscoped reads.
+
+## Demo deployment
+
+- Project: `chinese-territory-app-demo` only.
+- Deployment: `dpl_HKZnwBqAU2Cb5r4eFjSYKd1YvNp5`, READY.
+- Canonical: https://chinese-territory-app-demo.vercel.app
+- Deployed URL: https://chinese-territory-app-demo-i33ilbmz6-gms-projects-3b3e1c8b.vercel.app
+- Canonical service worker references `TerritoryReportView-DCGJ9wvC.js` and
+  `index-BVwIE9RW.js`. Downloaded artifacts contain proof-row validation and the
+  App/store/realtime `skipParticipantSignal` callback.
+- AST inspection and isolated evaluation of the compiled pure gate plus its
+  prerequisite helpers confirm enabled=true, application=true, navigation=true,
+  with an explicit false disabling it. No whole application bundle was executed.
+- Production service worker still references the prior verified
+  `TerritoryReportView-DDugu7SJ.js`; no production flag or deployment changed.
+
+Review exact-ID matching, absence proof for DELETE, acknowledgement only after
+publication, delayed-response invalidation and retained team-cancellation
+fallback before approving production activation.
