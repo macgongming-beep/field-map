@@ -9,13 +9,14 @@ type LoginProps = {
   onChangeLanguage: (language: AppLanguage) => void
   onLogin: (loginId: string, pin: string, rememberMe: boolean) => Promise<boolean>
   onSignup: (loginId: string, nickname: string, pin: string) => Promise<boolean>
+  loginRetryHintFor?: string | null
 }
 
 const LANGUAGES: AppLanguage[] = ['ko', 'zh', 'en']
 const IS_DEMO = import.meta.env.VITE_DEMO_MODE === 'true'
 const APP_LABEL = import.meta.env.VITE_APP_LABEL?.trim()
 
-export function Login({ language, onChangeLanguage, onLogin, onSignup }: LoginProps) {
+export function Login({ language, onChangeLanguage, onLogin, onSignup, loginRetryHintFor }: LoginProps) {
   const [isSignup, setIsSignup] = useState(false)
   const [loginId, setLoginId] = useState('')
   const [nickname, setNickname] = useState('')
@@ -164,6 +165,10 @@ export function Login({ language, onChangeLanguage, onLogin, onSignup }: LoginPr
                 </span>
               </label>
             </div>
+          )}
+
+          {!isSignup && loginRetryHintFor === loginId.trim() && (
+            <p role="status">{t(language, 'login.retryLaterHint')}</p>
           )}
 
           <button

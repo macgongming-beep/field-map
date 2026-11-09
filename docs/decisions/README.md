@@ -80,6 +80,8 @@
 
 로그인 시도 제한과 비로그인 사용자 조회 차단: [0075 데모 로그인 보안](0075-demo-login-attempt-guard.md)
 
+로그인 보안 리뷰 보완: [0076 반복 실패 안내와 관리자 초기화](0076-demo-login-guard-review-followup.md)
+
 ```markdown
 # 제목
 
