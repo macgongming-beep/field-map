@@ -70,6 +70,10 @@
 
 주소만 있는 재방문 지도: [0070 검색 실패 처리와 핀 격리](0070-demo-address-only-return-map.md)
 
+저장·실시간 조회 실측: [0071 데모 세 클라이언트 비교](0071-demo-mutation-fanout-audit.md)
+
+저장 후 실시간 중복 읽기: [0072 데모 변경 번호 확인과 재사용](0072-demo-visit-signal-receipts.md)
+
 ```markdown
 # 제목
 

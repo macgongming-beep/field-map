@@ -11,7 +11,7 @@ import { useSettingsCalendarScope } from './useSettingsCalendarScope'
 const state = vi.hoisted(() => ({
   creationAction: '' as '' | 'created' | 'existing',
   returnRows: [] as Record<string, unknown>[], returnLogs: [] as Record<string, unknown>[],
-  failedTable: '',
+  failedTable: '', proof: vi.fn(),
   requests: [] as Record<string, unknown>[],
   requestFilters: [] as unknown[][],
   unitParent: 20, insertError: false, unitLookupError: false,
@@ -39,7 +39,7 @@ vi.mock('../lib/recipientStore', async importOriginal => ({ ...await importOrigi
 }) }))
 vi.mock('../lib/cardSummaries', () => ({ fetchCardSummaries: state.summaries }))
 vi.mock('./recipientRecovery', () => ({ recoverRecipientBuildings: state.recover, readRecipientBoundaries: state.boundaries }))
-vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchTerritoryClock: async () => '2026-10-05T00:00:00Z' }))
+vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchBuildingSignalProof: state.proof, fetchTerritoryClock: async () => '2026-10-05T00:00:00Z' }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: (name: string) => Promise.resolve({ data: name === 'create_building_tx' && state.creationAction
     ? { ok: true, action: state.creationAction, building_id: 11 } : { ok: true }, error: null }),
@@ -115,6 +115,8 @@ beforeEach(() => {
   vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'false')
   vi.stubEnv('VITE_SCOPED_HISTORY_RECOVERY_ENABLED', 'false')
   vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'false')
+  vi.stubEnv('VITE_VISIT_SIGNAL_DEDUP_ENABLED', 'false')
+  state.proof.mockReset()
   state.historyRows = [{ id: 900, unit_id: 900, visitor_name: 'other', result: '부재', visited_at: '2026-10-05', created_at: '2026-10-05T00:00:00Z', visit_type: 'restaurant' }]
   state.historyFilters = []; state.historyResponse = null
   state.creationAction = ''
@@ -289,9 +291,14 @@ test.each(['save', 'cancel'] as const)('demo queued %s waits for older realtime 
   expect(state.historyFilters).toEqual([])
 })
 
-test.each(['save', 'cancel'] as const)('foreground rereads histories while queued %s waits between realtime batches', async operation => {
+test.each([
+  { operation: 'save', dedup: false }, { operation: 'cancel', dedup: false },
+  { operation: 'save', dedup: true }, { operation: 'cancel', dedup: true },
+])('foreground rereads histories while queued $operation waits between realtime batches, dedup=$dedup', async ({ operation, dedup }) => {
   enableHistoryRecovery()
   vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')
+  vi.stubEnv('VITE_VISIT_SIGNAL_DEDUP_ENABLED', String(dedup))
+  state.proof.mockResolvedValue([])
   localStorage.setItem('currentVisitor', 'Volunteer')
   localStorage.setItem('auth_token', 'test-token')
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
@@ -336,14 +343,67 @@ test.each(['save', 'cancel'] as const)('foreground rereads histories while queue
   expect(result.current.visitHistories.map(h => h.id)).toEqual(operation === 'save' ? [902] : [])
 })
 
-test('failed queued post-save refresh still falls back and repairs history', async () => {
+test.each(['save', 'cancel'] as const)('dedup %s waits for post-write read then skips own exact signal but keeps another user change', async operation => {
   enableHistoryRecovery()
   vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')
+  vi.stubEnv('VITE_VISIT_SIGNAL_DEDUP_ENABLED', 'true')
+  localStorage.setItem('currentVisitor', 'Volunteer'); localStorage.setItem('auth_token', 'test-token')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings[0]
+  const signal = { building_id: 10, card_id: 1, revision: 1, changed_at: '2026-11-09T10:00:00Z' }
+  state.proof.mockResolvedValue([signal])
+  const history = { id: 902, unitId: 100, visitor: 'Volunteer', result: '부재', timeSlot: '오후', visitedAt: '2026-11-09', createdAt: signal.changed_at }
+  let release!: () => void
+  state.changed.mockImplementationOnce(() => new Promise(done => { release = () => done({ buildings: [before], histories: operation === 'save' ? [history] : [] }) }))
+  let mutation!: Promise<void>, realtime!: Promise<void>
+  act(() => { mutation = operation === 'save' ? result.current.updateUnitStatus(10, 100, '부재') : result.current.deleteVisitHistory(901, 100) })
+  await waitFor(() => expect(state.changed).toHaveBeenCalledTimes(1))
+  expect(state.proof).toHaveBeenCalledExactlyOnceWith([10])
+  expect(state.proof.mock.invocationCallOrder[0]).toBeLessThan(state.changed.mock.invocationCallOrder[0])
+  let finished = false
+  act(() => { realtime = result.current.territoryRealtime.syncSignals!([signal]).then(() => { finished = true }) })
+  await act(async () => { await Promise.resolve() }); expect(finished).toBe(false)
+  await act(async () => { release(); await Promise.all([mutation, realtime]) })
+  expect(state.changed).toHaveBeenCalledTimes(1)
+  expect(result.current.visitHistories.map(h => h.id)).toEqual(operation === 'save' ? [902] : [])
+  state.changed.mockResolvedValue({ buildings: [before], histories: [{ ...history, id: 903, visitor: 'Other person' }] })
+  await act(async () => { await result.current.territoryRealtime.syncSignals!([{ ...signal, revision: 2 }]) })
+  expect(state.changed).toHaveBeenCalledTimes(2)
+  expect(state.proof).toHaveBeenCalledTimes(1)
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([903])
+})
+
+test.each([
+  { role: 'user', flag: 'true', queue: 'true', recovery: 'true', enabled: true },
+  { role: 'user', flag: undefined, queue: 'true', recovery: 'true', enabled: false },
+  { role: 'user', flag: 'false', queue: 'true', recovery: 'true', enabled: false },
+  { role: 'user', flag: 'true', queue: 'false', recovery: 'true', enabled: false },
+  { role: 'user', flag: 'true', queue: 'true', recovery: 'false', enabled: false },
+  { role: 'admin', flag: 'true', queue: 'true', recovery: 'true', enabled: false },
+  { role: 'leader', flag: 'true', queue: 'true', recovery: 'true', enabled: false },
+  { role: 'developer', flag: 'true', queue: 'true', recovery: 'true', enabled: false },
+] as const)('signal dedup opt-in $role/$flag queue=$queue recovery=$recovery', async ({ role, flag, queue, recovery, enabled }) => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_VISIT_SIGNAL_DEDUP_ENABLED', flag)
+  vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', queue)
+  vi.stubEnv('VITE_SCOPED_HISTORY_RECOVERY_ENABLED', recovery)
+  const { result } = renderHook(() => useStore(true, role, 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(Boolean(result.current.territoryRealtime.syncSignals)).toBe(enabled)
+  expect(state.proof).not.toHaveBeenCalled()
+})
+
+test.each(['data', 'proof'])('failed queued post-save %s still falls back and repairs history', async failure => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_VISIT_REALTIME_QUEUE_ENABLED', 'true')
+  vi.stubEnv('VITE_VISIT_SIGNAL_DEDUP_ENABLED', String(failure === 'proof'))
   localStorage.setItem('currentVisitor', 'Volunteer')
   localStorage.setItem('auth_token', 'test-token')
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
-  state.changed.mockRejectedValueOnce(new Error('offline'))
+  if (failure === 'proof') state.proof.mockRejectedValueOnce(new Error('offline'))
+  else state.changed.mockRejectedValueOnce(new Error('offline'))
   state.historyFilters = []
   await act(async () => { await result.current.updateUnitStatus(10, 100, '부재') })
   expect(state.historyFilters.some(filters => filters.some(([key]) => key === 'unit_id'))).toBe(true)

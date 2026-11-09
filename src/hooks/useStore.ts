@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { teamInformalAssignments } from '../utils/teamInformalAssignments'
-import { fetchChangedBuildings, fetchTerritoryClock } from './territorySync'
+import { fetchBuildingSignalProof, fetchChangedBuildings, fetchTerritoryClock, type TerritorySignal } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { calendarCachedScreenEnabled, calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
@@ -9,7 +9,7 @@ import { assertUnassignedCalendarEvent, calendarApplicationRefreshEnabled } from
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
 import { createHistoryCoverage, historyScope, scopedHistoryRecoveryEnabled } from './scopedHistoryRecovery'
-import { createBuildingRefreshQueue } from './buildingRefreshQueue'
+import { createVisitSignalQueue, visitSignalDedupEnabled } from './visitSignalQueue'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
 import { createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { recoverTerritoryBuildings } from './recoverTerritoryBuildings'
@@ -150,7 +150,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const scopedHistories = scopedVisitHistoryEnabled(role, Boolean(recipientReader))
   const historyRecovery = scopedHistoryRecoveryEnabled(scopedHistories)
   const queuedVisitRefresh = historyRecovery && (import.meta.env.VITE_VISIT_REALTIME_QUEUE_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
-  const visitRefreshQueue = useRef<ReturnType<typeof createBuildingRefreshQueue> | null>(null)
+  const dedupVisitSignals = visitSignalDedupEnabled(queuedVisitRefresh)
+  const visitRefreshQueue = useRef<ReturnType<typeof createVisitSignalQueue> | null>(null)
   const historyStoreActive = useRef(enabled)
   const historyCoverage = useRef(createHistoryCoverage()).current
   const historyReadsPending = useRef(0)
@@ -1151,7 +1152,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     // required post-write read is still waiting behind an older realtime read.
     ++historySyncsPending.current
     try {
-      visitRefreshQueue.current ??= createBuildingRefreshQueue((batch, canApply) => latestBuildingRead.current(batch, false, canApply))
+      visitRefreshQueue.current ??= createVisitSignalQueue((batch, canApply) => latestBuildingRead.current(batch, false, canApply),
+        dedupVisitSignals ? fetchBuildingSignalProof : undefined)
       await visitRefreshQueue.current.read(ids)
     } catch (error) {
       historyCoverage.invalidate()
@@ -1159,7 +1161,19 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     } finally {
       --historySyncsPending.current
     }
-  }, [queuedVisitRefresh, syncChangedBuildings, historyCoverage])
+  }, [queuedVisitRefresh, syncChangedBuildings, historyCoverage, dedupVisitSignals])
+
+  const syncTerritorySignals = useCallback(async (rows: TerritorySignal[]) => {
+    if (!historyStoreActive.current) throw new SupersededReadError('Building store disposed')
+    ++historySyncsPending.current
+    try {
+      visitRefreshQueue.current ??= createVisitSignalQueue((batch, canApply) => latestBuildingRead.current(batch, false, canApply), fetchBuildingSignalProof)
+      await visitRefreshQueue.current.signals(rows)
+    } catch (error) {
+      historyCoverage.invalidate()
+      throw error
+    } finally { --historySyncsPending.current }
+  }, [historyCoverage])
 
   const refreshVisitUnit = useCallback(async (unitId: number) => {
     const building = buildingsRef.current.find((b) => b.units.some((u) => u.id === unitId))
@@ -1175,8 +1189,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     }
   }, [fetchSlices, syncVisitOrRealtime, queuedVisitRefresh])
 
-  const territoryRealtime = useMemo(() => ({ sync: syncVisitOrRealtime, checkpoint: territoryCheckpoint }),
-    [syncVisitOrRealtime, territoryCheckpoint])
+  const territoryRealtime = useMemo(() => ({ sync: syncVisitOrRealtime, checkpoint: territoryCheckpoint,
+    syncSignals: dedupVisitSignals ? syncTerritorySignals : undefined }),
+  [syncVisitOrRealtime, territoryCheckpoint, dedupVisitSignals, syncTerritorySignals])
 
   // 세대 추가/삭제
   const appendUnits = useCallback((buildingId: number, units: Unit[]) => {

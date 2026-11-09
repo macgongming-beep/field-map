@@ -1,4 +1,5 @@
 import { createContext } from 'react'
+import type { TerritorySignal } from './territorySync'
 
 export function createTerritoryCheckpoint() {
   return {
@@ -12,6 +13,7 @@ export function createTerritoryCheckpoint() {
 
 export type TerritoryRealtime = {
   sync: (buildingIds: number[]) => Promise<void>
+  syncSignals?: (signals: TerritorySignal[]) => Promise<void>
   checkpoint: ReturnType<typeof createTerritoryCheckpoint>
 }
 export const TerritoryRealtimeContext = createContext<TerritoryRealtime | null>(null)

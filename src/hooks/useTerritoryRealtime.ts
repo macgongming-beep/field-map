@@ -10,7 +10,8 @@ const signalVersion = (row: TerritorySignal) => `${row.revision}:${row.changed_a
 export function useTerritoryRealtime(cardIds: number[]) {
   const context = useContext(TerritoryRealtimeContext)
   const syncRef = useRef(context?.sync)
-  useEffect(() => { syncRef.current = context?.sync }, [context])
+  const signalSyncRef = useRef(context?.syncSignals)
+  useEffect(() => { syncRef.current = context?.sync; signalSyncRef.current = context?.syncSignals }, [context])
   const checkpoint = context?.checkpoint
   const [visible, setVisible] = useState(!document.hidden)
   useEffect(() => {
@@ -47,7 +48,8 @@ export function useTerritoryRealtime(cardIds: number[]) {
       rows.forEach((row) => pending.delete(signalKey(row)))
       running = true
       try {
-        await syncRef.current?.(batch)
+        if (signalSyncRef.current) await signalSyncRef.current(rows)
+        else await syncRef.current?.(batch)
         if (!stopped) rows.forEach((row) => checkpoint.applied.set(signalKey(row), signalVersion(row)))
         retries = 0
       } catch (error) {
