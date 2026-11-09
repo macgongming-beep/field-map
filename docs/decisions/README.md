@@ -82,6 +82,8 @@
 
 로그인 보안 운영 적용: [0077 백업과 일회용 계정 검증](0077-production-login-security.md)
 
+채팅 사진 삭제: [0078 운영 미연결 사진 5개 정리](0078-production-chat-image-removal.md)
+
 ```markdown
 # 제목
 
