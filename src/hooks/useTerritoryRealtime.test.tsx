@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { TerritoryRealtimeContext, createTerritoryCheckpoint } from './territoryRealtimeContext'
 import { useTerritoryRealtime } from './useTerritoryRealtime'
+import type { TerritorySignal } from './territorySync'
 
 const mock = vi.hoisted(() => {
   const handlers: Array<{ filter: { filter: string }; cb: (p: { new: unknown }) => void }> = []
@@ -27,10 +28,10 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs() })
 const row = (buildingId: number, cardId = 1, revision = 1) => ({ building_id: buildingId, card_id: cardId, revision, changed_at: '2026-09-30T12:00:05Z' })
 const signal = (buildingId: number, cardId = 1) => mock.handlers[0].cb({ new: row(buildingId, cardId) })
-function mount(sync = vi.fn(async () => {}), ids = [1]) {
+function mount(sync = vi.fn(async () => {}), ids = [1], syncSignals?: (rows: TerritorySignal[]) => Promise<void>) {
   const checkpoint = createTerritoryCheckpoint()
   checkpoint.baseline = '2026-09-30T12:00:00Z'
-  const wrapper = ({ children }: { children: ReactNode }) => <TerritoryRealtimeContext.Provider value={{sync, checkpoint}}>{children}</TerritoryRealtimeContext.Provider>
+  const wrapper = ({ children }: { children: ReactNode }) => <TerritoryRealtimeContext.Provider value={{sync, syncSignals, checkpoint}}>{children}</TerritoryRealtimeContext.Provider>
   return { ...renderHook(({ cards }) => useTerritoryRealtime(cards), { wrapper, initialProps: { cards: ids } }), sync, checkpoint }
 }
 
@@ -42,6 +43,33 @@ test('filters on server and client, batches repeated signals without resetting t
     await vi.advanceTimersByTimeAsync(350)
   })
   expect(sync).toHaveBeenCalledExactlyOnceWith([10, 11])
+})
+test('dedup callback receives exact signals and acknowledges only after successful application', async () => {
+  let finish!: () => void
+  const sync = vi.fn(async () => {})
+  const syncSignals = vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve })).mockResolvedValue(undefined)
+  const { checkpoint } = mount(sync, [1], syncSignals)
+  await act(async () => { signal(10); await vi.advanceTimersByTimeAsync(350) })
+  expect(syncSignals).toHaveBeenCalledExactlyOnceWith([row(10)])
+  expect(sync).not.toHaveBeenCalled()
+  expect(checkpoint.applied.size).toBe(0)
+  await act(async () => {
+    mock.handlers[0].cb({ new: row(10, 1, 2) })
+    finish(); await vi.advanceTimersByTimeAsync(350)
+  })
+  expect(syncSignals).toHaveBeenCalledTimes(2)
+  expect(syncSignals).toHaveBeenLastCalledWith([row(10, 1, 2)])
+  expect(checkpoint.applied.size).toBe(1)
+})
+test('failed dedup sync never acknowledges a revision and retains bounded realtime retries', async () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const sync = vi.fn(async () => {}), syncSignals = vi.fn().mockRejectedValue(new Error('offline'))
+  const { checkpoint } = mount(sync, [1], syncSignals)
+  await act(async () => { signal(10); await vi.advanceTimersByTimeAsync(10000) })
+  expect(syncSignals).toHaveBeenCalledTimes(3)
+  expect(sync).not.toHaveBeenCalled()
+  expect(checkpoint.applied.size).toBe(0)
+  vi.restoreAllMocks()
 })
 test('serializes reads and processes a newer signal received during a pending read', async () => {
   let finish!: () => void

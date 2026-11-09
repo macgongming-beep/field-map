@@ -35,6 +35,22 @@ export async function fetchChangedBuildings(ids: number[]) {
 
 export type TerritorySignal = { building_id: number; card_id: number; revision: number | string; changed_at: string }
 
+export async function fetchBuildingSignalProof(ids: number[]): Promise<TerritorySignal[]> {
+  if (!ids.length || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid proof building IDs')
+  const rows = await pages<TerritorySignal>((from, to) => supabase.from('territory_change_signals')
+    .select('building_id,card_id,revision,changed_at').in('building_id', ids)
+    .order('building_id').order('card_id').range(from, to))
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const key = `${row.card_id}:${row.building_id}`
+    if (!ids.includes(row.building_id) || !Number.isSafeInteger(row.card_id) || row.card_id <= 0
+      || !/^\d+$/.test(String(row.revision)) || (typeof row.revision === 'number' && !Number.isSafeInteger(row.revision))
+      || !Number.isFinite(Date.parse(row.changed_at)) || seen.has(key)) throw new Error('Invalid building signal proof')
+    seen.add(key)
+  }
+  return rows
+}
+
 export async function fetchTerritoryClock(): Promise<string> {
   const { data, error } = await supabase.rpc('territory_sync_clock')
   if (error) throw error
