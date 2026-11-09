@@ -86,6 +86,8 @@
 
 채팅 비활성화: [0079 데모 조회·쓰기 차단과 댓글 보존](0079-demo-chat-retirement.md)
 
+채팅 운영 종료: [0080 백업·알림 33건 삭제·댓글 검증](0080-production-chat-retirement.md)
+
 ```markdown
 # 제목
 

@@ -1,6 +1,6 @@
 # Retire chat on demo, preserve comments
 
-- Status: implemented on demo; production not changed
+- Status: demo verification complete; production rollout is recorded in [0080](0080-production-chat-retirement.md).
 - Date: 2026-11-09
 - Predecessor: 0078 (production orphan photos already removed separately)
 
@@ -146,7 +146,7 @@ Server: restore the backed-up exact functions and upload policy in one transacti
 Restore selected notification rows from backup only if required; do not restore the
 whole live DB. Reopening public upload deserves separate security review.
 
-Production remains unchanged. Before production: review code+SQL, make a fresh
+At the time of demo verification production remained unchanged. Before production: review code+SQL, make a fresh
 production backup, inspect actual overloads/upload policies/notification categories,
 apply server migration, deploy with the flag, verify comments and mentions again.
 Do not infer monthly MB savings from zero chat requests in a controlled demo test.
