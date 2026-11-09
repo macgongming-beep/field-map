@@ -265,6 +265,7 @@ export const zh = {
     'login.passwordPlaceholder': '请输入密码',
     'login.newPasswordPlaceholder': '请输入容易记住的密码',
     'login.rememberMe': '自动登录（保持登录）',
+    'login.retryLaterHint': '登录已多次失败，账号可能暂时被锁定。请15分钟后重试，或联系管理员。',
     'login.login': '登录',
     'login.signup': '注册',
     'login.hasAccount': '已有账号？',

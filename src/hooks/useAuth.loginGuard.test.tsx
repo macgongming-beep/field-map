@@ -25,6 +25,47 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
+test('only five empty credential responses for the same ID show the retry hint; it never blocks login', async () => {
+  const hook = renderHook(() => useAuth())
+  await waitFor(() => expect(hook.result.current.loading).toBe(false))
+  for (let i = 1; i <= 5; i++) {
+    await act(async () => { await hook.result.current.login('member', 'wrong', true) })
+    expect(hook.result.current.loginRetryHintFor).toBe(i < 5 ? null : 'member')
+  }
+  api.rpc.mockResolvedValue({ data: [row], error: null })
+  await act(async () => { expect(await hook.result.current.login('member', 'valid', true)).toBe(true) })
+  expect(hook.result.current.loginRetryHintFor).toBeNull()
+})
+
+test('failure hints do not carry across IDs or expired observation windows', async () => {
+  const now = vi.spyOn(Date, 'now').mockReturnValue(100_000)
+  try {
+    const hook = renderHook(() => useAuth())
+    for (let i = 0; i < 5; i++) await act(async () => { await hook.result.current.login('member', 'wrong', true) })
+    expect(hook.result.current.loginRetryHintFor).toBe('member')
+    now.mockReturnValue(1_000_001)
+    await act(async () => { await hook.result.current.login('member', 'wrong', true) })
+    expect(hook.result.current.loginRetryHintFor).toBeNull()
+    for (let i = 0; i < 4; i++) await act(async () => { await hook.result.current.login('member', 'wrong', true) })
+    expect(hook.result.current.loginRetryHintFor).toBe('member')
+    await act(async () => { await hook.result.current.login('other', 'wrong', true) })
+    expect(hook.result.current.loginRetryHintFor).toBeNull()
+  } finally { now.mockRestore() }
+})
+
+test('network failures do not count as wrong passwords', async () => {
+  const warn = vi.spyOn(console, 'error').mockImplementation(() => {})
+  try {
+    api.rpc.mockResolvedValue({ data: null, error: { message: 'offline' } })
+    const hook = renderHook(() => useAuth())
+    for (let i = 0; i < 6; i++) await act(async () => { await hook.result.current.login('member', 'valid', true) })
+    expect(hook.result.current.loginRetryHintFor).toBeNull()
+    api.rpc.mockResolvedValue({ data: [], error: null })
+    await act(async () => { await hook.result.current.login('member', 'wrong', true) })
+    expect(hook.result.current.loginRetryHintFor).toBeNull()
+  } finally { warn.mockRestore() }
+})
+
 test.each([true, false])('successful login preserves role and stores the session before subsequent reads (persistent=%s)', async (persistent) => {
   api.rpc.mockResolvedValue({ data: [row], error: null })
   const hook = renderHook(() => useAuth())

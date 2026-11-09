@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { shouldForceRelogin } from '../lib/sessionRelogin'
 import { showToast } from '../lib/toast'
@@ -118,6 +118,8 @@ export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [allUsers, setAllUsers] = useState<AppUserRecord[]>([])
+  const loginFailures = useRef({ loginId: '', count: 0, startedAt: 0 })
+  const [loginRetryHintFor, setLoginRetryHintFor] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -237,6 +239,10 @@ export function useAuth() {
   const login = async (loginId: string, pin: string, rememberMe: boolean) => {
     try {
       const normalizedLoginId = loginId.trim()
+      if (loginFailures.current.loginId !== normalizedLoginId) {
+        loginFailures.current = { loginId: normalizedLoginId, count: 0, startedAt: 0 }
+        setLoginRetryHintFor(null)
+      }
 
       // 서버에서 bcrypt 검증 + last_login_at 갱신 + login_logs 기록 모두 수행
       let { data, error } = await supabase.rpc('auth_login', {
@@ -271,9 +277,20 @@ export function useAuth() {
         approval_status?: string | null
       }>)?.[0]
       if (!row) {
+        const now = Date.now()
+        const previous = loginFailures.current
+        const expired = now < previous.startedAt || now - previous.startedAt >= 15 * 60_000
+        loginFailures.current = {
+          loginId: normalizedLoginId,
+          count: expired ? 1 : previous.count + 1,
+          startedAt: expired || previous.count === 0 ? now : previous.startedAt,
+        }
+        setLoginRetryHintFor(loginFailures.current.count >= 5 ? normalizedLoginId : null)
         showToast(msg('아이디 또는 비밀번호가 일치하지 않습니다.'), 'error')
         return false
       }
+      loginFailures.current = { loginId: normalizedLoginId, count: 0, startedAt: 0 }
+      setLoginRetryHintFor(null)
 
       if (row.approval_status === 'pending') {
         showToast(msg('가입 신청이 승인 대기 중입니다.'), 'info')
@@ -864,6 +881,7 @@ export function useAuth() {
     user,
     loading,
     login,
+    loginRetryHintFor,
     signup,
     logout,
     changePin,

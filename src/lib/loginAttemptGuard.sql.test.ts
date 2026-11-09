@@ -5,15 +5,16 @@ import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto'
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest'
 
 const source = readFileSync('supabase/migrations/20261109_1800_login_attempt_guard.sql', 'utf8')
+  + '\n' + readFileSync('supabase/migrations/20261109_1900_login_guard_followup.sql', 'utf8')
 // Run mutation checks on isolated database instances; never edit the working source.
 const mutation = process.env.LOGIN_GUARD_MUTATION
 const migration = mutation === 'lock'
-  ? source.replace('if v_guard.locked_until > v_now then', 'if false then')
+  ? source.replaceAll('if v_guard.locked_until > v_now then', 'if false then')
   : mutation === 'count'
-    ? source.replace('v_guard.failed_attempts + 1', '0')
+    ? source.replaceAll('v_guard.failed_attempts + 1', '0')
     : mutation === 'read'
       ? source.replaceAll('using ((select private.request_session_user_id()) is not null)', 'using (true)')
-      : source
+      : mutation === 'unlock' ? source.replace('if private.request_is_admin() then', 'if false then') : source
 let db: PGlite
 type Login = { token: string | null; id: number; role: string; approval_status: string }
 beforeAll(async () => {
@@ -38,6 +39,18 @@ beforeAll(async () => {
     $$;
     revoke all on function private.request_session_user_id() from public;
     grant execute on function private.request_session_user_id() to anon, authenticated;
+    create function private.request_is_admin() returns boolean language sql stable security definer set search_path='' as $$
+      select coalesce((select u.role in ('admin','developer') from public.app_users u where u.id=private.request_session_user_id()),false)
+    $$;
+    grant update(pin,name) on app_users to anon;
+    create policy user_updates on app_users for update to anon
+      using (id=private.request_session_user_id() or private.request_is_admin())
+      with check (id=private.request_session_user_id() or private.request_is_admin());
+    create function hash_pin_if_plain() returns trigger language plpgsql security definer as $$ begin
+      if new.pin is not null and new.pin !~ '^\\$2[aby]\\$' then
+        new.pin := extensions.crypt(new.pin,extensions.gen_salt('bf',6));
+      end if; return new; end $$;
+    create trigger app_users_hash_pin before update of pin on app_users for each row execute function hash_pin_if_plain();
     create function auth_login(text,text) returns int language sql as $$ select 999 $$;
   `)
   await db.exec(migration)
@@ -188,4 +201,46 @@ test('reapplying migration does not unlock accounts or delete existing sessions'
   expect(await guard()).toEqual(previous)
   expect(await login()).toEqual([])
   expect(await directory(token)).toHaveLength(3)
+})
+
+test('admin password reset clears the lock atomically, including same plaintext password reset', async () => {
+  const admin = (await login('admin'))[0].token!
+  for (const password of ['Good-1234', 'New-456']) {
+    await failures()
+    await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-session-token': admin })])
+    await db.exec('set role anon')
+    expect((await db.query('update app_users set pin=$1 where id=1 returning id', [password])).rows).toEqual([{ id: 1 }])
+    await db.exec('reset role')
+    expect(await guard()).toBeUndefined()
+    expect((await login('member', password))[0].token).toBeTruthy()
+  }
+  expect(await login('member', 'Good-1234')).toEqual([])
+})
+
+test('unauthorized reset, profile edit and self password change do not clear the admin-only lock', async () => {
+  const member = (await login())[0].token!
+  const admin = (await login('admin'))[0].token!
+  await failures()
+  const locked = await guard()
+  await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-session-token': member })])
+  await db.exec('set role anon')
+  expect((await db.query("update app_users set pin='New-456' where id=2 returning id")).rows).toEqual([])
+  await db.query("update app_users set pin='New-456' where id=1 returning id")
+  await db.exec('reset role')
+  expect(await guard()).toEqual(locked)
+  expect(await login('member', 'New-456')).toEqual([])
+  await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-session-token': admin })])
+  await db.exec('set role anon')
+  await db.query("update app_users set name='New Name' where id=1 returning id")
+  await db.exec('reset role')
+  expect(await guard()).toEqual(locked)
+})
+
+test('rollback of an admin reset also rolls back the unlock', async () => {
+  const admin = (await login('admin'))[0].token!
+  await failures()
+  const locked = await guard()
+  await db.query("select set_config('request.headers',$1,false)", [JSON.stringify({ 'x-session-token': admin })])
+  await db.exec("begin; set local role anon; update app_users set pin='New-456' where id=1; rollback;")
+  expect(await guard()).toEqual(locked)
 })

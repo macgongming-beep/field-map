@@ -265,6 +265,7 @@ export const en = {
     'login.passwordPlaceholder': 'Enter password',
     'login.newPasswordPlaceholder': 'Choose a memorable password',
     'login.rememberMe': 'Keep me logged in',
+    'login.retryLaterHint': 'Login has failed several times. The account may be temporarily locked. Try again in 15 minutes or contact an administrator.',
     'login.login': 'Log in',
     'login.signup': 'Sign up',
     'login.hasAccount': 'Already have an account?',

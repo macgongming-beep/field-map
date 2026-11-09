@@ -368,6 +368,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
             language={language}
             onChangeLanguage={handleChangeLanguage}
             onLogin={login}
+            loginRetryHintFor={auth.loginRetryHintFor}
             onSignup={signup}
           />
         </Suspense>

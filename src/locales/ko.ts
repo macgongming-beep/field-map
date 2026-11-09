@@ -265,6 +265,7 @@ export const ko = {
     'login.passwordPlaceholder': '비밀번호 입력',
     'login.newPasswordPlaceholder': '기억하기 쉬운 비밀번호',
     'login.rememberMe': '자동 로그인 (로그인 유지)',
+    'login.retryLaterHint': '로그인이 여러 번 실패했습니다. 잠금 상태일 수 있으니 15분 후 다시 시도하거나 관리자에게 문의해 주세요.',
     'login.login': '로그인',
     'login.signup': '가입하기',
     'login.hasAccount': '이미 계정이 있으신가요?',
