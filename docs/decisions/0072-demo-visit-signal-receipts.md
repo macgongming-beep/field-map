@@ -126,3 +126,20 @@ deployment verification is recorded separately below.
 Only the demo project is enabled. Set the flag false and rebuild/redeploy, then
 apply the PWA update to restore the previous queue. Existing history recovery
 and the queue themselves remain enabled. Production needs separate approval.
+
+## Demo deployment
+
+- Code commit: `92fdd61`.
+- Linked Vercel project checked as `chinese-territory-app-demo`; its own
+  Production environment (the public DEMO alias, not the live congregation app)
+  has `VITE_VISIT_SIGNAL_DEDUP_ENABLED=true`.
+- Deployment `dpl_8X2nejpN8M8Xf1awFaXE12X3muNu` reached READY and was aliased to
+  https://chinese-territory-app-demo.vercel.app.
+- The published service worker references `TerritoryReportView-DwmPu3KS.js`.
+  Parsing that actual downloaded chunk confirmed the signal callback gate uses
+  `(e,t=\`true\`)=>e&&t===\`true\`` and its existing queue dependency is enabled.
+  Proof validation is present in `cardServiceScope-DLrjl1Ln.js`; the realtime
+  callback is wired in `useTerritoryRealtime-DwkrPZfs.js`.
+- The live DB tests above run source hooks in independent JS realms, not the
+  deployed UI. No new physical-device/browser-rendering test is claimed here.
+- No production environment, database, branch or alias was modified.
