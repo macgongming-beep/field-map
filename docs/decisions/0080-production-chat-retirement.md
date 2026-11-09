@@ -1,7 +1,7 @@
 # Production chat retirement
 
 - Date: 2026-11-09 (Asia/Seoul)
-- Status: database applied and live API smoke passed; frontend deployment pending.
+- Status: production database and frontend deployed and verified.
 - User explicitly authorized backup, deletion of 33 chat alerts and production retirement.
 - Approved changes: db8a7fa, 6376178, 5a3db14; production equivalents ee65a2a,
   8b3cee7, cc882be, based on origin/main b3e58c7. Other demo changes are not included.
@@ -42,7 +42,7 @@ removed. Chat reads, retention jobs, service worker and realtime publications st
 ## Verification
 
 - Clean production-based checkout: 2,261 tests / 228 files, lint and build passed.
-- Live production REST/RPC smoke with two disposable random-credential accounts:
+- 13 live production REST/RPC checks passed with two disposable random-credential accounts:
   - all three chat writes rejected without auto-join, message or notification;
   - old-client read-receipt RPC still works;
   - valid PNG upload rejected by RLS;
@@ -62,6 +62,15 @@ removed. Chat reads, retention jobs, service worker and realtime publications st
 Production uses `VITE_CHAT_DISABLED=true`. Existing ordinary-comment/notice hiding
 remains independent of this flag. Comment mentions and event-change alerts remain.
 Old chat links open event details; their full-calendar-read behavior is unchanged.
+
+The flag was saved in the production Vercel project before pushing main da009e8.
+Git-triggered deployment `dpl_BHcR2oLmzDbLYWNunxMMpmEeTdWg` is READY, aliased to
+`https://chinese-territory-app.vercel.app` (project `prj_cdo2L78J2YEEaBgxMMnNDfA5BDZs`).
+Direct HTTP reads of the public alias confirmed `index-CnVtJp3y.js` and
+`MeetingSettings-BQiSHtj4.js`: the shared retirement helper defaults to `true`,
+the hook, room/modal, calendar button, preferences and header use that helper,
+and the header excludes both `notice` and `comment` regardless of the flag.
+This is deployed-bundle verification, not a new production browser login test.
 
 Users must apply the PWA update to hide chat and stop client polling. Old clients
 can still read but cannot send or upload. Disabling this frontend flag alone does
