@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { getAuthToken } from '../lib/authToken'
 import { subscribeWithRecovery } from '../lib/realtimeRecovery'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
+import { chatDisabled } from '../lib/chatRetirement'
 import {
   USER_CHATS_CACHE_TTL,
   clearInflightUserChats,
@@ -65,7 +66,10 @@ export function useUserChats(
   userName: string | null | undefined,
   options?: { realtime?: boolean; badgeOnly?: boolean },
 ) {
-  const realtimeEnabled = options?.realtime !== false
+  const disabled = chatDisabled()
+  const disabledRef = useRef(disabled)
+  useEffect(() => { disabledRef.current = disabled }, [disabled])
+  const realtimeEnabled = !disabled && options?.realtime !== false
   const badgeOnly = options?.badgeOnly === true
   const badgeToken = badgeOnly ? getAuthToken() : null
   const accountKey = getUserChatsCacheKey(userId, userName)
@@ -78,8 +82,8 @@ export function useUserChats(
   const [snapshot, setSnapshot] = useState(() => ({
     key: cacheKey, chats: getCachedUserChats(cacheKey)?.chats ?? [],
   }))
-  const chats = useMemo(() => badgeOnly && snapshot.key !== cacheKey ? [] : snapshot.chats,
-    [badgeOnly, snapshot, cacheKey])
+  const chats = useMemo(() => disabled || (badgeOnly && snapshot.key !== cacheKey) ? [] : snapshot.chats,
+    [disabled, badgeOnly, snapshot, cacheKey])
   const setChats = useCallback((next: UserChat[] | ((previous: UserChat[]) => UserChat[])) => {
     setSnapshot((previous) => ({
       key: cacheKey,
@@ -96,8 +100,9 @@ export function useUserChats(
   )
 
   const fetchAll = useCallback(async (options?: { force?: boolean }) => {
-    const isCurrent = () => !badgeOnly
-      || (currentBadgeKey.current === cacheKey && getAuthToken() === badgeToken)
+    const isCurrent = () => !disabledRef.current && (!badgeOnly
+      || (currentBadgeKey.current === cacheKey && getAuthToken() === badgeToken))
+    if (disabled || disabledRef.current) return
     if (!userId || !userName) {
       setChats([])
       return
@@ -135,6 +140,7 @@ export function useUserChats(
         .from('event_participants')
         .select('event_id, events:calendar_events(id, event_date, time, title)')
         .eq('user_name', userName)
+      if (!isCurrent()) return []
 
       const eventsFromParticipants = ((participants ?? []) as unknown as ParticipantRow[])
         .map((p) => p.events)
@@ -149,12 +155,14 @@ export function useUserChats(
       const eventsFromCart = ((cartApplications ?? []) as unknown as ParticipantRow[])
         .map((application) => application.events)
         .filter((event): event is EventRow => Boolean(event))
+      if (!isCurrent()) return []
 
       // 1-b. 인도자가 본인인 일정도 포함 (참가자 명단에 없을 수 있음)
       const { data: leaderEvents } = await supabase
         .from('calendar_events')
         .select('id, event_date, time, title')
         .eq('leader_name', userName)
+      if (!isCurrent()) return []
 
       // 두 목록 합치기 (id 기준 중복 제거)
       const eventMap = new Map<number, EventRow>()
@@ -176,6 +184,7 @@ export function useUserChats(
         const { data: readRows } = await supabase.rpc('get_my_chat_reads', {
           p_token: token,
         })
+        if (!isCurrent()) return []
         ;((readRows ?? []) as ReadStatusRow[]).forEach((r) => {
           if (eventIds.includes(r.event_id)) {
             readMap.set(r.event_id, r.last_read_at)
@@ -199,6 +208,7 @@ export function useUserChats(
       }
 
       const messagesByEvent = new Map<number, MessageMetaRow[]>()
+      if (!isCurrent()) return []
       messages.forEach((m) => {
         const arr = messagesByEvent.get(m.event_id) ?? []
         arr.push(m)
@@ -218,6 +228,7 @@ export function useUserChats(
           .select('event_id')
           .in('event_id', eventIds)
         : { data: [] }
+      if (!isCurrent()) return []
 
       const participantCountByEvent = new Map<number, number>()
       ;((allParticipants ?? []) as { event_id: number }[]).forEach((p) => {
@@ -307,7 +318,7 @@ export function useUserChats(
       if (getInflightUserChats(cacheKey) === loadPromise) clearInflightUserChats(cacheKey)
       if (isCurrent()) setLoading(false)
     }
-  }, [cacheKey, userId, userName, badgeOnly, badgeToken, setChats])
+  }, [disabled, cacheKey, userId, userName, badgeOnly, badgeToken, setChats])
 
   useEffect(() => {
     fetchAll()
@@ -382,6 +393,7 @@ export function useUserChats(
 
   // 모든 채팅방 읽음 처리 (활성 + 잠긴 것 모두)
   const markAllChatsRead = useCallback(async () => {
+    if (disabled || disabledRef.current) return
     const token = getAuthToken()
     if (!token) return
     const eventIds = chats.map((c) => c.eventId)
@@ -397,14 +409,14 @@ export function useUserChats(
     if (error) {
       console.warn('[user_chats] mark_all_chats_read failed:', error)
     }
-  }, [chats, setChats])
+  }, [disabled, chats, setChats])
 
   return {
     chats,
     activeChats,
     lockedChats,
     totalUnread,
-    loading,
+    loading: !disabled && loading,
     refetch: fetchAll,
     markChatReadLocally,
     markAllChatsRead,

@@ -7,6 +7,7 @@ import type { AppLanguage } from '../i18n'
 import { getAuthToken } from '../lib/authToken'
 import { supabase } from '../lib/supabase'
 import type { Role } from '../types'
+import { chatDisabled } from '../lib/chatRetirement'
 
 type PrefKey =
   | 'pushEventChange'
@@ -379,7 +380,10 @@ export function NotificationSettings({
         <p style={{
           margin: '0 0 8px', fontSize: 12.5, fontWeight: 500, color: 'var(--muted)',
         }}>{lang === 'zh' ? '接收通知类型' : lang === 'en' ? 'Notification types' : '받을 알림 종류'}</p>
-        {GROUPS.map((group) => {
+        {GROUPS.map((original) => {
+          const group = chatDisabled() && original.id === 'social'
+            ? { ...original, descKo: '@멘션', descZh: '@提及', descEn: '@Mentions', items: original.items.filter(item => item.key !== 'pushChat') }
+            : original
           const groupOn = group.items.every((item) => prefs[item.key])
           const someOn = !groupOn && group.items.some((item) => prefs[item.key])
           const isOpen = expandedGroup === group.id

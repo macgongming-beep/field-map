@@ -7,6 +7,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { t, type AppLanguage } from '../i18n'
 import { useNotifications } from '../hooks/useNotifications'
 import { useUserChats } from '../hooks/useUserChats'
+import { chatDisabled, isRetiredChatNotification } from '../lib/chatRetirement'
+import { setActiveChatEventId } from '../lib/activeChat'
 import type { Role } from '../types'
 import { NotificationCenter } from './NotificationCenter'
 import { GlobalChatModal } from './GlobalChatModal'
@@ -175,6 +177,8 @@ export function AppHeaderActionButtons({
 }: AppHeaderActionButtonsProps) {
   const location = useLocation()
   const navigate = useNavigate()
+  const disabledChat = chatDisabled()
+  useEffect(() => { if (disabledChat) setActiveChatEventId(null) }, [disabledChat])
   const chatReturnToRef = useRef<string | null>(null)
   const [openNotifications, setOpenNotifications] = useState(false)
   const [openChat, setOpenChat] = useState(false)
@@ -185,11 +189,11 @@ export function AppHeaderActionButtons({
   const { totalUnread, markChatReadLocally } = useUserChats(userId ?? null, userName, {
     badgeOnly: (import.meta.env.VITE_CHAT_BADGE_ONLY_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true',
   })
-  // 공지와 댓글 화면은 닫았지만 과거 알림 행은 복구 가능하도록 보존한다.
-  // 표시 목록과 벨 배지에서 함께 제외해야 눌러도 갈 곳 없는 숫자가 남지 않는다.
+  // Retired chat alerts disappear from both badge and list. Comment mentions remain.
   const visibleNotifications = useMemo(
-    () => notifList.filter((notification) => notification.type !== 'notice' && notification.type !== 'comment'),
-    [notifList],
+    () => notifList.filter((notification) => notification.type !== 'notice'
+      && (disabledChat ? !isRetiredChatNotification(notification) : notification.type !== 'comment')),
+    [notifList, disabledChat],
   )
   const visibleUnreadCount = useMemo(
     () => visibleNotifications.filter((notification) => !notification.isRead).length,
@@ -249,6 +253,10 @@ export function AppHeaderActionButtons({
         eventId: number; eventTitle?: string; eventDate?: string; eventTime?: string | null
       } | null
       if (!detail || !detail.eventId) return
+      if (disabledChat) {
+        navigate(`/calendar?openEvent=${detail.eventId}`)
+        return
+      }
       chatReturnToRef.current = `${location.pathname}${location.search}${location.hash}`
       handleOpenChatRoom({
         eventId: detail.eventId,
@@ -260,7 +268,7 @@ export function AppHeaderActionButtons({
     window.addEventListener('app:open-event-chat', onOpenEventChat)
     return () => window.removeEventListener('app:open-event-chat', onOpenEventChat)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- handleOpenChatRoom 추가 시 매 렌더 재구독 발생, location만 추적
-  }, [location.pathname, location.search, location.hash])
+  }, [location.pathname, location.search, location.hash, disabledChat])
 
   return (
     <>
@@ -274,7 +282,7 @@ export function AppHeaderActionButtons({
           <HeaderActionIcon name="notification" />
           <IconBadge count={resolvedNotificationCount} />
         </button>
-        <button
+        {!disabledChat && <button
           type="button"
           className={buttonClassName}
           aria-label={resolvedChatCount ? t(language, 'header.chatCount').replace('{count}', String(resolvedChatCount)) : t(language, 'header.chats')}
@@ -282,7 +290,7 @@ export function AppHeaderActionButtons({
         >
           <HeaderActionIcon name="chat" />
           <IconBadge count={resolvedChatCount} />
-        </button>
+        </button>}
         {showMenu ? (
           <button type="button" className={buttonClassName} aria-label={t(language, 'header.menu')} onClick={onOpenMenu}>
             <HeaderActionIcon name="menu" />
@@ -309,7 +317,7 @@ export function AppHeaderActionButtons({
           </HeaderOverlayErrorBoundary>
         </HeaderOverlayPortal>
       ) : null}
-      {openChat ? (
+      {openChat && !disabledChat ? (
         <HeaderOverlayPortal>
           <HeaderOverlayErrorBoundary  onClose={handleCloseChat}>
             <GlobalChatModal

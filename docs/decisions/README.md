@@ -84,6 +84,8 @@
 
 로그인 보안 운영 적용: [0077 백업과 일회용 계정 검증](0077-production-login-security.md)
 
+채팅 비활성화: [0079 데모 조회·쓰기 차단과 댓글 보존](0079-demo-chat-retirement.md)
+
 ```markdown
 # 제목
 

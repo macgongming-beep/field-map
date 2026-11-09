@@ -9,6 +9,7 @@ import type { MentionUser } from './CommentSection'
 import type { Role } from '../types'
 import { LinkifiedText } from './LinkifiedText'
 import { msg } from '../lib/msg'
+import { chatDisabled } from '../lib/chatRetirement'
 
 type ChatMessage = {
   id: number
@@ -80,7 +81,11 @@ function translateSystemContent(content: string, language: AppLanguage): string 
   return content
 }
 
-export function ChatRoom({
+export function ChatRoom(props: ChatRoomProps) {
+  return chatDisabled() ? null : <EnabledChatRoom {...props} />
+}
+
+function EnabledChatRoom({
   eventId,
   eventTitle,
   currentVisitor,

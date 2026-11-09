@@ -40,6 +40,7 @@ import { Card } from '../ui'
 import { AdminEventDetailSheet } from './AdminEventDetailSheet'
 import type { MentionUser } from '../CommentSection'
 import { msg } from '../../lib/msg'
+import { chatDisabled } from '../../lib/chatRetirement'
 import { getCurrentAppPath, readEventDetailReturnTo } from '../../lib/eventDetailNavigation'
 
 // WEEKDAYS / WEEKDAY_LABELS defined inside component now via i18n
@@ -267,7 +268,7 @@ export function AdminMobileCalendar({
     setMonth(d.getMonth() + 1)
     setSelectedDay(d.getDate())
 
-    if (openChatId) {
+    if (openChatId && !chatDisabled()) {
       window.dispatchEvent(new CustomEvent('app:open-event-chat', {
         detail: {
           eventId: targetEvent.id,
@@ -276,7 +277,7 @@ export function AdminMobileCalendar({
           eventTime: targetEvent.time,
         },
       }))
-    } else if (openEventId) {
+    } else if (openEventId || openChatId) {
       const returnTo = readEventDetailReturnTo(location.state)
       detailReturnToRef.current = returnTo ?? (detailOnly ? '/' : '/calendar')
       detailReturnsThroughHistoryRef.current = returnTo !== null

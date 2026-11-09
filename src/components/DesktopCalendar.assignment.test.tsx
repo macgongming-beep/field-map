@@ -1,4 +1,5 @@
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -15,7 +16,7 @@ vi.mock('./assignment/AssignmentEditor', () => ({
 }))
 
 vi.mock('./CommentSection', () => ({
-  CommentSection: () => <div data-testid="comments" />,
+  CommentSection: ({ headerRight }: { headerRight?: ReactNode }) => <div data-testid="comments">{headerRight}</div>,
 }))
 
 vi.mock('./ChatRoom', () => ({
@@ -76,6 +77,18 @@ function calendarProps(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
+
+afterEach(() => vi.unstubAllEnvs())
+test.each(['openChat', 'openEvent'])('retired desktop %s link selects the event day and keeps comments, not chat', async (param) => {
+  Element.prototype.scrollIntoView = vi.fn()
+  vi.stubEnv('VITE_CHAT_DISABLED', 'true')
+  render(<MemoryRouter initialEntries={[`/calendar?${param}=91`]}>
+    <DesktopCalendar {...(calendarProps() as never)} />
+  </MemoryRouter>)
+  expect(await screen.findByTestId('comments')).toBeTruthy()
+  expect(screen.queryByTestId('chat-room')).toBeNull()
+  expect(screen.queryByRole('button', { name: '채팅 열기' })).toBeNull()
+})
 
 async function openAssignment(overrides: Record<string, unknown> = {}) {
   const user = userEvent.setup()

@@ -1,6 +1,7 @@
 // 글로벌 채팅 목록 모달 (헤더 💬 클릭 시 슬라이드 다운)
 // 메시지 미리보기 X (사생활 보호 결정)
-import { useState } from 'react'
+import { useState, type ComponentProps } from 'react'
+import { chatDisabled } from '../lib/chatRetirement'
 import { t, formatPeriod, weekdayShortLabels } from '../i18n'
 import type { AppLanguage } from '../i18n'
 import { useUserChats, type UserChat } from '../hooks/useUserChats'
@@ -61,7 +62,11 @@ function ChatEmptyIcon() {
   )
 }
 
-export function GlobalChatModal({
+export function GlobalChatModal(props: ComponentProps<typeof EnabledGlobalChatModal>) {
+  return chatDisabled() ? null : <EnabledGlobalChatModal {...props} />
+}
+
+function EnabledGlobalChatModal({
   language = 'ko',
   userId,
   userName,

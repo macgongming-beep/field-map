@@ -4,9 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CalendarEvent } from '../../types'
 import { AdminMobileCalendar } from './AdminMobileCalendar'
 import { CalendarReadContext } from '../../hooks/CalendarReadContext'
+import type { ReactNode } from 'react'
 
 vi.mock('../CommentSection', () => ({
-  CommentSection: () => <div>comment area</div>,
+  CommentSection: ({ headerRight }: { headerRight?: ReactNode }) => <div>comment area{headerRight}</div>,
 }))
 
 const event: CalendarEvent = {
@@ -35,7 +36,21 @@ beforeEach(() => {
     window.dispatchEvent(new PopStateEvent('popstate', { state: {} }))
   })
 })
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
+
+it('retired mobile chat deep link opens event comments without dispatching a chat modal', async () => {
+  vi.stubEnv('VITE_CHAT_DISABLED', 'true')
+  const listener = vi.fn()
+  window.addEventListener('app:open-event-chat', listener)
+  try {
+    render(<MemoryRouter initialEntries={['/calendar?openChat=17']}>
+      <AdminMobileCalendar language="ko" currentVisitor="봉사자" role="user" events={[event]} />
+    </MemoryRouter>)
+    expect(await screen.findByText('comment area')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '채팅 열기' })).toBeNull()
+    expect(listener).not.toHaveBeenCalled()
+  } finally { window.removeEventListener('app:open-event-chat', listener) }
+})
 
 function HomeDetail({ events = [event] }: { events?: CalendarEvent[] }) {
   const location = useLocation()

@@ -5,6 +5,7 @@ import { clearUserChatsCache } from '../lib/userChatsCache'
 import { useUserChats } from './useUserChats'
 import { NotificationCenter } from '../components/NotificationCenter'
 import { GlobalChatModal } from '../components/GlobalChatModal'
+import { ChatRoom } from '../components/ChatRoom'
 import type { AppNotification } from './useNotifications'
 
 const mocks = vi.hoisted(() => ({
@@ -63,11 +64,74 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   cleanup()
   clearUserChatsCache()
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.clearAllMocks()
+})
+
+test.each([['true', 'false'], [undefined, 'true']])('retired chat makes zero requests for ten minutes, including modal/notification/manual entry: flag=%s demo=%s', async (flag, demo) => {
+  vi.stubEnv('VITE_CHAT_DISABLED', flag)
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const hook = renderHook(() => useUserChats(10, 'test-user'))
+  render(<GlobalChatModal userId={10} userName="test-user" onClose={() => {}} />)
+  render(<ChatRoom eventId={1} eventTitle="Test" currentUserId={10} currentVisitor="test-user" />)
+  render(<MemoryRouter><NotificationCenter userId={10} userName="test-user" onClose={() => {}}
+    notifications={[{ id: 1, type: 'chat', title: 'Old', body: 'Old', link: '/calendar?openChat=1', isRead: false, createdAt: '2026-10-05', relatedId: 1 } as AppNotification]}
+    markRead={async () => {}} markAllRead={async () => {}} /></MemoryRouter>)
+  await act(async () => {
+    await hook.result.current.refetch({ force: true })
+    await hook.result.current.markAllChatsRead()
+    await vi.advanceTimersByTimeAsync(600_000)
+  })
+  expect(hook.result.current.chats).toEqual([])
+  expect(mocks.from).not.toHaveBeenCalled()
+  expect(mocks.rpc).not.toHaveBeenCalled()
+  expect(mocks.channel).not.toHaveBeenCalled()
+})
+
+test('explicit false restores chat requests even in demo', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_CHAT_DISABLED', 'false')
+  await mount()
+  expect(mocks.select).toHaveBeenCalledWith('event_participants', 'event_id')
+  expect(mocks.channel).toHaveBeenCalled()
+})
+
+test('retired hook alone does not fetch or subscribe over ten polling minutes', async () => {
+  vi.stubEnv('VITE_CHAT_DISABLED', 'true')
+  const { result } = renderHook(() => useUserChats(10, 'test-user'))
+  await act(async () => {
+    await result.current.refetch({ force: true })
+    await vi.advanceTimersByTimeAsync(600_000)
+  })
+  expect(mocks.from).not.toHaveBeenCalled()
+  expect(mocks.rpc).not.toHaveBeenCalled()
+  expect(mocks.channel).not.toHaveBeenCalled()
+})
+
+test('retiring with a pending read drops its result and does not revive the cache', async () => {
+  vi.stubEnv('VITE_CHAT_DISABLED', 'false')
+  let release!: (value: unknown) => void
+  mocks.rpc.mockImplementation((name: string) => name === 'get_chat_message_meta'
+    ? new Promise(resolve => { release = resolve }) : Promise.resolve({ data: [], error: null }))
+  const hook = renderHook(() => useUserChats(10, 'test-user', { badgeOnly: true }))
+  await act(async () => {})
+  expect(release).toBeTypeOf('function')
+  vi.stubEnv('VITE_CHAT_DISABLED', 'true')
+  hook.rerender()
+  await act(async () => { release({ data: [{ event_id: 1, created_at: '2026-10-05T10:00:00Z', author_id: 20 }], error: null }) })
+  expect(hook.result.current.chats).toEqual([])
+  expect(mocks.removeChannel).toHaveBeenCalled()
+  mocks.rpc.mockClear()
+  mocks.rpc.mockResolvedValue({ data: [], error: null })
+  vi.stubEnv('VITE_CHAT_DISABLED', 'false')
+  hook.rerender()
+  await act(async () => {})
+  expect(mocks.rpc).toHaveBeenCalledWith('get_chat_message_meta', expect.anything())
+  expect(hook.result.current.totalUnread).toBe(0)
 })
 
 async function mount() {
