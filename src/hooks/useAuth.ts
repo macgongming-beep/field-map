@@ -12,11 +12,13 @@ import {
 } from '../lib/authToken'
 import { setSentryUser, clearSentryUser } from '../lib/sentry'
 import type { Role } from '../types'
+import type { Database } from '../types/supabase'
 import { t, currentLang } from '../i18n'
 import { msg } from '../lib/msg'
 import { describeDbError } from '../utils/dbError'
 import { promptDialog } from '../lib/confirm'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
+import { privateUserReadsEnabled } from '../lib/privateUserReads'
 
 export type AuthUser = {
   id: number
@@ -48,6 +50,8 @@ export type LoginLogRecord = {
 }
 
 const ROLE_VALUES: Role[] = ['admin', 'leader', 'user', 'developer']
+type DirectoryRow = Database['public']['Functions']['get_user_directory']['Returns'][number]
+const EMPTY_USERS: AppUserRecord[] = []
 
 function isRole(value: unknown): value is Role {
   return typeof value === 'string' && ROLE_VALUES.includes(value as Role)
@@ -118,6 +122,11 @@ export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [allUsers, setAllUsers] = useState<AppUserRecord[]>([])
+  const directoryKey = user ? `${user.id}:${user.role}:${user.authToken ?? ''}` : ''
+  const directoryOwner = useRef('')
+  const directoryIdentity = useRef(directoryKey)
+  directoryIdentity.current = directoryKey
+  const directoryRead = useRef(0)
   const loginFailures = useRef({ loginId: '', count: 0, startedAt: 0 })
   const [loginRetryHintFor, setLoginRetryHintFor] = useState<string | null>(null)
 
@@ -302,12 +311,21 @@ export function useAuth() {
         return false
       }
 
+      // The directory no longer contains phone numbers. Load only our own profile.
+      let phone: string | null = null
+      if (privateUserReadsEnabled() && row.token) {
+        setAuthToken(row.token, rememberMe)
+        const profile = await supabase.from('app_users').select('phone').eq('id', row.id).single()
+        if (profile.error) throw profile.error
+        phone = profile.data.phone
+      }
       const authUser = toAuthUser({
         id: row.id,
         name: row.name,
         login_id: row.login_id,
         role: row.role,
         token: row.token ?? null,
+        phone,
       })
       setUser(authUser)
       setSentryUser({ id: authUser.id, name: authUser.name })
@@ -398,7 +416,12 @@ export function useAuth() {
       return false
     }
 
-    const { data: duplicatedName, error: nameCheckError } = await supabase
+    const nameCheck = privateUserReadsEnabled()
+      ? await supabase.rpc('get_user_directory')
+      : null
+    const { data: duplicatedName, error: nameCheckError } = nameCheck
+      ? { data: (nameCheck.data as DirectoryRow[] | null)?.find(item => item.name === trimmedName && item.id !== user.id), error: nameCheck.error }
+      : await supabase
       .from('app_users')
       .select('id')
       .eq('name', trimmedName)
@@ -453,6 +476,29 @@ export function useAuth() {
 
   const fetchAllUsers = async () => {
     if (!user) return
+    const read = ++directoryRead.current
+    const key = directoryKey
+    const current = () => directoryIdentity.current === key && directoryRead.current === read && getAuthToken() === user.authToken
+    if (privateUserReadsEnabled() && !isAdminLike(user.role)) {
+      const result = await supabase.rpc('get_user_directory')
+      if (!current()) return
+      directoryOwner.current = key
+      if (result.error) {
+        setAllUsers([])
+        showToast(msg('사용자 목록을 불러오지 못했습니다.'), 'error')
+        return
+      }
+      setAllUsers(((result.data ?? []) as DirectoryRow[]).map(item => ({
+        id: item.id, name: item.name, loginId: '', phone: null,
+        role: isRole(item.role) ? item.role : 'user',
+        approvalStatus: item.approval_status as AppUserRecord['approvalStatus'] ?? 'approved',
+        isActive: item.is_active ?? true, groupName: item.group_name,
+        cartServiceApproved: item.cart_service_approved ?? false,
+        cartServiceApprovedAt: item.cart_service_approved_at,
+        created_at: item.created_at, lastLoginAt: null,
+      })))
+      return
+    }
     const { data, error } = await supabase
       .from('app_users')
       .select(CART_APPLICATIONS_ENABLED
@@ -460,7 +506,9 @@ export function useAuth() {
         : 'id, name, phone, login_id, role, approval_status, is_active, group_name, created_at, last_login_at')
       .order('created_at', { ascending: false })
 
+    if (!current()) return
     if (!error && data) {
+      directoryOwner.current = key
       const rows = data as unknown as Array<{ id: number; name: string; phone?: string | null; login_id: string | null; role: Role; approval_status?: AppUserRecord['approvalStatus'] | null; is_active?: boolean | null; group_name?: string | null; cart_service_approved?: boolean | null; cart_service_approved_at?: string | null; created_at: string; last_login_at?: string | null }>
       setAllUsers(rows
         .filter((item) => user.role === 'developer' || !isDeveloperAccount(item))
@@ -492,7 +540,9 @@ export function useAuth() {
         .from('app_users')
         .select(error.message.includes('login_id') ? 'id, name, role, created_at' : 'id, name, login_id, role, created_at, last_login_at')
         .order('created_at', { ascending: false })
+      if (!current()) return
       if (!fallback.error && fallback.data) {
+        directoryOwner.current = key
         setAllUsers((fallback.data as unknown as Array<{ id: number; name: string; login_id?: string | null; role: Role; created_at: string; last_login_at?: string | null }>)
           .filter((item) => user.role === 'developer' || !isDeveloperAccount(item))
           .map((item) => ({
@@ -514,7 +564,7 @@ export function useAuth() {
   useEffect(() => {
     void fetchAllUsers()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [directoryKey])
 
   useEffect(() => {
     if (!user) return
@@ -886,7 +936,7 @@ export function useAuth() {
     logout,
     changePin,
     updateMyProfile,
-    allUsers,
+    allUsers: directoryOwner.current === directoryKey ? allUsers : EMPTY_USERS,
     fetchAllUsers,
     resetUserPin,
     updateUserRole,

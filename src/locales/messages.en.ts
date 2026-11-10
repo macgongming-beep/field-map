@@ -4,6 +4,7 @@
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
 export const messagesEn: Record<string, string> = {
+  '사용자 목록을 불러오지 못했습니다.': 'Could not load the user list.',
   '방문 기록을 불러오지 못했습니다.': 'Could not load visit records.',
   '지역 선택': 'Select district',
   '동 선택': 'Select neighborhood',

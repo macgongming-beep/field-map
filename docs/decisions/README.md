@@ -92,6 +92,8 @@
 
 방문 메모·재방문 주소 운영 보호: [0082 옛 시트 표시·백업·운영 검증](0082-production-private-visit-reads.md)
 
+연락처·로그인 아이디 조회 분리: [0083 데모 일반 명단과 인도자 연락처 분리](0083-demo-private-user-directory.md)
+
 ```markdown
 # 제목
 
