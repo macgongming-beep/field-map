@@ -86,6 +86,8 @@
 
 채팅 비활성화: [0079 데모 조회·쓰기 차단과 댓글 보존](0079-demo-chat-retirement.md)
 
+방문 메모·재방문 주소 보호: [0081 데모 비로그인 읽기 차단](0081-demo-private-visit-reads.md)
+
 ```markdown
 # 제목
 

@@ -19,8 +19,9 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
  * 매 요청마다 저장소에서 새로 읽는다 — 로그아웃하면 즉시 안 붙는다.
  * 붙이는 곳이 여기 한 곳뿐이라 쓰기 287곳을 고칠 필요가 없다.
  *
- * ⚠ Realtime(WebSocket)에는 안 붙는다. 그래서 SELECT 정책은 이 헤더에
- *   기대면 안 된다 (구독이 통째로 끊긴다).
+ * ⚠ Realtime(WebSocket)에는 안 붙는다. 직접 구독하는 표의 SELECT 정책은
+ *   별도 인증 설계가 필요하다. 구독하지 않는 상세 표는 이 헤더로 보호하며,
+ *   지도는 별도 변경 신호를 받은 뒤 인증된 HTTP 요청으로 상세를 읽는다.
  */
 export const fetchWithSessionToken: typeof fetch = (input, init) => {
   let token: string | null = null
