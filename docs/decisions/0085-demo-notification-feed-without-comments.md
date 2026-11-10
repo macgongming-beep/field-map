@@ -1,7 +1,7 @@
 # Exclude hidden ordinary comments from notification reads
 
 - Date: 2026-11-10
-- Status: demo validation in progress; production unchanged.
+- Status: demo deployed and verified 2026-11-11 KST; production unchanged.
 - Scope: additive notification reader and opt-in client; no user-row restriction.
 
 ## Decision
@@ -74,6 +74,37 @@ deployed demo bell/panel and RPC traffic. Physical phone push receipt is not cla
 Demo backup: `backups/notification-feed-demo-1794322647618/before.dump` (private,
 not committed). Existing functions/policies matched before/after and the new RPC
 was classified as authenticated read in the definer audit.
+
+### Completed live verification
+
+- Implementation: `6eaf6d4`. Demo deployment `dpl_Edmx24MZ7Rv2sFtN9ubFb3Uh26u4`
+  is READY at `https://chinese-territory-app-demo.vercel.app` (demo project's
+  Production environment, NOT the real production app/project).
+- API + deployed mobile-browser smoke: **20 checks passed**, fixtures cleaned.
+  Browser requests were filtered badge -> filtered full panel -> filtered badge;
+  no old getter requests or page errors occurred in this flow.
+- Bell panel showed the real comment mention and none of the 60 synthetic hidden
+  comments. Clicking the mention opened the correct event; both ordinary and
+  mentioned comment bodies remained visible in the detail. Calendar consumes the
+  `openEvent` parameter after opening, so the smoke asserts rendered content.
+- Actual demo comment trigger + dispatch produced both `comment` and `mention`
+  pg_net requests with the transaction-local dummy transport. The probe rolled
+  back. Real phone delivery is **not verified**; demo has no configured transport.
+- Synthetic old/full response: 50 rows / 11,051 JSON bytes / 352 locally gzipped
+  bytes. New/full: 1 mention / 275 JSON bytes / 229 locally gzipped bytes. These
+  repetitive fixtures are not representative operational traffic; gzip excludes
+  HTTP headers. Do not extrapolate monthly MB or claim fewer HTTP requests.
+- Evidence (untracked, synthetic accounts only):
+  `scratch/notification-feed-demo-results.json`,
+  `scratch/demo-notification-comment-skip.png`,
+  `scratch/demo-notification-mention-comments.png`.
+
+Reproduce (requires explicit demo credentials, never production):
+
+```sh
+DEMO_ENV_FILE=/secure/demo.env PLAYWRIGHT_MODULE=/absolute/path/playwright/index.mjs \
+  node scripts/notificationFeedDemo.mjs smoke --confirm-demo
+```
 
 ## Production and rollback
 

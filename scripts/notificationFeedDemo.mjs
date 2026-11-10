@@ -156,6 +156,15 @@ try {
       check('deployed demo renders mention, not ordinary comments', (await page.locator('.notification-row').allTextContents()).some(t => t.includes(f.marker)) && !(await page.locator('.notification-row').allTextContents()).some(t => t.includes('hidden comment')))
       await page.screenshot({ path: 'scratch/demo-notification-comment-skip.png', fullPage: true })
       check('deployed demo badge and panel use new RPC exclusively', reads.length >= 2 && reads.every(r => r.name === 'get_my_notification_feed') && reads.some(r => r.badge) && reads.some(r => !r.badge))
+      await page.locator('.notification-row').first().click()
+      await page.getByText(`${f.marker} ordinary`, { exact: true }).waitFor()
+      await page.getByText(`${f.marker} mention`, { exact: true }).waitFor()
+      // The calendar consumes openEvent and removes it after opening the sheet.
+      check('mention opens event detail with both ordinary and mentioned comments intact',
+        new URL(page.url()).pathname === '/calendar'
+        && await page.getByText(`${f.marker} ordinary`, { exact: true }).isVisible()
+        && await page.getByText(`${f.marker} mention`, { exact: true }).isVisible())
+      await page.screenshot({ path: 'scratch/demo-notification-mention-comments.png', fullPage: true })
       check('no browser errors', errors.length === 0)
       browserResults = { reads, errors }
     } finally { await browser.close() }
