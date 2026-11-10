@@ -41,7 +41,8 @@ if (mode.startsWith('apply')) {
   const before = digest()
   const writes = () => sql("select json_agg(p order by policyname) from pg_policies p where schemaname='public' and tablename='app_users' and cmd<>'SELECT'")
   const beforeWrites = writes()
-  run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-f', `supabase/migrations/20261110_${policy ? '1500_private_user_rows' : '1400_private_user_directory'}.sql`])
+  run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-f', `supabase/migrations/20261110_${policy ? '1500_private_user_rows' : '1400_private_user_directory'}.sql`,
+    ...(!policy ? ['-f', 'supabase/migrations/20261110_1410_directory_optional_cart_fields.sql'] : [])])
   assert.equal(digest(), before)
   assert.equal(writes(), beforeWrites)
   console.log(JSON.stringify({ backup: dir, rowsAndWritePoliciesUnchanged: true }))

@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest'
 
-const rpc = readFileSync('supabase/migrations/20261110_1400_private_user_directory.sql', 'utf8')
 const policy = readFileSync('supabase/migrations/20261110_1500_private_user_rows.sql', 'utf8')
 const mutation = process.env.PRIVATE_USER_READ_MUTATION
+const rpc = readFileSync('supabase/migrations/20261110_1400_private_user_directory.sql', 'utf8')
+  + (mutation === 'legacy' ? '' : readFileSync('supabase/migrations/20261110_1410_directory_optional_cart_fields.sql', 'utf8'))
 const testedRpc = mutation === 'session' ? rpc.replaceAll('IF private.request_session_user_id() IS NULL THEN', 'IF false THEN')
   : mutation === 'leaders' ? rpc.replace('WHERE e.id = p_event_id', 'WHERE true') : rpc
 const testedPolicy = mutation === 'rows' ? policy.replace('AS RESTRICTIVE', 'AS PERMISSIVE') : policy
@@ -71,6 +72,21 @@ test('safe directory preserves participant data but never includes phone, login 
     }
     expect(JSON.stringify(rows)).not.toMatch(/010|private-/)
   })
+})
+test('safe directory supports production without optional cart columns and preserves installed cart metadata', async () => {
+  await db.exec("update app_users set cart_service_approved=true,cart_service_approved_at='2026-11-10T00:00:00Z' where id=2")
+  const installed = await asClient(token(1), () => db.query<{ cart_service_approved: boolean; cart_service_approved_at: Date }>('select * from get_user_directory() where id=2'))
+  expect(installed.rows[0].cart_service_approved).toBe(true)
+  expect(new Date(installed.rows[0].cart_service_approved_at).toISOString()).toBe('2026-11-10T00:00:00.000Z')
+  await db.exec('begin; alter table app_users drop column cart_service_approved, drop column cart_service_approved_at')
+  try {
+    for (const id of [1, 2, 3, 4]) {
+      const legacy = await asClient(token(id), () => db.query<Record<string, unknown>>('select * from get_user_directory()'))
+      expect(legacy.rows).toHaveLength(5)
+      expect(legacy.rows.every(r => r.cart_service_approved === null && r.cart_service_approved_at === null)).toBe(true)
+      expect(legacy.rows.every(r => !('phone' in r) && !('pin' in r) && !('login_id' in r))).toBe(true)
+    }
+  } finally { await db.exec('rollback') }
 })
 test('event contacts only return active current leaders; unknown/other events cannot disclose arbitrary contacts', async () => {
   await asClient(token(1), async () => {
