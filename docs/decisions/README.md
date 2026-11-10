@@ -88,6 +88,8 @@
 
 채팅 운영 종료: [0080 백업·알림 33건 삭제·댓글 검증](0080-production-chat-retirement.md)
 
+방문 메모·재방문 주소 보호: [0081 데모 비로그인 읽기 차단](0081-demo-private-visit-reads.md)
+
 ```markdown
 # 제목
 
