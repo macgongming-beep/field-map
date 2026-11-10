@@ -90,6 +90,8 @@
 
 방문 메모·재방문 주소 보호: [0081 데모 비로그인 읽기 차단](0081-demo-private-visit-reads.md)
 
+방문 메모·재방문 주소 운영 보호: [0082 옛 시트 표시·백업·운영 검증](0082-production-private-visit-reads.md)
+
 ```markdown
 # 제목
 
