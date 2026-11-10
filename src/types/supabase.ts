@@ -1487,6 +1487,16 @@ export type Database = {
           token: string
         }[]
       }
+      get_user_directory: {
+        Args: Record<string, never>
+        Returns: { id: number; name: string; role: string; approval_status: string | null;
+          is_active: boolean | null; group_name: string | null; cart_service_approved: boolean | null;
+          cart_service_approved_at: string | null; created_at: string }[]
+      }
+      get_event_leader_contacts: {
+        Args: { p_event_id: number }
+        Returns: { id: number; name: string; phone: string | null }[]
+      }
       can_access_chat_event: {
         Args: { p_event_id: number; p_user_id: number }
         Returns: boolean

@@ -88,6 +88,8 @@
 
 방문 메모·재방문 주소 보호: [0081 데모 비로그인 읽기 차단](0081-demo-private-visit-reads.md)
 
+연락처·로그인 아이디 조회 분리: [0083 데모 일반 명단과 인도자 연락처 분리](0083-demo-private-user-directory.md)
+
 ```markdown
 # 제목
 

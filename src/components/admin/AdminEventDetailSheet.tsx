@@ -25,6 +25,7 @@ import { msg } from '../../lib/msg'
 import { chatDisabled } from '../../lib/chatRetirement'
 import { CartApplicantSection } from '../calendar/CartApplicantSection'
 import { toPhoneHref } from '../../utils/linkify'
+import { useEventLeaderContacts } from '../../hooks/useEventLeaderContacts'
 
 type Props = {
   /** 비공식 봉사 배정 — 구역이 없어도 맡은 일이 있으면 보여 준다 */
@@ -204,11 +205,8 @@ export function AdminEventDetailSheet({
   const leaders = event.leaders.length > 0
     ? event.leaders
     : event.leader.split(',').map((name) => name.trim()).filter(Boolean)
-  const phoneByName = new Map(
-    participantUsers
-      .filter((user) => user.phone?.trim())
-      .map((user) => [eventParticipantNameKey(user.name), user.phone!.trim()]),
-  )
+  const contacts = useEventLeaderContacts(event.id, leaders, participantUsers)
+  const { phoneByName } = contacts
 
   const [isAddParticipantModalOpen, setIsAddParticipantModalOpen] = useState(false)
   const [isRemoveParticipantMode, setIsRemoveParticipantMode] = useState(false)
@@ -427,6 +425,8 @@ export function AdminEventDetailSheet({
                 )
               })}
               <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t(language, 'calendar.leader')}</span>
+              {contacts.loading && <span role="status">{t(language, 'common.loading')}</span>}
+              {contacts.error && <button type="button" onClick={contacts.retry}>{t(language, 'meeting.retry')}</button>}
             </div>
           )}
         </section>

@@ -30,6 +30,7 @@ import { eventParticipantNameKey, type EventParticipantUser } from '../utils/eve
 import { CartApplicantSection } from './calendar/CartApplicantSection'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { toPhoneHref } from '../utils/linkify'
+import { useEventLeaderContacts } from '../hooks/useEventLeaderContacts'
 
 
 function getCalendarDays(year: number, month: number): (number | null)[] {
@@ -1073,6 +1074,8 @@ function EventDetailCard({
 }) {
   const [dotsOpen, setDotsOpen] = useState(false)
   const [isParticipantRemoveMode, setIsParticipantRemoveMode] = useState(false)
+  const contacts = useEventLeaderContacts(event.id,
+    event.leaders.length ? event.leaders : event.leader.split(',').map(name => name.trim()).filter(Boolean), participantUsers)
 
   return (
     <article className="detail-card" id={`event-card-${event.id}`}>
@@ -1113,9 +1116,7 @@ function EventDetailCard({
         {(event.leaders.length > 0 || event.leader) && (
           <div className="event-hero-leader">
             {(event.leaders.length > 0 ? event.leaders : event.leader.split(',').map((name) => name.trim()).filter(Boolean)).map((leader) => {
-              const phone = participantUsers.find(
-                (user) => eventParticipantNameKey(user.name) === eventParticipantNameKey(leader),
-              )?.phone?.trim()
+              const phone = contacts.phoneByName.get(eventParticipantNameKey(leader))
               const content = (
                 <>
                   <span className="event-hero-leader-avatar">{leader.slice(0, 1)}</span>
@@ -1131,6 +1132,8 @@ function EventDetailCard({
               )
             })}
             <span className="event-hero-leader-label">인도자</span>
+            {contacts.loading && <span role="status">{t(language, 'common.loading')}</span>}
+            {contacts.error && <button type="button" onClick={contacts.retry}>{t(language, 'meeting.retry')}</button>}
           </div>
         )}
       </div>
