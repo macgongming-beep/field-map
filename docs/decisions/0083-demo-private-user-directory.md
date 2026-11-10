@@ -1,6 +1,6 @@
 # Separate the directory, own profile, and event leader contacts
 
-- Status: demo verified; external review requested; NOT applied to production.
+- Status: code approved in external review; production rollout gated below; NOT applied to production.
 - Date: 2026-11-10
 - Scope: ordinary user / leader directory reads, own profile, calendar call links.
 - Follow-up to 0081 private visit reads. Does not change units, comments, chat, or notifications.
@@ -71,6 +71,49 @@ There are **two SQL phases**, not an automatically safe one-shot rollout:
 An old member/leader app asks app_users for the whole directory; after enforcement it silently
 gets only self, affecting selectors and leader calls. This is why the phase split is explicit.
 Fresh installations run both migrations and must build with the new reader enabled.
+
+### Enforcement evidence gate (external review follow-up, 2026-11-10)
+
+After the enabled client is deployed, measure a complete service-day interval in the retained
+production logs. Count candidate legacy directory reads and distinct **verified callers**:
+unfiltered app_users SELECTs containing phone/login_id, rather than the new directory RPC.
+
+- Exclude verified admin/developer callers: the NEW client deliberately still makes the full
+  private directory request for them. Requiring all such requests to reach zero is incorrect.
+- Exclude self-profile reads with an explicit `id=eq.<self>` filter, including restore/login.
+  Looking only for `phone` in the URL would also misclassify these legitimate new-client reads.
+- Separate user/leader legacy candidates from admin/developer, self reads, and unclassified
+  callers. Do not label an IP address as a person. If retained logs cannot reliably associate
+  role/caller, record that limitation and do not claim a verified member count or zero old apps.
+- For remaining known user/leader clients, an update reminder alone is not proof. Confirm the
+  update and subsequent safe-directory request (or equivalent actual UI/network verification).
+- Record interval/timezone, coverage/truncation, counts, verified users and unresolved clients.
+  Zero observed legacy requests proves only the **observed active clients**, not people who
+  did not open the app that day. Returning inactive old PWAs still need an update transition;
+  do not call this automatic compatibility. Before 1500, explicitly decide how they will be
+  updated or add a minimum-client/version gate. Production enforcement remains a separate approval.
+
+### Cart application embedded-name dependency
+
+`src/hooks/calendarEventRefresh.ts` uses
+`event_cart_applications(...,user:app_users!event_cart_applications_user_id_fkey(name))`
+when `VITE_CART_APPLICATIONS_ENABLED === 'true'`. After 1500, ordinary users/leaders cannot read
+other users through that embedded join, so other applicants' names can be null. **Do not enable
+cart applications with this policy until that reader resolves names through the safe directory
+and the cart applicant UI is regression-tested.** The shared CALENDAR_EVENT_COLUMNS consumer
+paths, not only the single-event reader, must be covered. This follow-up is not implemented here.
+
+Read-only production check on 2026-11-10: project `chinese-territory-app`
+(`prj_cdo2L78J2YEEaBgxMMnNDfA5BDZs`) production environment has CART_APPLICATIONS,
+PRIVATE_USER_READS and DEMO_MODE all unset. Thus cart applications is false by the exact-true
+feature check. No environment variable was changed. Deployment-specific environment download
+was unavailable for the READY deployment, so do not confuse current project configuration with
+a retrieved build-time environment snapshot.
+
+Independent deployed-artifact check: fetched the production alias service worker and all 17
+JavaScript assets in its precache manifest. Zero chunks contained the cart user-name embedded
+projection above; two contained the normal `*, event_participants(*)` projection. This agrees
+with cart applications being disabled in the deployed client, not just the project settings.
 
 Turning the frontend switch off after enforcement does NOT restore legacy directory behavior.
 Preferred recovery keeps the privacy policy and repairs the new client/RPC. Emergency rollback
