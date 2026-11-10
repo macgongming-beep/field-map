@@ -94,6 +94,8 @@
 
 연락처·로그인 아이디 조회 분리: [0083 데모 일반 명단과 인도자 연락처 분리](0083-demo-private-user-directory.md)
 
+연락처 조회 운영 전환: [0084 새 함수·앱 우선 적용, DB 제한 보류](0084-production-user-directory-transition.md)
+
 ```markdown
 # 제목
 

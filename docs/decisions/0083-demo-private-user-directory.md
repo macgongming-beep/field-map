@@ -1,6 +1,6 @@
 # Separate the directory, own profile, and event leader contacts
 
-- Status: code approved in external review; production rollout gated below; NOT applied to production.
+- Status: approved; production additive rollout tracked in 0084. Enforcement remains deferred.
 - Date: 2026-11-10
 - Scope: ordinary user / leader directory reads, own profile, calendar call links.
 - Follow-up to 0081 private visit reads. Does not change units, comments, chat, or notifications.
@@ -61,7 +61,8 @@ the old full table reader regardless of the switch.
 
 There are **two SQL phases**, not an automatically safe one-shot rollout:
 
-1. Back up public/private and install `20261110_1400_private_user_directory.sql` (additive RPCs).
+1. Back up public/private and install `20261110_1400_private_user_directory.sql` plus
+   `20261110_1410_directory_optional_cart_fields.sql` (additive RPCs, optional-cart compatibility).
 2. Deploy the enabled client, verify phone links, self profile and management, and get old PWAs
    updated before enforcement. Login-token presence alone does NOT prove a new client version.
 3. Back up again and apply `20261110_1500_private_user_rows.sql` with `psql --single-transaction`.
@@ -175,3 +176,6 @@ validation in both definers; exact server event leader lookup; no directory fall
 precheck after row restriction; late-response isolation; and notification helper execution context.
 Production, general hidden comment notification reads and units.memo/comments privacy remain
 separate work. No production credentials or project were used for this task.
+
+The preceding verification describes the original demo task. Production follow-up and the
+optional-cart schema mismatch found there are recorded in [0084](0084-production-user-directory-transition.md).
