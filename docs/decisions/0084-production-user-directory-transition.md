@@ -1,7 +1,7 @@
 # Production directory transition without row restrictions
 
 - Date: 2026-11-10 (Asia/Seoul)
-- Status: additive RPCs applied and smoke passed; client deployment/visual checks pending.
+- Status: additive RPCs and enabled production client deployed; API and browser checks passed.
 - User authorized the new RPCs and enabled app, explicitly NOT phase 1500.
 - Approved source: e46ec15 and review follow-up 3b2d3c5; production equivalents c41bb03/fff4da7.
 
@@ -60,6 +60,41 @@ were the smoke's disposable users. Do not claim a global unchanged digest across
 - All synthetic fixtures removed; app_users policies identical and phase 1500 still absent.
 
 Local report: `scratch/private-user-reads-production-results.json`, excluded from Git.
+
+The repository's definer audit was run against production. Both added functions are reported
+as read-only with authorization checks. Post-cleanup inspection still shows exactly the same
+five app_users policies, the two RPCs present and no app_users_self_admin_read policy.
+
+## Deployed client and actual browser verification
+
+Production flag VITE_PRIVATE_USER_READS_ENABLED=true was set before main 40dce17 was pushed.
+Git deployment `dpl_5ozvBscPFCWk2Uss6rJmhdnyRaeD` is READY and the canonical
+`https://chinese-territory-app.vercel.app` alias points to it.
+
+Direct reads of the canonical alias confirmed index-BTheMCKh.js, the directory chunk
+useCardDirectory-9J6yf1qi.js and contact code in MeetingSettings-SmWXEItE.js. The actual
+compiled private-reader gate defaults to true; member/leader reads call get_user_directory,
+while admin/developer keep the management reader. The contact hook calls
+get_event_leader_contacts. The normal non-cart calendar projection remains in the artifact.
+
+On the canonical production URL, applied the PWA update in the in-app browser, then verified:
+
+- Existing administrator opened user management and changed only the disposable user's
+  nickname. Success message and updated nickname appeared; its login ID remained visible.
+- Disposable leader logged in, opened My Profile, changed synthetic phone 01000000000 to
+  01000000009, saw success, then reloaded and confirmed the saved phone remained.
+- Disposable member logged in and saw the updated nickname, opened the synthetic event from
+  Home and received the link `tel:01000000009` for that event's leader. No call was placed.
+- Test login signed out; four disposable users, their sessions/logs and the event were removed.
+  The pre-existing Chrome login was not touched. The in-app browser's production login is now
+  signed out after account switching; it was not restored using stored credentials.
+
+Screenshots in scratch (not Git): production-private-admin-saved.png,
+production-private-profile-saved.png and production-private-leader-call.png.
+These are real production mobile-layout browser checks, not a physical phone dialer test.
+Desktop call links are covered by component tests, not a separate live desktop run.
+Temporary deployment URLs required Vercel login, so verification used the canonical public
+alias rather than weakening deployment protection.
 
 ## Enforcement hold and rollback
 
