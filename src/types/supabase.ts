@@ -1607,6 +1607,26 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_my_notification_feed: {
+        Args: { p_limit?: number; p_token: string }
+        Returns: {
+          body: string | null
+          created_at: string
+          id: number
+          is_read: boolean
+          link: string | null
+          related_id: number | null
+          title: string
+          type: string
+          user_id: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "notifications"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_my_notifications: {
         Args: { p_limit?: number; p_token: string }
         Returns: {

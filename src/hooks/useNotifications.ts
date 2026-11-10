@@ -69,8 +69,9 @@ async function markReadSilently(notificationId: number, token: string) {
 
 export function useNotifications(userId: number | null | undefined, options: { badgeOnly?: boolean } = {}) {
   const badgeOnly = options.badgeOnly === true
+  const skipComments = (import.meta.env.VITE_NOTIFICATION_COMMENT_SKIP_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
   const token = getAuthToken()
-  const identity = JSON.stringify([userId ?? null, token])
+  const identity = JSON.stringify([userId ?? null, token, skipComments])
   const key = JSON.stringify([identity, badgeOnly])
   const activeKey = useRef<string | null>(null)
   const generation = useRef(0)
@@ -97,7 +98,7 @@ export function useNotifications(userId: number | null | undefined, options: { b
         await Promise.allSettled([...pendingWrites.current])
         if (!current()) return
       }
-      const query = supabase.rpc('get_my_notifications', { p_token: token, p_limit: PAGE_SIZE })
+      const query = supabase.rpc(skipComments ? 'get_my_notification_feed' : 'get_my_notifications', { p_token: token, p_limit: PAGE_SIZE })
       const { data, error: readError } = await (badgeOnly ? query.select(NOTIFICATION_BADGE_COLUMNS) : query)
       if (!current()) return
       if (readError) throw readError
@@ -115,7 +116,7 @@ export function useNotifications(userId: number | null | undefined, options: { b
       console.warn('[notifications] fetch failed:', cause)
       setStatus({ key, loading: false, error: true })
     }
-  }, [userId, token, key, identity, badgeOnly])
+  }, [userId, token, key, identity, badgeOnly, skipComments])
 
   // 초기 로드
   useEffect(() => {

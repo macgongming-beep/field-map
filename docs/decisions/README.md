@@ -92,6 +92,8 @@
 
 연락처 조회 운영 전환: [0084 새 함수·앱 우선 적용, DB 제한 보류](0084-production-user-directory-transition.md)
 
+숨긴 댓글 알림 전송 제외: [0085 데모 조회 분리와 푸시 보존](0085-demo-notification-feed-without-comments.md)
+
 ```markdown
 # 제목
 
