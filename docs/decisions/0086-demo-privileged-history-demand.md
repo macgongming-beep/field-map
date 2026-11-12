@@ -95,7 +95,40 @@ not representative production traffic; no monthly-savings claim is made.
 Script: `scripts/measurePrivilegedHistoryDemo.mjs --confirm-demo`, with explicit
 `DEMO_ENV_FILE` and optional private `DEMO_LOGIN_FILE`. Only demo host allowed.
 
-Deployment/UI smoke evidence will be appended after live verification.
+## Deployed demo verification (2026-11-12)
+
+- Code commit: `1e4545a`. Demo deployment `dpl_76qF6upRQ7uD8as5vKQA6sJgmKh7`
+  is ready at `https://chinese-territory-app-demo.vercel.app`.
+- The demo project's production environment was used for the prebuilt demo
+  deployment, not the production app project. The built API origin is the
+  allowlisted demo host; the deployed JS chunks match the local build and
+  contain the reduced projection. No production deployment or DB change.
+- Live browser: demo administrator, mobile viewport for home/zone/map and
+  desktop viewport for statistics. A fresh home load and mobile zone showed
+  the existing card and last-visit date (9/30), then its map and unit detail.
+- Created one uniquely marked disposable unit under demo building 1 using
+  `scripts/verifyPrivilegedHistoryDemo.mjs setup --confirm-demo`.
+  Existing units and their records were not edited.
+- UI absent-save: unit became absent, building completion changed 1/4 to 2/4,
+  and unit detail showed one absent record. The authenticated API confirmed
+  active 365-day histories changed 3 to 4. Desktop statistics displayed total
+  4, absent 2, with one visit in November.
+- UI cancellation: detail returned to zero records, building completion to
+  1/4; the server record was invalidated and active histories returned to 3.
+  Desktop statistics displayed total 3, absent 1.
+- Guarded cleanup removed only the marked unit after verifying every test
+  history was invalidated. Direct deletion was correctly blocked by existing
+  permissions; cleanup uses the app's deletion-request/execute RPCs instead.
+  The deletion request remains as a completed audit record. Final mobile home
+  returned to the original 74 units, 2 completed; active histories remain 3.
+- Screenshots: `/tmp/privileged-history-demo-saved.jpg`,
+  `/tmp/privileged-history-demo-stats-four.jpg`,
+  `/tmp/privileged-history-demo-cancelled.jpg`,
+  `/tmp/privileged-history-demo-stats-restored.jpg` (local, not committed).
+- These are actual UI/save/cancel checks, not a browser network capture.
+  Projection/request assertions, leader behavior and delayed-response races
+  were verified in automated tests; no real-device slow-network or live
+  leader-account UI claim is made. Temporary viewport override was reset.
 
 ## Limits and next review
 
