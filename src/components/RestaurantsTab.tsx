@@ -1,6 +1,7 @@
 // 식당 탭 — design_handoff 06 화면
 // 식당 표시된 상가 목록 (지역별 그룹) + 추가 모달 + 식당봉사 신청 승인
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useVisitRecency } from '../hooks/privilegedHistoryScope'
 import type { Building, CardBoundary, Unit, RestaurantRequest, Role, TerritoryCard, VisitHistory } from '../types'
 import { RestaurantRegistrationModal } from './RestaurantRegistrationModal'
 import type { RegisterRestaurant } from '../types/restaurantRegistration'
@@ -639,14 +640,15 @@ export function RestaurantsTab({
   const [removeTarget, setRemoveTarget] = useState<{ key: string; name: string; building: Building; unit: Unit | null } | null>(null)
 
   // 세대별 최근 방문일
+  const recency = useVisitRecency(visitHistories)
   const lastVisitByUnit = useMemo(() => {
     const map = new Map<number, string>()
-    for (const h of visitHistories) {
+    for (const h of recency) {
       const prev = map.get(h.unitId)
       if (!prev || h.visitedAt > prev) map.set(h.unitId, h.visitedAt)
     }
     return map
-  }, [visitHistories])
+  }, [recency])
 
   const releaseExcluded = async () => {
     const target = excludeReleaseTarget

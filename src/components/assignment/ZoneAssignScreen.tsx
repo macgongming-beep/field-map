@@ -1,4 +1,5 @@
 import { teamServiceEnabled } from '../../config/teamService'
+import { useVisitRecency } from '../../hooks/privilegedHistoryScope'
 // 화면2 — 구역 배분 (sticky 팀바 + 목록/지도 토글)
 // 설계: docs/leader-assignment-redesign.md v3 §3.3
 //
@@ -156,18 +157,19 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
   }, [buildings])
 
   // 카드별 최근 봉사(방문) 날짜 — visit_histories 최신 visited_at
+  const recency = useVisitRecency(visitHistories)
   const cardLastVisit = useMemo(() => {
     const unitCard = new Map<number, number>()  // unitId → cardId
     for (const b of buildings) for (const u of b.units ?? []) unitCard.set(u.id, b.cardId)
     const m = new Map<number, string>()  // cardId → 최신 visited_at
-    for (const h of visitHistories) {
+    for (const h of recency) {
       const cardId = unitCard.get(h.unitId)
       if (cardId == null) continue
       const prev = m.get(cardId)
       if (!prev || (h.visitedAt ?? '') > prev) m.set(cardId, h.visitedAt)
     }
     return m
-  }, [buildings, visitHistories])
+  }, [buildings, recency])
   // "M/D" (없으면 —)
   const lastVisitLabel = (cardId: number) => {
     const v = cardLastVisit.get(cardId)

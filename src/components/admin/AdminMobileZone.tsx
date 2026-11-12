@@ -1,4 +1,5 @@
 import { t, translateKoreanAddress } from '../../i18n'
+import { useVisitRecency } from '../../hooks/privilegedHistoryScope'
 import { getRegionNames } from '../../lib/regions'
 import type { AppLanguage } from '../../i18n'
 // 관리자 모바일 구역 — design_handoff 04 화면 (구역 시·구 단위)
@@ -253,18 +254,19 @@ export function AdminMobileZone({
   }, [buildings])
 
   // 카드별 최근 봉사(방문) 날짜 — visit_histories 최신 visited_at
+  const recency = useVisitRecency(visitHistories)
   const cardLastVisit = useMemo(() => {
     const unitCard = new Map<number, number>()  // unitId → cardId
     for (const b of buildings) for (const u of b.units ?? []) unitCard.set(u.id, b.cardId)
     const map = new Map<number, string>()  // cardId → 최신 visited_at
-    for (const h of visitHistories) {
+    for (const h of recency) {
       const cardId = unitCard.get(h.unitId)
       if (cardId == null) continue
       const prev = map.get(cardId)
       if (!prev || (h.visitedAt ?? '') > prev) map.set(cardId, h.visitedAt)
     }
     return map
-  }, [buildings, visitHistories])
+  }, [buildings, recency])
 
   // onlyNeedsVisit 여부에 따라 카드의 주택/상가 카운트를 골라준다
   const pickCounts = (cardId: number): { house: number; shop: number } => {

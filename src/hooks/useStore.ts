@@ -9,6 +9,7 @@ import { createParticipantSignalReceipts, participantSignalDedupEnabled, type Pa
 import { assertUnassignedCalendarEvent, calendarApplicationRefreshEnabled } from './calendarApplicationRefresh'
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
+import { privilegedHistoryEnabled, VISIT_RECENCY_COLUMNS, type PrivilegedHistoryScope, type VisitRecency } from './privilegedHistoryScope'
 import { createHistoryCoverage, historyScope, scopedHistoryRecoveryEnabled } from './scopedHistoryRecovery'
 import { createVisitSignalQueue, visitSignalDedupEnabled } from './visitSignalQueue'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
@@ -131,7 +132,7 @@ async function fetchAllPages<T>(
  * 예전에는 로그인 화면에서도 전부 받았다 (App.tsx 는 인증 판단보다 먼저
  * useStore() 를 호출한다). 실측으로 API 만 약 2.2MB · 47개 요청이었다.
  */
-export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string, requestedCalendarScope?: string, sessionUserName?: string) {
+export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string, requestedCalendarScope?: string, sessionUserName?: string, requestedHistoryScope?: PrivilegedHistoryScope) {
   const calendarScopeFeature = calendarWindowEnabled() && requestedCalendarScope !== undefined
   const calendarScope = calendarScopeFeature ? requestedCalendarScope : 'full'
   const calendarScopeRef = useRef(calendarScope)
@@ -149,6 +150,19 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // App keys this store by account/read mode. Never mix partial and full snapshots.
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
   const scopedHistories = scopedVisitHistoryEnabled(role, Boolean(recipientReader))
+  const demandHistories = privilegedHistoryEnabled(role) && !recipientReader && requestedHistoryScope !== undefined
+  // Promote once per login instead of downloading again on every map/home round trip.
+  const fullHistoryAcquired = useRef(false)
+  const historyMode = demandHistories && !fullHistoryAcquired.current ? requestedHistoryScope : 'full'
+  const historyModeRef = useRef(historyMode)
+  const historyModeGeneration = useRef(0)
+  if (historyModeRef.current !== historyMode) ++historyModeGeneration.current
+  historyModeRef.current = historyMode
+  const historyBaseline = useRef<{ mode: PrivilegedHistoryScope; generation: number } | null>(null)
+  const [loadedHistoryMode, setLoadedHistoryMode] = useState<PrivilegedHistoryScope | null>(null)
+  const [loadedHistoryGeneration, setLoadedHistoryGeneration] = useState(-1)
+  const [historyReadError, setHistoryReadError] = useState(false)
+  const [visitRecency, setVisitRecency] = useState<VisitRecency[]>([])
   const historyRecovery = scopedHistoryRecoveryEnabled(scopedHistories)
   const queuedVisitRefresh = historyRecovery && (import.meta.env.VITE_VISIT_REALTIME_QUEUE_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
   const dedupVisitSignals = visitSignalDedupEnabled(queuedVisitRefresh)
@@ -164,6 +178,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     const historyVersion = historyReadVersion
     return () => {
       historyStoreActive.current = false
+      if (demandHistories) ++historyVersion.current
       if (historyRecovery) {
         visitRefreshQueue.current?.reset()
         ++buildingVersion.current
@@ -171,7 +186,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         ++historyVersion.current
       }
     }
-  }, [historyCoverage, historyRecovery, enabled])
+  }, [historyCoverage, historyRecovery, enabled, demandHistories])
   useEffect(() => {
     recipientReader?.resume()
     return () => recipientReader?.dispose()
@@ -432,11 +447,15 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       case 'visits': {
         const sessionsOnly = slice === 'serviceSessions'
         const historiesOnly = slice === 'visitHistories'
+        const readMode = historyModeRef.current
+        const readGeneration = historyModeGeneration.current
+        // A building delta cannot establish a missing full/summary baseline.
+        if (demandHistories && (historyBaseline.current?.mode !== readMode || historyBaseline.current.generation !== readGeneration)) historiesRecovered = false
         const coverageRead = historyRecovery && !sessionsOnly && !historiesRecovered
           ? historyCoverage.begin(historyScope(buildingsRef.current)) : null
         if (historyRecovery && !sessionsOnly) ++historyReadsPending.current
         try {
-          const historyVersion = scopedHistories && !sessionsOnly ? ++historyReadVersion.current : null
+          const historyVersion = (scopedHistories || demandHistories) && !sessionsOnly ? ++historyReadVersion.current : null
           // Recompute the cutoff per read, including foreground recovery after midnight.
           const sessionScope = recentSessionScope(role, sessionUserName)
           // Phase 5 projection + 기간 필터
@@ -451,7 +470,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
                 .then(data => ({ data, error: null }))
               : fetchAllPages((from, to) => supabase
               .from('visit_histories')
-              .select(VISIT_HISTORY_COLUMNS)
+              .select(demandHistories && readMode === 'summary' ? VISIT_RECENCY_COLUMNS : VISIT_HISTORY_COLUMNS)
               .is('invalidated_at', null)
               .gte('created_at', oneYearAgo)
               .order('created_at', { ascending: false })
@@ -483,7 +502,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           measure(visitsRes.data)
           measure(sessionsRes.data)
 
-          if (historyVersion !== null && historyVersion !== historyReadVersion.current) {
+          if (historyVersion !== null && (historyVersion !== historyReadVersion.current
+            || (demandHistories && (!historyStoreActive.current || readGeneration !== historyModeGeneration.current)))) {
             throw new SupersededReadError('Visit history read superseded')
           }
 
@@ -496,12 +516,29 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
             // Match the full/targeted SQL created_at >= cutoff contract (NULL is excluded).
             setVisitHistories((current) => current.filter((history) =>
               history.createdAt != null && Date.parse(history.createdAt) >= Date.parse(oneYearAgo)))
+            if (demandHistories) setVisitRecency(current => current.filter(history =>
+              history.createdAt != null && Date.parse(history.createdAt) >= Date.parse(oneYearAgo)))
           } else {
-            setVisitHistories((visitsRes.data as RawVisitHistory[]).map(toVisitHistory))
+            if (demandHistories && readMode === 'summary') {
+              setVisitRecency((visitsRes.data as Pick<RawVisitHistory, 'id' | 'unit_id' | 'visited_at' | 'created_at'>[]).map(row => ({
+                id: row.id, unitId: row.unit_id, visitedAt: row.visited_at, createdAt: row.created_at,
+              })))
+              // Never disguise abbreviated rows as complete records for mutations/statistics.
+              setVisitHistories([])
+            } else {
+              setVisitHistories((visitsRes.data as RawVisitHistory[]).map(toVisitHistory))
+            }
             if (coverageRead) {
               if (historySyncsPending.current) historyCoverage.invalidate()
               else historyCoverage.commit(coverageRead, historyScope(buildingsRef.current))
             }
+          }
+          if (demandHistories && !sessionsOnly) {
+            if (readMode === 'full') fullHistoryAcquired.current = true
+            historyBaseline.current = { mode: readMode, generation: readGeneration }
+            setLoadedHistoryMode(readMode)
+            setLoadedHistoryGeneration(readGeneration)
+            setHistoryReadError(false)
           }
           if (!historiesOnly) setServiceSessions(sessionsRes.error
             ? []
@@ -512,6 +549,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           }
           return approxBytes
         } catch (error) {
+          if (demandHistories && !sessionsOnly && readGeneration === historyModeGeneration.current
+            && historyStoreActive.current && !(error instanceof SupersededReadError)) {
+            historyBaseline.current = null
+            setHistoryReadError(true)
+          }
           // An authoritative save may supersede a read without damaging an already
           // complete snapshot. Scope changes and failed syncs invalidate it separately.
           if (historyRecovery && !sessionsOnly && !(error instanceof SupersededReadError)) historyCoverage.invalidate()
@@ -773,7 +815,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
     }
-  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories, publishCalendarEvents, historyRecovery, historyCoverage, queuedVisitRefresh])
+  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories, publishCalendarEvents, historyRecovery, historyCoverage, queuedVisitRefresh, demandHistories])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
@@ -974,7 +1016,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         } catch (failure) {
           // Several route changes may supersede initial reads. Finish a complete
           // replacement within one shared deadline, without swallowing real errors.
-          if (!calendarScopeFeature || loadedOnceRef.current || !(failure instanceof SupersededReadError) || Date.now() >= deadline) throw failure
+          if ((!calendarScopeFeature && !demandHistories) || loadedOnceRef.current || !(failure instanceof SupersededReadError) || Date.now() >= deadline) throw failure
           retry = true
         }
       }
@@ -1005,6 +1047,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       // 안 그러면 로그인 화면이 '데이터 불러오는 중' 에서 멈춘다 (App.tsx)
       fetchStartedRef.current = false
       loadedOnceRef.current = false
+      fullHistoryAcquired.current = false
+      historyBaseline.current = null
       territoryCheckpoint.baseline = null
       territoryCheckpoint.buildingsThrough = null
       territoryCheckpoint.cards.clear()
@@ -1123,13 +1167,20 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         ]
       })
       // A delayed pre-save scoped read must not overwrite this authoritative update.
-      if (scopedHistories) ++historyReadVersion.current
+      if (scopedHistories || demandHistories) ++historyReadVersion.current
       const visibleUnits = new Set(buildingsRef.current.flatMap(building => building.units.map(unit => unit.id)))
       setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)
         || (!incomingUnitIds.has(h.unitId) && unaffectedUnitIds.has(h.unitId))),
       ...data.histories.filter((h) => incomingUnitIds.has(h.unitId))]
         .filter(h => !scopedHistories || visibleUnits.has(h.unitId))
         .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
+      if (demandHistories) setVisitRecency(current => [
+        ...current.filter(h => !unitIds.has(h.unitId)
+          || (!incomingUnitIds.has(h.unitId) && unaffectedUnitIds.has(h.unitId))),
+        ...data.histories.filter(h => incomingUnitIds.has(h.unitId)).map(h => ({
+          id: h.id, unitId: h.unitId, visitedAt: h.visitedAt, createdAt: h.createdAt,
+        })),
+      ])
       if (historyRecovery) historyCoverage.applyDelta(previousScope, historyScope(buildingsRef.current))
       return true
     } catch (error) {
@@ -1138,7 +1189,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     } finally {
       if (historyRecovery) --historySyncsPending.current
     }
-  }, [applyBuildingsChange, recipientReader, scopedHistories, historyRecovery, historyCoverage])
+  }, [applyBuildingsChange, recipientReader, scopedHistories, historyRecovery, historyCoverage, demandHistories])
 
   const syncChangedBuildings = useCallback(async (ids: number[], requireFresh = false) => {
     await readChangedBuildings(ids, requireFresh)
@@ -1260,12 +1311,16 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           ? { ...building, units: building.units.filter((unit) => !unitIds.has(unit.id)) }
           : building))
     setVisitHistories((current) => current.filter((visit) => !unitIds.has(visit.unitId)))
+    if (demandHistories) {
+      ++historyReadVersion.current
+      setVisitRecency(current => current.filter(visit => !unitIds.has(visit.unitId)))
+    }
     setReturnVisits((current) => current.filter((visit) => !returnVisitIds.has(visit.id)))
     setReturnVisitLogs((current) => current.filter((log) => !returnVisitIds.has(log.returnVisitId)))
     setEventRestaurantAssignments((current) => current.filter(
       (assignment) => !isRestaurantAssignmentDeleted(assignment, signal, unitIds),
     ))
-  }, [applyBuildingsChange, returnVisits])
+  }, [applyBuildingsChange, returnVisits, demandHistories])
 
   // 방문 기록 등으로 세대 하나가 바뀐 경우
   const patchUnit = useCallback((unitId: number, patch: Partial<Unit>) => {
@@ -1298,6 +1353,32 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     () => fetchSlices(['calendar', 'visits'], { triggeredBy: 'mutation:calendar:participant-removal' }),
     [fetchSlices],
   )
+  const retryHistoryRead = useCallback(async () => {
+    const generation = historyModeGeneration.current
+    setHistoryReadError(false)
+    try {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await withLoadDeadline(fetchSlice('visitHistories'), 45_000)
+          return
+        } catch (failure) {
+          if (generation !== historyModeGeneration.current || !historyStoreActive.current) return
+          if (failure instanceof SupersededReadError && historyBaseline.current?.generation === generation
+            && historyBaseline.current.mode === historyModeRef.current) return
+          // A post-save patch can supersede a full read. Retry, but never spin forever.
+          if (!(failure instanceof SupersededReadError) || attempt >= 2) throw failure
+        }
+      }
+    } catch (failure) {
+      if (generation === historyModeGeneration.current && historyStoreActive.current) setHistoryReadError(true)
+      throw failure
+    }
+  }, [fetchSlice])
+  useEffect(() => {
+    if (!enabled || !demandHistories || loading || !loadedOnceRef.current) return
+    if (loadedHistoryMode === historyMode && loadedHistoryGeneration === historyModeGeneration.current) return
+    void retryHistoryRead().catch(() => { /* history gate owns retry */ })
+  }, [enabled, demandHistories, loading, loadedHistoryMode, loadedHistoryGeneration, historyMode, retryHistoryRead])
   const previousCalendarScope = useRef(calendarScope)
   const calendarCacheIdentity = useRef({ role, recipientUser })
   // Read-only display selection: avoid unmounting the entire app for one render
@@ -1649,6 +1730,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   }
 
   return {
+    visitRecency: demandHistories && historyMode === 'summary' ? visitRecency : null,
+    historyScopeReady: !demandHistories || (loadedHistoryMode === historyMode && loadedHistoryGeneration === historyModeGeneration.current),
+    historyReadError,
+    retryHistoryRead,
     territoryRealtime,
     refetchAll: fetchAll,
     refetchSlices: fetchSlices,

@@ -94,6 +94,8 @@
 
 숨긴 댓글 알림 전송 제외: [0085 데모 조회 분리와 푸시 보존](0085-demo-notification-feed-without-comments.md)
 
+관리자·인도자 방문기록 지연 조회: [0086 날짜 요약과 전체 기록 분리](0086-demo-privileged-history-demand.md)
+
 ```markdown
 # 제목
 

@@ -12,6 +12,7 @@ const groupResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unk
 const assetResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
 const calendarResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
 const buildingResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
+const historyResponses = vi.hoisted(() => [] as Promise<{ data: Record<string, unknown>[]; error: unknown }> [])
 const calendarAssignmentState = vi.hoisted(() => ({ failedTable: '', rows: {} as Record<string, Record<string, unknown>[]> }))
 const updatedEvent = vi.hoisted(() => vi.fn())
 const toast = vi.hoisted(() => vi.fn())
@@ -40,6 +41,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       if (!writing && table === 'informal_assets' && assetResponses.length) return resolve(await assetResponses.shift())
       if (!writing && table === 'calendar_events' && calendarResponses.length) return resolve(await calendarResponses.shift())
       if (!writing && table === 'buildings' && buildingResponses.length) return resolve(await buildingResponses.shift())
+      if (!writing && table === 'visit_histories' && historyResponses.length) return resolve(await historyResponses.shift())
       if (!writing && (table === 'event_card_assignments' || table === 'event_card_assignment_cards')) {
         return resolve({ data: calendarAssignmentState.rows[table] ?? [],
           error: calendarAssignmentState.failedTable === table ? new Error('assignment read failed') : null })
@@ -54,6 +56,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); state.rpc.mockReset(); state.ch
 afterEach(() => { logColumns.length = 0; creationCards.enabled = false; returnResponses.length = 0; groupResponses.length = 0; assetResponses.length = 0 })
 afterEach(() => { calendarResponses.length = 0; buildingResponses.length = 0; updatedEvent.mockReset(); creationCards.ids = [1] })
 afterEach(() => { calendarAssignmentState.failedTable = ''; calendarAssignmentState.rows = {} })
+afterEach(() => { historyResponses.length = 0 })
 
 const eventInput = { time: '11:00', title: 'edited', place: '', leader: '', memo: '', hasMeeting: true, allowApplications: true }
 const rawEvents = [
@@ -805,6 +808,50 @@ test('successful building recovery skips global histories but keeps sessions and
   expect(state.reads).toContain('visit_histories')
   expect(state.reads).toContain('buildings')
   expect(state.reads).toContain('service_sessions')
+})
+
+test('building recovery cannot promote a date summary while the full history demand is pending', async () => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+  state.clock.mockResolvedValue(new Date().toISOString())
+  state.index.mockResolvedValue({ signals: [], ids: [] })
+  const { result, rerender } = renderHook(({ mode }: { mode: 'summary' | 'full' }) =>
+    useStore(true, 'admin', undefined, undefined, 'Me', mode), { initialProps: { mode: 'summary' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let finish!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  historyResponses.push(new Promise(resolve => { finish = resolve }))
+  rerender({ mode: 'full' })
+  await waitFor(() => expect(historyResponses).toHaveLength(0))
+  expect(result.current.historyScopeReady).toBe(false)
+  historyResponses.push(Promise.resolve({ data: [{ id: 9, unit_id: 1, visitor_name: 'Me', result: '부재',
+    visited_at: '2026-11-12', created_at: new Date().toISOString(), memo: 'complete' }], error: null }))
+  state.reads = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(state.reads).toContain('visit_histories')
+  expect(result.current.historyScopeReady).toBe(true)
+  expect(result.current.visitHistories[0]?.memo).toBe('complete')
+  state.reads = []
+  await act(async () => { finish({ data: [], error: null }) })
+  expect(result.current.visitHistories[0]?.memo).toBe('complete')
+  expect(state.reads).not.toContain('visit_histories')
+})
+
+test('privileged summary recovery expires dates without adding a global history read', async () => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
+  state.clock.mockResolvedValue(new Date().toISOString())
+  state.index.mockResolvedValue({ signals: [], ids: [1] })
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, undefined, 'Me', 'summary'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const building = testBuilding(1, 1, 'kept')
+  const recent = { id: 1, unitId: building.units[0].id, visitor: 'Me', result: '부재', timeSlot: '오전',
+    visitedAt: '2026-11-12', createdAt: new Date().toISOString() }
+  state.changed.mockResolvedValue({ buildings: [building], histories: [recent, { ...recent, id: 2, createdAt: '2000-01-01T00:00:00Z' }] })
+  await act(async () => { await result.current.syncChangedBuildings([1]) })
+  state.reads = []
+  await act(async () => { await result.current.refetchSlices(['buildings', 'visits'], { triggeredBy: 'foreground' }) })
+  expect(result.current.visitRecency?.map(h => h.id)).toEqual([1])
+  expect(state.reads).not.toContain('visit_histories')
 })
 
 test.each([[1, 2], [2, 1]])('unit move preserves history when building responses arrive in order %j', async (first, second) => {

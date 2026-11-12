@@ -7,6 +7,8 @@ import { recipientStoreEnabled } from '../lib/recipientStore'
 import { calendarReadScope, calendarWindowEnabled } from './calendarReadScope'
 import { makeServiceSessionMutations } from './storeMutations/serviceSessions'
 import { useSettingsCalendarScope } from './useSettingsCalendarScope'
+import { privilegedHistoryScope, VISIT_RECENCY_COLUMNS, type PrivilegedHistoryScope } from './privilegedHistoryScope'
+import { VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
 
 const state = vi.hoisted(() => ({
   creationAction: '' as '' | 'created' | 'existing',
@@ -139,6 +141,152 @@ beforeEach(() => {
   state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }, { id: 2, units: 50, completed: 25, progress: 50 }])
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
+
+test.each(['admin', 'leader'] as const)('privileged %s home reads dates; statistics waits for complete paginated histories only', async role => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  const { result, rerender } = renderHook(({ mode }: { mode: PrivilegedHistoryScope }) =>
+    useStore(true, role, undefined, undefined, 'Me', mode), { initialProps: { mode: 'summary' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.historyScopeReady).toBe(true)
+  expect(state.historyColumns).toEqual([VISIT_RECENCY_COLUMNS])
+  expect(result.current.visitHistories).toEqual([])
+  expect(result.current.visitRecency).toEqual([{ id: 900, unitId: 900, visitedAt: '2026-10-05', createdAt: '2026-10-05T00:00:00Z' }])
+  state.historyRows = Array.from({ length: 1001 }, (_, id) => ({ ...state.historyRows[0], id, memo: `memo${id}` }))
+  let finish!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.historyResponse = new Promise(resolve => { finish = resolve })
+  state.reads = []; state.historyColumns = []
+  rerender({ mode: 'full' })
+  expect(result.current.historyScopeReady).toBe(false)
+  await waitFor(() => expect(state.historyResponse).toBeNull())
+  await act(async () => { finish({ data: state.historyRows.slice(0, 1000), error: null }) })
+  await waitFor(() => expect(result.current.historyScopeReady).toBe(true))
+  expect(result.current.visitHistories).toHaveLength(1001)
+  expect(result.current.visitHistories[1000].memo).toBe('memo1000')
+  expect(state.historyColumns).toEqual([VISIT_HISTORY_COLUMNS, VISIT_HISTORY_COLUMNS])
+  expect(state.reads).toEqual(['visit_histories', 'visit_histories'])
+  state.reads = []
+  rerender({ mode: 'summary' })
+  expect(result.current.historyScopeReady).toBe(true)
+  expect(result.current.visitHistories).toHaveLength(1001)
+  expect(state.reads).toEqual([])
+  rerender({ mode: 'full' })
+  expect(state.reads).toEqual([])
+})
+
+test.each(['user', 'developer'] as const)('store itself excludes %s from privileged summary', async role => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, role, undefined, undefined, 'Me', 'summary'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.historyColumns).toEqual([VISIT_HISTORY_COLUMNS])
+  expect(result.current.visitHistories).toHaveLength(1)
+  expect(result.current.visitRecency).toBeNull()
+})
+
+test.each([['false', 'true', true], ['true', 'false', false], ['false', undefined, false], ['true', undefined, true]] as const)(
+  'history App classifier and reader agree demo=%s flag=%s', async (demo, flag, enabled) => {
+    vi.stubEnv('VITE_DEMO_MODE', demo)
+    vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', flag)
+    const mode = privilegedHistoryScope('admin', '/', '', false)
+    const { result } = renderHook(() => useStore(true, 'admin', undefined, undefined, 'Me', mode))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(state.historyColumns).toEqual([enabled ? VISIT_RECENCY_COLUMNS : VISIT_HISTORY_COLUMNS])
+  },
+)
+
+test('failed history demand keeps statistics closed until explicit successful retry', async () => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  const { result, rerender } = renderHook(({ mode }: { mode: PrivilegedHistoryScope }) =>
+    useStore(true, 'admin', undefined, undefined, 'Me', mode), { initialProps: { mode: 'summary' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.failedTable = 'visit_histories'
+  rerender({ mode: 'full' })
+  await waitFor(() => expect(result.current.historyReadError).toBe(true))
+  expect(result.current.historyScopeReady).toBe(false)
+  expect(result.current.visitHistories).toEqual([])
+  state.failedTable = ''
+  await act(async () => { await result.current.retryHistoryRead() })
+  expect(result.current.historyScopeReady).toBe(true)
+  expect(result.current.visitHistories).toHaveLength(1)
+})
+
+test('late summary response cannot erase newly loaded full history', async () => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  const { result, rerender } = renderHook(({ mode }: { mode: PrivilegedHistoryScope }) =>
+    useStore(true, 'admin', undefined, undefined, 'Me', mode), { initialProps: { mode: 'summary' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let finish!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.historyResponse = new Promise(resolve => { finish = resolve })
+  let previous!: Promise<unknown>
+  act(() => { previous = result.current.refetchSlices(['visitHistories']).catch(error => error) })
+  await waitFor(() => expect(state.historyResponse).toBeNull())
+  rerender({ mode: 'full' })
+  expect(result.current.historyScopeReady).toBe(false)
+  await waitFor(() => expect(result.current.historyScopeReady).toBe(true))
+  await act(async () => { finish({ data: [], error: null }); await previous })
+  expect(result.current.visitHistories).toHaveLength(1)
+  expect(result.current.visitRecency).toBeNull()
+})
+
+test('date summary targeted patch removes cancelled latest date and restores previous date', async () => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'admin', undefined, undefined, 'Me', 'summary'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const raw = { ...building, units: [{ ...building.units[0], id: 900 }] }
+  const { toBuilding, toVisitHistory } = await import('./storeTransforms')
+  const old = toVisitHistory(state.historyRows[0] as never)
+  state.changed.mockResolvedValue({ buildings: [toBuilding(raw)], histories: [old, { ...old, id: 901, visitedAt: '2026-11-12' }] })
+  await act(async () => { await result.current.syncChangedBuildings([10]) })
+  expect(result.current.visitRecency?.map(h => h.id)).toEqual([900, 901])
+  state.changed.mockResolvedValue({ buildings: [toBuilding(raw)], histories: [old] })
+  await act(async () => { await result.current.syncChangedBuildings([10]) })
+  expect(result.current.visitRecency?.map(h => h.visitedAt)).toEqual(['2026-10-05'])
+  state.changed.mockResolvedValue({ buildings: [], histories: [] })
+  await act(async () => { await result.current.syncChangedBuildings([10]) })
+  expect(result.current.visitRecency).toEqual([])
+})
+
+test('slow full demand cannot resurrect cancelled history after targeted patch', async () => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  const { result, rerender } = renderHook(({ mode }: { mode: PrivilegedHistoryScope }) =>
+    useStore(true, 'admin', undefined, undefined, 'Me', mode), { initialProps: { mode: 'summary' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const stale = [...state.historyRows]
+  let finish!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.historyResponse = new Promise(resolve => { finish = resolve })
+  rerender({ mode: 'full' })
+  await waitFor(() => expect(state.historyResponse).toBeNull())
+  state.changed.mockResolvedValue({ buildings: [], histories: [] })
+  state.historyRows = []
+  await act(async () => { await result.current.syncChangedBuildings([10]) })
+  expect(result.current.historyScopeReady).toBe(false)
+  await act(async () => { finish({ data: stale, error: null }) })
+  await waitFor(() => expect(result.current.historyScopeReady).toBe(true))
+  expect(result.current.visitHistories).toEqual([])
+})
+
+test('strict-mode privileged initial read establishes a complete summary', async () => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, undefined, 'Me', 'summary'), { wrapper: StrictMode })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  expect(result.current.historyScopeReady).toBe(true)
+  expect(result.current.visitRecency).toHaveLength(1)
+  expect(result.current.visitHistories).toEqual([])
+})
+
+test('disabling privileged store discards an in-flight full history response', async () => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  const { result, rerender } = renderHook(({ enabled, mode }: { enabled: boolean; mode: PrivilegedHistoryScope }) =>
+    useStore(enabled, 'admin', undefined, undefined, 'Me', mode), { initialProps: { enabled: true, mode: 'summary' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let finish!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.historyResponse = new Promise(resolve => { finish = resolve })
+  rerender({ enabled: true, mode: 'full' })
+  await waitFor(() => expect(state.historyResponse).toBeNull())
+  rerender({ enabled: false, mode: 'full' })
+  await act(async () => { finish({ data: state.historyRows, error: null }) })
+  expect(result.current.visitHistories).toEqual([])
+})
 
 function enableScopedHistories() {
   vi.stubEnv('VITE_DEMO_MODE', 'true')

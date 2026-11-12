@@ -8,15 +8,18 @@ import { CalendarReadContext } from './hooks/CalendarReadContext'
 const state = vi.hoisted(() => ({
   ready: true, scope: '', sessionUser: undefined as string | undefined, role: '', mounts: 0,
   realtime: vi.fn(), skipSignal: vi.fn(),
+  historyReady: true, historyError: false, historyScope: undefined as string | undefined, retryHistory: vi.fn(async () => {}),
   auth: { user: { id: 1, name: 'Admin', role: 'admin' }, allUsers: [], loading: false },
 }))
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => state.auth }))
-vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string, _user: string, scope: string, sessionUser?: string) => {
+vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string, _user: string, scope: string, sessionUser?: string, historyScope?: string) => {
   useState(() => { state.mounts += 1; return null })
   state.scope = scope
   state.sessionUser = sessionUser
   state.role = role
-  return { loading: false, error: null, calendarScopeReady: state.ready, calendarReadError: false, skipParticipantSignal: state.skipSignal }
+  state.historyScope = historyScope
+  return { loading: false, error: null, calendarScopeReady: state.ready, calendarReadError: false, skipParticipantSignal: state.skipSignal,
+    historyScopeReady: state.historyReady, historyReadError: state.historyError, retryHistoryRead: state.retryHistory }
 } }))
 vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: state.realtime }))
 vi.mock('./hooks/usePlaceDeletionRealtime', () => ({ usePlaceDeletionRealtime: () => {} }))
@@ -43,11 +46,40 @@ function CalendarConsumer() {
 beforeEach(() => {
   state.realtime.mockClear()
   state.ready = true
+  state.historyReady = true; state.historyError = false; state.retryHistory.mockClear()
   state.mounts = 0
   state.auth.user = { id: 1, name: 'Admin', role: 'admin' }
   window.localStorage.clear()
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
 })
+
+test.each(['/stats', '/service-logs', '/map'])('full history consumer %s stays closed on loading/failure', async path => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'true')
+  state.historyReady = false
+  const view = render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(state.historyScope).toBe('full')
+  expect(screen.getByText('app loading')).toBeTruthy()
+  expect(screen.queryByText('detail mounted')).toBeNull()
+  state.historyError = true
+  view.rerender(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(screen.getByRole('alert')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
+  expect(state.retryHistory).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText('detail mounted')).toBeNull()
+  state.historyReady = true
+  view.rerender(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(await screen.findByText('detail mounted')).toBeTruthy()
+})
+
+test.each([['true', 'false', undefined], ['false', 'true', 'summary']] as const)(
+  'App wires history flag demo=%s flag=%s', async (demo, flag, scope) => {
+    vi.stubEnv('VITE_DEMO_MODE', demo)
+    vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', flag)
+    render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+    await screen.findByText('detail mounted')
+    expect(state.historyScope).toBe(scope)
+  },
+)
 
 test('App passes store participant receipts into the real-time hook', async () => {
   render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)

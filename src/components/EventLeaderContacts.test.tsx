@@ -15,6 +15,8 @@ const event = { id: 10, date: '2026-11-10', time: '10:00', title: 'Test service'
   applicants: [], guests: [], assigned: [], cardAssignments: [], memo: '' } satisfies CalendarEvent
 beforeEach(() => {
   vi.stubEnv('VITE_PRIVATE_USER_READS_ENABLED', 'true')
+  // openEvent selects the fixture date only in the retired-chat navigation mode.
+  vi.stubEnv('VITE_CHAT_DISABLED', 'true')
   api.rpc.mockResolvedValue({ data: [{ id: 2, name: 'Leader', phone: '010-0000-0000' }], error: null })
   Element.prototype.scrollIntoView = vi.fn()
 })
