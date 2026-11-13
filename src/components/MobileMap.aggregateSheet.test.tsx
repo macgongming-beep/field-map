@@ -10,6 +10,7 @@ import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight } from '../uti
 import type { InformalAsset } from '../types'
 import { getLocalDateString } from '../utils/dateUtils'
 import { registerToastListener } from '../lib/toast'
+import { BuildingDetailContext } from '../hooks/buildingDemand'
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
@@ -83,6 +84,28 @@ describe('모바일 지도 하단 시트', () => {
     eventRestaurantAssignments: [],
     calendarEvents: [],
     onBack: vi.fn(),
+  })
+
+  test('unit detail waits for its building body before showing or editing its memo', async () => {
+    Element.prototype.scrollIntoView = vi.fn()
+    const props = mapProps()
+    props.buildings[0].units[0].memo = 'Existing private memo'
+    const ensure = vi.fn(() => new Promise<void>(() => {}))
+    let ready = false
+    const reader = { ready: () => ready, ensure }
+    const view = () => <MemoryRouter><BuildingDetailContext.Provider value={reader}>
+      <MobileMap {...(props as never)} />
+    </BuildingDetailContext.Provider></MemoryRouter>
+    const { container, rerender } = render(view())
+    fireEvent.click(screen.getByRole('button', { name: 'zoom close' }))
+    fireEvent.click(screen.getByRole('button', { name: '지도 건물 영덕빌라' }))
+    fireEvent.click(container.querySelector('#building-card-1 .bld-row-head-btn')!)
+    fireEvent.click(container.querySelector('.unit-name-btn')!)
+    await waitFor(() => expect(ensure).toHaveBeenCalledWith(1))
+    expect(screen.queryByText('Existing private memo')).not.toBeInTheDocument()
+    ready = true
+    rerender(view())
+    expect(await screen.findByText('Existing private memo')).toBeVisible()
   })
 
   test('배정 전체 지도는 진행 중 세션의 대표 카드로 좁혀지지 않는다', async () => {

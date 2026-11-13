@@ -9,17 +9,20 @@ const state = vi.hoisted(() => ({
   ready: true, scope: '', sessionUser: undefined as string | undefined, role: '', mounts: 0,
   realtime: vi.fn(), skipSignal: vi.fn(),
   historyReady: true, historyError: false, historyScope: undefined as string | undefined, retryHistory: vi.fn(async () => {}),
+  buildingReady: true, buildingError: false, buildingScope: undefined as string | undefined, retryBuilding: vi.fn(async () => {}),
   auth: { user: { id: 1, name: 'Admin', role: 'admin' }, allUsers: [], loading: false },
 }))
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => state.auth }))
-vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string, _user: string, scope: string, sessionUser?: string, historyScope?: string) => {
+vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string, _user: string, scope: string, sessionUser?: string, historyScope?: string, buildingScope?: string) => {
   useState(() => { state.mounts += 1; return null })
   state.scope = scope
   state.sessionUser = sessionUser
   state.role = role
   state.historyScope = historyScope
+  state.buildingScope = buildingScope
   return { loading: false, error: null, calendarScopeReady: state.ready, calendarReadError: false, skipParticipantSignal: state.skipSignal,
-    historyScopeReady: state.historyReady, historyReadError: state.historyError, retryHistoryRead: state.retryHistory }
+    historyScopeReady: state.historyReady, historyReadError: state.historyError, retryHistoryRead: state.retryHistory,
+    buildingScopeReady: state.buildingReady, buildingReadError: state.buildingError, retryBuildingRead: state.retryBuilding }
 } }))
 vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: state.realtime }))
 vi.mock('./hooks/usePlaceDeletionRealtime', () => ({ usePlaceDeletionRealtime: () => {} }))
@@ -47,10 +50,27 @@ beforeEach(() => {
   state.realtime.mockClear()
   state.ready = true
   state.historyReady = true; state.historyError = false; state.retryHistory.mockClear()
+  state.buildingReady = true; state.buildingError = false; state.retryBuilding.mockClear()
   state.mounts = 0
   state.auth.user = { id: 1, name: 'Admin', role: 'admin' }
   window.localStorage.clear()
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+})
+
+test.each([['/', 'home'], ['/map', 'map'], ['/stats', 'full'], ['/?openEvent=17', 'full']])('App wires building scope for %s and blocks incomplete consumers', async (path, expected) => {
+  vi.stubEnv('VITE_BUILDING_DEMAND_ENABLED', 'true')
+  state.buildingReady = false
+  const view = render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(state.buildingScope).toBe(expected)
+  expect(screen.getByText('app loading')).toBeTruthy()
+  expect(screen.queryByText('detail mounted')).toBeNull()
+  state.buildingError = true
+  view.rerender(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
+  expect(state.retryBuilding).toHaveBeenCalledTimes(1)
+  state.buildingReady = true
+  view.rerender(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(await screen.findByText('detail mounted')).toBeTruthy()
 })
 
 test.each(['/stats', '/service-logs', '/map'])('full history consumer %s stays closed on loading/failure', async path => {

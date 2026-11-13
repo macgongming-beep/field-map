@@ -96,6 +96,8 @@
 
 관리자·인도자 방문기록 지연 조회: [0086 날짜 요약과 전체 기록 분리](0086-demo-privileged-history-demand.md)
 
+홈 건물 상세 지연 조회: [0087 데모 홈 요약·지도·선택 건물 상세 분리](0087-demo-building-demand.md)
+
 ```markdown
 # 제목
 

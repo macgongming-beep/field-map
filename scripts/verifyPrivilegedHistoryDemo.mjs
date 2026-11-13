@@ -7,7 +7,8 @@ import { createClient } from '@supabase/supabase-js'
 const mode = process.argv[2]
 assert.ok(['setup', 'check', 'cleanup'].includes(mode) && process.argv.includes('--confirm-demo'))
 const config = parseEnv(readFileSync(process.env.DEMO_ENV_FILE, 'utf8'))
-const login = JSON.parse(readFileSync(process.env.DEMO_LOGIN_FILE, 'utf8'))
+const login = process.env.DEMO_LOGIN_FILE ? JSON.parse(readFileSync(process.env.DEMO_LOGIN_FILE, 'utf8'))
+  : { loginId: config.TEST_LOGIN_ID, pin: config.TEST_LOGIN_PIN }
 const origin = 'https://itjlykpjmlcvanqpmkmc.supabase.co'
 assert.equal(config.VITE_SUPABASE_URL, origin)
 const options = { auth: { persistSession: false, autoRefreshToken: false } }
@@ -15,7 +16,7 @@ const unwrap = ({ data, error }) => { assert.equal(error, null, JSON.stringify(e
 const actor = unwrap(await createClient(origin, config.VITE_SUPABASE_ANON_KEY, options).rpc('auth_login', {
   p_login_id: login.loginId, p_pin: login.pin,
 }))[0]
-assert.equal(actor.role, 'admin')
+assert.ok(['admin', 'developer'].includes(actor.role))
 const db = createClient(origin, config.VITE_SUPABASE_ANON_KEY, { ...options, global: { headers: { 'x-session-token': actor.token } } })
 const file = '/tmp/field-map-privileged-history-fixture.json'
 async function activeCount() {
