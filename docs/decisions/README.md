@@ -98,6 +98,8 @@
 
 홈 건물 상세 지연 조회: [0087 데모 홈 요약·지도·선택 건물 상세 분리](0087-demo-building-demand.md)
 
+캘린더·구역 건물 조회: [0089 데모 이름·상태 요약과 배정 편집 전체 조회](0089-demo-calendar-zone-building-demand.md)
+
 ```markdown
 # 제목
 

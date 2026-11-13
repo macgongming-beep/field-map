@@ -57,8 +57,9 @@ beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
 })
 
-test.each([['/', 'home'], ['/map', 'map'], ['/stats', 'full'], ['/?openEvent=17', 'full']])('App wires building scope for %s and blocks incomplete consumers', async (path, expected) => {
+test.each([['/', 'home'], ['/map', 'map'], ['/stats', 'full'], ['/?openEvent=17', 'full'], ['/calendar', 'calendar'], ['/zone', 'zone'], ['/zone?tab=restaurant', 'full']])('App wires building scope for %s and blocks incomplete consumers', async (path, expected) => {
   vi.stubEnv('VITE_BUILDING_DEMAND_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_ZONE_BUILDING_DEMAND_ENABLED', 'true')
   state.buildingReady = false
   const view = render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
   expect(state.buildingScope).toBe(expected)

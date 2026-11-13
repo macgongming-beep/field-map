@@ -15,7 +15,7 @@ import { PwaInstallBanner } from './components/PwaInstall'
 import { PullToRefresh } from './components/PullToRefresh'
 import { useStore } from './hooks/useStore'
 import { privilegedHistoryScope, VisitRecencyContext } from './hooks/privilegedHistoryScope'
-import { buildingDemandForRoute, BuildingDetailContext } from './hooks/buildingDemand'
+import { buildingDemandForRoute, BuildingDetailContext, FullBuildingContext } from './hooks/buildingDemand'
 import { msg } from './lib/msg'
 import { recentSessionsEnabled } from './hooks/serviceSessionReadScope'
 import { useCalendarRealtime } from './hooks/useCalendarRealtime'
@@ -116,7 +116,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
 
   const {
     visitRecency, historyScopeReady, historyReadError, retryHistoryRead,
-    buildingScopeReady, buildingReadError, retryBuildingRead, buildingDetailReader,
+    buildingScopeReady, buildingReadError, retryBuildingRead, buildingDetailReader, fullBuildingReader,
     calendarScopeReady, calendarReadError, retryCalendarRead, invalidateCalendarCache, refreshCalendarParticipants, skipParticipantSignal,
     cards,
     buildings,
@@ -442,6 +442,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
         <ScopedCardContext.Provider value={recipientCardScopeEnabled(actualRole, Boolean(recipientUser))}>
         <VisitRecencyContext.Provider value={visitRecency ?? null}>
         <BuildingDetailContext.Provider value={buildingDetailReader ?? null}>
+        <FullBuildingContext.Provider value={fullBuildingReader ?? null}>
         <TerritoryRealtimeContext.Provider value={territoryRealtime}>
         <CalendarReadContext.Provider value={windowedCalendar ? {
           ...calendarDemand, ready: calendarScopeReady, error: calendarReadError, select: selectCalendarDemand,
@@ -674,6 +675,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
         )}
         </CalendarReadContext.Provider>
         </TerritoryRealtimeContext.Provider>
+        </FullBuildingContext.Provider>
         </BuildingDetailContext.Provider>
         </VisitRecencyContext.Provider>
         </ScopedCardContext.Provider>

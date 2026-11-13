@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { AssignmentEditor } from './AssignmentEditor'
 import type { CalendarEvent, InformalAsset, EventInformalAssignment } from '../../types'
 import { testCard } from '../../test/territoryFixture'
+import { FullBuildingContext } from '../../hooks/buildingDemand'
 
 vi.mock('./TeamBuildScreen', () => ({ TeamBuildScreen: () => null }))
 vi.mock('./ZoneAssignScreen', () => ({ ZoneAssignScreen: () => null }))
@@ -52,4 +53,26 @@ test('삭제된 비공식 ID도 선택 해제할 수 있다', () => {
   expect(screen.getByRole('region',{name:'배정할 수 없는 선택'})).toHaveTextContent('#9 (ID: 9)')
   fireEvent.click(screen.getByRole('button',{name:'팀 1 · #9 선택 해제'}))
   expect(screen.getByRole('button',{name:'배정 공유',exact:true})).toBeEnabled()
+})
+
+test('actual assignment editor cannot initialize or share from name-only buildings; waits through failure then uses latest participants', async () => {
+  const request = vi.fn(), retry = vi.fn().mockResolvedValue(undefined), share = vi.fn()
+  const props = { event, cards: [], allCards: [testCard(1, 'card')], buildings: [], cardBoundaries: [],
+    currentVisitor: 'A', canEdit: true, informalAssets: assets.filter(a => !a.archived), onClose: vi.fn(), onShare: share }
+  const view = (ready: boolean, error = false) => <FullBuildingContext.Provider value={{ ready, error, request, retry }}>
+    <AssignmentEditor {...props} />
+  </FullBuildingContext.Provider>
+  const rendered = render(view(false))
+  expect(request).toHaveBeenCalledOnce()
+  expect(screen.queryByRole('button', { name: '배정 공유', exact: true })).not.toBeInTheDocument()
+  expect(screen.getByRole('status')).toBeInTheDocument()
+  rendered.rerender(view(false, true))
+  fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
+  expect(retry).toHaveBeenCalledOnce()
+  expect(share).not.toHaveBeenCalled()
+  props.event = { ...event, applicants: [], assigned: [], cardAssignments: [] }
+  rendered.rerender(view(true))
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '배정 공유', exact: true })).toBeInTheDocument()
+  expect(screen.queryByText('보관된 카드 (ID: 9)')).not.toBeInTheDocument()
 })

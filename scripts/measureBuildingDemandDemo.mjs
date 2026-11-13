@@ -17,6 +17,8 @@ assert.ok(actor.token && ['admin', 'developer'].includes(actor.role))
 const db = createClient(origin, config.VITE_SUPABASE_ANON_KEY, { ...options,
   global: { headers: { 'x-session-token': actor.token } } })
 const mapColumns = readFileSync('src/hooks/buildingDemand.ts', 'utf8').match(/MAP_BUILDING_COLUMNS = '([^']+)'/)[1]
+const calendarColumns = readFileSync('src/hooks/buildingDemand.ts', 'utf8').match(/CALENDAR_BUILDING_COLUMNS = '([^']+)'/)[1]
+const zoneColumns = readFileSync('src/hooks/buildingDemand.ts', 'utf8').match(/ZONE_BUILDING_COLUMNS = '([^']+)'/)[1]
 const fullColumns = readFileSync('src/hooks/useStore.ts', 'utf8').match(/MAP_BUILDING_COLUMNS : '([^']+)'/)[1]
 async function read(columns) {
   const rows = []
@@ -29,6 +31,13 @@ async function read(columns) {
   return { rows, pages }
 }
 const full = await read(fullColumns), map = await read(mapColumns)
+const calendar = await read(calendarColumns), zone = await read(zoneColumns)
+const names = rows => rows.map(b => ({ id: b.id, card: b.card_id, name: b.name, address: b.address,
+  units: b.units.map(u => ({ id: u.id, building: u.building_id, number: u.number })).sort((a, b) => a.id - b.id) }))
+assert.deepEqual(names(calendar.rows), names(full.rows))
+const zoneShape = rows => rows.map(({ lat, lng, memo, building_access_events, units, ...b }) => ({ ...b,
+  units: units.map(({ memo, ...u }) => u).sort((a, b) => a.id - b.id) }))
+assert.deepEqual(zoneShape(zone.rows), zoneShape(full.rows))
 const shape = rows => rows.map(b => ({ id: b.id, card: b.card_id, lat: b.lat, lng: b.lng,
   units: b.units.map(u => ({ id: u.id, status: u.status })).sort((a, b) => a.id - b.id) }))
 assert.deepEqual(shape(full.rows), shape(map.rows))
@@ -44,8 +53,12 @@ const sizes = value => ({ jsonBytes: Buffer.byteLength(JSON.stringify(value)), l
 const report = { at: new Date().toISOString(), origin,
   full: { rows: full.rows.length, requests: full.pages, ...sizes(full.rows) },
   map: { rows: map.rows.length, requests: map.pages, ...sizes(map.rows) },
+  calendar: { rows: calendar.rows.length, requests: calendar.pages, ...sizes(calendar.rows), additionalSummaryRequests: summaryRequests,
+    combinedLocalGzipBytes: sizes(calendar.rows).localGzipBytes + sizes(summaries).localGzipBytes },
+  zone: { rows: zone.rows.length, requests: zone.pages, ...sizes(zone.rows) },
   home: { buildingRequests: 0, summaryRequests, cards: summaries.length, ...sizes(summaries) },
   identicalPinsAndStatuses: true,
+  identicalCalendarNamesAndZoneStatusFields: true,
   note: 'Read-only demo payload comparison; local gzip excludes headers. Not browser request counts or production savings.' }
 writeFileSync('scratch/building-demand-demo-measurement.json', JSON.stringify(report, null, 2))
 console.log(JSON.stringify(report, null, 2))
