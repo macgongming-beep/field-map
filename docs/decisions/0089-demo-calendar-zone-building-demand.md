@@ -1,6 +1,6 @@
 # Calendar names and mobile zone status projections
 
-- Status: implemented; demo verification in progress, production unchanged
+- Status: demo deployed and verified; awaiting independent review, production unchanged
 - Date: 2026-11-13
 - Depends on: 0087 building demand (production integration recorded separately in 0088)
 - Opt-in: `VITE_CALENDAR_ZONE_BUILDING_DEMAND_ENABLED`
@@ -61,6 +61,8 @@ full until the AppSession resets; this intentionally limits later savings.
 
 ## Automated verification
 
+Full suite: 2,439 tests / 241 files passed. Lint and TypeScript/Vite build passed.
+
 Tests cover route/role/flag combinations, the useStore guard, 1001-row pagination,
 all-team restaurant names, rename/delete/new-unit signals, zone status equivalence,
 home/calendar/zone reuse, full promotion failure/retry without parent unmount,
@@ -99,7 +101,43 @@ calendar/zone behavior until explicitly enabled and rebuilt. Disable only the
 new flag and rebuild to restore full calendar/zone reads while retaining the
 already-approved home/map optimization. No DB rollback is needed.
 
-## Remaining work
+## Deployed demo verification
 
-Actual demo browser verification and final test/build results are recorded below
-after deployment. No claim of live team-assignment cancellation until tested.
+- Code commit: `d3117d4`. Deployed only to the DEMO Vercel project, deployment
+  `dpl_HMhkwqCFgtgcLCZXVZaCMfJKJRHB`, canonical demo alias ready.
+- Remote build logs identify that commit; fetched public bundle includes both
+  projections. Browser applied the update and loaded `index-CKO9CWUY.js`.
+- Admin, mobile 430x932: calendar -> previous month -> 10/5 showed the existing
+  applicant and confirmed team/card. Zone showed the same 9 cards, restaurant 4,
+  region house/shop counts 21/22 and 4/5 as before deployment.
+- Zone drilldown and needs-visit filter worked. Home -> calendar -> zone repeat
+  showed the acquired screen immediately. App diagnostics recorded one
+  `navigation:building-demand` promotion on first zone entry, none on that repeat.
+  This is slice instrumentation, NOT a browser HTTP capture or byte measurement.
+- Zone -> map showed 75 units including one disposable fixture. Selected detail
+  waited first, then displayed the original memo. Saved absence on that fixture:
+  DB active histories 3 -> 4, unit absent, building progress 1/4 -> 2/4. Cancelled:
+  history invalidated, unit unvisited, active histories 4 -> 3, progress restored.
+  Reopened detail immediately showed original memo and zero active records.
+- Guarded demo-only fixture cleanup removed the temporary unit and verified the
+  original active-history count. No existing record was edited or cancelled.
+- Fresh mobile calendar -> assignment editor: loading then existing team; card
+  selection showed 9 cards, map boundaries and house/shop counts. Closed without
+  sharing changes. Fresh PC 1280x900 calendar also waited then showed that team.
+  Browser reported no console errors; temporary viewport override was reset.
+- Local proof artifacts: `scratch/demo-calendar-zone-demand-cancelled.png` and
+  `scratch/demo-calendar-zone-demand-assignment.png`.
+
+## Limits and next review
+
+Live verification used an administrator, not a separately logged-in leader or
+two devices. Both roles, all-team restaurant labels, other-device new-unit
+signals and late-response/cancel races have automated coverage. Existing team
+sharing/cancellation tests passed in the suite, but this run did NOT create/share
+or cancel a live team assignment. No claim of physical slow-network testing.
+
+Review the projection consumers, editor leaf gate, calendar summary refreshes,
+and production-like delayed-history cancellation test before enabling production.
+Calendar still fetches all name rows, and mobile zone still fetches all unit
+statuses. Future server aggregate or assignment-scoped name reads require their
+own design. Full promotion remains sticky and limits savings after editing.
