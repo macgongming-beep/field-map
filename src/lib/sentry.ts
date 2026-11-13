@@ -1,8 +1,7 @@
 // Sentry 에러 모니터링 + 성능 추적
 // DSN은 환경변수로 (VITE_SENTRY_DSN), 없으면 비활성화 (개발/PR 환경에서 조용히 꺼짐)
 import * as Sentry from '@sentry/react'
-
-const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined
+import { normalizeSentryDsn } from './sentryDsn'
 
 const SECRET_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
 
@@ -17,6 +16,13 @@ export function scrubSecrets<T>(value: T): T {
 }
 
 export function initSentry() {
+  let dsn: string | undefined
+  try {
+    dsn = normalizeSentryDsn(import.meta.env.VITE_SENTRY_DSN)
+  } catch {
+    console.warn('[sentry] Invalid VITE_SENTRY_DSN; monitoring disabled')
+    return
+  }
   if (!dsn) {
     // DSN 없으면 비활성화 — 콘솔 경고만
     if (import.meta.env.PROD) {
@@ -57,7 +63,7 @@ export function initSentry() {
 
 /** 로그인 후 호출 — Sentry 이슈 추적에 사용자 식별 추가 */
 export function setSentryUser(user: { id: number; name: string }) {
-  if (!dsn) return
+  if (!Sentry.getClient()) return
   Sentry.setUser({
     id: String(user.id),
     username: user.name,
@@ -65,7 +71,7 @@ export function setSentryUser(user: { id: number; name: string }) {
 }
 
 export function clearSentryUser() {
-  if (!dsn) return
+  if (!Sentry.getClient()) return
   Sentry.setUser(null)
 }
 

@@ -1,10 +1,12 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { normalizeSentryDsn } from './src/lib/sentryDsn'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
+  normalizeSentryDsn(process.env.VITE_SENTRY_DSN ?? env.VITE_SENTRY_DSN)
   const isDemo = (process.env.VITE_DEMO_MODE || env.VITE_DEMO_MODE) === 'true'
   const appLabel = env.VITE_APP_LABEL?.trim() || (isDemo ? 'DEMO' : '')
   const installName = env.VITE_APP_NAME?.trim() || (isDemo ? 'Field Map DEMO' : 'Field Map')
