@@ -7,15 +7,18 @@ import { CalendarReadContext } from './hooks/CalendarReadContext'
 
 const state = vi.hoisted(() => ({
   ready: true, scope: '', sessionUser: undefined as string | undefined, role: '', mounts: 0,
+  buildingReady: true, buildingError: false, buildingScope: undefined as string | undefined, retryBuilding: vi.fn(async () => {}),
   auth: { user: { id: 1, name: 'Admin', role: 'admin' }, allUsers: [], loading: false },
 }))
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => state.auth }))
-vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string, _user: string, scope: string, sessionUser?: string) => {
+vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string, _user: string, scope: string, sessionUser?: string, buildingScope?: string) => {
   useState(() => { state.mounts += 1; return null })
   state.scope = scope
   state.sessionUser = sessionUser
   state.role = role
-  return { loading: false, error: null, calendarScopeReady: state.ready, calendarReadError: false }
+  state.buildingScope = buildingScope
+  return { loading: false, error: null, calendarScopeReady: state.ready, calendarReadError: false,
+    buildingScopeReady: state.buildingReady, buildingReadError: state.buildingError, retryBuildingRead: state.retryBuilding }
 } }))
 vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: () => {} }))
 vi.mock('./hooks/usePlaceDeletionRealtime', () => ({ usePlaceDeletionRealtime: () => {} }))
@@ -41,10 +44,27 @@ function CalendarConsumer() {
 }
 beforeEach(() => {
   state.ready = true
+  state.buildingReady = true; state.buildingError = false; state.retryBuilding.mockClear()
   state.mounts = 0
   state.auth.user = { id: 1, name: 'Admin', role: 'admin' }
   window.localStorage.clear()
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+})
+
+test.each([['/', 'home'], ['/map', 'map'], ['/stats', 'full'], ['/?openEvent=17', 'full']])('App wires building scope for %s and blocks incomplete consumers', async (path, expected) => {
+  vi.stubEnv('VITE_BUILDING_DEMAND_ENABLED', 'true')
+  state.buildingReady = false
+  const view = render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(state.buildingScope).toBe(expected)
+  expect(screen.getByText('app loading')).toBeTruthy()
+  expect(screen.queryByText('detail mounted')).toBeNull()
+  state.buildingError = true
+  view.rerender(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
+  expect(state.retryBuilding).toHaveBeenCalledTimes(1)
+  state.buildingReady = true
+  view.rerender(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(await screen.findByText('detail mounted')).toBeTruthy()
 })
 
 test.each(['user', 'leader', 'admin', 'developer'])('session reads get authenticated identity and actual %s role on a full-store route', async role => {

@@ -8,6 +8,7 @@ import { readCalendarParticipants } from './calendarParticipants'
 import { assertUnassignedCalendarEvent, calendarApplicationRefreshEnabled } from './calendarApplicationRefresh'
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
+import { buildingDemandEnabled, buildingDemandRank, MAP_BUILDING_COLUMNS, toMapBuilding, type BuildingDemand, type RawMapBuilding } from './buildingDemand'
 import { createHistoryCoverage, historyScope, scopedHistoryRecoveryEnabled } from './scopedHistoryRecovery'
 import { createVisitSignalQueue, visitSignalDedupEnabled } from './visitSignalQueue'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
@@ -130,7 +131,7 @@ async function fetchAllPages<T>(
  * 예전에는 로그인 화면에서도 전부 받았다 (App.tsx 는 인증 판단보다 먼저
  * useStore() 를 호출한다). 실측으로 API 만 약 2.2MB · 47개 요청이었다.
  */
-export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string, requestedCalendarScope?: string, sessionUserName?: string) {
+export function useStore(enabled: boolean = true, role: Role = 'user', recipientUser?: string, requestedCalendarScope?: string, sessionUserName?: string, requestedBuildingDemand?: BuildingDemand) {
   const calendarScopeFeature = calendarWindowEnabled() && requestedCalendarScope !== undefined
   const calendarScope = calendarScopeFeature ? requestedCalendarScope : 'full'
   const calendarScopeRef = useRef(calendarScope)
@@ -147,6 +148,22 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   }, [])
   // App keys this store by account/read mode. Never mix partial and full snapshots.
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
+  const demandBuildings = buildingDemandEnabled(role) && !recipientReader && requestedBuildingDemand !== undefined
+  const acquiredBuildingMode = useRef<BuildingDemand>('home')
+  const buildingSnapshotMode = useRef<BuildingDemand>('home')
+  const requestedBuildingMode = demandBuildings ? requestedBuildingDemand : 'full'
+  const buildingMode = buildingDemandRank[acquiredBuildingMode.current] > buildingDemandRank[requestedBuildingMode]
+    ? acquiredBuildingMode.current : requestedBuildingMode
+  const buildingModeRef = useRef(buildingMode)
+  const buildingModeGeneration = useRef(0)
+  if (buildingModeRef.current !== buildingMode) ++buildingModeGeneration.current
+  buildingModeRef.current = buildingMode
+  const [loadedBuildingMode, setLoadedBuildingMode] = useState<BuildingDemand | null>(null)
+  const [buildingReadError, setBuildingReadError] = useState(false)
+  const buildingDemandRead = useRef<Promise<void> | null>(null)
+  const [completeBuildingIds, setCompleteBuildingIds] = useState<Set<number>>(new Set())
+  const completeBuildingIdsRef = useRef(completeBuildingIds)
+  const buildingDetailReads = useRef(new Map<number, Promise<void>>())
   const scopedHistories = scopedVisitHistoryEnabled(role, Boolean(recipientReader))
   const historyRecovery = scopedHistoryRecoveryEnabled(scopedHistories)
   const queuedVisitRefresh = historyRecovery && (import.meta.env.VITE_VISIT_REALTIME_QUEUE_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
@@ -163,6 +180,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     const historyVersion = historyReadVersion
     return () => {
       historyStoreActive.current = false
+      if (demandBuildings) {
+        ++buildingVersion.current
+        ++historyVersion.current
+      }
       if (historyRecovery) {
         visitRefreshQueue.current?.reset()
         ++buildingVersion.current
@@ -170,7 +191,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         ++historyVersion.current
       }
     }
-  }, [historyCoverage, historyRecovery, enabled])
+  }, [historyCoverage, historyRecovery, enabled, demandBuildings])
   useEffect(() => {
     recipientReader?.resume()
     return () => recipientReader?.dispose()
@@ -289,9 +310,16 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
     switch (slice) {
       case 'buildings': {
+        const readMode = buildingModeRef.current
+        const readGeneration = buildingModeGeneration.current
+        if (demandBuildings && readMode === 'home') {
+          setLoadedBuildingMode('home')
+          return 0
+        }
         if (historyRecovery) historyCoverage.invalidate()
         if (queuedVisitRefresh) visitRefreshQueue.current?.reset()
         const fullVersion = ++buildingFullReadVersion.current
+        if (demandBuildings) realtimeVersionsRef.current.forEach((version, id) => realtimeVersionsRef.current.set(id, version + 1))
         buildingFullReadsPending.current += 1
         try {
         const scoped = await recipientReader?.read()
@@ -313,28 +341,36 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         // 부모 행을 페이지 단위로 끝까지 조회한다.
         const pageSize = 1000
         const buildingRows: RawBuilding[] = []
+        const buildingColumns: string = demandBuildings && readMode === 'map' ? MAP_BUILDING_COLUMNS : 'id, card_id, name, address, type, lat, lng, warning, access_status, memo, is_restaurant, units_surveyed, building_access_events(id, action, visitor_name, visited_at, time_slot, memo, created_at), units(id, building_id, number, status, is_chinese, is_restaurant, usage_type, memo, regular_visits(visitor_name, registered_at))'
         for (let from = 0; ; from += pageSize) {
           const buildingsRes = await supabase
             .from('buildings')
-            .select('id, card_id, name, address, type, lat, lng, warning, access_status, memo, is_restaurant, units_surveyed, building_access_events(id, action, visitor_name, visited_at, time_slot, memo, created_at), units(id, building_id, number, status, is_chinese, is_restaurant, usage_type, memo, regular_visits(visitor_name, registered_at))')
+            .select(buildingColumns)
             .order('id')
             .range(from, from + pageSize - 1)
 
           if (buildingsRes.error) {
             throw new Error('Building data load failed', { cause: buildingsRes.error })
           }
-          const page = (buildingsRes.data ?? []) as RawBuilding[]
+          const page = (buildingsRes.data ?? []) as unknown as RawBuilding[]
           buildingRows.push(...page)
           if (page.length < pageSize) break
         }
         measure(buildingRows)
-        if ((import.meta.env.VITE_BUILDING_MOVE_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
-          && fullVersion !== buildingFullReadVersion.current) {
+        if (((import.meta.env.VITE_BUILDING_MOVE_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' || demandBuildings)
+          && (fullVersion !== buildingFullReadVersion.current || (demandBuildings && (readGeneration !== buildingModeGeneration.current || !historyStoreActive.current)))) {
           throw new SupersededReadError('Building read superseded')
         }
-        const transformedBuildings = buildingRows.map(toBuilding)
+        const transformedBuildings = demandBuildings && readMode === 'map'
+          ? (buildingRows as RawMapBuilding[]).map(toMapBuilding) : buildingRows.map(toBuilding)
         setBuildings(transformedBuildings)
         buildingsRef.current = transformedBuildings  // ref 동기 갱신 (cards transform용)
+        if (demandBuildings) {
+          buildingSnapshotMode.current = readMode
+          const ids = new Set(readMode === 'full' ? transformedBuildings.map(building => building.id) : [])
+          completeBuildingIdsRef.current = ids
+          setCompleteBuildingIds(ids)
+        }
 
         // 주의: cards transform이 buildings 의존. cards가 stale 상태라면
         // 새 buildings로 cards를 재변환해야 일관성 유지.
@@ -345,6 +381,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       }
 
       case 'cards': {
+        const buildingGeneration = buildingModeGeneration.current
         // 지역 목록도 여기서 받는다 — 카드의 region 값을 해석하는 재료라 늘 함께 쓰인다.
         // 표가 아직 없거나 실패하면 lib/regions 의 기본값이 그대로 남는다 (화면이 비지 않는다).
         const regionsRes = await supabase.from('territory_regions')
@@ -401,11 +438,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         measure(cardsRes.data)
         // cards transform은 buildings 의존 — buildingsRef로 항상 최신 buildings 사용
         const transformedCards = (cardsRes.data as unknown as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
-        if (recipientReader?.scoped) {
-          recipientReader.validateCards(transformedCards.map((card) => card.id))
+        if (recipientReader?.scoped || (demandBuildings && buildingModeRef.current === 'home')) {
+          recipientReader?.validateCards(transformedCards.map((card) => card.id))
           const summaries = await fetchCardSummaries(transformedCards.map((card) => card.id))
           const byId = new Map(summaries.map((card) => [card.id, card]))
           if (byId.size !== transformedCards.length) throw new Error('Missing recipient card summary')
+          if (demandBuildings && buildingGeneration !== buildingModeGeneration.current) throw new SupersededReadError('Card summary superseded')
           setCards(transformedCards.map((card) => ({ ...card, ...byId.get(card.id)! })))
         } else setCards(transformedCards)
         return approxBytes
@@ -431,7 +469,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           ? historyCoverage.begin(historyScope(buildingsRef.current)) : null
         if (historyRecovery && !sessionsOnly) ++historyReadsPending.current
         try {
-          const historyVersion = scopedHistories && !sessionsOnly ? ++historyReadVersion.current : null
+          const historyVersion = (scopedHistories || demandBuildings) && !sessionsOnly ? ++historyReadVersion.current : null
           // Recompute the cutoff per read, including foreground recovery after midnight.
           const sessionScope = recentSessionScope(role, sessionUserName)
           // Phase 5 projection + 기간 필터
@@ -742,7 +780,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return approxBytes
       }
     }
-  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories, publishCalendarEvents, historyRecovery, historyCoverage, queuedVisitRefresh])
+  }, [recipientReader, recipientUser, role, calendarScopeFeature, sessionUserName, scopedHistories, publishCalendarEvents, historyRecovery, historyCoverage, queuedVisitRefresh, demandBuildings])
 
   // 공개 API: 특정 slice만 fetch. 측정 자동 기록.
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
@@ -845,6 +883,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         })
       }
       const canRecoverBuildings = slice === 'buildings' && recovery
+        && (!demandBuildings || (buildingModeRef.current !== 'home' && acquiredBuildingMode.current === buildingModeRef.current))
         && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
         && territoryCheckpoint.baseline && syncBuildingsRef.current
       if (canRecoverBuildings) reusedTerritoryRead = true
@@ -875,6 +914,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       let totalBytes = 0
       // Capture BEFORE the reads, not after: changes during the snapshot must be recovered.
       const baseline = import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
+        && (!demandBuildings || buildingModeRef.current !== 'home')
         && slices.includes('buildings') && slices.includes('visits')
         ? await fetchTerritoryClock().catch(() => {
           // Optional realtime metadata must never block the ordinary data load.
@@ -899,6 +939,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         territoryCheckpoint.cards.clear()
         territoryCheckpoint.applied.clear()
       }
+      if (demandBuildings && slices.includes('buildings')) {
+        acquiredBuildingMode.current = buildingSnapshotMode.current
+        setLoadedBuildingMode(buildingSnapshotMode.current)
+        setBuildingReadError(false)
+      }
       const duration = Math.round(performance.now() - start)
       trackFetch({
         triggeredBy: options?.triggeredBy ?? 'fetchSlices',
@@ -916,7 +961,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       void promise.then(clear, clear)
     }
     return track(promise)
-  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader, scopedHistories, clearCalendarWindows, historyRecovery, historyCoverage])
+  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader, scopedHistories, clearCalendarWindows, historyRecovery, historyCoverage, demandBuildings])
 
   // 기존 fetchAll: 모든 slice + auto_close 부수효과 유지 (100% 후방호환)
   const fetchAll = useCallback(async (recovery = false) => {
@@ -1048,13 +1093,19 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     const next = update(buildingsRef.current)
     buildingsRef.current = next
     setBuildings(next)
+    if (demandBuildings && buildingModeRef.current === 'home') return
     setCards(prevCards => prevCards.map(card => recipientReader && !recipientReader.allowsCard(card.id)
       ? card : recomputeCardStats(card, next)))
-  }, [recipientReader])
+  }, [recipientReader, demandBuildings])
 
   // Realtime updates only the affected buildings and their visit histories.
   const readChangedBuildings = useCallback(async (buildingIds: number[], requireFresh = false, canApply: () => boolean = () => true) => {
+    if (demandBuildings && buildingModeRef.current === 'home') {
+      await fetchSlice('cards')
+      return true
+    }
     if (historyRecovery) ++historySyncsPending.current
+    if (demandBuildings) ++buildingFullReadVersion.current
     const fullVersion = buildingFullReadVersion.current
     try {
       const versions = new Map(buildingIds.map((id) => {
@@ -1063,9 +1114,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         return [id, version]
       }))
       const data = await fetchChangedBuildings(buildingIds)
+      if (demandBuildings && !historyStoreActive.current) throw new SupersededReadError('Building detail disposed')
       // A previous map's in-flight read must not overwrite a newer map's response.
       const ids = new Set(buildingIds.filter((id) => versions.get(id) === realtimeVersionsRef.current.get(id)))
-      if ((requireFresh || historyRecovery) && ids.size !== new Set(buildingIds).size) throw new SupersededReadError('Building refresh superseded')
+      if ((requireFresh || historyRecovery || demandBuildings) && ids.size !== new Set(buildingIds).size) throw new SupersededReadError('Building refresh superseded')
       if (historyRecovery && (fullVersion !== buildingFullReadVersion.current || buildingFullReadsPending.current)) {
         throw new SupersededReadError('Building scope changed during recovery')
       }
@@ -1091,8 +1143,14 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           ...visible.filter((b) => !existing.has(b.id)),
         ]
       })
+      if (demandBuildings) {
+        const complete = new Set(completeBuildingIdsRef.current)
+        ids.forEach(id => { if (updatedById.has(id)) complete.add(id); else complete.delete(id) })
+        completeBuildingIdsRef.current = complete
+        setCompleteBuildingIds(complete)
+      }
       // A delayed pre-save scoped read must not overwrite this authoritative update.
-      if (scopedHistories) ++historyReadVersion.current
+      if (scopedHistories || demandBuildings) ++historyReadVersion.current
       const visibleUnits = new Set(buildingsRef.current.flatMap(building => building.units.map(unit => unit.id)))
       setVisitHistories((current) => [...current.filter((h) => !unitIds.has(h.unitId)
         || (!incomingUnitIds.has(h.unitId) && unaffectedUnitIds.has(h.unitId))),
@@ -1107,11 +1165,26 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     } finally {
       if (historyRecovery) --historySyncsPending.current
     }
-  }, [applyBuildingsChange, recipientReader, scopedHistories, historyRecovery, historyCoverage])
+  }, [applyBuildingsChange, recipientReader, scopedHistories, historyRecovery, historyCoverage, demandBuildings, fetchSlice])
 
   const syncChangedBuildings = useCallback(async (ids: number[], requireFresh = false) => {
     await readChangedBuildings(ids, requireFresh)
   }, [readChangedBuildings])
+  const ensureBuildingDetail = useCallback(async (id: number) => {
+    if (!demandBuildings) return
+    if (!buildingsRef.current.some(building => building.id === id)) throw new Error('Building unavailable')
+    if (completeBuildingIdsRef.current.has(id)) return
+    const pending = buildingDetailReads.current.get(id)
+    if (pending) return pending
+    const work = withLoadDeadline(syncChangedBuildings([id], true)).then(() => {
+      if (!completeBuildingIdsRef.current.has(id)) throw new Error('Building no longer available')
+    })
+    buildingDetailReads.current.set(id, work)
+    try { await work } finally { if (buildingDetailReads.current.get(id) === work) buildingDetailReads.current.delete(id) }
+  }, [demandBuildings, syncChangedBuildings])
+  const buildingDetailReader = useMemo(() => demandBuildings ? {
+    ready: (id: number) => completeBuildingIds.has(id), ensure: ensureBuildingDetail,
+  } : null, [demandBuildings, completeBuildingIds, ensureBuildingDetail])
   const latestBuildingRead = useRef(readChangedBuildings)
   useEffect(() => { latestBuildingRead.current = readChangedBuildings }, [readChangedBuildings])
 
@@ -1178,6 +1251,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // 다른 기기에서 새로 만든 세대만 가져온다. 전체 buildings slice는 400KB가 넘어
   // 일괄 추가 때마다 다시 받지 않는다. 신호보다 건물이 늦게 보인 경우에만 전체 복구한다.
   const syncCreatedUnits = useCallback(async (unitIds: number[]): Promise<void> => {
+    if (demandBuildings && buildingModeRef.current === 'home') {
+      await fetchSlice('cards')
+      return
+    }
     const ids = Array.from(new Set(unitIds.filter(Number.isFinite)))
     if (ids.length === 0) return
     const result = await supabase.from('units')
@@ -1204,7 +1281,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           .sort((a, b) => compareUnitNumbers(a.number, b.number)),
       }
     }))
-  }, [applyBuildingsChange, fetchSlices])
+  }, [applyBuildingsChange, fetchSlices, demandBuildings, fetchSlice])
 
   const removeUnit = useCallback((unitId: number) => {
     applyBuildingsChange((prev) => prev.map((building) => (
@@ -1217,6 +1294,21 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // Realtime 삭제 신호는 전체 목록을 다시 받지 않고 관련 메모리만 걷어낸다.
   // building 신호의 unitIds는 서버가 삭제 직전에 수집하므로 cascade 뒤에도 정확하다.
   const applyPlaceDeletionSignal = useCallback((signal: PlaceDeletionSignal) => {
+    if (demandBuildings) {
+      ++buildingFullReadVersion.current
+      ++historyReadVersion.current
+      if (signal.buildingId != null) realtimeVersionsRef.current.set(signal.buildingId, (realtimeVersionsRef.current.get(signal.buildingId) ?? 0) + 1)
+      if (signal.targetType === 'building' && signal.buildingId != null) {
+        const complete = new Set(completeBuildingIdsRef.current)
+        complete.delete(signal.buildingId)
+        completeBuildingIdsRef.current = complete
+        setCompleteBuildingIds(complete)
+      }
+      if (buildingModeRef.current === 'home') void fetchSlice('cards').catch(error => {
+        console.error('[home card summary] deletion refresh failed', error)
+        showToast(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'), 'error')
+      })
+    }
     const { unitIds, returnVisitIds } = resolvePlaceDeletionScope(
       buildingsRef.current,
       returnVisits,
@@ -1234,7 +1326,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     setEventRestaurantAssignments((current) => current.filter(
       (assignment) => !isRestaurantAssignmentDeleted(assignment, signal, unitIds),
     ))
-  }, [applyBuildingsChange, returnVisits])
+  }, [applyBuildingsChange, returnVisits, demandBuildings, fetchSlice])
 
   // 방문 기록 등으로 세대 하나가 바뀐 경우
   const patchUnit = useCallback((unitId: number, patch: Partial<Unit>) => {
@@ -1267,6 +1359,34 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     () => fetchSlices(['calendar', 'visits'], { triggeredBy: 'mutation:calendar:participant-removal' }),
     [fetchSlices],
   )
+  const retryBuildingRead = useCallback(async () => {
+    if (buildingDemandRead.current) return buildingDemandRead.current
+    setBuildingReadError(false)
+    const work = (async () => {
+      try {
+        for (let attempt = 0; ; attempt++) {
+          try {
+            // Capture the recovery clock before both buildings and histories.
+            await withLoadDeadline(fetchSlices(['buildings', 'cards', 'visits'], { triggeredBy: 'navigation:building-demand' }))
+            return
+          } catch (failure) {
+            if (!historyStoreActive.current) return
+            if (!(failure instanceof SupersededReadError) || attempt >= 2) throw failure
+          }
+        }
+      } catch (failure) {
+        if (historyStoreActive.current) setBuildingReadError(true)
+        throw failure
+      }
+    })()
+    buildingDemandRead.current = work
+    try { await work } finally { if (buildingDemandRead.current === work) buildingDemandRead.current = null }
+  }, [fetchSlices])
+  useEffect(() => {
+    if (!enabled || !demandBuildings || loading || !loadedOnceRef.current || buildingReadError) return
+    if (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank[buildingMode]) return
+    void retryBuildingRead().catch(() => { /* demand gate owns retry */ })
+  }, [enabled, demandBuildings, loading, loadedBuildingMode, buildingMode, buildingReadError, retryBuildingRead])
   const previousCalendarScope = useRef(calendarScope)
   const calendarCacheIdentity = useRef({ role, recipientUser })
   // Read-only display selection: avoid unmounting the entire app for one render
@@ -1596,6 +1716,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   }
 
   return {
+    buildingScopeReady: !demandBuildings || (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank[buildingMode]),
+    buildingReadError,
+    retryBuildingRead,
+    buildingDetailReader,
     territoryRealtime,
     refetchAll: fetchAll,
     refetchSlices: fetchSlices,

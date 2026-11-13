@@ -14,6 +14,8 @@ import { applyFontScale, loadFontScale } from './lib/fontScale'
 import { PwaInstallBanner } from './components/PwaInstall'
 import { PullToRefresh } from './components/PullToRefresh'
 import { useStore } from './hooks/useStore'
+import { buildingDemandForRoute, BuildingDetailContext } from './hooks/buildingDemand'
+import { msg } from './lib/msg'
 import { recentSessionsEnabled } from './hooks/serviceSessionReadScope'
 import { useCalendarRealtime } from './hooks/useCalendarRealtime'
 import { Sentry } from './lib/sentry'
@@ -112,6 +114,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   const calendarScope = useSettingsCalendarScope(requestedScope, location.pathname, location.search, homeScope, windowedCalendar)
 
   const {
+    buildingScopeReady, buildingReadError, retryBuildingRead, buildingDetailReader,
     calendarScopeReady, calendarReadError, retryCalendarRead, invalidateCalendarCache, refreshCalendarParticipants,
     cards,
     buildings,
@@ -230,7 +233,8 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
     registerRestaurant,
     approveRestaurantRequest,
     rejectRestaurantRequest,
-  } = useStore(storeEnabled, actualRole, recipientUser, calendarScope, user?.name)
+  } = useStore(storeEnabled, actualRole, recipientUser, calendarScope, user?.name,
+    buildingDemandForRoute(actualRole, location.pathname, location.search, isDesktop))
 
   // Phase 2: 캘린더/배정 Realtime → calendar slice만 refetch
   // (useUserChats가 이 책임을 갖고 있었으나 전체 fetchAll 호출하던 증폭점 제거)
@@ -398,6 +402,11 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   // Full consumers must never render historical statistics from a home window.
   // Home detail owns CalendarReadGate too: keep its editor mounted while loading history.
   const homeCalendarDetail = !isDesktop && homeEventDetailId(location.pathname, location.search) !== null
+  if (buildingScopeReady === false) {
+    return buildingReadError
+      ? <div role="alert">{msg('자료를 불러오지 못했습니다.')}<button type="button" onClick={() => { void retryBuildingRead().catch(() => {}) }}>{msg('다시 시도')}</button></div>
+      : <AppLoading />
+  }
   if (windowedCalendar && location.pathname !== '/calendar' && !homeCalendarDetail && !calendarScopeReady) {
     return calendarReadError
       ? <div role="alert">자료를 불러오지 못했습니다.<button type="button" onClick={() => { void retryCalendarRead().catch(() => {}) }}>다시 시도</button></div>
@@ -422,6 +431,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
         }
       >
         <ScopedCardContext.Provider value={recipientCardScopeEnabled(actualRole, Boolean(recipientUser))}>
+        <BuildingDetailContext.Provider value={buildingDetailReader ?? null}>
         <TerritoryRealtimeContext.Provider value={territoryRealtime}>
         <CalendarReadContext.Provider value={windowedCalendar ? {
           ...calendarDemand, ready: calendarScopeReady, error: calendarReadError, select: selectCalendarDemand,
@@ -654,6 +664,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
         )}
         </CalendarReadContext.Provider>
         </TerritoryRealtimeContext.Provider>
+        </BuildingDetailContext.Provider>
         </ScopedCardContext.Provider>
       </Suspense>
       </MeetingProvider>

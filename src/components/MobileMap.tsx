@@ -38,6 +38,7 @@ import { getGeocodeCandidates } from '../utils/geocodeCandidates'
 import { candidateBuildingName, candidateBuildingType, candidateFirstUnitName } from '../utils/searchedPlaceDraft'
 import { informalAssetsForMap } from '../utils/informalAssets'
 import { useTerritoryRealtime } from '../hooks/useTerritoryRealtime'
+import { BuildingDetailGate } from './BuildingDetailGate'
 import { useAddressMapPin } from '../hooks/useAddressMapPin'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
@@ -3201,6 +3202,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
 
           {/* 본문 */}
           <div className="mobile-unit-detail-body">
+            <BuildingDetailGate buildingId={liveFullScreenUnit.building.id}>
             <UnitDetailScreen key={liveFullScreenUnit.unit.id} language={language}
               unit={liveFullScreenUnit.unit}
               building={liveFullScreenUnit.building}
@@ -3230,6 +3232,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
               )}
               calendarEvents={calendarEvents}
             />
+            </BuildingDetailGate>
           </div>
         </div>
       )}

@@ -96,6 +96,10 @@
 
 연락처 조회 운영 전환: [0084 새 함수·앱 우선 적용, DB 제한 보류](0084-production-user-directory-transition.md)
 
+홈 건물 상세 지연 조회: [0087 데모 홈 요약·지도·선택 건물 상세 분리](0087-demo-building-demand.md)
+
+홈 건물 조회 운영 전환: [0088 운영 적용 범위·검증·롤백](0088-production-building-demand.md)
+
 ```markdown
 # 제목
 
