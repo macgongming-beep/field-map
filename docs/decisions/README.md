@@ -102,6 +102,8 @@
 
 캘린더·구역 건물 조회: [0089 데모 이름·상태 요약과 배정 편집 전체 조회](0089-demo-calendar-zone-building-demand.md)
 
+캘린더·구역 운영 전환: [0090 선행 스위치·검증·롤백](0090-production-calendar-zone-building-demand.md)
+
 ```markdown
 # 제목
 
