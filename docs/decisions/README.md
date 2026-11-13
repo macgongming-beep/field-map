@@ -100,6 +100,8 @@
 
 홈 건물 조회 운영 전환: [0088 운영 적용 범위·검증·롤백](0088-production-building-demand.md)
 
+캘린더·구역 건물 조회: [0089 데모 이름·상태 요약과 배정 편집 전체 조회](0089-demo-calendar-zone-building-demand.md)
+
 ```markdown
 # 제목
 

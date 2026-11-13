@@ -8,7 +8,7 @@ import { readCalendarParticipants } from './calendarParticipants'
 import { assertUnassignedCalendarEvent, calendarApplicationRefreshEnabled } from './calendarApplicationRefresh'
 import { recentSessionScope } from './serviceSessionReadScope'
 import { readScopedVisitHistories, scopedVisitHistoryEnabled, VISIT_HISTORY_COLUMNS } from './scopedVisitHistory'
-import { buildingDemandEnabled, buildingDemandRank, MAP_BUILDING_COLUMNS, toMapBuilding, type BuildingDemand, type RawMapBuilding } from './buildingDemand'
+import { buildingDemandEnabled, calendarZoneBuildingDemandEnabled, buildingDemandRank, needsBuildingSummaries, CALENDAR_BUILDING_COLUMNS, ZONE_BUILDING_COLUMNS, MAP_BUILDING_COLUMNS, toCalendarBuilding, toZoneBuilding, toMapBuilding, type BuildingDemand, type RawCalendarBuilding, type RawZoneBuilding, type RawMapBuilding } from './buildingDemand'
 import { createHistoryCoverage, historyScope, scopedHistoryRecoveryEnabled } from './scopedHistoryRecovery'
 import { createVisitSignalQueue, visitSignalDedupEnabled } from './visitSignalQueue'
 import { readSnapshotParts, SupersededReadError } from './supersededRead'
@@ -151,7 +151,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const demandBuildings = buildingDemandEnabled(role) && !recipientReader && requestedBuildingDemand !== undefined
   const acquiredBuildingMode = useRef<BuildingDemand>('home')
   const buildingSnapshotMode = useRef<BuildingDemand>('home')
-  const requestedBuildingMode = demandBuildings ? requestedBuildingDemand : 'full'
+  const [fullBuildingRequested, setFullBuildingRequested] = useState(false)
+  const requestFullBuildings = useCallback(() => { setFullBuildingRequested(true) }, [])
+  const routeBuildingMode = demandBuildings
+    && (!(requestedBuildingDemand === 'calendar' || requestedBuildingDemand === 'zone') || calendarZoneBuildingDemandEnabled())
+    ? requestedBuildingDemand : 'full'
+  const requestedBuildingMode = fullBuildingRequested ? 'full' : routeBuildingMode
   const buildingMode = buildingDemandRank[acquiredBuildingMode.current] > buildingDemandRank[requestedBuildingMode]
     ? acquiredBuildingMode.current : requestedBuildingMode
   const buildingModeRef = useRef(buildingMode)
@@ -341,7 +346,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         // 부모 행을 페이지 단위로 끝까지 조회한다.
         const pageSize = 1000
         const buildingRows: RawBuilding[] = []
-        const buildingColumns: string = demandBuildings && readMode === 'map' ? MAP_BUILDING_COLUMNS : 'id, card_id, name, address, type, lat, lng, warning, access_status, memo, is_restaurant, units_surveyed, building_access_events(id, action, visitor_name, visited_at, time_slot, memo, created_at), units(id, building_id, number, status, is_chinese, is_restaurant, usage_type, memo, regular_visits(visitor_name, registered_at))'
+        const buildingColumns: string = demandBuildings && readMode === 'calendar' ? CALENDAR_BUILDING_COLUMNS
+          : demandBuildings && readMode === 'zone' ? ZONE_BUILDING_COLUMNS
+          : demandBuildings && readMode === 'map' ? MAP_BUILDING_COLUMNS : 'id, card_id, name, address, type, lat, lng, warning, access_status, memo, is_restaurant, units_surveyed, building_access_events(id, action, visitor_name, visited_at, time_slot, memo, created_at), units(id, building_id, number, status, is_chinese, is_restaurant, usage_type, memo, regular_visits(visitor_name, registered_at))'
         for (let from = 0; ; from += pageSize) {
           const buildingsRes = await supabase
             .from('buildings')
@@ -361,8 +368,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           && (fullVersion !== buildingFullReadVersion.current || (demandBuildings && (readGeneration !== buildingModeGeneration.current || !historyStoreActive.current)))) {
           throw new SupersededReadError('Building read superseded')
         }
-        const transformedBuildings = demandBuildings && readMode === 'map'
-          ? (buildingRows as RawMapBuilding[]).map(toMapBuilding) : buildingRows.map(toBuilding)
+        const transformedBuildings = demandBuildings && readMode === 'calendar' ? (buildingRows as RawCalendarBuilding[]).map(toCalendarBuilding)
+          : demandBuildings && readMode === 'zone' ? (buildingRows as RawZoneBuilding[]).map(toZoneBuilding)
+          : demandBuildings && readMode === 'map' ? (buildingRows as RawMapBuilding[]).map(toMapBuilding) : buildingRows.map(toBuilding)
         setBuildings(transformedBuildings)
         buildingsRef.current = transformedBuildings  // ref 동기 갱신 (cards transform용)
         if (demandBuildings) {
@@ -438,7 +446,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         measure(cardsRes.data)
         // cards transform은 buildings 의존 — buildingsRef로 항상 최신 buildings 사용
         const transformedCards = (cardsRes.data as unknown as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
-        if (recipientReader?.scoped || (demandBuildings && buildingModeRef.current === 'home')) {
+        if (recipientReader?.scoped || (demandBuildings && needsBuildingSummaries(buildingModeRef.current))) {
           recipientReader?.validateCards(transformedCards.map((card) => card.id))
           const summaries = await fetchCardSummaries(transformedCards.map((card) => card.id))
           const byId = new Map(summaries.map((card) => [card.id, card]))
@@ -883,7 +891,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         })
       }
       const canRecoverBuildings = slice === 'buildings' && recovery
-        && (!demandBuildings || (buildingModeRef.current !== 'home' && acquiredBuildingMode.current === buildingModeRef.current))
+        && (!demandBuildings || (!needsBuildingSummaries(buildingModeRef.current) && acquiredBuildingMode.current === buildingModeRef.current))
         && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
         && territoryCheckpoint.baseline && syncBuildingsRef.current
       if (canRecoverBuildings) reusedTerritoryRead = true
@@ -914,7 +922,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       let totalBytes = 0
       // Capture BEFORE the reads, not after: changes during the snapshot must be recovered.
       const baseline = import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
-        && (!demandBuildings || buildingModeRef.current !== 'home')
+        && (!demandBuildings || !needsBuildingSummaries(buildingModeRef.current))
         && slices.includes('buildings') && slices.includes('visits')
         ? await fetchTerritoryClock().catch(() => {
           // Optional realtime metadata must never block the ordinary data load.
@@ -1093,7 +1101,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     const next = update(buildingsRef.current)
     buildingsRef.current = next
     setBuildings(next)
-    if (demandBuildings && buildingModeRef.current === 'home') return
+    if (demandBuildings && needsBuildingSummaries(buildingModeRef.current)) return
     setCards(prevCards => prevCards.map(card => recipientReader && !recipientReader.allowsCard(card.id)
       ? card : recomputeCardStats(card, next)))
   }, [recipientReader, demandBuildings])
@@ -1158,6 +1166,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         .filter(h => !scopedHistories || visibleUnits.has(h.unitId))
         .sort((a, b) => (b.createdAt ?? b.visitedAt).localeCompare(a.createdAt ?? a.visitedAt)))
       if (historyRecovery) historyCoverage.applyDelta(previousScope, historyScope(buildingsRef.current))
+      if (demandBuildings && needsBuildingSummaries(buildingModeRef.current)) await fetchSlice('cards')
       return true
     } catch (error) {
       if (historyRecovery) historyCoverage.invalidate()
@@ -1281,6 +1290,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           .sort((a, b) => compareUnitNumbers(a.number, b.number)),
       }
     }))
+    if (demandBuildings && needsBuildingSummaries(buildingModeRef.current)) await fetchSlice('cards')
   }, [applyBuildingsChange, fetchSlices, demandBuildings, fetchSlice])
 
   const removeUnit = useCallback((unitId: number) => {
@@ -1304,7 +1314,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         completeBuildingIdsRef.current = complete
         setCompleteBuildingIds(complete)
       }
-      if (buildingModeRef.current === 'home') void fetchSlice('cards').catch(error => {
+      if (needsBuildingSummaries(buildingModeRef.current)) void fetchSlice('cards').catch(error => {
         console.error('[home card summary] deletion refresh failed', error)
         showToast(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'), 'error')
       })
@@ -1716,7 +1726,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   }
 
   return {
-    buildingScopeReady: !demandBuildings || (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank[buildingMode]),
+    // Local editor promotion must not unmount its parent calendar and lose its open state.
+    buildingScopeReady: !demandBuildings || (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank[routeBuildingMode]),
+    fullBuildingReader: demandBuildings ? {
+      ready: loadedBuildingMode === 'full', error: buildingReadError,
+      request: requestFullBuildings, retry: retryBuildingRead,
+    } : null,
     buildingReadError,
     retryBuildingRead,
     buildingDetailReader,

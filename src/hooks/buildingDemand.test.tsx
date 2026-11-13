@@ -1,6 +1,10 @@
 import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { buildingDemandForRoute, BuildingDetailContext, MAP_BUILDING_COLUMNS, type BuildingDemand } from './buildingDemand'
+import { buildingDemandForRoute, BuildingDetailContext, CALENDAR_BUILDING_COLUMNS, ZONE_BUILDING_COLUMNS, MAP_BUILDING_COLUMNS, toZoneBuilding, type BuildingDemand } from './buildingDemand'
+import { buildSharedAssignmentTeams } from '../components/admin/sharedAssignmentTeams'
+import { getBuildingStatus } from '../utils/mapUtils'
+import { buildingHasUsage, scopeBuildingToUsage } from '../utils/unitUsage'
+import type { CalendarEvent, EventRestaurantAssignment } from '../types'
 import { BuildingDetailGate } from '../components/BuildingDetailGate'
 import { toBuilding, type RawBuilding } from './storeTransforms'
 import { useStore } from './useStore'
@@ -39,6 +43,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
         return resolve(await response)
       }
       if (table === 'buildings') return resolve({ data: structuredClone(state.rows.slice(offset, offset + limit)), error: null })
+      if (table === 'units') return resolve({ data: state.rows.flatMap(b => b.units), error: null })
       if (table === 'cards') return resolve({ data: [{ id: 1, name: 'card', card_assignments: [] }, { id: 2, name: 'other', card_assignments: [] }], error: state.cardError ? new Error('cards offline') : null })
       return resolve({ data: lookup ? [] : [], error: null })
     }
@@ -56,6 +61,7 @@ const buildingReads = () => state.reads.filter(read => read.table === 'buildings
 beforeEach(() => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
   vi.stubEnv('VITE_BUILDING_DEMAND_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_ZONE_BUILDING_DEMAND_ENABLED', 'true')
   vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
   localStorage.setItem('currentVisitor', 'tester')
   localStorage.setItem('auth_token', 'test')
@@ -68,6 +74,155 @@ afterEach(() => {
   cleanup(); vi.unstubAllEnvs(); vi.clearAllMocks(); localStorage.clear()
   state.reads = []; state.buildingResponse = null; state.historyResponse = null; state.cardError = false
 })
+
+test.each(['admin', 'leader'] as const)('%s calendar preserves all team restaurant names and server progress without full details', async role => {
+  const { result } = renderHook(() => useStore(true, role, undefined, undefined, 'tester', 'calendar'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(buildingReads()).toEqual([{ table: 'buildings', columns: CALENDAR_BUILDING_COLUMNS }])
+  expect(CALENDAR_BUILDING_COLUMNS).toBe('id, card_id, name, address, units(id, building_id, number)')
+  expect(result.current.cards.map(card => card.units)).toEqual([1, 1])
+  expect(result.current.buildings[0].memo).toBeUndefined()
+  expect(result.current.buildingDetailReader!.ready(1)).toBe(false)
+  expect(result.current.territoryRealtime.checkpoint.baseline).toBeNull()
+  const event = { id: 9, cardAssignments: [
+    { userName: 'self', teamKey: 'a', assignedCardIds: [] },
+    { userName: 'other', teamKey: 'b', assignedCardIds: [] },
+  ] } as unknown as CalendarEvent
+  const restaurants = [
+    { eventId: 9, userName: 'self', buildingId: 1, unitId: 10 },
+    { eventId: 9, userName: 'other', buildingId: 2, unitId: null },
+    { eventId: 8, userName: 'other', buildingId: 1, unitId: 10 },
+  ] as EventRestaurantAssignment[]
+  const names = () => buildSharedAssignmentTeams(event, [], [], [], result.current.buildings, restaurants)
+  expect(names().map(team => team.cardNames)).toEqual([['101'], ['Building 2']])
+  state.rows[1].name = 'Renamed restaurant'
+  await act(async () => { await result.current.syncChangedBuildings([2]) })
+  expect(names()[1].cardNames).toEqual(['Renamed restaurant'])
+  expect(result.current.cards.map(card => card.units)).toEqual([1, 1])
+  act(() => result.current.applyPlaceDeletionSignal({ id: 99, targetType: 'building', buildingId: 2, unitId: null, unitIds: [20], returnVisitIds: [] }))
+  expect(names()[1].cardNames).toEqual([])
+})
+
+test('home calendar zone home calendar reuse the richer status snapshot without another building read', async () => {
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, 'leader', undefined, undefined, 'tester', mode), { initialProps: { mode: 'home' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  for (const mode of ['calendar', 'zone', 'home', 'calendar', 'zone'] as BuildingDemand[]) {
+    rerender({ mode })
+    await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  }
+  expect(buildingReads().map(read => read.columns)).toEqual([CALENDAR_BUILDING_COLUMNS, ZONE_BUILDING_COLUMNS])
+  expect(result.current.buildings.map(b => b.name)).toEqual(['Building 1', 'Building 2'])
+})
+
+test('calendar receives a new unit name and authoritative card totals after another device adds it', async () => {
+  const { result } = renderHook(() => useStore(true, 'admin', undefined, undefined, 'tester', 'calendar'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.rows[0].units.push({ ...raw().units[0], id: 11, number: '102' })
+  state.summaries.mockImplementation(async (ids: number[]) => ids.map(id => ({ id, buildings: 1, units: id === 1 ? 2 : 1, completed: 0, progress: 0, regularVisits: 0 })))
+  await act(async () => { await result.current.syncCreatedUnits([11]) })
+  expect(result.current.buildings[0].units.map(unit => unit.number)).toEqual(['101', '102'])
+  expect(result.current.cards.find(card => card.id === 1)?.units).toBe(2)
+})
+
+test('zone list retains usage, forbidden, regular-visit and needs-visit counts but not coordinates/access histories/memos', () => {
+  const samples = [raw(), raw(2), raw(3), raw(4)]
+  samples[0].units[0].usage_type = '상가'; samples[0].units[0].is_restaurant = true
+  samples[1].access_status = 'blocked'
+  samples[2].units[0].regular_visits = [{ visitor_name: 'other', registered_at: '2026-01-01' }]
+  samples[3].units[0].status = '만남'
+  const shape = (b: ReturnType<typeof toBuilding>) => ({
+    status: getBuildingStatus(b), house: buildingHasUsage(b, '주택'), shop: buildingHasUsage(b, '상가'),
+    houseStatus: getBuildingStatus(scopeBuildingToUsage(b, '주택')),
+    shopStatus: getBuildingStatus(scopeBuildingToUsage(b, '상가')),
+    restaurant: b.units.filter(u => u.isRestaurant).length,
+  })
+  expect(samples.map(toZoneBuilding).map(shape)).toEqual(samples.map(toBuilding).map(shape))
+  for (const field of ['card_id', 'type', 'warning', 'access_status', 'is_restaurant', 'units_surveyed', 'status', 'is_chinese', 'usage_type', 'regular_visits(visitor_name, registered_at)']) expect(ZONE_BUILDING_COLUMNS).toContain(field)
+  for (const field of ['memo', 'lat', 'lng', 'building_access_events']) expect(ZONE_BUILDING_COLUMNS.split(/[, ()]+/)).not.toContain(field)
+})
+
+test.each(['calendar', 'zone'] as BuildingDemand[])('%s pagination reads all 1001 buildings', async mode => {
+  state.rows = Array.from({ length: 1001 }, (_, i) => raw(i + 1))
+  const { result } = renderHook(() => useStore(true, 'admin', undefined, undefined, 'tester', mode))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.buildings).toHaveLength(1001)
+  expect(buildingReads()).toHaveLength(2)
+})
+
+test('editor promotion waits for complete cards and buildings without unmounting its calendar; failure can retry', async () => {
+  const { result } = renderHook(() => useStore(true, 'admin', undefined, undefined, 'tester', 'calendar'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.cardError = true
+  act(() => result.current.fullBuildingReader!.request())
+  await waitFor(() => expect(result.current.buildingReadError).toBe(true))
+  expect(result.current.buildingScopeReady).toBe(true)
+  expect(result.current.fullBuildingReader!.ready).toBe(false)
+  state.cardError = false
+  await act(async () => { await result.current.fullBuildingReader!.retry() })
+  expect(result.current.fullBuildingReader!.ready).toBe(true)
+  expect(result.current.buildings[0].units[0].memo).toBe('saved unit memo')
+  const count = buildingReads().length
+  act(() => result.current.fullBuildingReader!.request())
+  expect(buildingReads()).toHaveLength(count)
+})
+
+test('late calendar names cannot replace a map snapshot or its coordinates', async () => {
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, 'admin', undefined, undefined, 'tester', mode), { initialProps: { mode: 'calendar' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let finish!: (value: { data: RawBuilding[]; error: null }) => void
+  state.buildingResponse = new Promise(resolve => { finish = resolve })
+  let old!: Promise<unknown>
+  act(() => { old = result.current.refetchSlices(['buildings', 'cards']).catch(e => e) })
+  await waitFor(() => expect(state.buildingResponse).toBeNull())
+  rerender({ mode: 'map' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  await act(async () => { finish({ data: [raw()], error: null }); await old })
+  expect(result.current.buildings).toHaveLength(2)
+  expect(result.current.buildings[0].lat).toBe(37)
+})
+
+test('full history response cannot resurrect a targeted cancel even with separate history-demand disabled', async () => {
+  vi.stubEnv('VITE_PRIVILEGED_HISTORY_DEMAND_ENABLED', 'false')
+  const { result } = renderHook(() => useStore(true, 'admin', undefined, undefined, 'tester', 'zone'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.changed.mockResolvedValueOnce({ buildings: [toBuilding(raw())], histories: [{ id: 99, unitId: 10, visitor: 'tester', result: '만남', visitedAt: '2026-11-13' }] })
+  await act(async () => { await result.current.syncChangedBuildings([1]) })
+  let finish!: (value: { data: unknown[]; error: null }) => void
+  state.historyResponse = new Promise(resolve => { finish = resolve })
+  let old!: Promise<unknown>
+  act(() => { old = result.current.refetchSlices(['visitHistories']).catch(e => e) })
+  await waitFor(() => expect(state.historyResponse).toBeNull())
+  await act(async () => { await result.current.undoLatestVisit(1, 10) })
+  await act(async () => { finish({ data: [{ id: 99, unit_id: 10, result: '만남', visited_at: '2026-11-13', created_at: '2026-11-13T00:00:00Z' }], error: null }); await old })
+  expect(result.current.visitHistories).toEqual([])
+  expect(state.rpc).toHaveBeenCalledWith('invalidate_visit_history_tx', expect.objectContaining({ p_history_id: 99 }))
+})
+
+test.each(['calendar', 'zone'] as BuildingDemand[])('store itself restores full %s reads when the new flag is explicitly false', async mode => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_CALENDAR_ZONE_BUILDING_DEMAND_ENABLED', 'false')
+  const { result } = renderHook(() => useStore(true, 'admin', undefined, undefined, 'tester', mode))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.buildings[0].units[0].memo).toBe('saved unit memo')
+  expect(result.current.fullBuildingReader?.ready).toBe(true)
+})
+
+test.each([['false', undefined, false], ['true', undefined, true], ['false', 'true', true], ['true', 'false', false]] as const)(
+  'calendar/zone opt-in demo=%s flag=%s', (demo, flag, enabled) => {
+    vi.stubEnv('VITE_DEMO_MODE', demo); vi.stubEnv('VITE_CALENDAR_ZONE_BUILDING_DEMAND_ENABLED', flag)
+    for (const role of ['admin', 'leader'] as const) {
+      for (const desktop of [false, true]) expect(buildingDemandForRoute(role, '/calendar', '?openEvent=9', desktop)).toBe(enabled ? 'calendar' : 'full')
+      expect(buildingDemandForRoute(role, '/zone', '?level=cards&region=R&dong=D&scope=mine', false)).toBe(enabled ? 'zone' : 'full')
+      expect(buildingDemandForRoute(role, '/zone', '?tab=informal', false)).toBe(enabled ? 'zone' : 'full')
+      for (const search of ['?tab=restaurant', '?view=map', '?unknown=1']) expect(buildingDemandForRoute(role, '/zone', search, false)).toBe('full')
+      expect(buildingDemandForRoute(role, '/zone', '', true)).toBe('full')
+    }
+    for (const role of ['user', 'developer'] as const) expect(buildingDemandForRoute(role, '/calendar', '', false)).toBeUndefined()
+    vi.stubEnv('VITE_BUILDING_DEMAND_ENABLED', 'false')
+    expect(buildingDemandForRoute('admin', '/calendar', '', false)).toBeUndefined()
+  },
+)
 
 test.each(['admin', 'leader'] as const)('%s home uses complete card summaries without a building payload or recovery baseline', async role => {
   const { result } = renderHook(() => useStore(true, role, undefined, undefined, 'tester', 'home'))
