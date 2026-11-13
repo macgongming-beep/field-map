@@ -130,14 +130,66 @@ already-approved home/map optimization. No DB rollback is needed.
 
 ## Limits and next review
 
-Live verification used an administrator, not a separately logged-in leader or
-two devices. Both roles, all-team restaurant labels, other-device new-unit
-signals and late-response/cancel races have automated coverage. Existing team
-sharing/cancellation tests passed in the suite, but this run did NOT create/share
-or cancel a live team assignment. No claim of physical slow-network testing.
+Live verification used an administrator, not a separately logged-in leader.
+The follow-up below adds actual sharing/cancellation and two independently
+mounted browser tabs, not two physical devices or two different logged-in
+accounts. Both roles, all-team restaurant labels, other-device new-unit signals
+and late-response/cancel races also have automated coverage. No claim of
+physical slow-network testing.
 
 Review the projection consumers, editor leaf gate, calendar summary refreshes,
 and production-like delayed-history cancellation test before enabling production.
 Calendar still fetches all name rows, and mobile zone still fetches all unit
 statuses. Future server aggregate or assignment-scoped name reads require their
 own design. Full promotion remains sticky and limits savings after editing.
+
+## Live team change and cancellation follow-up
+
+2026-11-13, same deployed code `d3117d4`; no application or production changes.
+`scripts/verifyCalendarZoneTeamsDemo.mjs` requires `--confirm-demo`, allows only
+the demo database host, and reads credentials from `DEMO_ENV_FILE` without
+printing or persisting tokens. It sets up disposable data and checks DB state;
+the change/share/cancel actions below were performed through the actual UI.
+
+- Created disposable event 147 with two one-person teams. A (`team-a`) had card
+  28; B (`team-b`) had card 29 plus restaurant building 75 / unit 163. Existing
+  cards, buildings and units were referenced, not edited.
+- Fresh mobile calendar load (430x932) displayed both teams using the names
+  projection. Opening the assignment editor first showed its loading gate,
+  then both teams, nine selectable cards and their house/shop counts.
+- In A's card list, deselected card 28, selected card 30 and pressed Share.
+  The detail immediately displayed A's new card. An independently mounted PC
+  calendar tab also changed without manual reload. B's card and `+1` additional
+  assignment stayed visible. DB checks confirmed B's participant, team key,
+  card, restaurant and scope were unchanged; assignment row IDs can legitimately
+  change during sharing, so checks compare semantic values.
+- Pressed A's own Cancel Application in mobile detail. This was a **shared team
+  cancellation**, not an unassigned cancellation. A's participant, assignment
+  and card join disappeared; `team-a` scope/informal metadata was removed. B's
+  participant, card 29, restaurant 75/163 and `team-b` metadata remained.
+- The PC observer independently updated to one applicant and the remaining B
+  team without reload. Mobile reload -> reopen detail still showed B's card
+  and additional assignment. The remaining team is displayed as "Team 1"
+  because the UI renumbers visible teams; its stored key remains `team-b`.
+- At initial/change/cancel checkpoints, all unrelated event-card join rows
+  matched the pre-test snapshot. No existing event was changed. The verifier
+  refuses a 1000-row result rather than silently claiming complete coverage.
+- Cleanup removed the disposable event, participants, card assignments/card
+  joins, restaurant assignment and three fixture-linked service sessions.
+  Before removing sessions, the verifier confirmed no visit history referenced
+  them. Sessions are removed before the event to prevent orphaned active rows.
+  Unrelated event-card assignments still matched afterwards. Login/audit logs
+  from verification are not erased.
+
+Local evidence: `scratch/calendar-zone-teams-demo-results.json` and
+`scratch/demo-calendar-zone-teams-cancelled.png`. The report includes stage
+timestamps, DB snapshots and cleanup assertions; no credentials. UI restaurant
+label is collapsed to `+1`; the exact building/unit preservation was verified
+in DB, not inferred from that label. No request-count or byte-saving claim is
+made for this mutation run. Production rollout still awaits independent review.
+
+Follow-up checks: 55 tests across buildingDemand, AssignmentEditor guards,
+calendarRemoval, eventAssignments.scope and DesktopCalendar.assignment passed.
+Lint and TypeScript/Vite build passed. The 2,439-test full-suite result above is
+from the implementation run; it was not rerun for this script/document-only
+follow-up. Review `d3117d4` together with this live verification record.
