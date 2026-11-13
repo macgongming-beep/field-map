@@ -1,7 +1,7 @@
 # Production home building demand
 
 - Date: 2026-11-13
-- Status: approved; production rollout in progress
+- Status: enabled and verified in production
 - Source: reviewed `c664ea5`, decision 0087
 - Flag: `VITE_BUILDING_DEMAND_ENABLED=true`
 
@@ -51,8 +51,30 @@ No DB migration, permission change or production record edit is needed.
   Private-user reads was true. Privileged history demand, hidden comment skip
   and cart applications were unset; this rollout does not enable them.
 
-Demo interaction evidence and its limits are recorded in 0087. Production
-deployment artifact verification will be recorded after the deployment is ready.
+Demo interaction evidence and its limits are recorded in 0087.
+
+## Deployment evidence
+
+- Production code commit: `7549e7c`, pushed to main.
+- Vercel deployment `dpl_9pQdEdhy5RxisNJmRkQukpCdrq95` became Ready and
+  aliases https://chinese-territory-app.vercel.app.
+- Pulled production settings confirmed BUILDING_DEMAND, TERRITORY_REALTIME and
+  CALENDAR_WINDOW enabled. This rollout only added BUILDING_DEMAND.
+- Canonical deployed entry: `index-BPYwEmKp.js`. Its shared
+  `useCardDirectory-syxSM6me.js` contains the compiled enabled role predicate
+  `(admin || leader) && true` and plain-home/map/full demand selection.
+- `TerritoryReportView-Rk39QqLQ.js` contains the home early return before building
+  SQL, the map projection, detail lifecycle protection and demand retry path.
+- Chrome production administrator: applied waiting updates using the normal UI,
+  then verified the page loads the same `index-BPYwEmKp.js`. Home still shows
+  609 cards, 329 in progress, 280 unassigned, 589 / 3,655 completed units (16.1%).
+  Today's three service entries and meeting-note entry remain visible.
+- Screenshot: local `scratch/production-building-demand-home.png` (not committed,
+  contains production personal information). No production save/cancel or team
+  assignment mutation was performed. No live HTTP count or egress claim is made;
+  compiled artifact verification and the demo/automated request checks establish
+  activation, not measured monthly savings.
+- Lint passed. No production DB records or permissions were modified.
 
 ## Rollback and follow-up
 
