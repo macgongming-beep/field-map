@@ -422,6 +422,14 @@ button:focus-visible {
   border-radius: 8px;
 }
 
+.mobile-map-shell--chinese-filter .mobile-map-legend-card {
+  top: calc(var(--map-filter-header-height, 94px) + 12px - var(--map-chips-push, 0px));
+}
+
+.mobile-map-shell--chinese-filter .map-toolbar-overlay {
+  top: calc(var(--map-filter-header-height, 94px) + 12px - var(--map-chips-push, 0px) + var(--map-toolbar-search-push, 0px)) !important;
+}
+
 .mobile-map-chinese-filter[aria-pressed="true"] {
   color: var(--surface);
   background: var(--brand-800);
@@ -435,7 +443,11 @@ button:focus-visible {
   right: 0;
   top: calc(100% + 6px);
   width: max-content;
-  max-width: 200px;
+  max-width: min(200px, calc(100vw / var(--app-zoom, 1) - 84px));
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  line-height: 1.4;
   padding: 6px 8px;
   border-radius: 4px;
   background: var(--ink-900);

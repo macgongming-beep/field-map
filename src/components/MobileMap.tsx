@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 SDK(window.naver)는 공식 TS 타입이 없어 any 사용이 불가피함 */
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import { canEditVisitor, visitorOptionsFrom, visitorOptionsWithCurrent } from '../utils/visitorPicker'
 import { useSearchParams } from 'react-router-dom'
 import { MapCanvas } from './MapCanvas'
@@ -266,6 +266,22 @@ export function MobileMap({
   const [chineseOnly, setChineseOnly] = useState(false)
   const canFilterChinese = mapChineseFilterEnabled() && !focusedInformalId && !regularVisitScope && !addrParam
   const showChineseOnly = canFilterChinese && chineseOnly
+  const mapHeaderRef = useRef<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    if (!canFilterChinese || navLevel !== 'map') return
+    const header = mapHeaderRef.current
+    const shell = header?.parentElement
+    if (!header || !shell) return
+    // offsetHeight uses layout pixels, unlike the zoom-scaled bounding rectangle.
+    const update = () => shell.style.setProperty('--map-filter-header-height', `${header.offsetHeight}px`)
+    update()
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update)
+    observer?.observe(header)
+    return () => {
+      observer?.disconnect()
+      shell.style.removeProperty('--map-filter-header-height')
+    }
+  }, [canFilterChinese, navLevel])
   const [statusFilter, setStatusFilter] = useState<PinGroup | '전체'>('전체')
   const [buildingTypeFilter, setBuildingTypeFilter] = useState<BuildingTypeFilter>('전체')
 
@@ -1681,7 +1697,7 @@ export function MobileMap({
       {childDraftModal}
       {editInformalModal}
       {/* 통합 헤더 — map 레벨에서는 floating + blur (디자인 23) */}
-      <header className={`mobile-map-header${navLevel === 'map' ? ' mobile-map-header--floating' : ''}`}>
+      <header ref={mapHeaderRef} className={`mobile-map-header${navLevel === 'map' ? ' mobile-map-header--floating' : ''}`}>
         <button onClick={handleBack} type="button" className="mm-back-btn" aria-label="Back">‹</button>
         <div className="mobile-map-header-content">
           <div className="mobile-map-title-row">
