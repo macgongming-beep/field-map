@@ -104,6 +104,8 @@
 
 캘린더·구역 운영 전환: [0090 선행 스위치·검증·롤백](0090-production-calendar-zone-building-demand.md)
 
+모바일 지도 중국어 세대 필터: [0092 표시 집계 일치와 원본 저장 보존](0092-demo-map-chinese-unit-filter.md)
+
 ```markdown
 # 제목
 
