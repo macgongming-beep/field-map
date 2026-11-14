@@ -28,7 +28,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn()
   const root = document.createElement('div'); root.id = 'root'; document.body.appendChild(root)
 })
-afterEach(() => { cleanup(); document.getElementById('root')?.remove(); vi.unstubAllEnvs(); vi.clearAllMocks() })
+afterEach(() => { cleanup(); document.getElementById('root')?.remove(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 function propsForMap() {
   return territoryProps({
@@ -58,6 +58,45 @@ function expand(container: HTMLElement, id: number) {
   fireEvent.click(screen.getByRole('button', { name: `pin ${id}` }))
   fireEvent.click(container.querySelector(`#building-card-${id} .bld-row-head-btn`)!)
 }
+
+test('header clearance tracks translated wrapping without scaling layout pixels twice', () => {
+  let resize: (() => void) | undefined
+  const disconnect = vi.fn()
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(callback: () => void) { resize = callback }
+    observe = vi.fn()
+    disconnect = disconnect
+  })
+  let height = 119
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.classList.contains('mobile-map-header') ? height : 0
+  })
+  const { container, unmount } = render(view(propsForMap()))
+  const shell = container.querySelector<HTMLElement>('.mobile-map-shell')!
+  expect(shell.style.getPropertyValue('--map-filter-header-height')).toBe('119px')
+  height = 147
+  resize!()
+  expect(shell.style.getPropertyValue('--map-filter-header-height')).toBe('147px')
+  unmount()
+  expect(disconnect).toHaveBeenCalled()
+  expect(shell.style.getPropertyValue('--map-filter-header-height')).toBe('')
+})
+
+test.each([
+  ['en', 'Show Chinese-speaking units only', 'No Chinese-speaking units match this area and filters', 'Show all units'],
+  ['zh', '只显示中文住户', '当前范围和筛选条件下没有标记为中文的住户', '显示所有住户'],
+] as const)('filter help and no-match controls follow %s', (language, help, empty, reset) => {
+  const props = propsForMap()
+  props.language = language
+  props.buildings = [testBuilding(2, 1, 'unmarked', [testUnit(21, '201')])]
+  render(view(props))
+  const button = screen.getByRole('button', { name: help })
+  expect(button).toHaveAttribute('title', help)
+  fireEvent.click(button)
+  expect(screen.getByText(empty)).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: reset }))
+  expect(button).toHaveAttribute('aria-pressed', 'false')
+})
 
 test('header, pins, legend, list and progress share one projection; both teams and original data stay intact', () => {
   const props = propsForMap(), before = structuredClone(props.buildings)

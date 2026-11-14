@@ -101,3 +101,33 @@ No live network-total measurement is claimed. Own-save/cancel was exercised
 against the demo; assignment changes and incoming snapshots were tested in
 components, not a new two-device live assignment exercise. Chrome viewport
 testing is not a physical iPhone/PWA test. DesktopMap is outside this change.
+
+## English/Chinese follow-up (2026-11-14)
+
+User requested live language checks before production. Chrome demo was switched
+through the actual Settings controls to English and Simplified Chinese, at
+320x740 and Extra large text (root zoom 1.25).
+
+English's longer house/shop labels wrap the header to two rows. This revealed
+that the previous fixed legend/toolbar offset could hide the legend's first row.
+The map now observes the actual header layout height and positions both controls
+below it. It uses offsetHeight rather than a zoom-scaled bounding rectangle, and
+disconnects/removes the CSS property when inactive. The tooltip has a viewport-
+bounded width and wraps rather than extending beyond the left screen edge.
+Only the filter-enabled map layout uses these new offsets.
+
+- English header bottom 148.5px, legend/toolbar top 163.5px: 15px clearance.
+- Chinese header bottom 113.5px, legend/toolbar top 128.5px: 15px clearance.
+- Both translated tooltips were displayed; English wraps to two lines.
+- Opened Du-dong's one-shop/no-house scope and selected House to exercise the
+  actual no-match state. Both language messages and reset buttons fit at 125%.
+  English message spans x47.5..272.5 and reset x95.6..224.4 in a 320px viewport;
+  no document horizontal overflow. Reset disables only the Chinese filter.
+- Local screenshots: scratch/map-filter-en-320-help.png,
+  scratch/map-filter-en-320-empty.png, scratch/map-filter-zh-320-help.png,
+  scratch/map-filter-zh-320-empty.png.
+- Added both language render tests and a ResizeObserver/layout-height test.
+  Replacing the measured height with a constant fails the new height test.
+  Full demo suite: 2,459 tests / 243 files pass; lint and demo deployment build pass.
+- No service records were written during the language checks. These are browser
+  viewport checks, not physical-phone tests.
