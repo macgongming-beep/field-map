@@ -106,6 +106,8 @@
 
 모바일 지도 중국어 세대 필터: [0092 표시 집계 일치와 원본 저장 보존](0092-demo-map-chinese-unit-filter.md)
 
+지도 필터 운영 적용: [0093 다국어 작은 화면·운영 활성화 확인](0093-production-map-chinese-filter.md)
+
 ```markdown
 # 제목
 
