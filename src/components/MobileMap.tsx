@@ -40,9 +40,9 @@ import { informalAssetsForMap } from '../utils/informalAssets'
 import { useTerritoryRealtime } from '../hooks/useTerritoryRealtime'
 import { BuildingDetailGate } from './BuildingDetailGate'
 import { useAddressMapPin } from '../hooks/useAddressMapPin'
+import { chineseMapBuildings, mapChineseFilterEnabled } from '../utils/mapChineseFilter'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
-type StrategyFilter = '전체' | '중국인' | '부재' | '만남'
 type BuildingTypeFilter = '전체' | Building['type']
 
 const BUILDING_PIN_AUTO_ADJUST_MAX_METERS = 200
@@ -263,7 +263,9 @@ export function MobileMap({
   }, [showCardFinder, cardSearch, addressSearching, addressSearchResults])
 
   // 필터
-  const [strategyFilter] = useState<StrategyFilter>('전체')
+  const [chineseOnly, setChineseOnly] = useState(false)
+  const canFilterChinese = mapChineseFilterEnabled() && !focusedInformalId && !regularVisitScope && !addrParam
+  const showChineseOnly = canFilterChinese && chineseOnly
   const [statusFilter, setStatusFilter] = useState<PinGroup | '전체'>('전체')
   const [buildingTypeFilter, setBuildingTypeFilter] = useState<BuildingTypeFilter>('전체')
 
@@ -930,6 +932,9 @@ export function MobileMap({
     () => new Set(scopedCards.map((card) => card.id)),
     [scopedCards]
   )
+  const displayedCardCount = selectedCardId == null
+    ? scopedCards.length
+    : scopedCards.filter(card => card.id === selectedCardId).length
   useTerritoryRealtime(focusedInformalId != null ? [] : selectedCardId != null ? [selectedCardId] : [...scopedCardIds])
 
   const cardMap = useMemo(() => new Map(cards.map(c => [c.id, c])), [cards])
@@ -955,38 +960,32 @@ export function MobileMap({
     return map
   }, [buildings, cards])
 
-  const unitMatchesStrategyFilter = (unit: Building['units'][number]) => {
-    if (strategyFilter === '전체') return true
-    if (strategyFilter === '중국인') return unit.isChinese
-    if (strategyFilter === '부재') return unit.status === '부재'
-    if (strategyFilter === '만남') return unit.status === '만남'
-    return true
-  }
-
   const geographicallyFilteredBuildings = useMemo(() =>
     buildings.filter((b) => {
       if (selectedCardId != null && b.cardId !== selectedCardId) return false
       if (selectedCardId == null && focusedCardIdSet.size > 0 && !focusedCardIdSet.has(b.cardId)) return false
       if (selectedCardId == null && (selectedArea || selectedRegion) && !scopedCardIds.has(b.cardId)) return false
-      if (b.units.length > 0 && !b.units.some(unitMatchesStrategyFilter)) return false
       return true
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 필터 함수는 이미 포함된 필터 state만 참조함
-    [buildings, selectedCardId, focusedCardIdSet, selectedArea, selectedRegion, scopedCardIds, strategyFilter]
+    [buildings, selectedCardId, focusedCardIdSet, selectedArea, selectedRegion, scopedCardIds]
   )
 
+  const languageFilteredBuildings = useMemo(
+    () => chineseMapBuildings(geographicallyFilteredBuildings, showChineseOnly),
+    [geographicallyFilteredBuildings, showChineseOnly],
+  )
   const typeCounts = useMemo(() => ({
-    전체: geographicallyFilteredBuildings.reduce((sum, building) => sum + unitsForUsage(building, '전체').length, 0),
-    주택: geographicallyFilteredBuildings.reduce((sum, building) => sum + unitsForUsage(building, '주택').length, 0),
-    상가: geographicallyFilteredBuildings.reduce((sum, building) => sum + unitsForUsage(building, '상가').length, 0),
-  }), [geographicallyFilteredBuildings])
+    전체: languageFilteredBuildings.reduce((sum, building) => sum + unitsForUsage(building, '전체').length, 0),
+    주택: languageFilteredBuildings.reduce((sum, building) => sum + unitsForUsage(building, '주택').length, 0),
+    상가: languageFilteredBuildings.reduce((sum, building) => sum + unitsForUsage(building, '상가').length, 0),
+  }), [languageFilteredBuildings])
 
   const filteredBuildings = useMemo(() =>
-    geographicallyFilteredBuildings
+    languageFilteredBuildings
       .filter((building) => buildingHasUsage(building, buildingTypeFilter))
       .map((building) => scopeBuildingToUsage(building, buildingTypeFilter))
       .filter((building) => statusFilter === '전체' || getPinGroup(building) === statusFilter),
-    [geographicallyFilteredBuildings, buildingTypeFilter, statusFilter]
+    [languageFilteredBuildings, buildingTypeFilter, statusFilter]
   )
 
   const statusCounts = useMemo(() =>
@@ -1487,6 +1486,7 @@ export function MobileMap({
     setSelectedRegion(null)
     setStatusFilter('전체')
     setBuildingTypeFilter('전체')
+    setChineseOnly(false)
     setSelectedCardId(card.id)
 
     if (!building) {
@@ -1675,7 +1675,7 @@ export function MobileMap({
   const hasAreaChips = !isUserMap && !enteredDirectly && areas.length > 1
   return (
     <main
-      className={`mobile-map-shell${navLevel === 'map' ? ' mobile-map-shell--map' : ''}`}
+      className={`mobile-map-shell${navLevel === 'map' ? ' mobile-map-shell--map' : ''}${navLevel === 'map' && canFilterChinese ? ' mobile-map-shell--chinese-filter' : ''}`}
       style={hasAreaChips && navLevel === 'map' ? { '--map-chips-push': '53px' } as React.CSSProperties : undefined}
     >
       {childDraftModal}
@@ -1695,7 +1695,7 @@ export function MobileMap({
               ) : navLevel === 'map' ? (
                 <>
                   <h1>{assignmentServiceMap ? focusedScopeLabel : selectedCardId ? translateKoreanAddress(cards.find(c => c.id === selectedCardId)?.name ?? t(language, 'map.zoneMap'), language, translatePlaceNames) : t(language, 'map.zoneMap')}</h1>
-                  {assignmentServiceMap ? <span className="mm-stats-sub">{msg('카드 {n}개', { n: cards.length })} · {typeCounts.전체}{msg('세대')}</span> : <span className="mm-stats-sub" role="tablist">
+                  {assignmentServiceMap ? <span className="mm-stats-sub">{msg('카드 {n}개', { n: displayedCardCount })} · {showChineseOnly ? `${t(language, 'map.chinese')} ` : ''}{typeCounts.전체}{msg('세대')}</span> : <span className="mm-stats-sub" role="tablist">
                     <button
                       type="button"
                       role="tab"
@@ -1734,6 +1734,27 @@ export function MobileMap({
             </div>
             {navLevel === 'map' ? (
               <div className="mobile-map-header-actions">
+                {canFilterChinese && (
+                  <button
+                    type="button"
+                    className="mobile-map-header-action mobile-map-chinese-filter"
+                    aria-label={t(language, 'map.chineseOnly')}
+                    aria-pressed={showChineseOnly}
+                    title={t(language, 'map.chineseOnly')}
+                    onClick={() => {
+                      setChineseOnly(value => !value)
+                      setShowMapActionMenu(false)
+                      setShowCardFinder(false)
+                      setFullScreenUnit(null)
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M2 21a8 8 0 0 1 13.292-6" />
+                      <circle cx="10" cy="8" r="5" />
+                      <path d="m16 19 2 2 4-4" />
+                    </svg>
+                  </button>
+                )}
                 <button
                   type="button"
                   className="mobile-map-header-action"
@@ -2081,7 +2102,7 @@ export function MobileMap({
                   setFullScreenUnit(null) // 다른 건물로 넘어갈 때도 호수 상세 내역 초기화
 
                   // 해당 건물 그룹이 접혀 있으면 자동으로 펼치기 (예: 방문완료 그룹)
-                  const b = buildings.find(item => item.id === id)
+                  const b = filteredBuildings.find(item => item.id === id)
                   if (b) {
                     const grp = getPinGroup(b)
                     setCollapsedStatusGroups((prev) => { const n = new Set(prev); n.delete(grp); return n })
@@ -2332,6 +2353,7 @@ export function MobileMap({
               ) : (
                 <>
                   <span>
+                    {showChineseOnly && <span className="mm-chinese-scope-label">{t(language, 'map.chinese')} · </span>}
                     {mapAggregateMarkers.length > 0
                       ? `${aggregateScopeLabel} ${mapAggregateMarkers.length}${t(language, 'calendar.countSuffix')}`
                       : `${t(language, 'map.building')} ${filteredBuildings.length}${t(language, 'calendar.countSuffix')}`}
@@ -2489,7 +2511,8 @@ export function MobileMap({
 
               {mapAggregateMarkers.length === 0 && filteredBuildings.length === 0 && (
                 <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
-                  <p>{t(language, 'map.noBuildings')}</p>
+                  <p>{t(language, showChineseOnly ? 'map.noChineseUnits' : 'map.noBuildings')}</p>
+                  {showChineseOnly && <button type="button" className="mm-chinese-reset" onClick={() => setChineseOnly(false)}>{t(language, 'map.showAllUnits')}</button>}
                 </div>
               )}
 
@@ -2505,6 +2528,7 @@ export function MobileMap({
                       type="button"
                     />
                     {!isGroupCollapsed && groupedBuildings.map((building) => {
+                const sourceBuilding = buildings.find(item => item.id === building.id) ?? building
                 const isExpanded = expandedBuildingIds.has(building.id)
                 const handledUnits = building.units.filter(u => u.status !== '미방문').length
 const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / building.units.length) * 100)
@@ -2624,7 +2648,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                                 {/* ⚠ **이 표시가 있어야 '완료'(채운 초록)로 바뀐다.**
                                     시스템은 '등록된 세대' 만 안다 — 104·105호만 등록된 건물에서 둘 다 가면
                                     100% 가 되어 아무도 안 갔다. 몇 세대가 있는지는 사람만 안다. */}
-                                {onSetUnitsSurveyed && (
+                                {onSetUnitsSurveyed && !showChineseOnly && (
                                   <button
                                     type="button"
                                     className={building.unitsSurveyed ? 'bld-menu-on' : undefined}
@@ -2658,10 +2682,7 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
                           <span>{t(language, 'map.korean')}</span>
                         </div>
 
-                        {(strategyFilter === '전체'
-                          ? building.units
-                          : building.units.filter(unitMatchesStrategyFilter)
-                        ).map((unit) => {
+                        {building.units.map((unit) => {
                           const unitHistories = visitHistoriesByUnitId.get(unit.id) ?? []
                           const latestHistory = unitHistories[0]
 
@@ -2757,12 +2778,13 @@ const completion = building.units.length === 0 ? 0 : Math.round((handledUnits / 
 
                         {addingUnitToBuildingId === building.id ? (() => {
                           // 입력이 비어 있으면 이미 있는 호수 다음 번호를 알아서 붙인다
-                          const existingNumbers = building.units.map((u) => u.number)
+                          const existingNumbers = sourceBuilding.units.map((u) => u.number)
                           const suggested = suggestNextUnitNumber(existingNumbers)
                           const submitUnit = async () => {
                             const number = newUnitNumber.trim() || suggested
                             // 결과를 보고 나서 비운다 — 실패했는데 비우면 적은 호수가 사라진다
                             if (await onAddUnit(building.id, number, newUnitUsageType)) {
+                              setChineseOnly(false)
                               setNewUnitNumber('')
                               if (building.units.length === 0) setAddingUnitToBuildingId(null)
                             }

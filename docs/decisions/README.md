@@ -100,6 +100,8 @@
 
 캘린더·구역 건물 조회: [0089 데모 이름·상태 요약과 배정 편집 전체 조회](0089-demo-calendar-zone-building-demand.md)
 
+모바일 지도 중국어 세대 필터: [0092 표시 집계 일치와 원본 저장 보존](0092-demo-map-chinese-unit-filter.md)
+
 ```markdown
 # 제목
 
