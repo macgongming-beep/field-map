@@ -1,4 +1,5 @@
 export const groupServiceZh: Record<string,string> = {
+  '봉사 신청 취소':'取消传道报名','재방·연구 신청 취소':'取消续访·圣经课程报名','참여':'加入',
   '봉사 신청':'报名传道','재방·연구 신청':'报名续访·圣经课程','재방·연구':'续访·圣经课程','봉사':'传道',
   '봉사 신청 완료':'已报名传道','재방·연구 신청 완료':'已报名续访·圣经课程','재방·연구 신청이 완료됐습니다':'已报名续访·圣经课程',
   '이미 신청한 종류를 변경하려면 먼저 신청을 취소해 주세요.':'请先取消现有报名，再更改报名类别。',
@@ -26,6 +27,7 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '봉사 신청 취소':'Cancel service application','재방·연구 신청 취소':'Cancel return visit / study application','참여':'Join',
   '봉사 신청':'Join service','재방·연구 신청':'Join return visits / studies','재방·연구':'Return visits / studies','봉사':'Service',
   '봉사 신청 완료':'Joined service','재방·연구 신청 완료':'Joined return visits / studies','재방·연구 신청이 완료됐습니다':'Joined return visits / studies',
   '이미 신청한 종류를 변경하려면 먼저 신청을 취소해 주세요.':'Cancel your existing application before changing its type.',

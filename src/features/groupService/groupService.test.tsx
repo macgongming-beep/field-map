@@ -108,6 +108,15 @@ test('single slot uses saved shared presets and accepts completely empty virtual
   expect(submit.mock.calls[0][0].servicePlan.rows).toHaveLength(1)
   expect(submit.mock.calls[0][0].servicePlan.rows[0].payload).toMatchObject({time:'14:30',end_time:'16:00',title:'Saved title',access:{joinUrl:'',meetingNumber:'',passcode:''}})
 })
+test('meeting join action shares the compact heading and retains its accessible name',async()=>{
+  mocks.read.mockResolvedValue({joinUrl:'https://example.com',meetingNumber:'123',passcode:'secret',version:'1'})
+  render(<MeetingAccessPanel eventId={1} version="1"/>)
+  const link=await screen.findByRole('link',{name:'화상 모임 참여'})
+  expect(link.textContent).toBe('참여 ↗')
+  expect(link.closest('.gs-meeting-heading')?.querySelector('h3')?.textContent).toBe('화상 모임')
+  expect(link.getAttribute('href')).toBe('https://example.com')
+  expect(screen.getByRole('button',{name:'비밀번호 복사'})).toBeTruthy()
+})
 test('empty meeting details render an intentional empty state, not a loading error',async()=>{
   mocks.read.mockResolvedValue({joinUrl:'',meetingNumber:'',passcode:'',version:'1'})
   render(<MeetingAccessPanel eventId={1} version="1"/>)
