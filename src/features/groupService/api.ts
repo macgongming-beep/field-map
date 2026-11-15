@@ -4,6 +4,16 @@ import { confirmDialog } from '../../lib/confirm'
 import { msg } from '../../lib/msg'
 import type { MeetingAccess, ServicePlan } from './model'
 
+export async function applyServiceActivity(eventId: number, activity: 'service'|'return_visit') {
+  const token = getAuthToken()
+  if (!token) throw new Error(msg('다시 로그인해 주세요.'))
+  const {data,error}=await supabase.rpc('apply_service_activity_tx',{p_token:token,p_event_id:eventId,p_activity:activity})
+  if(error || !data?.ok) throw new Error(error?.code==='PT409'
+    ? msg('이미 신청한 종류를 변경하려면 먼저 신청을 취소해 주세요.')
+    : msg('봉사 신청을 저장하지 못했습니다.'))
+  return data as {ok:true;created:boolean}
+}
+
 export async function saveServicePlan(plan: ServicePlan) {
   const token = getAuthToken()
   if (!token) throw new Error(msg('다시 로그인해 주세요.'))

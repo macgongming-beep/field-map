@@ -115,7 +115,7 @@ export type RawCalendarEvent = {
   assignment_team_informal?: Record<string, number[]> | null
   memo: string
   series_id: string | null
-  event_participants: { user_name: string; role: string }[]
+  event_participants: { user_name: string; role: string; service_activity?: string }[]
   event_cart_applications?: Array<{
     user_id: number
     is_team_lead: boolean
@@ -407,6 +407,7 @@ export function toCalendarEvent(
     hasMeeting: raw.has_meeting,
     allowApplications: raw.allow_applications ?? true,
     applicants: participants.map((p) => p.user_name),
+    returnVisitApplicants: participants.filter(p => p.service_activity === 'return_visit').map(p => p.user_name),
     allowCartApplications: raw.allow_cart_applications ?? false,
     cartCapacity: raw.cart_capacity ?? null,
     cartApplicants: (raw.event_cart_applications ?? [])

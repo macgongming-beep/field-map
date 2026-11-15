@@ -1,4 +1,7 @@
 export const groupServiceZh: Record<string,string> = {
+  '봉사 신청':'报名传道','재방·연구 신청':'报名续访·圣经课程','재방·연구':'续访·圣经课程','봉사':'传道',
+  '봉사 신청 완료':'已报名传道','재방·연구 신청 완료':'已报名续访·圣经课程','재방·연구 신청이 완료됐습니다':'已报名续访·圣经课程',
+  '이미 신청한 종류를 변경하려면 먼저 신청을 취소해 주세요.':'请先取消现有报名，再更改报名类别。',
   '자주 쓰는 시간':'常用时间',
   '시간대 {n}':'时段 {n}','시간대 추가':'添加时段','시간대 삭제':'删除时段','시간대 {n} 삭제':'删除时段 {n}',
   '직접 입력':'手动输入','제목, 대상 집단, 인도자를 확인해 주세요.':'请确认标题、参加的小组和主持人。',
@@ -23,6 +26,9 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '봉사 신청':'Join service','재방·연구 신청':'Join return visits / studies','재방·연구':'Return visits / studies','봉사':'Service',
+  '봉사 신청 완료':'Joined service','재방·연구 신청 완료':'Joined return visits / studies','재방·연구 신청이 완료됐습니다':'Joined return visits / studies',
+  '이미 신청한 종류를 변경하려면 먼저 신청을 취소해 주세요.':'Cancel your existing application before changing its type.',
   '자주 쓰는 시간':'Frequent times',
   '시간대 {n}':'Time slot {n}','시간대 추가':'Add time slot','시간대 삭제':'Remove time slot','시간대 {n} 삭제':'Remove time slot {n}',
   '직접 입력':'Custom time','제목, 대상 집단, 인도자를 확인해 주세요.':'Check the title, groups and conductors.',

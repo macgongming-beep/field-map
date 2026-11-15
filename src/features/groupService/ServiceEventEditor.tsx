@@ -140,10 +140,11 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
       else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}
     }
   }}>
-    <header><h2>{msg(snapshot?'일정 수정':'일정 추가')}</h2><button type="button" disabled={busy} onClick={onClose} aria-label={msg('닫기')}>×</button></header>
+    <div className="gs-sheet-handle" aria-hidden/>
+    <header><div><h2>{msg(snapshot?'일정 수정':'일정 추가')}</h2><span className="gs-editor-date">{day.replaceAll('-','.')}</span></div><button type="button" disabled={busy} onClick={onClose} aria-label={msg('닫기')}>×</button></header>
     <form onSubmit={e=>{e.preventDefault();void save()}}><fieldset disabled={busy}>
       <div className="gs-segment" role="group" aria-label={msg('봉사 구분')}>{(['congregation','group'] as const).map(k=><button type="button" key={k} aria-pressed={kind===k} onClick={()=>changeKind(k)}>{msg(k==='group'?'집단봉사':'회중봉사')}</button>)}</div>
-      {kind==='group' && <fieldset className="gs-groups"><legend>{msg('대상 집단')}</legend>{serviceGroups.map(g=><label key={g.code}><input type="checkbox" checked={groups.includes(g.code)} onChange={()=>setGroups(prev=>prev.includes(g.code)?prev.filter(c=>c!==g.code):[...prev,g.code])} />{g[language]}</label>)}</fieldset>}
+      {kind==='group' && <fieldset className="gs-groups"><legend>{msg('대상 집단')}</legend>{serviceGroups.map(g=><label key={g.code}><input type="checkbox" aria-label={g[language]} checked={groups.includes(g.code)} disabled={groups.length>=2&&!groups.includes(g.code)} onChange={()=>setGroups(prev=>prev.includes(g.code)?prev.filter(c=>c!==g.code):[...prev,g.code])} /><span className="gs-choice-mark" aria-hidden>{groups.includes(g.code)?'✓':'+'}</span>{g[language]}</label>)}</fieldset>}
       <label>{msg('날짜')}<input type="date" value={day} onChange={e=>setDay(e.target.value)} required /></label>
       <label>{msg('제목')}<input value={title} maxLength={200} onChange={e=>setTitle(e.target.value)} required /></label>
       {slots.map((s,i)=><div key={i} className="gs-slot">

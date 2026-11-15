@@ -103,7 +103,7 @@ type Props = {
   onDeleteEventSeries?: (seriesId: string, fromDate: string) => void
   onUpdateEvent?: (id: number, input: EventInput, notify?: boolean) => void | Promise<boolean>
   onUpdateEventSeries?: (seriesId: string, fromDate: string, input: EventInput, notify?: boolean) => void | Promise<boolean>
-  onApplyToEvent?: (eventId: number) => void
+  onApplyToEvent?: (eventId: number, activity?: 'service'|'return_visit') => void
   onApplyToCartEvent?: (eventId: number) => void
   onManageCartApplication?: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
   onSetCartTeamLeader?: (eventId: number, userId: number | null) => Promise<boolean> | boolean
@@ -652,7 +652,7 @@ export function AdminMobileCalendar({
           onAddParticipant={(userName, participantRole) => onAddParticipantToEvent?.(detailEvent.id, userName, participantRole)}
           onRemoveParticipant={(userName) => onRemoveParticipantFromEvent?.(detailEvent.id, userName)}
           onClose={returnFromDetail}
-          onApply={onApplyToEvent ? () => onApplyToEvent(detailEvent.id) : undefined}
+          onApply={onApplyToEvent ? (activity) => activity ? onApplyToEvent(detailEvent.id,activity) : onApplyToEvent(detailEvent.id) : undefined}
           onCancelApply={onApplyToEvent ? () => onApplyToEvent(detailEvent.id) : undefined}
           onApplyToCart={onApplyToCartEvent ? () => onApplyToCartEvent(detailEvent.id) : undefined}
           onManageCartApplicant={onManageCartApplication ? (userId, action) => onManageCartApplication(detailEvent.id, userId, action) : undefined}

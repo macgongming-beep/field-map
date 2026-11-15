@@ -35,6 +35,7 @@ import { groupServiceEnabled } from '../features/groupService/model'
 import { ServiceEventEditor } from '../features/groupService/ServiceEventEditor'
 import { ServiceEventList } from '../features/groupService/ServiceEventList'
 import { MeetingAccessPanel } from '../features/groupService/MeetingAccessPanel'
+import { ServiceApplicationButtons, ReturnVisitApplicants } from '../features/groupService/ServiceApplications'
 
 
 function getCalendarDays(year: number, month: number): (number | null)[] {
@@ -139,7 +140,7 @@ export function DesktopCalendar({
   actualRole?: Role
   participantUsers?: EventParticipantUser[]
   mentionUsers?: MentionUser[]
-  onApplyToEvent: (eventId: number) => void
+  onApplyToEvent: (eventId: number, activity?: 'service'|'return_visit') => void
   onApplyToCartEvent: (eventId: number) => void
   onManageCartApplication: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
   onSetCartTeamLeader: (eventId: number, userId: number | null) => Promise<boolean> | boolean
@@ -866,7 +867,7 @@ export function DesktopCalendar({
                     participantUsers={participantUsers}
                     addParticipantEventId={addParticipantEventId}
                     onAddParticipant={onAddParticipant}
-                    onApply={() => onApplyToEvent(event.id)}
+                    onApply={(activity) => activity ? onApplyToEvent(event.id,activity) : onApplyToEvent(event.id)}
                     onApplyToCart={() => onApplyToCartEvent(event.id)}
                     onManageCartApplicant={(userId, action) => onManageCartApplication(event.id, userId, action)}
                     onSetCartTeamLead={(userId) => onSetCartTeamLeader(event.id, userId)}
@@ -1068,7 +1069,7 @@ function EventDetailCard({
   participantUsers: EventParticipantUser[]
   addParticipantEventId: number | null
   onAddParticipant?: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
-  onApply: () => void
+  onApply: (activity?: 'service'|'return_visit') => void
   onApplyToCart: () => void
   onManageCartApplicant: (userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
   onSetCartTeamLead: (userId: number | null) => Promise<boolean> | boolean
@@ -1146,10 +1147,11 @@ function EventDetailCard({
       </div>
 
       {/* 신청 버튼 */}
-      {event.allowApplications && (
+      {(event.allowApplications || isApplied) && groupServiceEnabled() && <ServiceApplicationButtons event={event} currentVisitor={currentVisitor} onApply={onApply} onCancel={()=>onApply()}/>}
+      {event.allowApplications && !groupServiceEnabled() && (
         <button
           className={`cal-apply-big-btn${isApplied ? ' applied' : ''}`}
-          onClick={onApply}
+          onClick={() => onApply()}
           type="button"
           style={{ marginBottom: 14 }}
         >
@@ -1258,8 +1260,9 @@ function EventDetailCard({
               </div>
             )}
           </div>
+        {groupServiceEnabled() && <h4 className="gs-applicant-heading">{msg('봉사')} <span>{event.applicants.filter(name=>!event.returnVisitApplicants?.includes(name)).length}</span></h4>}
         <div className="event-applicants-strip">
-          {event.applicants.map((name) => (
+          {event.applicants.filter(name=>!groupServiceEnabled()||!event.returnVisitApplicants?.includes(name)).map((name) => (
             <span
               aria-label={event.guests.includes(name) ? `${name}, ${msg('손님')}` : name}
               className={`event-applicant-chip${event.guests.includes(name) ? ' is-guest' : ''}`}
@@ -1288,6 +1291,9 @@ function EventDetailCard({
             <span style={{ fontSize: 12, color: 'var(--gray-400)', padding: '6px 2px' }}>신청자가 없습니다</span>
           )}
         </div>
+        {groupServiceEnabled() && <ReturnVisitApplicants event={event} onRemove={canManageParticipants&&isParticipantRemoveMode ? async name=>{
+          if(await confirmDialog({message:msg('{name}님을 이 일정에서 제외할까요?',{name}),danger:true,confirmLabel:'제외'}))onRemoveParticipant(event.id,name)
+        }:undefined}/>}
       </div>
       )}
 

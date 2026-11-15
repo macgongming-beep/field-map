@@ -14,6 +14,10 @@ export const serviceGroups = [
   { code: 'dongbaek', ko: '동백', zh: '东柏', en: 'Dongbaek' },
 ] as const
 export type GroupCode = typeof serviceGroups[number]['code']
+export function territoryApplicants(event: CalendarEvent) {
+  const returns = new Set(event.returnVisitApplicants ?? [])
+  return Array.from(new Set([...event.applicants,...event.assigned])).filter(name=>!returns.has(name))
+}
 export type MeetingAccess = { joinUrl: string; meetingNumber: string; passcode: string }
 export type ServiceFields = {
   serviceKind?: 'congregation' | 'group'

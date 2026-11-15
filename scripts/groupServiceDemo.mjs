@@ -14,7 +14,7 @@ assert.equal(decodeURIComponent(db.username),`postgres.${project}`)
 assert.ok(db.hostname.endsWith('.pooler.supabase.com'))
 assert.equal(db.port,'5432')
 const mode=process.argv[2]
-assert.ok(['check','apply','apply-conflict','apply-templates','apply-compatibility','apply-optional-access','fixture','smoke'].includes(mode))
+assert.ok(['check','apply','apply-conflict','apply-templates','apply-compatibility','apply-optional-access','apply-activity','fixture','smoke'].includes(mode))
 if(mode!=='check')assert.ok(process.argv.includes('--confirm-demo'))
 const env={...process.env,PGHOST:db.hostname,PGPORT:db.port,PGUSER:decodeURIComponent(db.username),PGDATABASE:db.pathname.slice(1),PGPASSWORD:decodeURIComponent(db.password),PGSSLMODE:'require',PGCONNECT_TIMEOUT:'15'}
 function run(command,args,input) {const r=spawnSync(command,args,{env,input,encoding:'utf8',maxBuffer:128*1024*1024});if(r.error||r.status)throw r.error??Error(r.stderr);return r.stdout.trim()}
@@ -29,13 +29,19 @@ if(mode.startsWith('apply')) {
   const dir=resolve('backups',`group-service-demo-${Date.now()}`);mkdirSync(dir,{recursive:true})
   const dump=resolve(dir,'before.dump')
   run('pg_dump',['--format=custom','--no-owner','--schema=public','--schema=private','--file',dump]);run('pg_restore',['--list',dump])
+  if(mode==='apply-activity') {
+    assert.equal(sql("select count(*) from information_schema.columns where table_schema='public' and table_name='event_participants' and column_name='service_activity'"),'0')
+    writeFileSync(resolve(dir,'rollback.sql'),readFileSync('supabase/tools/rollbacks/_ROLLBACK_20261116_service_application_activity.sql','utf8'))
+    run('psql',['-X','-v','ON_ERROR_STOP=1','--single-transaction','-f','supabase/migrations/20261116_1100_service_application_activity.sql'])
+    console.log(JSON.stringify({project,backup:dir,activityInstalled:true}));process.exit()
+  }
   const oldFunctions=sql("select pg_get_functiondef('public.notify_on_calendar_event_change()'::regprocedure)||E'\\n'||pg_get_functiondef('public.update_calendar_event_series_tx(uuid,uuid,date,jsonb,boolean)'::regprocedure)")
   const oldTrigger=sql("select pg_get_triggerdef(oid)||';' from pg_trigger where tgname='on_calendar_event_update'")
   const rollback=`-- Demo rollback only; deploy old app first. New service metadata and meeting secrets are removed.\nDROP TRIGGER on_calendar_event_update ON public.calendar_events;\nDROP TRIGGER service_event_guard ON public.calendar_events;\n${oldFunctions}\n${oldTrigger}\nDROP FUNCTION public.save_service_events_tx(uuid,jsonb,uuid,boolean);\nDROP FUNCTION public.get_event_meeting_access(integer);\nDROP FUNCTION public.get_event_application_overlaps(integer);\nDROP FUNCTION private.guard_service_event();\nDROP FUNCTION private.service_event_notify(jsonb,integer[],integer,integer[]);\nDROP FUNCTION private.validate_service_event_input(jsonb);\nDROP TABLE public.event_meeting_access;\nDROP TABLE private.service_event_imports;\nALTER TABLE public.calendar_events DROP COLUMN service_kind,DROP COLUMN target_groups,DROP COLUMN primary_leader_user_id,DROP COLUMN meeting_mode,DROP COLUMN edit_version;\nDROP TABLE public.service_groups;\nNOTIFY pgrst,'reload schema';\n`
   const previous=['apply-templates','apply-optional-access'].includes(mode)?'private.validate_service_event_input(jsonb)':'public.save_service_events_tx(uuid,jsonb,uuid,boolean)'
   const undo=mode==='apply-compatibility'?sql("select pg_get_functiondef('private.service_event_notify(jsonb,integer[],integer,integer[])'::regprocedure)||E'\\n'||pg_get_functiondef('public.update_calendar_event_series_tx(uuid,uuid,date,jsonb,boolean)'::regprocedure)"):mode==='apply'?'':sql(`select pg_get_functiondef('${previous}'::regprocedure)`)
-  writeFileSync(resolve(dir,'rollback.sql'),mode==='apply'?rollback:undo+"\nNOTIFY pgrst,'reload schema';\n")
-  const files=mode==='apply'?['20261116_1000_group_service.sql','20261116_1010_service_event_conflict_response.sql','20261116_1020_unassigned_service_templates.sql','20261116_1030_preserve_cart_schedule_contract.sql','20261116_1040_optional_meeting_access.sql']:[mode==='apply-conflict'?'20261116_1010_service_event_conflict_response.sql':mode==='apply-templates'?'20261116_1020_unassigned_service_templates.sql':mode==='apply-optional-access'?'20261116_1040_optional_meeting_access.sql':'20261116_1030_preserve_cart_schedule_contract.sql']
+  writeFileSync(resolve(dir,'rollback.sql'),mode==='apply'?readFileSync('supabase/tools/rollbacks/_ROLLBACK_20261116_service_application_activity.sql','utf8')+'\n'+rollback:undo+"\nNOTIFY pgrst,'reload schema';\n")
+  const files=mode==='apply'?['20261116_1000_group_service.sql','20261116_1010_service_event_conflict_response.sql','20261116_1020_unassigned_service_templates.sql','20261116_1030_preserve_cart_schedule_contract.sql','20261116_1040_optional_meeting_access.sql','20261116_1100_service_application_activity.sql']:[mode==='apply-conflict'?'20261116_1010_service_event_conflict_response.sql':mode==='apply-templates'?'20261116_1020_unassigned_service_templates.sql':mode==='apply-optional-access'?'20261116_1040_optional_meeting_access.sql':'20261116_1030_preserve_cart_schedule_contract.sql']
   run('psql',['-X','-v','ON_ERROR_STOP=1','--single-transaction',...files.flatMap(file=>['-f',`supabase/migrations/${file}`])])
   console.log(JSON.stringify({project,backup:dir,installed:installed()}));process.exit()
 }
@@ -76,6 +82,16 @@ try {
     check('single slot saves without online connection fields',single.ids.length===1)
     const empty=await rest('rpc/get_event_meeting_access',{p_event_id:single.ids[0]},user.token)
     check('empty online connection fields round trip',empty.joinUrl===''&&empty.meetingNumber===''&&empty.passcode==='')
+    const activity=await rest('rpc/apply_service_activity_tx',{p_token:user.token,p_event_id:single.ids[0],p_activity:'return_visit'},user.token)
+    check('return visit application creates membership',activity.ok&&activity.created)
+    const retry=await rest('rpc/apply_service_activity_tx',{p_token:user.token,p_event_id:single.ids[0],p_activity:'return_visit'},user.token)
+    check('return retry does not cancel or duplicate',retry.ok&&!retry.created)
+    const members=await rest(`calendar_events?id=eq.${single.ids[0]}&select=id,event_participants(user_name,service_activity)`,undefined,user.token,'GET')
+    check('calendar nested read preserves return kind',members[0].event_participants.length===1&&members[0].event_participants[0].service_activity==='return_visit')
+    const conflict=await rest('rpc/apply_service_activity_tx',{p_token:user.token,p_event_id:single.ids[0],p_activity:'service'},user.token,'POST',false)
+    check('changing activity requires explicit cancellation',conflict.code==='PT409')
+    await rest('rpc/apply_service_activity_tx',{p_token:null,p_event_id:single.ids[0],p_activity:'return_visit'},undefined,'POST',false)
+    checks.push('anonymous application denied')
     await rest('event_meeting_access?select=*',undefined,undefined,'GET',false);checks.push('anon direct read denied')
     await rest('rpc/get_event_meeting_access',{p_event_id:saved.ids[0]},undefined,'POST',false);checks.push('anon RPC denied')
     const access=await rest('rpc/get_event_meeting_access',{p_event_id:saved.ids[0]},user.token)
@@ -85,6 +101,11 @@ try {
     fixture.cardId=Number(sql(`insert into cards(name,area,region,type,leader_name) values(${quote(marker)},'demo','demo','전체',${quote(leader.name)}) returning id`).split('\n')[0])
     for(const actor of [leader,replacement])sql(`insert into card_leader_assignments(card_id,user_name) values(${fixture.cardId},${quote(actor.name)})`)
     const assignment=[{userName:user.name,teamKey:'demo-team',cardIds:[fixture.cardId],cardScope:'전체',informalAssetIds:[]}]
+    const blocked=await rest('rpc/assign_team_service_bulk_tx',{p_token:leader.token,p_event_id:single.ids[0],p_assignments:assignment,p_status:'shared',p_expected_shared_at:null},leader.token,'POST',false)
+    check('actual assignment RPC rejects return applicant',blocked.code==='PT409')
+    await rest(`event_participants?event_id=eq.${single.ids[0]}&user_name=eq.${user.name}`,undefined,user.token,'DELETE')
+    const reapplied=await rest('rpc/apply_service_activity_tx',{p_token:user.token,p_event_id:single.ids[0],p_activity:'service'},user.token)
+    check('return cancellation permits a service application',reapplied.ok&&reapplied.created)
     for(const id of saved.ids.slice(0,2)) {
       const result=await rest('rpc/assign_team_service_bulk_tx',{p_token:leader.token,p_event_id:id,p_assignments:assignment,p_status:'shared',p_expected_shared_at:null},leader.token)
       check(`slot ${id} team shared by assigned leader`,result.ok)

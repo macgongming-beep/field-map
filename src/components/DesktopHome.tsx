@@ -35,7 +35,7 @@ export function DesktopHome({
   serviceSessions: ServiceSession[]
   returnVisits?: ReturnVisit[]
   returnVisitLogs?: ReturnVisitLog[]
-  onApplyToEvent: (eventId: number) => void
+  onApplyToEvent: (eventId: number, activity?: 'service'|'return_visit') => void
   onStartServiceSession: (input: {
     timeSlot: TimeSlot
     primaryCardId?: number | null

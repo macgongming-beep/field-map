@@ -106,6 +106,8 @@
 
 집단봉사 입력 단순화: [0094 가변 시간대·인도자 한 목록·선택 화상 정보](0094-demo-flexible-service-editor.md)
 
+재방·연구 신청: [0095 전체 인원 포함·명단 분리·기본 구역배정 제외](0095-demo-return-service-applications.md)
+
 ```markdown
 # 제목
 

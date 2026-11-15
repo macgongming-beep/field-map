@@ -1,32 +1,41 @@
-.gs-backdrop { position:fixed; inset:0; z-index:2600; background:#0006; display:grid; place-items:center; padding:16px; }
-.gs-editor { width:min(640px,100%); max-height:calc(92dvh / var(--app-zoom,1)); overflow:auto; background:var(--surface,#fff); color:var(--ink,#222); border-radius:8px; }
-.gs-editor header { position:sticky; top:0; z-index:1; background:var(--gray-100,#eee); display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border-default,#ddd); }
-.gs-editor h2 { font-size:20px; margin:0; }
-.gs-editor header button { width:40px; height:40px; font-size:26px; background:transparent; border:0; }
-.gs-editor form { padding:20px; }
+.gs-backdrop { position:fixed; inset:0; z-index:2600; background:rgba(26,26,24,.34); display:grid; place-items:center; padding:20px; }
+.gs-editor { width:min(580px,100%); max-height:calc(90dvh / var(--app-zoom,1)); overflow:auto; background:var(--bg); color:var(--ink); border-radius:12px; box-shadow:0 12px 40px #0003; letter-spacing:0; }
+.gs-sheet-handle { display:none; }
+.gs-editor header { position:sticky; top:0; z-index:1; background:var(--bg); display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid var(--line); }
+.gs-editor h2 { font-size:18px; font-weight:700; margin:0; }
+.gs-editor-date { display:block; color:var(--muted); font-size:12px; margin-top:3px; }
+.gs-editor header button { width:36px; height:36px; min-height:36px; font-size:24px; background:transparent; color:var(--text); border:0; }
+.gs-editor form { padding:16px 20px 0; }
 .gs-editor fieldset { border:0; padding:0; margin:0; min-width:0; }
-.gs-editor label { display:flex; flex-direction:column; gap:6px; margin-bottom:16px; font-size:14px; }
-.gs-editor input:not([type=checkbox]),.gs-editor select,.gs-editor textarea { width:100%; box-sizing:border-box; min-width:0; padding:10px; min-height:44px; border:1px solid var(--border-default,#ccc); border-radius:6px; background:var(--surface,#fff); color:inherit; font:inherit; }
+.gs-editor label { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; font-size:12px; font-weight:600; color:var(--muted); }
+.gs-editor input:not([type=checkbox]),.gs-editor select,.gs-editor textarea { width:100%; box-sizing:border-box; min-width:0; padding:10px 12px; min-height:42px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--text); font:inherit; font-size:14px; font-weight:400; }
 .gs-editor .gs-check,.gs-groups label { flex-direction:row; align-items:center; gap:8px; }
-.gs-slot-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:14px; font-weight:600; }
-.gs-slot-head button,.gs-slot-add { width:40px; height:40px; border:1px solid var(--border-default,#ddd); border-radius:6px; background:var(--surface,#fff); color:inherit; font-size:24px; }
+.gs-slot { padding-top:8px; border-top:1px solid var(--line); }
+.gs-slot-head { display:flex; align-items:center; justify-content:space-between; min-height:36px; margin-bottom:4px; font-size:12px; font-weight:700; color:var(--muted); }
+.gs-slot-head button,.gs-slot-add { width:36px; height:36px; min-height:36px; padding:0; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--text); font-size:22px; }
 .gs-slot-add { margin-bottom:16px; }
-.gs-conductors legend { font-size:14px; font-weight:600; }
-.gs-selected-leaders { font-size:14px; overflow-wrap:anywhere; margin:8px 0; }
+.gs-conductors legend { font-size:12px; font-weight:700; color:var(--muted); }
+.gs-selected-leaders { font-size:12px; overflow-wrap:anywhere; margin:6px 0; color:var(--text); }
 .gs-editor input[type=checkbox] { accent-color:var(--ink,#222); width:18px; height:18px; flex-shrink:0; }
-.gs-editor .gs-groups { display:flex; flex-wrap:wrap; gap:12px; }
-.gs-groups legend,.gs-access legend { padding:12px 0; font-weight:600; }
+.gs-editor .gs-groups { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; margin-bottom:12px; }
+.gs-groups legend,.gs-access legend { padding:0 0 8px; font-size:12px; font-weight:700; color:var(--muted); }
+.gs-editor .gs-groups label { position:relative; justify-content:center; gap:5px; margin:0; min-height:40px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font-size:13px; cursor:pointer; }
+.gs-groups input,.gs-leaders input { position:absolute; opacity:0; width:1px!important; height:1px!important; }
+.gs-groups label:has(input:checked),.gs-leaders label:has(input:checked) { background:var(--ink); border-color:var(--ink); color:#fff; }
+.gs-groups label:has(input:focus-visible),.gs-leaders label:has(input:focus-visible) { outline:2px solid var(--muted); outline-offset:2px; }
+.gs-groups label:has(input:disabled) { opacity:.45; cursor:default; }
+.gs-choice-mark { display:inline-block; width:14px; text-align:center; }
 .gs-times { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
-.gs-segment { display:flex; margin-bottom:16px; border-bottom:1px solid var(--border-default,#ddd); }
-.gs-segment button { flex:1; min-height:44px; padding:8px; border:0; border-bottom:3px solid transparent; background:transparent; color:inherit; font:inherit; }
-.gs-segment button[aria-pressed=true] { border-bottom-color:var(--ink,#222); font-weight:700; }
-.gs-leaders { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); padding-top:12px; }
-.gs-leaders .gs-check { min-width:0; overflow-wrap:anywhere; }
+.gs-segment { display:flex; gap:4px; padding:4px; margin-bottom:16px; border-radius:8px; background:var(--tint); }
+.gs-segment button { flex:1; min-width:0; min-height:40px; padding:8px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--muted); font:inherit; font-size:13px; font-weight:600; letter-spacing:0; }
+.gs-segment button[aria-pressed=true] { border-color:var(--ink); background:var(--ink); color:#fff; }
+.gs-leaders { display:flex; flex-wrap:wrap; gap:6px; padding:6px 0 14px; }
+.gs-leaders .gs-check { position:relative; min-width:0; max-width:100%; min-height:36px; margin:0; padding:7px 12px; border:1px solid var(--line); border-radius:99px; color:var(--ink); background:var(--surface); font-size:13px; font-weight:500; overflow-wrap:anywhere; cursor:pointer; }
 .gs-editor details { margin-bottom:20px; }
 .gs-editor summary { cursor:pointer; padding:8px 0; font-size:14px; }
-.gs-editor footer { display:flex; justify-content:flex-end; gap:10px; padding-top:16px; }
-.gs-editor footer button { padding:10px 20px; min-height:44px; border:1px solid var(--border-default,#ddd); border-radius:6px; background:transparent; color:inherit; }
-.gs-editor footer button[type=submit] { color:#fff; background:#242424; }
+.gs-editor footer { position:sticky; bottom:0; display:flex; gap:8px; padding:12px 0 max(14px,env(safe-area-inset-bottom)); background:var(--bg); border-top:1px solid var(--line); }
+.gs-editor footer button { padding:10px 20px; min-height:44px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font-size:14px; font-weight:600; letter-spacing:0; }
+.gs-editor footer button[type=submit] { flex:1; color:#fff; border-color:var(--ink); background:var(--ink); }
 .gs-editor button:disabled { opacity:.45; cursor:wait; }
 .gs-error { color:#b63830; font-size:14px; }
 .gs-event-block { border-bottom:1px solid var(--border-default,#ddd); padding:12px 0; }
@@ -45,4 +54,18 @@
 .day-events .gs-event-text>span,.day-events .gs-event-block>button>span:last-child { display:none; }
 .day-events .gs-event-block[data-service-kind=group] .gs-event-text { display:none; }
 .day-cell .gs-day-select { border:0; background:transparent; padding:0; min-height:24px; width:24px; color:inherit; font:inherit; }
-@media(max-width:440px) { .gs-backdrop { padding:8px; }.gs-editor form { padding:16px; }.gs-event-time { width:92px; font-size:12px; }.gs-times { grid-template-columns:minmax(0,1fr); gap:0; }.gs-leaders { grid-template-columns:minmax(0,1fr); } }
+.gs-application-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:8px; margin:0 0 14px; }
+.gs-application-actions button { min-height:44px; min-width:0; padding:10px 8px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font:inherit; font-size:14px; font-weight:600; letter-spacing:0; overflow-wrap:anywhere; cursor:pointer; }
+.gs-application-actions .gs-apply-service { background:var(--ink); color:#fff; border-color:var(--ink); }
+.gs-application-actions button:disabled { opacity:.5; cursor:default; }
+.gs-application-status { align-self:center; font-size:13px; font-weight:600; color:var(--muted); overflow-wrap:anywhere; }
+.gs-applicant-heading,.gs-return-applicants h4 { margin:8px 0; font-size:12px; font-weight:600; color:var(--muted); }
+.gs-applicant-heading span,.gs-return-applicants h4 span { font-weight:400; margin-left:4px; }
+.gs-return-applicants { margin-top:12px; padding-top:4px; border-top:1px solid var(--line); }
+.gs-participant-list { display:flex; flex-wrap:wrap; gap:8px; }
+.gs-participant { display:inline-flex; align-items:center; gap:7px; max-width:100%; padding:5px 12px 5px 5px; border:1px solid var(--line); border-radius:99px; font-size:13px; background:var(--surface); color:var(--ink); overflow-wrap:anywhere; }
+.gs-participant-avatar { display:grid; place-items:center; width:22px; height:22px; flex-shrink:0; background:var(--tint); border-radius:50%; font-size:11px; }
+.gs-participant button { padding:0; min-height:24px; width:24px; border:0; background:transparent; color:var(--status-danger); }
+@media(max-width:759px) { .gs-backdrop { padding:0; align-items:end; }.gs-editor { width:100%; border-radius:18px 18px 0 0; }.gs-editor form { padding:12px 12px 0; }.gs-editor header { padding:8px 12px 12px; }.gs-sheet-handle { display:block; width:30px; height:4px; border-radius:99px; background:var(--line-2); margin:12px auto 4px; } }
+@media(max-width:440px) { .gs-event-time { width:92px; font-size:12px; } }
+@media(max-width:359px) { .gs-times { grid-template-columns:minmax(0,1fr); gap:0; }.gs-editor .gs-groups { grid-template-columns:repeat(2,minmax(0,1fr)); }.gs-application-actions button { font-size:13px; } }

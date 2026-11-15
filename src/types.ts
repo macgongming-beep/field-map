@@ -39,6 +39,8 @@ export type CalendarEvent = import('./features/groupService/model').ServiceField
   hasMeeting: boolean
   allowApplications: boolean
   applicants: string[]
+  /** Included in applicants/counts, but not in the default territory assignment pool. */
+  returnVisitApplicants?: string[]
   allowCartApplications?: boolean
   cartCapacity?: number | null
   cartApplicants?: CartApplicant[]

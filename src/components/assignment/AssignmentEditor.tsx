@@ -1,4 +1,5 @@
 import { teamServiceEnabled } from '../../config/teamService'
+import { territoryApplicants } from '../../features/groupService/model'
 // 인도자 배정 에디터 (호스트) — 화면1(팀짓기) ↔ 화면2(구역배분) + 배정 공유
 // 설계: docs/leader-assignment-redesign.md v3
 //
@@ -84,8 +85,8 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
   )
 
   const participants = useMemo(
-    () => Array.from(new Set([...event.applicants, ...event.assigned])),
-    [event.applicants, event.assigned],
+    () => territoryApplicants(event),
+    [event],
   )
 
   // 진입 시 참가자 sanitize (취소·거절자 제거) — 1회

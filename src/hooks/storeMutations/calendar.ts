@@ -8,7 +8,7 @@ import { eventParticipantNameKey, normalizeEventParticipantName } from '../../ut
 import { alertDialog, confirmDialog } from '../../lib/confirm'
 import { CART_APPLICATIONS_ENABLED } from '../../config/features'
 import { groupServiceEnabled, type ServicePlan } from '../../features/groupService/model'
-import { saveServicePlan, confirmOverlappingApplication } from '../../features/groupService/api'
+import { saveServicePlan, confirmOverlappingApplication, applyServiceActivity } from '../../features/groupService/api'
 
 /** 일정 입력 공통 타입 */
 export type CalendarEventInput = {
@@ -239,7 +239,7 @@ export function makeCalendarMutations(deps: {
   }
 
   // ─── 참가자 / 신청 ───────────────────────────────────────────
-  const applyToEvent = async (eventId: number) => {
+  const applyToEvent = async (eventId: number, activity: 'service'|'return_visit' = 'service') => {
     const currentVisitor = getCurrentVisitor()
     const event = calendarEvents.find((e) => e.id === eventId)
     const isApplied = event?.applicants.includes(currentVisitor)
@@ -254,6 +254,13 @@ export function makeCalendarMutations(deps: {
     if (!isApplied && groupServiceEnabled()) {
       try { if (!await confirmOverlappingApplication(eventId)) return }
       catch (error) { reportMutationError(msg('신청 시간을 확인하지 못했습니다. 다시 시도해 주세요.'), error); return }
+      try {
+        const result = await applyServiceActivity(eventId,activity)
+        if(result.created) await logServiceAction({eventId,action:'joined',targetType:'event_participant',details:{user_name:currentVisitor,source:'self_apply',service_activity:activity}})
+        await refreshApplication(eventId,false)
+        showToast(activity==='return_visit' ? msg('재방·연구 신청이 완료됐습니다') : msg('일정에 신청됐습니다'))
+      } catch(error) { reportMutationError(msg('봉사 신청을 저장하지 못했습니다.'),error) }
+      return
     }
     if (!CART_APPLICATIONS_ENABLED) {
       if (isApplied) {

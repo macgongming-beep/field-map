@@ -14,6 +14,7 @@
 import { useMemo, useState } from 'react'
 import { groupServiceEnabled } from '../../features/groupService/model'
 import { MeetingAccessPanel } from '../../features/groupService/MeetingAccessPanel'
+import { ServiceApplicationButtons, ReturnVisitApplicants } from '../../features/groupService/ServiceApplications'
 import type { Building, CalendarEvent, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, Role, TerritoryCard } from '../../types'
 import { buildSharedAssignmentTeams } from './sharedAssignmentTeams'
 import { useSharedCardNames } from '../../hooks/useCardDirectory'
@@ -47,7 +48,7 @@ type Props = {
   onClose: () => void
   onDelete?: () => void
   onEdit?: () => void
-  onApply?: () => void
+  onApply?: (activity?: 'service'|'return_visit') => void
   onCancelApply?: () => void
   onApplyToCart?: () => void
   onManageCartApplicant?: (userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
@@ -434,10 +435,11 @@ export function AdminEventDetailSheet({
         </section>
 
         {/* 신청 버튼 */}
-        {canApply && (
+        {(canApply || isApplied) && groupServiceEnabled() && <ServiceApplicationButtons event={event} currentVisitor={currentVisitor} onApply={onApply} onCancel={onCancelApply}/>}
+        {canApply && !groupServiceEnabled() && (
           <button
             type="button"
-            onClick={isApplied ? onCancelApply : onApply}
+            onClick={isApplied ? onCancelApply : () => onApply?.()}
             style={{
               height: 44,
               minHeight: 44,
@@ -579,6 +581,7 @@ export function AdminEventDetailSheet({
               </div>
             )}
           </div>
+          {groupServiceEnabled() && <h4 className="gs-applicant-heading">{msg('봉사')} <span>{applicants.filter(name=>!event.returnVisitApplicants?.includes(name)).length}</span></h4>}
           <div
             style={{
               display: 'flex',
@@ -589,7 +592,7 @@ export function AdminEventDetailSheet({
               paddingBottom: 4,
             }}
           >
-            {applicants.map((name) => (
+            {applicants.filter(name=>!groupServiceEnabled()||!event.returnVisitApplicants?.includes(name)).map((name) => (
               <span
                 aria-label={event.guests.includes(name) ? `${name}, ${msg('손님')}` : name}
                 className={`event-detail-participant-chip${event.guests.includes(name) ? ' is-guest' : ''}`}
@@ -636,6 +639,7 @@ export function AdminEventDetailSheet({
               </span>
             )}
           </div>
+          {groupServiceEnabled() && <ReturnVisitApplicants event={event} onRemove={isRemoveParticipantMode&&onRemoveParticipant ? handleRemoveParticipant : undefined}/>}
         </section>
 
         )}

@@ -193,7 +193,7 @@ export function DesktopApp({
   notices: Notice[]
   serviceSessions: ServiceSession[]
   onAddUnit: (buildingId: number, unitNumber: string | string[], usageType?: Building['type']) => Promise<number[] | false>
-  onApplyToEvent: (eventId: number) => void
+  onApplyToEvent: (eventId: number, activity?: 'service'|'return_visit') => void
   onApplyToCartEvent: (eventId: number) => void
   onManageCartApplication: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
   onSetCartTeamLeader: (eventId: number, userId: number | null) => Promise<boolean> | boolean
