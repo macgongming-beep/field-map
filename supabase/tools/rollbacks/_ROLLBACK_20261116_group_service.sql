@@ -69,4 +69,3 @@ DROP TABLE private.service_event_imports;
 ALTER TABLE public.calendar_events DROP COLUMN service_kind,DROP COLUMN target_groups,DROP COLUMN primary_leader_user_id,DROP COLUMN meeting_mode,DROP COLUMN edit_version;
 DROP TABLE public.service_groups;
 NOTIFY pgrst,'reload schema';
-

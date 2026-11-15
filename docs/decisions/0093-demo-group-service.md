@@ -61,6 +61,10 @@
   새 인도자 배정 수정 성공과 이전 인도자 거부. 일회용 테스트 자료는 정리한다.
 - Playwright: 모바일 430px, 320px·125% 확대, PC 1440px. 묶음/상세/접속 정보/함께 저장 확인.
 
+실행 결과: 전체 247개 파일/2,483개 테스트 통과, 빌드/린트 통과.
+두 변형 검사는 각각 해당 테스트 1개만 실패했다. 실제 API 검증 16개 통과.
+소속 없는 봉사자 계정의 실제 신청/취소와 중국어 화상 정보 표시도 브라우저에서 확인했다.
+
 사용자 확인용으로 11/25 연합 한 곳, 11/28 단일 집단 한 곳에 두 타임씩 시험 일정을 유지한다.
 화상 링크는 `example.com` 시험 주소다. 실제 Zoom 정보나 실제 담당자를 넣지 않았다.
 
@@ -69,6 +73,8 @@
 데모 Supabase: `itjlykpjmlcvanqpmkmc`.
 데모 Vercel: `chinese-territory-app-demo` (`prj_txJm1ruq4OiRnZi3cjz9IXLkGKPG`).
 운영 ref/다른 프로젝트는 도구가 거부한다. `--linked`는 사용하지 않는다.
+이번 CLI 환경의 Vercel env pull에서는 Supabase 두 값이 비어 있어, 검증된 데모 env의
+공개 URL/anon 키를 이 배포의 `--build-env`로 명시했다. 프로젝트 공통 변수는 수정하지 않았다.
 
 적용 SQL: `20261116_1000`, `1010`, `1020`, `1030` 순서.
 적용마다 public/private custom-format 백업 후 `psql --single-transaction`으로 적용했다.

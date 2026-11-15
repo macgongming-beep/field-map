@@ -34,7 +34,7 @@
 .gs-meeting>div { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:8px; overflow-wrap:anywhere; }
 .gs-meeting button { min-width:40px; min-height:40px; border:0; color:inherit; background:var(--gray-100,#eee); border-radius:6px; }
 .day-events .gs-event-block { padding:4px 0; }.day-events .gs-event-block h3 { font-size:11px; }
-.day-events .gs-event-block>button { display:grid; grid-template-columns:minmax(0,1fr); gap:2px; padding:5px; border-left:2px solid var(--ink,#222); margin:3px 0; }
+.day-events .gs-event-block>button { display:grid; grid-template-columns:minmax(0,1fr); gap:2px; min-height:22px; padding:3px 5px; border-left:2px solid var(--ink,#222); margin:2px 0; }
 .day-events .gs-event-time { width:auto; font-size:11px; }.day-events .gs-event-text strong { font-size:11px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .day-events .gs-event-text>span,.day-events .gs-event-block>button>span:last-child { display:none; }
 .day-events .gs-event-block[data-service-kind=group] .gs-event-text { display:none; }
