@@ -720,10 +720,11 @@ export function DesktopCalendar({
               const dayStr = day ? toDateStr(year, month, day) : null
               const dayEvents = dayStr ? events.filter((e) => e.date === dayStr) : []
               const activePeriod = dayStr ? findActivePeriod(specialPeriods, dayStr) : null
+              const DayCell = groupServiceEnabled() ? 'div' : 'button'
               return (
-                <button
+                <DayCell
                   className={['day-cell', day === selectedDay ? 'selected' : '', !day ? 'muted' : '', activePeriod ? 'in-period' : ''].join(' ')}
-                  disabled={!day}
+                  {...(groupServiceEnabled() ? {} : {disabled:!day,type:'button' as const})}
                   key={`${day ?? 'blank'}-${index}`}
                   onClick={() => {
                     if (day) {
@@ -733,15 +734,15 @@ export function DesktopCalendar({
                       setEditingEventId(null)
                     }
                   }}
-                  type="button"
                 >
                   <div className="day-head">
-                    <span
+                    {groupServiceEnabled() ? <button type="button" className="day-number gs-day-select" disabled={!day} aria-label={dayStr ?? undefined}
+                      style={activePeriod && day !== selectedDay ? {background:activePeriod.color+'20'}:undefined}>{day ?? ''}</button> : <span
                       className="day-number"
                       style={activePeriod && day !== selectedDay ? { background: activePeriod.color + '20' } : undefined}
                     >
                       {day ?? ''}
-                    </span>
+                    </span>}
                   </div>
                   <div className="day-events">
                     {groupServiceEnabled() ? <ServiceEventList events={dayEvents} language={language} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{if(day)setSelectedDay(day);setSelectedEventId(id);setShowCreateForm(false)}}/> : dayEvents.map((event) => (
@@ -762,7 +763,7 @@ export function DesktopCalendar({
                       </small>
                     ))}
                   </div>
-                </button>
+                </DayCell>
               )
             })}
           </div>

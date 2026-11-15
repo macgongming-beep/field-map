@@ -28,7 +28,7 @@ test('groups visually by day and canonical targets without dropping ungrouped or
   const events=[make(1),make(2,'17:00',['singal','dongtan']),make(3,'14:30',['cheoin']),{...make(4),serviceKind:undefined},{...make(5),date:'2026-11-26'}]
   expect(eventBlocks(events).map(b=>b.map(e=>e.id))).toEqual([[1,2],[3],[4],[5]])
   expect(eventBlocks(events,'处仁')[0].map(e=>e.id)).toEqual([3])
-  const open=vi.fn();render(<ServiceEventList events={events} language="ko" onOpen={open}/>);fireEvent.click(screen.getAllByRole('button')[1]);expect(open).toHaveBeenCalledWith(2)
+  const open=vi.fn(),parent=vi.fn();render(<div onClick={parent}><ServiceEventList events={events} language="ko" onOpen={open}/></div>);fireEvent.click(screen.getAllByRole('button')[1]);expect(open).toHaveBeenCalledWith(2);expect(parent).not.toHaveBeenCalled()
 })
 test('creates two distinct time slots with explicit primary and immutable original events',async()=>{
   const submit=vi.fn(async()=>true)

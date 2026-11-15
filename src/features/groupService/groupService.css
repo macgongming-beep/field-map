@@ -38,4 +38,5 @@
 .day-events .gs-event-time { width:auto; font-size:11px; }.day-events .gs-event-text strong { font-size:11px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .day-events .gs-event-text>span,.day-events .gs-event-block>button>span:last-child { display:none; }
 .day-events .gs-event-block[data-service-kind=group] .gs-event-text { display:none; }
+.day-cell .gs-day-select { border:0; background:transparent; padding:0; min-height:24px; width:24px; color:inherit; font:inherit; }
 @media(max-width:440px) { .gs-backdrop { padding:8px; }.gs-editor form { padding:16px; }.gs-event-time { width:92px; font-size:12px; }.gs-times { grid-template-columns:minmax(0,1fr); gap:0; } }
