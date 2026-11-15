@@ -89,6 +89,11 @@ export type RawCard = {
 }
 
 export type RawCalendarEvent = {
+  service_kind?: 'congregation' | 'group' | null
+  target_groups?: import('../features/groupService/model').GroupCode[]
+  primary_leader_user_id?: number | null
+  meeting_mode?: 'none' | 'in_person' | 'virtual' | null
+  edit_version?: number | string
   id: number
   event_date: string
   time: string
@@ -385,6 +390,11 @@ export function toCalendarEvent(
   return {
     id: raw.id,
     date: raw.event_date,
+    serviceKind: raw.service_kind ?? undefined,
+    targetGroups: raw.target_groups ?? [],
+    primaryLeaderUserId: raw.primary_leader_user_id ?? null,
+    meetingMode: raw.meeting_mode ?? (raw.has_meeting ? 'in_person' : 'none'),
+    editVersion: raw.edit_version == null ? undefined : String(raw.edit_version),
     time: raw.time,
     endTime: raw.end_time ?? undefined,
     title: raw.title,

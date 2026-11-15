@@ -1,0 +1,41 @@
+.gs-backdrop { position:fixed; inset:0; z-index:2600; background:#0006; display:grid; place-items:center; padding:16px; }
+.gs-editor { width:min(640px,100%); max-height:calc(92dvh / var(--app-zoom,1)); overflow:auto; background:var(--surface,#fff); color:var(--ink,#222); border-radius:8px; }
+.gs-editor header { position:sticky; top:0; z-index:1; background:var(--gray-100,#eee); display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border-default,#ddd); }
+.gs-editor h2 { font-size:20px; margin:0; }
+.gs-editor header button { width:40px; height:40px; font-size:26px; background:transparent; border:0; }
+.gs-editor form { padding:20px; }
+.gs-editor fieldset { border:0; padding:0; margin:0; min-width:0; }
+.gs-editor label { display:flex; flex-direction:column; gap:6px; margin-bottom:16px; font-size:14px; }
+.gs-editor input:not([type=checkbox]),.gs-editor select,.gs-editor textarea { width:100%; box-sizing:border-box; min-width:0; padding:10px; min-height:44px; border:1px solid var(--border-default,#ccc); border-radius:6px; background:var(--surface,#fff); color:inherit; font:inherit; }
+.gs-editor .gs-check,.gs-groups label { flex-direction:row; align-items:center; gap:8px; }
+.gs-editor input[type=checkbox] { accent-color:var(--ink,#222); width:18px; height:18px; flex-shrink:0; }
+.gs-editor .gs-groups { display:flex; flex-wrap:wrap; gap:12px; }
+.gs-groups legend,.gs-access legend { padding:12px 0; font-weight:600; }
+.gs-times { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
+.gs-segment { display:flex; margin-bottom:16px; border-bottom:1px solid var(--border-default,#ddd); }
+.gs-segment button { flex:1; min-height:44px; padding:8px; border:0; border-bottom:3px solid transparent; background:transparent; color:inherit; font:inherit; }
+.gs-segment button[aria-pressed=true] { border-bottom-color:var(--ink,#222); font-weight:700; }
+.gs-leaders { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); padding-top:12px; }
+.gs-editor details { margin-bottom:20px; }
+.gs-editor summary { cursor:pointer; padding:8px 0; font-size:14px; }
+.gs-editor footer { display:flex; justify-content:flex-end; gap:10px; padding-top:16px; }
+.gs-editor footer button { padding:10px 20px; min-height:44px; border:1px solid var(--border-default,#ddd); border-radius:6px; background:transparent; color:inherit; }
+.gs-editor footer button[type=submit] { color:#fff; background:#242424; }
+.gs-editor button:disabled { opacity:.45; cursor:wait; }
+.gs-error { color:#b63830; font-size:14px; }
+.gs-event-block { border-bottom:1px solid var(--border-default,#ddd); padding:12px 0; }
+.gs-event-block h3 { margin:0 0 6px; font-size:15px; color:var(--muted,#666); }
+.gs-event-block>button { display:flex; align-items:center; gap:12px; width:100%; padding:12px 0; border:0; background:transparent; color:inherit; text-align:left; }
+.gs-event-time { width:110px; flex-shrink:0; font-size:13px; font-variant-numeric:tabular-nums; }
+.gs-event-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; overflow-wrap:anywhere; }
+.gs-event-text strong { font-size:15px; }.gs-event-text>span { font-size:13px; color:var(--muted,#666); }
+.gs-meeting { padding:16px 0; border-top:1px solid var(--border-default,#ddd); border-bottom:1px solid var(--border-default,#ddd); }
+.gs-meeting h3 { margin:0 0 12px; font-size:16px; }.gs-meeting a { color:var(--ink,#222); text-decoration:underline; }
+.gs-meeting>div { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:8px; overflow-wrap:anywhere; }
+.gs-meeting button { min-width:40px; min-height:40px; border:0; color:inherit; background:var(--gray-100,#eee); border-radius:6px; }
+.day-events .gs-event-block { padding:4px 0; }.day-events .gs-event-block h3 { font-size:11px; }
+.day-events .gs-event-block>button { display:grid; grid-template-columns:minmax(0,1fr); gap:2px; padding:5px; border-left:2px solid var(--ink,#222); margin:3px 0; }
+.day-events .gs-event-time { width:auto; font-size:11px; }.day-events .gs-event-text strong { font-size:11px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.day-events .gs-event-text>span,.day-events .gs-event-block>button>span:last-child { display:none; }
+.day-events .gs-event-block[data-service-kind=group] .gs-event-text { display:none; }
+@media(max-width:440px) { .gs-backdrop { padding:8px; }.gs-editor form { padding:16px; }.gs-event-time { width:92px; font-size:12px; }.gs-times { grid-template-columns:minmax(0,1fr); gap:0; } }

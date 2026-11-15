@@ -42,6 +42,9 @@ import type { MentionUser } from '../CommentSection'
 import { msg } from '../../lib/msg'
 import { chatDisabled } from '../../lib/chatRetirement'
 import { getCurrentAppPath, readEventDetailReturnTo } from '../../lib/eventDetailNavigation'
+import { groupServiceEnabled } from '../../features/groupService/model'
+import { ServiceEventEditor } from '../../features/groupService/ServiceEventEditor'
+import { ServiceEventList } from '../../features/groupService/ServiceEventList'
 
 // WEEKDAYS / WEEKDAY_LABELS defined inside component now via i18n
 // 시간 프리셋(TimePreset, 기본값, load/save 등)은 ../../lib/timePresets 로 이동 (PC 공용)
@@ -551,7 +554,9 @@ export function AdminMobileCalendar({
             <CalendarEmptyIcon />
             <p>{t(language, 'calendar.noEvents')}</p>
           </div>
-        ) : (
+        ) : groupServiceEnabled() ? <ServiceEventList language={language} events={selectedEvents} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{
+          detailReturnToRef.current=getCurrentAppPath(location); detailReturnsThroughHistoryRef.current=false; setDetailEventId(id)
+        }}/> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
             {selectedEvents.map((event) => (
               <DayEventCard
@@ -578,7 +583,9 @@ export function AdminMobileCalendar({
       </div>}
 
       {/* ── 일정 추가/편집 시트 ─────────── */}
-      {(addOpen || editingEvent) && (
+      {groupServiceEnabled() && (addOpen || editingEvent?.serviceKind) && <ServiceEventEditor key={editingEvent?.id ?? 'new'} language={language} date={selectedDateStr} event={editingEvent} events={events} users={participantUsers}
+        onClose={()=>{setAddOpen(false);setEditingEventId(null)}} onSubmit={input=>editingEvent ? onUpdateEvent?.(editingEvent.id,input) : onCreateEvent?.(input)}/>}
+      {(!groupServiceEnabled() || (editingEvent && !editingEvent.serviceKind)) && (addOpen || editingEvent) && (
         <EventAddSheet language={language}
           defaultDate={selectedDateStr}
           editingEvent={editingEvent}

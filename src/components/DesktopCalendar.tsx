@@ -31,6 +31,10 @@ import { CartApplicantSection } from './calendar/CartApplicantSection'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { toPhoneHref } from '../utils/linkify'
 import { useEventLeaderContacts } from '../hooks/useEventLeaderContacts'
+import { groupServiceEnabled } from '../features/groupService/model'
+import { ServiceEventEditor } from '../features/groupService/ServiceEventEditor'
+import { ServiceEventList } from '../features/groupService/ServiceEventList'
+import { MeetingAccessPanel } from '../features/groupService/MeetingAccessPanel'
 
 
 function getCalendarDays(year: number, month: number): (number | null)[] {
@@ -431,7 +435,9 @@ export function DesktopCalendar({
       )}
 
       {/* ── Create event modal ───────────────────── */}
-      {showCreateForm && (
+      {groupServiceEnabled() && showCreateForm && <ServiceEventEditor language={language} date={newDate} events={events} users={participantUsers} onClose={closeCreate} onSubmit={onCreateEvent}/>}
+      {groupServiceEnabled() && editingEventId!==null && events.find(e=>e.id===editingEventId)?.serviceKind && <ServiceEventEditor key={editingEventId} language={language} date={newDate} event={events.find(e=>e.id===editingEventId)} events={events} users={participantUsers} onClose={clearEdit} onSubmit={input=>onUpdateEvent(editingEventId,input)}/>}
+      {!groupServiceEnabled() && showCreateForm && (
         <div className="cal-modal-backdrop" onClick={closeCreate}>
           <div className="cal-modal" onClick={(e) => e.stopPropagation()}>
             <div className="cal-modal-head">
@@ -738,7 +744,7 @@ export function DesktopCalendar({
                     </span>
                   </div>
                   <div className="day-events">
-                    {dayEvents.map((event) => (
+                    {groupServiceEnabled() ? <ServiceEventList events={dayEvents} language={language} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{if(day)setSelectedDay(day);setSelectedEventId(id);setShowCreateForm(false)}}/> : dayEvents.map((event) => (
                       <small 
                         className={`event-pill ${eventTimeClass(event.time)}${event.hasMeeting ? ' has-meeting' : ''} ${selectedEventId === event.id ? 'active' : ''}`} 
                         key={event.id}
@@ -799,7 +805,7 @@ export function DesktopCalendar({
                   event.leaders.includes(currentVisitor)
                 const isEditing = editingEventId === event.id
 
-                if (isEditing && editDraft) {
+                if (isEditing && editDraft && (!groupServiceEnabled() || !event.serviceKind)) {
                   return (
                     <EditCard
                       key={event.id}
@@ -1159,6 +1165,7 @@ function EventDetailCard({
       )}
 
       {/* 위치 카드 */}
+      {groupServiceEnabled() && event.meetingMode==='virtual' && <MeetingAccessPanel eventId={event.id} version={event.editVersion}/>}
       {event.place && (
         <div style={{ marginBottom: 12 }}>
           <div className="cal-section-head"><h3>위치</h3></div>

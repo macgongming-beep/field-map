@@ -24,7 +24,7 @@ export type GeoPoint = {
   lng: number
 }
 
-export type CalendarEvent = {
+export type CalendarEvent = import('./features/groupService/model').ServiceFields & {
   id: number
   date: string  // 'YYYY-MM-DD'
   time: string

@@ -3,7 +3,9 @@
 // 열쇠는 한국어 원문 그대로다 (lib/msg.ts 설명 참고).
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
+import { groupServiceZh } from './groupService'
 export const messagesZh: Record<string, string> = {
+  ...groupServiceZh,
   '사용자 목록을 불러오지 못했습니다.': '无法加载用户列表。',
   '방문 기록을 불러오지 못했습니다.': '无法加载探访记录。',
   '지역 선택': '选择地区',

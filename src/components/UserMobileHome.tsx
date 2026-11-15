@@ -6,6 +6,8 @@ import { t, formatPeriod, formatLeadSub, formatLeaderOf, formatApplied } from '.
 import { compareTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
 import { ServiceSuggestionsSection } from './ServiceSuggestionsSection'
 import { MeetingHome } from '../features/meetingNotes/MeetingHome'
+import { groupServiceEnabled } from '../features/groupService/model'
+import { ServiceEventList } from '../features/groupService/ServiceEventList'
 
 export function UserMobileHome({
   language,
@@ -15,6 +17,7 @@ export function UserMobileHome({
   onOpenEventDetail,
   onOpenZone,
   globalSettings = {},
+  groupName,
 }: {
   language: AppLanguage
   myTodayEvents: Array<{ event: CalendarEvent; kind: 'lead' | 'join' | 'avail' }>
@@ -23,6 +26,7 @@ export function UserMobileHome({
   onOpenEventDetail: (eventId: number) => void
   onOpenZone: () => void
   globalSettings?: Record<string, string>
+  groupName?: string
 }) {
   const navigate = useNavigate()
 
@@ -43,7 +47,7 @@ export function UserMobileHome({
           <div className="mh-empty-line">
             <span>{t(language, 'home.noTodayServiceShort')}</span>
           </div>
-        ) : (
+        ) : groupServiceEnabled() ? <ServiceEventList events={myTodayEvents.map(x=>x.event)} statusById={Object.fromEntries(myTodayEvents.map(x=>[x.event.id,x.kind]))} groupName={groupName} language={language} onOpen={onOpenEventDetail}/> : (
           <div className="mh-today-list">
             {myTodayEvents.map(({ event, kind }) => {
               const hour = Number(event.time.split(':')[0] ?? 0)

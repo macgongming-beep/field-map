@@ -25,6 +25,7 @@ export function DesktopHome({
   onEndServiceSession: _oess,
   onOpenTerritory: _oot,
   globalSettings = {},
+  groupName,
 }: {
   language: AppLanguage
   calendarEvents: CalendarEvent[]
@@ -50,6 +51,7 @@ export function DesktopHome({
   notices?: Notice[]
   onOpenSettings?: () => void
   globalSettings?: Record<string, string>
+  groupName?: string
 }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -96,6 +98,7 @@ export function DesktopHome({
           <AdminMobileHome
             language={language}
             todayEvents={todayEvents}
+            groupName={groupName}
             cards={cards}
             totalUnits={totalUnits}
             completedUnits={completedUnits}
@@ -110,6 +113,7 @@ export function DesktopHome({
           <UserMobileHome
             language={language}
             myTodayEvents={myTodayEvents}
+            groupName={groupName}
             leaderCards={leaderCards}
             role={role}
             onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`, {

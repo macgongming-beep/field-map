@@ -7,9 +7,12 @@ import { getAuthToken } from '../../lib/authToken'
 import { eventParticipantNameKey, normalizeEventParticipantName } from '../../utils/eventParticipantUsers'
 import { alertDialog, confirmDialog } from '../../lib/confirm'
 import { CART_APPLICATIONS_ENABLED } from '../../config/features'
+import { groupServiceEnabled, type ServicePlan } from '../../features/groupService/model'
+import { saveServicePlan, confirmOverlappingApplication } from '../../features/groupService/api'
 
 /** 일정 입력 공통 타입 */
 export type CalendarEventInput = {
+  servicePlan?: ServicePlan
   time: string
   endTime?: string
   title: string
@@ -82,7 +85,13 @@ export function makeCalendarMutations(deps: {
   }
 
   // ─── 일정 CRUD ───────────────────────────────────────────────
+  const savePlan = async (plan: ServicePlan): Promise<boolean> => {
+    if (!groupServiceEnabled()) return false
+    try { await saveServicePlan(plan); await fetchAll(); showToast(msg('일정이 저장됐습니다')); return true }
+    catch (error) { reportMutationError(msg('일정을 저장하지 못했습니다.'), error); return false }
+  }
   const createCalendarEvent = async (input: { date: string } & CalendarEventInput) => {
+    if (input.servicePlan) return savePlan(input.servicePlan)
     const payload = { ...buildEventPayload(input), event_date: input.date }
     const result = await supabase.from('calendar_events').insert(payload).select('id').single()
     if (result.error) {
@@ -121,6 +130,7 @@ export function makeCalendarMutations(deps: {
   //   '권한 없음' 을 우회하고, '보내지 않기' 를 골라도 알림이 나갔다.
   //   실패하면 실패로 끝낸다.
   const updateCalendarEvent = async (eventId: number, input: CalendarEventInput, notify = true): Promise<boolean> => {
+    if (input.servicePlan) return savePlan(input.servicePlan)
     const token = getAuthToken()
     if (!token) {
       showToast(msg('로그인 정보가 없습니다. 다시 로그인해 주세요.'), 'error')
@@ -240,6 +250,10 @@ export function makeCalendarMutations(deps: {
     if (event && !event.allowApplications && !isApplied) {
       showToast(msg('이 일정은 봉사 신청을 받지 않습니다.'), 'info')
       return
+    }
+    if (!isApplied && groupServiceEnabled()) {
+      try { if (!await confirmOverlappingApplication(eventId)) return }
+      catch (error) { reportMutationError(msg('신청 시간을 확인하지 못했습니다. 다시 시도해 주세요.'), error); return }
     }
     if (!CART_APPLICATIONS_ENABLED) {
       if (isApplied) {

@@ -12,6 +12,8 @@
 // 단순화: 댓글/지도 썸네일은 기본 placeholder 만, 본격 기능은 다음 라운드.
 
 import { useMemo, useState } from 'react'
+import { groupServiceEnabled } from '../../features/groupService/model'
+import { MeetingAccessPanel } from '../../features/groupService/MeetingAccessPanel'
 import type { Building, CalendarEvent, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, Role, TerritoryCard } from '../../types'
 import { buildSharedAssignmentTeams } from './sharedAssignmentTeams'
 import { useSharedCardNames } from '../../hooks/useCardDirectory'
@@ -468,6 +470,7 @@ export function AdminEventDetailSheet({
         {/* 위치 — mapLink 있으면 카드 전체가 네이버 지도 링크,
             없으면 단순 한 줄 표시.
             지도 썸네일 미리보기는 네이버 X-Frame-Options 차단으로 불가능. */}
+        {groupServiceEnabled() && event.meetingMode==='virtual' && <MeetingAccessPanel eventId={event.id} version={event.editVersion}/>}
         {event.place && event.mapLink && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <SectionHead title={t(language, 'calendar.location')} />

@@ -102,6 +102,8 @@
 
 모바일 지도 중국어 세대 필터: [0092 표시 집계 일치와 원본 저장 보존](0092-demo-map-chinese-unit-filter.md)
 
+집단봉사 일정: [0093 두 타임·주 인도자·화상 정보와 데모 검증](0093-demo-group-service.md)
+
 ```markdown
 # 제목
 

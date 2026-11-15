@@ -922,6 +922,7 @@ export function MobileHome({
                     language={language}
                     
                     todayEvents={todayEvents}
+                    groupName={myGroupName ?? undefined}
                     cards={cards}
                     totalUnits={totalUnits}
                     completedUnits={completedUnits}
@@ -941,6 +942,7 @@ export function MobileHome({
                     language={language}
                     
                     myTodayEvents={myTodayEvents}
+                    groupName={myGroupName ?? undefined}
                     
                     
                     
