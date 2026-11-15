@@ -435,8 +435,8 @@ export function DesktopCalendar({
       )}
 
       {/* ── Create event modal ───────────────────── */}
-      {groupServiceEnabled() && showCreateForm && <ServiceEventEditor language={language} date={newDate} events={events} users={participantUsers} onClose={closeCreate} onSubmit={onCreateEvent}/>}
-      {groupServiceEnabled() && editingEventId!==null && events.find(e=>e.id===editingEventId)?.serviceKind && <ServiceEventEditor key={editingEventId} language={language} date={newDate} event={events.find(e=>e.id===editingEventId)} events={events} users={participantUsers} onClose={clearEdit} onSubmit={input=>onUpdateEvent(editingEventId,input)}/>}
+      {groupServiceEnabled() && showCreateForm && <ServiceEventEditor language={language} globalSettings={globalSettings} date={newDate} events={events} users={participantUsers} onClose={closeCreate} onSubmit={onCreateEvent}/>}
+      {groupServiceEnabled() && editingEventId!==null && events.find(e=>e.id===editingEventId)?.serviceKind && <ServiceEventEditor key={editingEventId} language={language} globalSettings={globalSettings} date={newDate} event={events.find(e=>e.id===editingEventId)} events={events} users={participantUsers} onClose={clearEdit} onSubmit={input=>onUpdateEvent(editingEventId,input)}/>}
       {!groupServiceEnabled() && showCreateForm && (
         <div className="cal-modal-backdrop" onClick={closeCreate}>
           <div className="cal-modal" onClick={(e) => e.stopPropagation()}>

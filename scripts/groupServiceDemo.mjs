@@ -14,7 +14,7 @@ assert.equal(decodeURIComponent(db.username),`postgres.${project}`)
 assert.ok(db.hostname.endsWith('.pooler.supabase.com'))
 assert.equal(db.port,'5432')
 const mode=process.argv[2]
-assert.ok(['check','apply','apply-conflict','apply-templates','apply-compatibility','fixture','smoke'].includes(mode))
+assert.ok(['check','apply','apply-conflict','apply-templates','apply-compatibility','apply-optional-access','fixture','smoke'].includes(mode))
 if(mode!=='check')assert.ok(process.argv.includes('--confirm-demo'))
 const env={...process.env,PGHOST:db.hostname,PGPORT:db.port,PGUSER:decodeURIComponent(db.username),PGDATABASE:db.pathname.slice(1),PGPASSWORD:decodeURIComponent(db.password),PGSSLMODE:'require',PGCONNECT_TIMEOUT:'15'}
 function run(command,args,input) {const r=spawnSync(command,args,{env,input,encoding:'utf8',maxBuffer:128*1024*1024});if(r.error||r.status)throw r.error??Error(r.stderr);return r.stdout.trim()}
@@ -32,10 +32,10 @@ if(mode.startsWith('apply')) {
   const oldFunctions=sql("select pg_get_functiondef('public.notify_on_calendar_event_change()'::regprocedure)||E'\\n'||pg_get_functiondef('public.update_calendar_event_series_tx(uuid,uuid,date,jsonb,boolean)'::regprocedure)")
   const oldTrigger=sql("select pg_get_triggerdef(oid)||';' from pg_trigger where tgname='on_calendar_event_update'")
   const rollback=`-- Demo rollback only; deploy old app first. New service metadata and meeting secrets are removed.\nDROP TRIGGER on_calendar_event_update ON public.calendar_events;\nDROP TRIGGER service_event_guard ON public.calendar_events;\n${oldFunctions}\n${oldTrigger}\nDROP FUNCTION public.save_service_events_tx(uuid,jsonb,uuid,boolean);\nDROP FUNCTION public.get_event_meeting_access(integer);\nDROP FUNCTION public.get_event_application_overlaps(integer);\nDROP FUNCTION private.guard_service_event();\nDROP FUNCTION private.service_event_notify(jsonb,integer[],integer,integer[]);\nDROP FUNCTION private.validate_service_event_input(jsonb);\nDROP TABLE public.event_meeting_access;\nDROP TABLE private.service_event_imports;\nALTER TABLE public.calendar_events DROP COLUMN service_kind,DROP COLUMN target_groups,DROP COLUMN primary_leader_user_id,DROP COLUMN meeting_mode,DROP COLUMN edit_version;\nDROP TABLE public.service_groups;\nNOTIFY pgrst,'reload schema';\n`
-  const previous=mode==='apply-templates'?'private.validate_service_event_input(jsonb)':'public.save_service_events_tx(uuid,jsonb,uuid,boolean)'
+  const previous=['apply-templates','apply-optional-access'].includes(mode)?'private.validate_service_event_input(jsonb)':'public.save_service_events_tx(uuid,jsonb,uuid,boolean)'
   const undo=mode==='apply-compatibility'?sql("select pg_get_functiondef('private.service_event_notify(jsonb,integer[],integer,integer[])'::regprocedure)||E'\\n'||pg_get_functiondef('public.update_calendar_event_series_tx(uuid,uuid,date,jsonb,boolean)'::regprocedure)"):mode==='apply'?'':sql(`select pg_get_functiondef('${previous}'::regprocedure)`)
   writeFileSync(resolve(dir,'rollback.sql'),mode==='apply'?rollback:undo+"\nNOTIFY pgrst,'reload schema';\n")
-  const files=mode==='apply'?['20261116_1000_group_service.sql','20261116_1010_service_event_conflict_response.sql','20261116_1020_unassigned_service_templates.sql','20261116_1030_preserve_cart_schedule_contract.sql']:[mode==='apply-conflict'?'20261116_1010_service_event_conflict_response.sql':mode==='apply-templates'?'20261116_1020_unassigned_service_templates.sql':'20261116_1030_preserve_cart_schedule_contract.sql']
+  const files=mode==='apply'?['20261116_1000_group_service.sql','20261116_1010_service_event_conflict_response.sql','20261116_1020_unassigned_service_templates.sql','20261116_1030_preserve_cart_schedule_contract.sql','20261116_1040_optional_meeting_access.sql']:[mode==='apply-conflict'?'20261116_1010_service_event_conflict_response.sql':mode==='apply-templates'?'20261116_1020_unassigned_service_templates.sql':mode==='apply-optional-access'?'20261116_1040_optional_meeting_access.sql':'20261116_1030_preserve_cart_schedule_contract.sql']
   run('psql',['-X','-v','ON_ERROR_STOP=1','--single-transaction',...files.flatMap(file=>['-f',`supabase/migrations/${file}`])])
   console.log(JSON.stringify({project,backup:dir,installed:installed()}));process.exit()
 }
@@ -71,6 +71,11 @@ try {
     const check=(name,value)=>{assert.ok(value,name);checks.push(name);console.log(`PASS ${name}`)}
     const again=await rest('rpc/save_service_events_tx',{p_token:admin.token,p_rows:rows,p_request_id:key,p_notify:false},admin.token)
     check('idempotent retry',JSON.stringify(again.ids)===JSON.stringify(saved.ids))
+    const blank={joinUrl:'',meetingNumber:'',passcode:''}
+    const single=await rest('rpc/save_service_events_tx',{p_token:admin.token,p_rows:[{payload:{...payload('2099-11-29','15:00','16:00',['dongtan']),access:blank}}],p_request_id:randomUUID(),p_notify:false},admin.token)
+    check('single slot saves without online connection fields',single.ids.length===1)
+    const empty=await rest('rpc/get_event_meeting_access',{p_event_id:single.ids[0]},user.token)
+    check('empty online connection fields round trip',empty.joinUrl===''&&empty.meetingNumber===''&&empty.passcode==='')
     await rest('event_meeting_access?select=*',undefined,undefined,'GET',false);checks.push('anon direct read denied')
     await rest('rpc/get_event_meeting_access',{p_event_id:saved.ids[0]},undefined,'POST',false);checks.push('anon RPC denied')
     const access=await rest('rpc/get_event_meeting_access',{p_event_id:saved.ids[0]},user.token)

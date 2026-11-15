@@ -583,7 +583,7 @@ export function AdminMobileCalendar({
       </div>}
 
       {/* ── 일정 추가/편집 시트 ─────────── */}
-      {groupServiceEnabled() && (addOpen || editingEvent?.serviceKind) && <ServiceEventEditor key={editingEvent?.id ?? 'new'} language={language} date={selectedDateStr} event={editingEvent} events={events} users={participantUsers}
+      {groupServiceEnabled() && (addOpen || editingEvent?.serviceKind) && <ServiceEventEditor key={editingEvent?.id ?? 'new'} language={language} globalSettings={globalSettings} date={selectedDateStr} event={editingEvent} events={events} users={participantUsers}
         onClose={()=>{setAddOpen(false);setEditingEventId(null)}} onSubmit={input=>editingEvent ? onUpdateEvent?.(editingEvent.id,input) : onCreateEvent?.(input)}/>}
       {(!groupServiceEnabled() || (editingEvent && !editingEvent.serviceKind)) && (addOpen || editingEvent) && (
         <EventAddSheet language={language}

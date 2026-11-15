@@ -1,4 +1,8 @@
 export const groupServiceZh: Record<string,string> = {
+  '자주 쓰는 시간':'常用时间',
+  '시간대 {n}':'时段 {n}','시간대 추가':'添加时段','시간대 삭제':'删除时段','시간대 {n} 삭제':'删除时段 {n}',
+  '직접 입력':'手动输入','제목, 대상 집단, 인도자를 확인해 주세요.':'请确认标题、参加的小组和主持人。',
+  '참여 링크 (선택)':'加入链接（可选）','회의 번호 (선택)':'会议号码（可选）','비밀번호 (선택)':'密码（可选）','접속 정보 미등록':'尚未填写接入信息',
   '봉사 구분':'传道类别','집단봉사':'小组传道','회중봉사':'会众传道','대상 집단':'参加的小组',
   '주 인도자':'主要主持人','공동 인도자':'其他主持人','미지정':'未指定','현장 모임':'现场聚会','화상 모임':'线上聚会',
   '봉사 장소':'传道地点','지도 링크':'地图链接','참여 링크':'加入链接','회의 번호':'会议号码','비밀번호':'密码',
@@ -19,6 +23,10 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '자주 쓰는 시간':'Frequent times',
+  '시간대 {n}':'Time slot {n}','시간대 추가':'Add time slot','시간대 삭제':'Remove time slot','시간대 {n} 삭제':'Remove time slot {n}',
+  '직접 입력':'Custom time','제목, 대상 집단, 인도자를 확인해 주세요.':'Check the title, groups and conductors.',
+  '참여 링크 (선택)':'Join link (optional)','회의 번호 (선택)':'Meeting ID (optional)','비밀번호 (선택)':'Passcode (optional)','접속 정보 미등록':'No connection details yet',
   '봉사 구분':'Service type','집단봉사':'Group service','회중봉사':'Congregation service','대상 집단':'Groups',
   '주 인도자':'Primary conductor','공동 인도자':'Other conductors','미지정':'Unassigned','현장 모임':'In-person meeting','화상 모임':'Online meeting',
   '봉사 장소':'Service location','지도 링크':'Map link','참여 링크':'Join link','회의 번호':'Meeting ID','비밀번호':'Passcode',

@@ -104,6 +104,8 @@
 
 집단봉사 일정: [0093 두 타임·주 인도자·화상 정보와 데모 검증](0093-demo-group-service.md)
 
+집단봉사 입력 단순화: [0094 가변 시간대·인도자 한 목록·선택 화상 정보](0094-demo-flexible-service-editor.md)
+
 ```markdown
 # 제목
 

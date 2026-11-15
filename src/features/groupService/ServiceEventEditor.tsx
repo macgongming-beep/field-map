@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CalendarEvent } from '../../types'
-import type { AppLanguage } from '../../i18n'
+import { t, type AppLanguage } from '../../i18n'
+import { addMinutesToTime, resolveTimePresets, TIME_PRESET_SETTING_KEY } from '../../lib/timePresets'
 import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
 import type { CalendarEventInput } from '../../hooks/storeMutations/calendar'
 import { getOverlayRoot } from '../../lib/overlayRoot'
@@ -16,9 +17,10 @@ import './groupService.css'
 type Props = {
   language: AppLanguage; date: string; event?: CalendarEvent | null; events: CalendarEvent[];
   users: EventParticipantUser[]; onClose: () => void;
+  globalSettings?: Record<string,string>;
   onSubmit: (input: CalendarEventInput & { date: string }) => unknown | Promise<unknown>;
 }
-export function ServiceEventEditor({ language,date,event,events,users,onClose,onSubmit }: Props) {
+export function ServiceEventEditor({ language,date,event,events,users,onClose,onSubmit,globalSettings={} }: Props) {
   // Freeze the edit snapshot: background refresh must not silently advance versions.
   const [snapshot] = useState(() => event ?? null)
   const [companions] = useState(() => event ? events.filter(e => e.id!==event.id && sameServiceDay(event,e)) : [])
@@ -32,7 +34,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const [mapLink,setMapLink] = useState(event?.mapLink ?? '')
   const [memo,setMemo] = useState(event?.memo ?? '')
   const [leaders,setLeaders] = useState(event?.leaders ?? [])
-  const [primary,setPrimary] = useState<number|null>(event?.primaryLeaderUserId ?? null)
+  const [leadersEdited,setLeadersEdited] = useState(false)
   const [mode,setMode] = useState<'none'|'in_person'|'virtual'>(event?.meetingMode ?? (event?.hasMeeting ? 'in_person' : 'none'))
   const [access,setAccess] = useState<MeetingAccess>(emptyAccess)
   const [accessLoading,setAccessLoading] = useState(event?.meetingMode==='virtual')
@@ -47,6 +49,9 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const seriesRef = useRef([crypto.randomUUID(),crypto.randomUUID()])
   const dialogRef = useRef<HTMLElement>(null)
   const available = users.filter(u => u.isActive!==false && (!u.approvalStatus || u.approvalStatus==='approved') && ['leader','admin','developer'].includes(u.role ?? ''))
+  const firstMatches=available.filter(u=>u.name===leaders[0])
+  const primary=snapshot&&!leadersEdited ? snapshot.primaryLeaderUserId??null : firstMatches.length===1?firstMatches[0].id??null:null
+  const timePresets=resolveTimePresets(globalSettings[TIME_PRESET_SETTING_KEY])
   useEffect(() => pushBackHandler(() => { if (!busy) onClose(); return true }),[busy,onClose])
   useEffect(() => {
     const previous=document.activeElement as HTMLElement|null
@@ -69,18 +74,17 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   },[snapshot])
   const changeKind = (next: 'group'|'congregation') => {
     setKind(next)
-    if (!snapshot) setSlots(next==='group' ? [{time:'14:30',end:'16:30'},{time:'17:00',end:'19:00'}] : [{time:'14:30',end:'16:30'}])
     if (next==='congregation') { setGroups([]); setSelected([]) }
   }
   const save = async () => {
     if (busy || accessLoading || accessError) return
     setError('')
-    if (!title.trim() || (!repeatEnd && !snapshot && !primary) || (kind==='group' && (groups.length<1 || groups.length>2))) {
-      setError(msg('제목, 대상 집단, 주 인도자를 확인해 주세요.')); return
+    if (!title.trim() || (!repeatEnd && ((!snapshot&&!primary)||(leadersEdited&&leaders.length>0&&!primary))) || (kind==='group' && (groups.length<1 || groups.length>2))) {
+      setError(msg('제목, 대상 집단, 인도자를 확인해 주세요.')); return
     }
     const allTimes = [...slots,...selected.map(id=>companionTimes[id])]
     if (allTimes.some(s => !s.time || !s.end || s.time>=s.end)) { setError(msg('종료 시간은 시작 시간 이후로 정해 주세요.')); return }
-    if (mode==='virtual' && ((!access.joinUrl && !access.meetingNumber) || (access.joinUrl && !/^https:\/\/\S+$/.test(access.joinUrl)))) {
+    if (mode==='virtual' && access.joinUrl && !/^https:\/\/\S+$/.test(access.joinUrl)) {
       setError(msg('화상 모임 링크 또는 회의 번호를 확인해 주세요.')); return
     }
     const dates=[day]
@@ -116,10 +120,17 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
       if (result!==false) onClose()
     } catch { setError(msg('일정을 저장하지 못했습니다.')) } finally { setBusy(false) }
   }
-  const timeInputs = (s:{time:string;end:string},update:(s:{time:string;end:string})=>void,key:string) => <div className="gs-times" key={key}>
+  const timeInputs = (s:{time:string;end:string},update:(s:{time:string;end:string})=>void,key:string) => <div key={key}>
+    <label>{msg('자주 쓰는 시간')}<select value={timePresets.findIndex(p=>p.time===s.time&&addMinutesToTime(p.time,p.durationMinutes)===s.end)} onChange={e=>{
+      const preset=timePresets[Number(e.target.value)]
+      if(!preset)return
+      update({time:preset.time,end:addMinutesToTime(preset.time,preset.durationMinutes)})
+      if(!title.trim()||timePresets.some(p=>p.title===title))setTitle(preset.title)
+    }}><option value={-1}>{msg('직접 입력')}</option>{timePresets.map((p,i)=><option key={i} value={i}>{p.label} · {p.time}–{addMinutesToTime(p.time,p.durationMinutes)}</option>)}</select></label>
+    <div className="gs-times">
     <label>{msg('시작 시간')}<input type="time" value={s.time} onChange={e=>update({...s,time:e.target.value})} required /></label>
     <label>{msg('종료 시간')}<input type="time" value={s.end} onChange={e=>update({...s,end:e.target.value})} required /></label>
-  </div>
+    </div></div>
   const content=<div className="gs-backdrop"><section ref={dialogRef} tabIndex={-1} className="gs-editor" role="dialog" aria-modal="true" aria-label={msg(snapshot?'일정 수정':'일정 추가')} onKeyDown={e=>{
     if(e.key==='Escape'&&!busy){e.stopPropagation();onClose()}
     if(e.key==='Tab'){
@@ -135,24 +146,31 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
       {kind==='group' && <fieldset className="gs-groups"><legend>{msg('대상 집단')}</legend>{serviceGroups.map(g=><label key={g.code}><input type="checkbox" checked={groups.includes(g.code)} onChange={()=>setGroups(prev=>prev.includes(g.code)?prev.filter(c=>c!==g.code):[...prev,g.code])} />{g[language]}</label>)}</fieldset>}
       <label>{msg('날짜')}<input type="date" value={day} onChange={e=>setDay(e.target.value)} required /></label>
       <label>{msg('제목')}<input value={title} maxLength={200} onChange={e=>setTitle(e.target.value)} required /></label>
-      {slots.map((s,i)=>timeInputs(s,v=>setSlots(prev=>prev.map((x,j)=>i===j?v:x)),String(i)))}
+      {slots.map((s,i)=><div key={i} className="gs-slot">
+        {!snapshot && <div className="gs-slot-head"><span>{msg('시간대 {n}',{n:i+1})}</span>{slots.length>1&&<button type="button" title={msg('시간대 삭제')} aria-label={msg('시간대 {n} 삭제',{n:i+1})} onClick={()=>setSlots(prev=>prev.filter((_,j)=>i!==j))}>×</button>}</div>}
+        {timeInputs(s,v=>setSlots(prev=>prev.map((x,j)=>i===j?v:x)),String(i))}
+      </div>)}
+      {!snapshot && <button className="gs-slot-add" type="button" title={msg('시간대 추가')} aria-label={msg('시간대 추가')} disabled={slots.length>=200} onClick={()=>{
+        const time=addMinutesToTime(slots.at(-1)!.end,30)
+        if(seriesRef.current.length<=slots.length)seriesRef.current.push(crypto.randomUUID())
+        setSlots(prev=>[...prev,{time,end:addMinutesToTime(time,120)}])
+      }}>+</button>}
       {snapshot && kind==='group' && companions.map(e=><div key={e.id}><label className="gs-check"><input type="checkbox" checked={selected.includes(e.id)} onChange={()=>setSelected(prev=>prev.includes(e.id)?prev.filter(id=>id!==e.id):[...prev,e.id])}/>{msg('함께 수정')} · {e.time}–{e.endTime} · {e.title}</label>{selected.includes(e.id) && timeInputs(companionTimes[e.id],v=>setCompanionTimes(prev=>({...prev,[e.id]:v})),`c${e.id}`)}</div>)}
-      {!snapshot && <label>{msg('반복 종료일 (선택)')}<input type="date" min={day} value={repeatEnd} onChange={e=>{setRepeatEnd(e.target.value);setPrimary(null);setLeaders([])}} /></label>}
-      <label>{msg('주 인도자')}<select value={primary ?? ''} onChange={e=>{
-        const id=e.target.value?Number(e.target.value):null
-        const previous=users.find(u=>u.id===primary)?.name
-        const next=available.find(u=>u.id===id)?.name
-        setPrimary(id)
-        setLeaders(current=>Array.from(new Set([...current.filter(name=>name!==previous),...(next?[next]:[])])))
-      }} required={!snapshot&&!repeatEnd} disabled={!!repeatEnd}><option value="">{msg('미지정')}</option>{available.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
-      {!repeatEnd && <details><summary>{msg('공동 인도자')}</summary><div className="gs-leaders">{available.map(u=><label className="gs-check" key={u.id}><input type="checkbox" checked={leaders.includes(u.name)} disabled={primary===u.id} onChange={()=>setLeaders(prev=>prev.includes(u.name)?prev.filter(n=>n!==u.name):[...prev,u.name])}/>{u.name}</label>)}</div></details>}
+      {!snapshot && <label>{msg('반복 종료일 (선택)')}<input type="date" min={day} value={repeatEnd} onChange={e=>{setRepeatEnd(e.target.value);setLeadersEdited(true);setLeaders([])}} /></label>}
+      {!repeatEnd && <fieldset className="gs-conductors"><legend>{t(language,'calendar.leader')}</legend>
+        {leaders.length>0&&<p className="gs-selected-leaders">{leaders.join(' · ')}</p>}
+        <div className="gs-leaders">{Array.from(new Set([...available.map(u=>u.name),...leaders])).map(name=><label className="gs-check" key={name}><input type="checkbox" checked={leaders.includes(name)} onChange={()=>{
+          setLeadersEdited(true)
+          setLeaders(prev=>prev.includes(name)?prev.filter(n=>n!==name):[...prev,name])
+        }}/>{name}</label>)}</div>
+      </fieldset>}
       <label>{msg('봉사 모임')}<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="none">{msg('없음')}</option><option value="in_person">{msg('현장 모임')}</option><option value="virtual">{msg('화상 모임')}</option></select></label>
       <label>{msg('봉사 장소')}<input value={place} onChange={e=>setPlace(e.target.value)} /></label>
       <label>{msg('지도 링크')}<input type="url" value={mapLink} onChange={e=>setMapLink(e.target.value)} /></label>
       {mode==='virtual' && <fieldset className="gs-access" disabled={accessLoading || accessError}><legend>{msg('화상 모임')}</legend>{accessLoading?<p role="status">{msg('불러오는 중...')}</p>:null}
-        <label>{msg('참여 링크')}<input type="url" value={access.joinUrl} onChange={e=>setAccess({...access,joinUrl:e.target.value})} maxLength={2048}/></label>
-        <label>{msg('회의 번호')}<input value={access.meetingNumber} onChange={e=>setAccess({...access,meetingNumber:e.target.value})} maxLength={100}/></label>
-        <label>{msg('비밀번호')}<input value={access.passcode} autoComplete="off" onChange={e=>setAccess({...access,passcode:e.target.value})} maxLength={100}/></label>
+        <label>{msg('참여 링크 (선택)')}<input type="url" value={access.joinUrl} onChange={e=>setAccess({...access,joinUrl:e.target.value})} maxLength={2048}/></label>
+        <label>{msg('회의 번호 (선택)')}<input value={access.meetingNumber} onChange={e=>setAccess({...access,meetingNumber:e.target.value})} maxLength={100}/></label>
+        <label>{msg('비밀번호 (선택)')}<input value={access.passcode} autoComplete="off" onChange={e=>setAccess({...access,passcode:e.target.value})} maxLength={100}/></label>
       </fieldset>}
       <label>{msg('메모')}<textarea value={memo} onChange={e=>setMemo(e.target.value)} rows={3}/></label>
       <label className="gs-check"><input type="checkbox" checked={allow} onChange={e=>setAllow(e.target.checked)}/>{msg('봉사 신청 받기')}</label>

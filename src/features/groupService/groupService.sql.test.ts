@@ -9,8 +9,10 @@ let source=readFileSync('supabase/migrations/20261116_1000_group_service.sql','u
   +readFileSync('supabase/migrations/20261116_1010_service_event_conflict_response.sql','utf8')
   +readFileSync('supabase/migrations/20261116_1020_unassigned_service_templates.sql','utf8')
   +readFileSync('supabase/migrations/20261116_1030_preserve_cart_schedule_contract.sql','utf8')
+  +readFileSync('supabase/migrations/20261116_1040_optional_meeting_access.sql','utf8')
 if(process.env.GROUP_SERVICE_MUTATION==='version')source=source.replace("if r->>'version' is null or (r->>'version')::bigint<>e.edit_version then",'if false then')
 if(process.env.GROUP_SERVICE_MUTATION==='privacy')source=source.replaceAll("if v_actor is null then raise exception 'Approved session required' using errcode='42501'; end if;",'-- mutation: session check removed')
+if(process.env.GROUP_SERVICE_MUTATION==='optional')source=source.slice(0,source.indexOf(readFileSync('supabase/migrations/20261116_1040_optional_meeting_access.sql','utf8')))
 const helperSource=readFileSync('supabase/migrations/20260828_1000_session_helper_and_signup.sql','utf8')
 const helper=(name:string)=>helperSource.match(new RegExp(`create or replace function private\\.${name}\\(\\)[\\s\\S]+?\\$\\$;`))![0]
 const permission=readFileSync('supabase/migrations/20260907_1100_finalize_calendar_assignment_policies.sql','utf8').match(/create or replace function private.user_can_manage_event[\s\S]+?\$\$;/)![0]
@@ -149,4 +151,19 @@ test('legacy cart-only applicants still receive changes and repeated cart settin
   await db.query('select update_calendar_event_series_tx($1,$2,$3,$4,true)',[token(1),series,'2099-11-25',JSON.stringify({end_time:'16:45',allow_cart_applications:true,cart_capacity:4})])
   expect((await db.query('select recipient from test_notices order by recipient')).rows).toEqual([{recipient:2},{recipient:3}])
   expect((await db.query('select allow_cart_applications,cart_capacity from calendar_events where id=$1',[id])).rows[0]).toEqual({allow_cart_applications:true,cart_capacity:4})
+})
+test('all virtual connection fields are independently optional but supplied URLs remain validated',async()=>{
+  for(const access of [
+    {joinUrl:'',meetingNumber:'',passcode:''},
+    {joinUrl:'https://example.com',meetingNumber:'',passcode:''},
+    {joinUrl:'',meetingNumber:'123',passcode:''},
+    {joinUrl:'',meetingNumber:'',passcode:'test'},
+  ]) {
+    const {ids:[id]}=await save([{payload:{...payload(),access}}])
+    await session(3)
+    const result=(await db.query<{r:unknown}>('select get_event_meeting_access($1) r',[id])).rows[0].r
+    expect(result).toMatchObject(access)
+    await db.query('delete from calendar_events where id=$1',[id])
+  }
+  await expect(save([{payload:{...payload(),access:{joinUrl:'javascript:alert(1)',meetingNumber:'',passcode:''}}}])).rejects.toThrow('HTTPS')
 })
