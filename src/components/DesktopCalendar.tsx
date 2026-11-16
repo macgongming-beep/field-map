@@ -15,7 +15,8 @@ import { savePlacePresets, normalizePlacePresets, resolvePlacePresets, parsePlac
 import type { PlacePreset } from '../lib/placePresets'
 import { saveTimePresets, normalizeTimePresets, resolveTimePresets, parseTimePresetsValue, TIME_PRESET_SETTING_KEY, addMinutesToTime } from '../lib/timePresets'
 import type { TimePreset } from '../lib/timePresets'
-import { PlacePresetEditor, TimePresetEditor } from './admin/AdminMobileCalendar'
+import { PlacePresetEditor } from './admin/AdminMobileCalendar'
+import { TimePresetEditor } from './admin/TimePresetEditor'
 import { ExportEventsModal } from './calendar/ExportEventsModal'
 import { ImportEventsModal } from './calendar/ImportEventsModal'
 import { msg } from '../lib/msg'
@@ -436,8 +437,8 @@ export function DesktopCalendar({
       )}
 
       {/* ── Create event modal ───────────────────── */}
-      {groupServiceEnabled() && showCreateForm && <ServiceEventEditor language={language} globalSettings={globalSettings} date={newDate} events={events} users={participantUsers} onClose={closeCreate} onSubmit={onCreateEvent}/>}
-      {groupServiceEnabled() && editingEventId!==null && events.find(e=>e.id===editingEventId)?.serviceKind && <ServiceEventEditor key={editingEventId} language={language} globalSettings={globalSettings} date={newDate} event={events.find(e=>e.id===editingEventId)} events={events} users={participantUsers} onClose={clearEdit} onSubmit={input=>onUpdateEvent(editingEventId,input)}/>}
+      {groupServiceEnabled() && showCreateForm && <ServiceEventEditor language={language} globalSettings={globalSettings} onUpsertGlobalSetting={onUpsertGlobalSetting} date={newDate} events={events} users={participantUsers} onClose={closeCreate} onSubmit={onCreateEvent}/>}
+      {groupServiceEnabled() && editingEventId!==null && events.find(e=>e.id===editingEventId)?.serviceKind && <ServiceEventEditor key={editingEventId} language={language} globalSettings={globalSettings} onUpsertGlobalSetting={onUpsertGlobalSetting} date={newDate} event={events.find(e=>e.id===editingEventId)} events={events} users={participantUsers} onClose={clearEdit} onSubmit={input=>onUpdateEvent(editingEventId,input)}/>}
       {!groupServiceEnabled() && showCreateForm && (
         <div className="cal-modal-backdrop" onClick={closeCreate}>
           <div className="cal-modal" onClick={(e) => e.stopPropagation()}>

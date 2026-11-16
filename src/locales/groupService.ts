@@ -1,4 +1,6 @@
 export const groupServiceZh: Record<string,string> = {
+  '시간 설정':'时间设置',
+  '시간 설정 저장':'保存时间设置','시간 설정의 이름, 시작 시간, 소요시간을 확인해 주세요.':'请检查时间设置的名称、开始时间和时长。','시간 설정을 저장하지 못했습니다. 다시 시도해 주세요.':'无法保存时间设置，请重试。',
   '봉사 신청 취소':'取消传道报名','재방·연구 신청 취소':'取消续访·圣经课程报名','참여':'加入',
   '봉사 신청':'报名传道','재방·연구 신청':'报名续访·圣经课程','재방·연구':'续访·圣经课程','봉사':'传道',
   '봉사 신청 완료':'已报名传道','재방·연구 신청 완료':'已报名续访·圣经课程','재방·연구 신청이 완료됐습니다':'已报名续访·圣经课程',
@@ -27,6 +29,8 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '시간 설정':'Time settings',
+  '시간 설정 저장':'Save time settings','시간 설정의 이름, 시작 시간, 소요시간을 확인해 주세요.':'Check the preset name, start time and duration.','시간 설정을 저장하지 못했습니다. 다시 시도해 주세요.':'Could not save time settings. Please try again.',
   '봉사 신청 취소':'Cancel service application','재방·연구 신청 취소':'Cancel return visit / study application','참여':'Join',
   '봉사 신청':'Join service','재방·연구 신청':'Join return visits / studies','재방·연구':'Return visits / studies','봉사':'Service',
   '봉사 신청 완료':'Joined service','재방·연구 신청 완료':'Joined return visits / studies','재방·연구 신청이 완료됐습니다':'Joined return visits / studies',

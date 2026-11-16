@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CalendarEvent } from '../../types'
 import { t, type AppLanguage } from '../../i18n'
-import { addMinutesToTime, resolveTimePresets, TIME_PRESET_SETTING_KEY } from '../../lib/timePresets'
+import { addMinutesToTime, normalizeTimePresets, resolveTimePresets, saveTimePresets, TIME_PRESET_SETTING_KEY, type TimePreset } from '../../lib/timePresets'
+import { TimePresetEditor } from '../../components/admin/TimePresetEditor'
 import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
 import type { CalendarEventInput } from '../../hooks/storeMutations/calendar'
 import { getOverlayRoot } from '../../lib/overlayRoot'
@@ -18,9 +19,10 @@ type Props = {
   language: AppLanguage; date: string; event?: CalendarEvent | null; events: CalendarEvent[];
   users: EventParticipantUser[]; onClose: () => void;
   globalSettings?: Record<string,string>;
+  onUpsertGlobalSetting?: (key:string,value:string)=>Promise<boolean>;
   onSubmit: (input: CalendarEventInput & { date: string }) => unknown | Promise<unknown>;
 }
-export function ServiceEventEditor({ language,date,event,events,users,onClose,onSubmit,globalSettings={} }: Props) {
+export function ServiceEventEditor({ language,date,event,events,users,onClose,onSubmit,globalSettings={},onUpsertGlobalSetting }: Props) {
   // Freeze the edit snapshot: background refresh must not silently advance versions.
   const [snapshot] = useState(() => event ?? null)
   const [companions] = useState(() => event ? events.filter(e => e.id!==event.id && sameServiceDay(event,e)) : [])
@@ -43,6 +45,11 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const [slots,setSlots] = useState(() => [{ time:event?.time ?? '14:30',end:event?.endTime ?? '16:30' }])
   const [companionTimes,setCompanionTimes] = useState(() => Object.fromEntries(companions.map(e => [e.id,{time:e.time,end:e.endTime ?? ''}])))
   const [busy,setBusy] = useState(false)
+  const [presetKey,setPresetKey] = useState<string|null>(null)
+  const [presetDraft,setPresetDraft] = useState<TimePreset[]>([])
+  const [presetSaving,setPresetSaving] = useState(false)
+  const [presetError,setPresetError] = useState('')
+  const [savedPresets,setSavedPresets] = useState<{source:string|undefined;value:TimePreset[]}|null>(null)
   const [error,setError] = useState('')
   const requestRef = useRef<{ body: string; id: string } | null>(null)
   const originalAccess = useRef<MeetingAccess>(emptyAccess)
@@ -51,8 +58,29 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const available = users.filter(u => u.isActive!==false && (!u.approvalStatus || u.approvalStatus==='approved') && ['leader','admin','developer'].includes(u.role ?? ''))
   const firstMatches=available.filter(u=>u.name===leaders[0])
   const primary=snapshot&&!leadersEdited ? snapshot.primaryLeaderUserId??null : firstMatches.length===1?firstMatches[0].id??null:null
-  const timePresets=resolveTimePresets(globalSettings[TIME_PRESET_SETTING_KEY])
-  useEffect(() => pushBackHandler(() => { if (!busy) onClose(); return true }),[busy,onClose])
+  const presetSource=globalSettings[TIME_PRESET_SETTING_KEY]
+  const timePresets=savedPresets&&savedPresets.source===presetSource?savedPresets.value:resolveTimePresets(presetSource)
+  const locked=busy||presetSaving
+  useEffect(() => pushBackHandler(() => { if (!locked) onClose(); return true }),[locked,onClose])
+  const togglePresets=(key:string)=>{
+    if(presetKey===key){setPresetKey(null);return}
+    setPresetDraft(timePresets.map(p=>({...p})));setPresetError('');setPresetKey(key)
+  }
+  const savePresets=async()=>{
+    if(presetSaving||!onUpsertGlobalSetting)return
+    if(presetDraft.some(p=>!p.label.trim()||!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.time)||!Number.isFinite(p.durationMinutes)||p.durationMinutes<15||p.durationMinutes>480)){
+      setPresetError(msg('시간 설정의 이름, 시작 시간, 소요시간을 확인해 주세요.'));return
+    }
+    const normalized=normalizeTimePresets(presetDraft)
+    setPresetSaving(true);setPresetError('')
+    try{
+      if(!await onUpsertGlobalSetting(TIME_PRESET_SETTING_KEY,JSON.stringify(normalized)))throw new Error('Preset save failed')
+      setSavedPresets({source:presetSource,value:normalized})
+      try{saveTimePresets(normalized)}catch{/* Server settings remain authoritative if local storage is unavailable. */}
+      setPresetKey(null)
+    }catch{setPresetError(msg('시간 설정을 저장하지 못했습니다. 다시 시도해 주세요.'))}
+    finally{setPresetSaving(false)}
+  }
   useEffect(() => {
     const previous=document.activeElement as HTMLElement|null
     const overflow=document.documentElement.style.overflow
@@ -77,7 +105,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     if (next==='congregation') { setGroups([]); setSelected([]) }
   }
   const save = async () => {
-    if (busy || accessLoading || accessError) return
+    if (locked || presetKey!==null || accessLoading || accessError) return
     setError('')
     if (!title.trim() || (!repeatEnd && ((!snapshot&&!primary)||(leadersEdited&&leaders.length>0&&!primary))) || (kind==='group' && (groups.length<1 || groups.length>2))) {
       setError(msg('제목, 대상 집단, 인도자를 확인해 주세요.')); return
@@ -121,18 +149,23 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     } catch { setError(msg('일정을 저장하지 못했습니다.')) } finally { setBusy(false) }
   }
   const timeInputs = (s:{time:string;end:string},update:(s:{time:string;end:string})=>void,key:string) => <div key={key}>
-    <label>{msg('자주 쓰는 시간')}<select value={timePresets.findIndex(p=>p.time===s.time&&addMinutesToTime(p.time,p.durationMinutes)===s.end)} onChange={e=>{
+    <div className="gs-preset-heading"><label htmlFor={`gs-preset-${key}`}>{msg('자주 쓰는 시간')}</label>{onUpsertGlobalSetting&&<button type="button" title={msg('시간 설정')} aria-label={msg('시간 설정')} aria-expanded={presetKey===key} aria-controls={`gs-preset-settings-${key}`} onClick={()=>togglePresets(key)}>⚙</button>}</div>
+    <label className="gs-preset-select"><select id={`gs-preset-${key}`} value={timePresets.findIndex(p=>p.time===s.time&&addMinutesToTime(p.time,p.durationMinutes)===s.end)} onChange={e=>{
       const preset=timePresets[Number(e.target.value)]
       if(!preset)return
       update({time:preset.time,end:addMinutesToTime(preset.time,preset.durationMinutes)})
       if(!title.trim()||timePresets.some(p=>p.title===title))setTitle(preset.title)
     }}><option value={-1}>{msg('직접 입력')}</option>{timePresets.map((p,i)=><option key={i} value={i}>{p.label} · {p.time}–{addMinutesToTime(p.time,p.durationMinutes)}</option>)}</select></label>
+    {presetKey===key&&<div className="gs-preset-settings" id={`gs-preset-settings-${key}`}>
+      <TimePresetEditor language={language} presets={presetDraft} onChange={setPresetDraft}/>
+      {presetError&&<p role="alert" className="gs-error">{presetError}</p>}
+    </div>}
     <div className="gs-times">
     <label>{msg('시작 시간')}<input type="time" value={s.time} onChange={e=>update({...s,time:e.target.value})} required /></label>
     <label>{msg('종료 시간')}<input type="time" value={s.end} onChange={e=>update({...s,end:e.target.value})} required /></label>
     </div></div>
   const content=<div className="gs-backdrop"><section ref={dialogRef} tabIndex={-1} className="gs-editor" role="dialog" aria-modal="true" aria-label={msg(snapshot?'일정 수정':'일정 추가')} onKeyDown={e=>{
-    if(e.key==='Escape'&&!busy){e.stopPropagation();onClose()}
+    if(e.key==='Escape'&&!locked){e.stopPropagation();if(presetKey!==null)setPresetKey(null);else onClose()}
     if(e.key==='Tab'){
       const controls=Array.from(e.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary')).filter(el=>el.getClientRects().length)
       const first=controls[0],last=controls.at(-1)
@@ -141,22 +174,22 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     }
   }}>
     <div className="gs-sheet-handle" aria-hidden/>
-    <header><div><h2>{msg(snapshot?'일정 수정':'일정 추가')}</h2><span className="gs-editor-date">{day.replaceAll('-','.')}</span></div><button type="button" disabled={busy} onClick={onClose} aria-label={msg('닫기')}>×</button></header>
-    <form onSubmit={e=>{e.preventDefault();void save()}}><fieldset disabled={busy}>
+    <header><div><h2>{msg(snapshot?'일정 수정':'일정 추가')}</h2><span className="gs-editor-date">{day.replaceAll('-','.')}</span></div><button type="button" disabled={locked} onClick={onClose} aria-label={msg('닫기')}>×</button></header>
+    <form noValidate={presetKey!==null} onSubmit={e=>{e.preventDefault();if(presetKey!==null)void savePresets();else void save()}}><fieldset disabled={locked}>
       <div className="gs-segment" role="group" aria-label={msg('봉사 구분')}>{(['congregation','group'] as const).map(k=><button type="button" key={k} aria-pressed={kind===k} onClick={()=>changeKind(k)}>{msg(k==='group'?'집단봉사':'회중봉사')}</button>)}</div>
       {kind==='group' && <fieldset className="gs-groups"><legend>{msg('대상 집단')}</legend>{serviceGroups.map(g=><label key={g.code}><input type="checkbox" aria-label={g[language]} checked={groups.includes(g.code)} disabled={groups.length>=2&&!groups.includes(g.code)} onChange={()=>setGroups(prev=>prev.includes(g.code)?prev.filter(c=>c!==g.code):[...prev,g.code])} /><span className="gs-choice-mark" aria-hidden>{groups.includes(g.code)?'✓':'+'}</span>{g[language]}</label>)}</fieldset>}
       <label>{msg('날짜')}<input type="date" value={day} onChange={e=>setDay(e.target.value)} required /></label>
       <label>{msg('제목')}<input value={title} maxLength={200} onChange={e=>setTitle(e.target.value)} required /></label>
       {slots.map((s,i)=><div key={i} className="gs-slot">
-        {!snapshot && <div className="gs-slot-head"><span>{msg('시간대 {n}',{n:i+1})}</span>{slots.length>1&&<button type="button" title={msg('시간대 삭제')} aria-label={msg('시간대 {n} 삭제',{n:i+1})} onClick={()=>setSlots(prev=>prev.filter((_,j)=>i!==j))}>×</button>}</div>}
+        {!snapshot && <div className="gs-slot-head"><span>{msg('시간대 {n}',{n:i+1})}</span>{slots.length>1&&<button type="button" title={msg('시간대 삭제')} aria-label={msg('시간대 {n} 삭제',{n:i+1})} disabled={presetKey!==null} onClick={()=>setSlots(prev=>prev.filter((_,j)=>i!==j))}>×</button>}</div>}
         {timeInputs(s,v=>setSlots(prev=>prev.map((x,j)=>i===j?v:x)),String(i))}
       </div>)}
-      {!snapshot && <button className="gs-slot-add" type="button" title={msg('시간대 추가')} aria-label={msg('시간대 추가')} disabled={slots.length>=200} onClick={()=>{
+      {!snapshot && <button className="gs-slot-add" type="button" title={msg('시간대 추가')} aria-label={msg('시간대 추가')} disabled={slots.length>=200||presetKey!==null} onClick={()=>{
         const time=addMinutesToTime(slots.at(-1)!.end,30)
         if(seriesRef.current.length<=slots.length)seriesRef.current.push(crypto.randomUUID())
         setSlots(prev=>[...prev,{time,end:addMinutesToTime(time,120)}])
       }}>+</button>}
-      {snapshot && kind==='group' && companions.map(e=><div key={e.id}><label className="gs-check"><input type="checkbox" checked={selected.includes(e.id)} onChange={()=>setSelected(prev=>prev.includes(e.id)?prev.filter(id=>id!==e.id):[...prev,e.id])}/>{msg('함께 수정')} · {e.time}–{e.endTime} · {e.title}</label>{selected.includes(e.id) && timeInputs(companionTimes[e.id],v=>setCompanionTimes(prev=>({...prev,[e.id]:v})),`c${e.id}`)}</div>)}
+      {snapshot && kind==='group' && companions.map(e=><div key={e.id}><label className="gs-check"><input type="checkbox" disabled={presetKey!==null} checked={selected.includes(e.id)} onChange={()=>setSelected(prev=>prev.includes(e.id)?prev.filter(id=>id!==e.id):[...prev,e.id])}/>{msg('함께 수정')} · {e.time}–{e.endTime} · {e.title}</label>{selected.includes(e.id) && timeInputs(companionTimes[e.id],v=>setCompanionTimes(prev=>({...prev,[e.id]:v})),`c${e.id}`)}</div>)}
       {!snapshot && <label>{msg('반복 종료일 (선택)')}<input type="date" min={day} value={repeatEnd} onChange={e=>{setRepeatEnd(e.target.value);setLeadersEdited(true);setLeaders([])}} /></label>}
       {!repeatEnd && <fieldset className="gs-conductors"><legend>{t(language,'calendar.leader')}</legend>
         {leaders.length>0&&<p className="gs-selected-leaders">{leaders.join(' · ')}</p>}
@@ -176,7 +209,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
       <label>{msg('메모')}<textarea value={memo} onChange={e=>setMemo(e.target.value)} rows={3}/></label>
       <label className="gs-check"><input type="checkbox" checked={allow} onChange={e=>setAllow(e.target.checked)}/>{msg('봉사 신청 받기')}</label>
     </fieldset>{error && <p role="alert" className="gs-error">{error}</p>}
-      <footer><button type="button" disabled={busy} onClick={onClose}>{msg('취소')}</button><button type="submit" disabled={busy||accessLoading||accessError}>{msg(busy?'저장 중...':'저장')}</button></footer>
+      <footer><button type="button" disabled={locked} onClick={()=>{if(presetKey!==null)setPresetKey(null);else onClose()}}>{msg('취소')}</button><button type="submit" formNoValidate={presetKey!==null} disabled={locked||(presetKey===null&&(accessLoading||accessError))}>{msg(locked?'저장 중...':presetKey!==null?'시간 설정 저장':'저장')}</button></footer>
     </form></section></div>
   return getOverlayRoot() ? createPortal(content,getOverlayRoot()!) : content
 }
