@@ -52,6 +52,13 @@ try{
     assert.equal(await admin.getByRole('button',{name:'팀 구성 · 구역 배정'}).count(),1)
   }
   await admin.getByRole('tab',{name:/^동탄/}).click()
+  const sharedResult=admin.locator('details').filter({has:admin.locator('summary',{hasText:'배정 결과'})})
+  assert.equal(await sharedResult.evaluate(el=>el.open),true,'Shared result starts expanded')
+  assert.equal(await admin.locator('details').filter({has:admin.locator('summary',{hasText:'모임 정보'})}).evaluate(el=>el.open),false)
+  await sharedResult.locator('summary').click()
+  assert.equal(await sharedResult.evaluate(el=>el.open),false,'User can still collapse shared result')
+  await sharedResult.locator('summary').click()
+  checks.push('shared result opens automatically, can be collapsed manually, meeting info stays collapsed')
   await admin.screenshot({path:'scratch/group-tabs-admin-mobile.png',fullPage:true})
   await admin.setViewportSize({width:320,height:740})
   await admin.evaluate(()=>{document.querySelector('#root').style.zoom='1.25';document.querySelector('#root').style.setProperty('--app-zoom','1.25')})
@@ -119,6 +126,8 @@ try{
     await memberContext.close()
   }
   const {page:desktop,context:desktopContext}=await pageFor(1440)
+  await desktop.getByRole('tab',{name:/^동탄/}).click()
+  assert.equal(await desktop.locator('details').filter({has:desktop.locator('summary',{hasText:'배정 결과'})}).evaluate(el=>el.open),true)
   await desktop.getByRole('tab',{name:/^처인/}).click()
   await desktop.screenshot({path:'scratch/group-tabs-desktop.png',fullPage:true})
   assert.ok(await desktop.locator('.gs-tab-detail').evaluate(el=>el.scrollWidth<=el.clientWidth+1))

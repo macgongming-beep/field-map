@@ -39,6 +39,27 @@ test('failed context is closed to names and management, retry restores only allo
   await screen.findByRole('alert');expect(screen.queryByText('Member0')).toBeNull()
   fireEvent.click(screen.getByRole('button',{name:'다시 시도'}));await screen.findByRole('tab',{name:'동탄 1'})
 })
+test('shared assignments open automatically but meeting info stays collapsed and foreign results stay hidden',async()=>{
+  const assigned=events.map(e=>({...e,assignmentStatus:'draft' as const,cardAssignments:[{id:e.id,eventId:e.id,userName:e.applicants[0],assignedCardId:1,assignedBy:'Admin',assignedAt:'',memo:''}]}))
+  const props={event:assigned[0],events:assigned,language:'ko' as const,currentVisitor:'User',renderAssignments:(e:CalendarEvent)=><div>{`Team ${e.id}`}</div>}
+  const {rerender}=render(<GroupServiceDetail {...props}/> )
+  await screen.findByRole('tab',{name:'동탄 1'})
+  expect(screen.queryByText('배정 결과')).toBeNull()
+  const shared=assigned.map(e=>({...e,assignmentStatus:'shared' as const}))
+  rerender(<GroupServiceDetail {...props} event={shared[0]} events={shared}/> )
+  const result=screen.getByText('배정 결과').closest('details')!
+  expect(result.open).toBe(true)
+  expect(screen.getByText('모임 정보').closest('details')!.open).toBe(false)
+  fireEvent.click(screen.getByText('배정 결과'))
+  expect(result.open).toBe(false)
+  rerender(<GroupServiceDetail {...props} event={shared[0]} events={shared}/> )
+  expect(result.open).toBe(false)
+  fireEvent.click(screen.getByRole('tab',{name:'신갈 1'}))
+  expect(screen.queryByText('배정 결과')).toBeNull()
+  expect(screen.queryByText('Team 2')).toBeNull()
+  fireEvent.click(screen.getByRole('tab',{name:'동탄 1'}))
+  expect(screen.getByText('배정 결과').closest('details')!.open).toBe(true)
+})
 test('new group schedule expands four independent children per time with separate weekly series',async()=>{
   const submit=vi.fn(async()=>true)
   render(<ServiceEventEditor date="2026-11-18" events={[]} users={[]} language="ko" onClose={vi.fn()} onSubmit={submit}/>)
