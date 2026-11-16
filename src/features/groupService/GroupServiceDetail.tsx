@@ -6,6 +6,7 @@ import {readGroupServiceContext,type GroupServiceContext} from './api'
 import {groupSlotEvents,serviceGroups,territoryApplicants} from './model'
 import {ServiceApplicationButtons,ReturnVisitApplicants} from './ServiceApplications'
 import {MeetingAccessPanel} from './MeetingAccessPanel'
+import {GROUP_PARTICIPANTS_CHANGED} from './participantChanges'
 import './groupService.css'
 
 type Props={event:CalendarEvent;events:CalendarEvent[];language:AppLanguage;currentVisitor:string;
@@ -20,6 +21,15 @@ export function GroupServiceDetail({event,events,language,currentVisitor,mobile,
   const siblings=groupSlotEvents(event,events)
   const membershipKey=siblings.map(e=>`${e.id}:${e.editVersion}:${e.applicants.join(',')}:${e.assigned.join(',')}:${e.returnVisitApplicants?.join(',')}`).join('|')
   const requestKey=`${event.id}:${membershipKey}:${retry}`
+  const siblingIds=siblings.map(e=>e.id).join(',')
+  useEffect(()=>{
+    const ids=new Set(siblingIds.split(',').map(Number))
+    const changed=(signal:Event)=>{
+      if((signal as CustomEvent<number[]>).detail.some(id=>ids.has(id)))setRetry(n=>n+1)
+    }
+    window.addEventListener(GROUP_PARTICIPANTS_CHANGED,changed)
+    return()=>window.removeEventListener(GROUP_PARTICIPANTS_CHANGED,changed)
+  },[siblingIds])
   const context=response?.key===requestKey?response.data:null
   const failed=response?.key===requestKey&&response.failed
   useEffect(()=>{

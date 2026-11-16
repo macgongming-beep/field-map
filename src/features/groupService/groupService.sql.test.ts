@@ -12,6 +12,8 @@ let source=readFileSync('supabase/migrations/20261116_1000_group_service.sql','u
   +readFileSync('supabase/migrations/20261116_1040_optional_meeting_access.sql','utf8')
   +readFileSync('supabase/migrations/20261116_1200_group_service_tabs.sql','utf8')
   +readFileSync('supabase/migrations/20261116_1210_group_service_scope_integrity.sql','utf8')
+  +readFileSync('supabase/migrations/20261116_1220_group_participant_signals.sql','utf8')
+if(process.env.GROUP_SERVICE_MUTATION==='signal')source=source.replace('where id=v_id and group_service_scope','where false')
 if(process.env.GROUP_SERVICE_MUTATION==='scope')source=source.replace('case when e.group_service_scope then','case when false then')
 if(process.env.GROUP_SERVICE_MUTATION==='roster')source=source.replace('using (public.can_read_group_service_row(event_id,user_name))','using (true)')
 if(process.env.GROUP_SERVICE_MUTATION==='version')source=source.replace("if r->>'version' is null or (r->>'version')::bigint<>e.edit_version then",'if false then')
@@ -59,6 +61,20 @@ async function save(rows:unknown[],actor=1,id=crypto.randomUUID()) {
 }
 async function version(id:number) {return String((await db.query<{edit_version:number}>('select edit_version from calendar_events where id=$1',[id])).rows[0].edit_version)}
 async function session(id:number|null) {await db.query("select set_config('request.headers',$1,false)",[JSON.stringify(id?{'x-session-token':token(id)}:{})])}
+test('private roster signals publish IDs only for scoped events and cannot be forged',async()=>{
+  const {ids:[scoped]}=await save([{payload:{...payload(),group_service_scope:true,target_groups:['dongtan']}}])
+  const {ids:[legacy]}=await save([{payload:payload('17:00','19:00')}])
+  await db.query("insert into event_participants values($1,'Member','신청'),($2,'Member','신청')",[scoped,legacy])
+  await db.query("update event_participants set role='참여' where event_id=$1",[scoped])
+  await db.query('delete from event_participants where event_id=$1',[scoped])
+  await db.exec('set role anon')
+  expect((await db.query('select * from group_participant_signals')).rows).toEqual([{event_id:scoped,revision:3}])
+  await expect(db.query('update group_participant_signals set revision=99')).rejects.toThrow('permission')
+  await expect(db.query('select private.signal_group_participants()')).rejects.toThrow('permission')
+  await db.exec('reset role')
+  await db.query('delete from calendar_events where id=$1',[scoped])
+  expect((await db.query('select * from group_participant_signals')).rows).toEqual([])
+})
 test('creates independent two slots atomically and canonicalizes group codes',async()=>{
   const r=await save([{payload:payload()},{payload:payload('17:00','19:00')}])
   expect(r.ids).toHaveLength(2)

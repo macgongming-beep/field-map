@@ -16,6 +16,12 @@ async function pageFor(width,actor){
     return route.continue()
   })
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message))
+  let signalReady=false
+  page.on('websocket',socket=>socket.on('framereceived',({payload})=>{
+    const wire=JSON.parse(String(payload))
+    const message=Array.isArray(wire)?{event:wire[3],topic:wire[2],payload:wire[4]}:wire
+    if(message.event==='phx_reply'&&message.payload?.status==='ok'&&message.payload.response?.postgres_changes?.some(c=>c.table==='group_participant_signals'))signalReady=true
+  }))
   await page.goto(root)
   await page.locator('#login-id').fill(actor?.name??config.TEST_LOGIN_ID)
   await page.locator('#pin').fill(actor?'0000':config.TEST_LOGIN_PIN)
@@ -33,7 +39,11 @@ async function pageFor(width,actor){
   }
   await page.locator('.gs-group-tabs [role=tab]').first().waitFor({timeout:30000})
   assert.equal(await page.getByRole('tab').count(),4)
-  return {page,context}
+  return {page,context,waitForSignals:async()=>{
+    const deadline=Date.now()+30000
+    while(!signalReady&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,100))
+    assert.ok(signalReady,'Realtime group signal subscription acknowledged')
+  }}
 }
 try{
   const {page:admin,context:adminContext}=await pageFor(430)
@@ -53,9 +63,24 @@ try{
   await admin.screenshot({path:'scratch/group-tabs-320.png'})
   checks.push('mobile two time rows, four tabs, admin manages every group, 320px at 125% fits')
   await adminContext.close()
-  const {page:leader,context:leaderContext}=await pageFor(430,fixture.actors[0])
+  const {page:leader,context:leaderContext,waitForSignals}=await pageFor(430,fixture.actors[0])
   assert.equal(await leader.getByRole('tab',{name:/^동탄/}).getAttribute('aria-selected'),'true')
   assert.ok((await leader.locator('.gs-participant-list').first().innerText()).includes(fixture.actors[4].name))
+  await waitForSignals()
+  const visitor=fixture.actors[6]
+  const authResponse=await fetch(`${config.VITE_SUPABASE_URL}/rest/v1/rpc/auth_login`,{method:'POST',headers:{apikey:config.VITE_SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify({p_login_id:visitor.name,p_pin:'0000'})})
+  assert.ok(authResponse.ok)
+  const [{token:visitorToken}]=await authResponse.json()
+  const removeLiveApplicant=(id=fixture.eventIds[0])=>fetch(`${config.VITE_SUPABASE_URL}/rest/v1/event_participants?event_id=eq.${id}&user_name=eq.${encodeURIComponent(visitor.name)}`,{method:'DELETE',headers:{apikey:config.VITE_SUPABASE_ANON_KEY,'x-session-token':visitorToken}})
+  const applyLiveApplicant=id=>fetch(`${config.VITE_SUPABASE_URL}/rest/v1/rpc/apply_service_activity_tx`,{method:'POST',headers:{apikey:config.VITE_SUPABASE_ANON_KEY,'Content-Type':'application/json','x-session-token':visitorToken},body:JSON.stringify({p_token:visitorToken,p_event_id:id,p_activity:'service'})})
+  try{
+    const applied=await applyLiveApplicant(fixture.eventIds[0])
+    assert.ok(applied.ok)
+    await leader.locator('.gs-participant').filter({hasText:visitor.name}).waitFor({timeout:30000})
+    assert.ok((await removeLiveApplicant()).ok)
+    await leader.locator('.gs-participant').filter({hasText:visitor.name}).waitFor({state:'detached',timeout:30000})
+    checks.push('separate member session applies/cancels and supervisor roster updates live without reload')
+  }finally{assert.ok((await removeLiveApplicant()).ok)}
   await leader.getByRole('button',{name:'팀 구성 · 구역 배정'}).click()
   await leader.locator('.asg-editor').waitFor({timeout:30000})
   const assignmentText=await leader.locator('.asg-editor').innerText()
@@ -66,6 +91,14 @@ try{
   await leader.getByRole('tab',{name:/^신갈/}).click()
   assert.equal(await leader.getByRole('button',{name:'팀 구성 · 구역 배정'}).count(),0)
   assert.equal(await leader.locator('.gs-participant').count(),0)
+  try{
+    assert.ok((await applyLiveApplicant(fixture.eventIds[1])).ok)
+    await leader.getByRole('tab',{name:/^신갈\s+2$/}).waitFor({timeout:30000})
+    assert.equal(await leader.locator('.gs-participant').count(),0,'Foreign live changes never reveal names')
+    assert.ok((await removeLiveApplicant(fixture.eventIds[1])).ok)
+    await leader.getByRole('tab',{name:/^신갈\s+1$/}).waitFor({timeout:30000})
+    checks.push('foreign group count updates live while its applicant names remain hidden')
+  }finally{assert.ok((await removeLiveApplicant(fixture.eventIds[1])).ok)}
   await leader.screenshot({path:'scratch/group-tabs-foreign-group.png',fullPage:true})
   checks.push('supervisor defaults own group; own assignment opens; return and foreign members absent; foreign tab no names or manage tools')
   await leaderContext.close()

@@ -18,6 +18,26 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 } }))
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); state.callbacks.clear(); vi.clearAllMocks() })
 
+test('demo private roster signal refreshes only event IDs and updates tab counts', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_GROUP_SERVICE_ENABLED', 'true')
+  vi.stubEnv('VITE_SUPABASE_URL', 'https://itjlykpjmlcvanqpmkmc.supabase.co')
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  vi.useFakeTimers()
+  const onParticipants = vi.fn(), onChange = vi.fn(), changed = vi.fn()
+  window.addEventListener('group-participants-changed', changed)
+  try {
+    renderHook(() => useCalendarRealtime(onChange, { onParticipants }))
+    state.callbacks.get('group_participant_signals')!({ new: { event_id: 7, revision: 2 } })
+    state.callbacks.get('group_participant_signals')!({ new: { event_id: 8, revision: 3 } })
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+    expect(onParticipants).toHaveBeenCalledExactlyOnceWith([7, 8])
+    expect(onChange).not.toHaveBeenCalled()
+    expect(changed).toHaveBeenCalledOnce()
+    expect(changed.mock.calls[0][0].detail).toEqual([7, 8])
+  } finally { window.removeEventListener('group-participants-changed', changed) }
+})
+
 test('own receipt skips early/late duplicate only; another signal and broad assignment still refresh', async () => {
   vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
   vi.useFakeTimers()

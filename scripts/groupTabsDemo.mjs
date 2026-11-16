@@ -17,12 +17,18 @@ function run(command,args,input){const r=spawnSync(command,args,{env,input,encod
 const sql=q=>run('psql',['-X','-At','-v','ON_ERROR_STOP=1'],q)
 const quote=s=>`'${s.replaceAll("'","''")}'`
 const mode=process.argv[2]
-assert.ok(['apply','apply-integrity','fixture','smoke'].includes(mode))
+assert.ok(['apply','apply-integrity','apply-signals','fixture','smoke'].includes(mode))
 const tables=['event_participants','event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments']
-if(mode==='apply'||mode==='apply-integrity'){
+if(mode==='apply'||mode==='apply-integrity'||mode==='apply-signals'){
   assert.equal(sql("select count(*) from information_schema.columns where table_name='calendar_events' and column_name='group_service_scope'"),mode==='apply'?'0':'1')
   const dir=resolve('backups',`group-tabs-demo-${Date.now()}`);mkdirSync(dir,{recursive:true})
   run('pg_dump',['--format=custom','--no-owner','--schema=public','--schema=private','--file',resolve(dir,'before.dump')]);run('pg_restore',['--list',resolve(dir,'before.dump')])
+  if(mode==='apply-signals'){
+    assert.equal(sql("select count(*) from information_schema.tables where table_schema='public' and table_name='group_participant_signals'"),'0')
+    writeFileSync(resolve(dir,'rollback.sql'),"drop trigger signal_group_participants on public.event_participants;drop function private.signal_group_participants();drop table public.group_participant_signals;notify pgrst,'reload schema';\n")
+    run('psql',['-X','-v','ON_ERROR_STOP=1','--single-transaction','-f','supabase/migrations/20261116_1220_group_participant_signals.sql'])
+    console.log(JSON.stringify({project,backup:dir,signalsApplied:true}));process.exit()
+  }
   if(mode==='apply-integrity'){
     writeFileSync(resolve(dir,'rollback.sql'),"drop policy group_service_scoped_read on public.service_sessions;drop index public.group_service_scope_slot;notify pgrst,'reload schema';\n")
     run('psql',['-X','-v','ON_ERROR_STOP=1','--single-transaction','-f','supabase/migrations/20261116_1210_group_service_scope_integrity.sql'])

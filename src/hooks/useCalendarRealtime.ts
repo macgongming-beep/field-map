@@ -13,6 +13,8 @@ import { subscribeWithRecovery } from '../lib/realtimeRecovery'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { calendarNavigationReuseEnabled } from './calendarNavigationCache'
 import type { ParticipantSignal } from './participantSignalReceipts'
+import { groupServiceEnabled } from '../features/groupService/model'
+import { notifyGroupParticipantsChanged } from '../features/groupService/participantChanges'
 
 export function useCalendarRealtime(
   onChange: () => void,
@@ -35,6 +37,7 @@ export function useCalendarRealtime(
     let pending: ReturnType<typeof setTimeout> | null = null
     let broad = false
     let participantSignals: ParticipantSignal[] = []
+    const groupChanges = new Set<number>()
     const schedule = () => {
       if (calendarNavigationReuseEnabled()) optionsRef.current?.invalidate?.()
       if (pending) clearTimeout(pending)
@@ -52,6 +55,10 @@ export function useCalendarRealtime(
         }
         broad = false
         participantSignals = []
+        if (groupChanges.size) {
+          notifyGroupParticipantsChanged([...groupChanges])
+          groupChanges.clear()
+        }
         if (all) cbRef.current()
         else if (signals.length) optionsRef.current?.onParticipants?.(unknownParticipant ? null : [...participantIds])
       }, debounceMs)
@@ -77,6 +84,15 @@ export function useCalendarRealtime(
     }
     if (CART_APPLICATIONS_ENABLED) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'event_cart_applications' }, trigger)
+    }
+    if (groupServiceEnabled()) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'group_participant_signals' }, (payload: ParticipantSignal) => {
+        const id = payload.new?.event_id ?? payload.old?.event_id
+        if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) return
+        groupChanges.add(id)
+        if (calendarNavigationReuseEnabled()) participants({ new: { event_id: id } })
+        else trigger()
+      })
     }
     // 재연결 시 끊긴 동안 놓친 일정 변경 catch-up
     subscribeWithRecovery(channel, () => cbRef.current())
