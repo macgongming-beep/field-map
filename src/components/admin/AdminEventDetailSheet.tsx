@@ -112,7 +112,7 @@ function formatDateHeader(iso: string, language = 'ko') {
 }
 
 
-function SharedAssignmentTeams({
+export function SharedAssignmentTeams({
   event,
   cards,
   language,

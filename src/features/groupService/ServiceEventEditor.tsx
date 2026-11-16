@@ -54,6 +54,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const requestRef = useRef<{ body: string; id: string } | null>(null)
   const originalAccess = useRef<MeetingAccess>(emptyAccess)
   const seriesRef = useRef([crypto.randomUUID(),crypto.randomUUID()])
+  const groupSeriesRef = useRef(new Map<string,string>())
   const dialogRef = useRef<HTMLElement>(null)
   const available = users.filter(u => u.isActive!==false && (!u.approvalStatus || u.approvalStatus==='approved') && ['leader','admin','developer'].includes(u.role ?? ''))
   const firstMatches=available.filter(u=>u.name===leaders[0])
@@ -102,12 +103,13 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   },[snapshot])
   const changeKind = (next: 'group'|'congregation') => {
     setKind(next)
+    if (next==='group' && !snapshot && groups.length===0) setGroups(serviceGroups.map(g=>g.code))
     if (next==='congregation') { setGroups([]); setSelected([]) }
   }
   const save = async () => {
     if (locked || presetKey!==null || accessLoading || accessError) return
     setError('')
-    if (!title.trim() || (!repeatEnd && ((!snapshot&&!primary)||(leadersEdited&&leaders.length>0&&!primary))) || (kind==='group' && (groups.length<1 || groups.length>2))) {
+    if (!title.trim() || (!repeatEnd && ((!snapshot&&kind!=='group'&&!primary)||(leadersEdited&&leaders.length>0&&!primary))) || (kind==='group' && (groups.length<1 || groups.length>(snapshot&&!snapshot.groupServiceScope?2:4)))) {
       setError(msg('제목, 대상 집단, 인도자를 확인해 주세요.')); return
     }
     const allTimes = [...slots,...selected.map(id=>companionTimes[id])]
@@ -122,13 +124,20 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
       while(true) { next.setUTCDate(next.getUTCDate()+7); const d=next.toISOString().slice(0,10); if(d>repeatEnd) break; dates.push(d); if(dates.length*slots.length>200) { setError(msg('한 번에 200개 이하의 일정을 등록해 주세요.')); return } }
     }
     const base: ServicePayload = {event_date:day,time:slots[0].time,end_time:slots[0].end,title:title.trim(),place,meeting_map_url:mapLink,leader_name:leaders.join(', '),memo,allow_applications:allow,
-      service_kind:kind,target_groups:kind==='group'?groups:[],primary_leader_user_id:primary,meeting_mode:mode,access:mode==='virtual'?access:emptyAccess}
+      service_kind:kind,target_groups:kind==='group'?groups:[],primary_leader_user_id:primary,meeting_mode:mode,access:mode==='virtual'?access:emptyAccess,
+      group_service_scope:snapshot?.groupServiceScope ?? kind==='group'}
     let rows: ServiceRow[]
     if (snapshot) {
       rows=[{id:snapshot.id,version:snapshot.editVersion,payload:base},...companions.filter(e=>selected.includes(e.id)).map(e=>({id:e.id,version:e.editVersion,payload:{...base,time:companionTimes[e.id].time,end_time:companionTimes[e.id].end}}))]
     } else {
-      rows=dates.flatMap(d=>slots.map((s,i)=>({payload:{...base,event_date:d,time:s.time,end_time:s.end,...(repeatEnd?{series_id:seriesRef.current[i],leader_name:'',primary_leader_user_id:null}:{})}})))
+      rows=dates.flatMap(d=>slots.flatMap((s,i)=>(kind==='group'?groups:[null]).map(group=>{
+        const key=`${i}:${group ?? 'congregation'}`
+        if(!groupSeriesRef.current.has(key))groupSeriesRef.current.set(key,crypto.randomUUID())
+        return {payload:{...base,event_date:d,time:s.time,end_time:s.end,target_groups:group?[group]:[],
+          ...(repeatEnd?{series_id:groupSeriesRef.current.get(key),leader_name:'',primary_leader_user_id:null}:{})}}
+      })))
     }
+    if(rows.length>200){setError(msg('한 번에 200개 이하의 일정을 등록해 주세요.'));return}
     setBusy(true)
     const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'})
     const needsNotice=!!snapshot && rows.some(row=>{
@@ -176,8 +185,8 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     <div className="gs-sheet-handle" aria-hidden/>
     <header><div><h2>{msg(snapshot?'일정 수정':'일정 추가')}</h2><span className="gs-editor-date">{day.replaceAll('-','.')}</span></div><button type="button" disabled={locked} onClick={onClose} aria-label={msg('닫기')}>×</button></header>
     <form noValidate={presetKey!==null} onSubmit={e=>{e.preventDefault();if(presetKey!==null)void savePresets();else void save()}}><fieldset disabled={locked}>
-      <div className="gs-segment" role="group" aria-label={msg('봉사 구분')}>{(['congregation','group'] as const).map(k=><button type="button" key={k} aria-pressed={kind===k} onClick={()=>changeKind(k)}>{msg(k==='group'?'집단봉사':'회중봉사')}</button>)}</div>
-      {kind==='group' && <fieldset className="gs-groups"><legend>{msg('대상 집단')}</legend>{serviceGroups.map(g=><label key={g.code}><input type="checkbox" aria-label={g[language]} checked={groups.includes(g.code)} disabled={groups.length>=2&&!groups.includes(g.code)} onChange={()=>setGroups(prev=>prev.includes(g.code)?prev.filter(c=>c!==g.code):[...prev,g.code])} /><span className="gs-choice-mark" aria-hidden>{groups.includes(g.code)?'✓':'+'}</span>{g[language]}</label>)}</fieldset>}
+      <div className="gs-segment" role="group" aria-label={msg('봉사 구분')}>{(['congregation','group'] as const).map(k=><button type="button" key={k} disabled={snapshot?.groupServiceScope} aria-pressed={kind===k} onClick={()=>changeKind(k)}>{msg(k==='group'?'집단봉사':'회중봉사')}</button>)}</div>
+      {kind==='group' && <fieldset className="gs-groups"><legend>{msg('대상 집단')}</legend>{serviceGroups.map(g=><label key={g.code}><input type="checkbox" aria-label={g[language]} checked={groups.includes(g.code)} disabled={snapshot?.groupServiceScope || (!!snapshot&&groups.length>=2&&!groups.includes(g.code))} onChange={()=>setGroups(prev=>prev.includes(g.code)?prev.filter(c=>c!==g.code):[...prev,g.code])} /><span className="gs-choice-mark" aria-hidden>{groups.includes(g.code)?'✓':'+'}</span>{g[language]}</label>)}</fieldset>}
       <label>{msg('날짜')}<input type="date" value={day} onChange={e=>setDay(e.target.value)} required /></label>
       <label>{msg('제목')}<input value={title} maxLength={200} onChange={e=>setTitle(e.target.value)} required /></label>
       {slots.map((s,i)=><div key={i} className="gs-slot">

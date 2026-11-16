@@ -6,7 +6,7 @@ import { t, formatPeriod, formatLeadSub, formatLeaderOf, formatApplied } from '.
 import { compareTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
 import { ServiceSuggestionsSection } from './ServiceSuggestionsSection'
 import { MeetingHome } from '../features/meetingNotes/MeetingHome'
-import { groupServiceEnabled } from '../features/groupService/model'
+import { groupServiceEnabled, visibleServiceEventCount } from '../features/groupService/model'
 import { ServiceEventList } from '../features/groupService/ServiceEventList'
 
 export function UserMobileHome({
@@ -40,7 +40,7 @@ export function UserMobileHome({
         <div className="mh-sec-head">
           <h2>
             {t(language, 'home.todayService')}
-            {myTodayEvents.length > 0 && <span className="mh-cnt">{myTodayEvents.length}</span>}
+            {myTodayEvents.length > 0 && <span className="mh-cnt">{groupServiceEnabled()?visibleServiceEventCount(myTodayEvents.map(x=>x.event)):myTodayEvents.length}</span>}
           </h2>
         </div>
         {myTodayEvents.length === 0 ? (

@@ -20,6 +20,7 @@ export function territoryApplicants(event: CalendarEvent) {
 }
 export type MeetingAccess = { joinUrl: string; meetingNumber: string; passcode: string }
 export type ServiceFields = {
+  groupServiceScope?: boolean
   serviceKind?: 'congregation' | 'group'
   targetGroups?: GroupCode[]
   primaryLeaderUserId?: number | null
@@ -32,6 +33,7 @@ export type ServicePayload = {
   service_kind: 'congregation' | 'group'; target_groups: GroupCode[];
   primary_leader_user_id: number | null; meeting_mode: 'none' | 'in_person' | 'virtual';
   access: MeetingAccess; series_id?: string;
+  group_service_scope?: boolean;
 }
 export type ServiceRow = { id?: number; version?: string; payload: ServicePayload }
 export type ServicePlan = { rows: ServiceRow[]; requestId: string; notify: boolean }
@@ -43,7 +45,7 @@ export function eventBlocks(events: CalendarEvent[], groupName?: string) {
   const own = serviceGroups.find(g => g.zh === groupName || g.ko === groupName || g.code === groupName)?.code
   const blocks = new Map<string, CalendarEvent[]>()
   for (const e of [...events].sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id-b.id)) {
-    const key = e.serviceKind === 'group' && e.targetGroups?.length
+    const key = e.groupServiceScope ? `groups:${e.date}:${e.time}:${e.endTime ?? ''}` : e.serviceKind === 'group' && e.targetGroups?.length
       ? `${e.date}:${[...e.targetGroups].sort().join(',')}` : `event:${e.id}`
     blocks.set(key, [...(blocks.get(key) ?? []),e])
   }
@@ -52,5 +54,14 @@ export function eventBlocks(events: CalendarEvent[], groupName?: string) {
 }
 export function sameServiceDay(a: CalendarEvent,b: CalendarEvent) {
   return a.serviceKind === 'group' && b.serviceKind === 'group' && a.date === b.date
+    && Boolean(a.groupServiceScope) === Boolean(b.groupServiceScope)
     && [...(a.targetGroups ?? [])].sort().join(',') === [...(b.targetGroups ?? [])].sort().join(',')
+}
+
+export function groupSlotEvents(event: CalendarEvent, events: CalendarEvent[]) {
+  return events.filter(e=>e.groupServiceScope && e.date===event.date && e.time===event.time && e.endTime===event.endTime)
+}
+
+export function visibleServiceEventCount(events: CalendarEvent[]) {
+  return eventBlocks(events).reduce((count,block)=>count+(block[0].groupServiceScope?1:block.length),0)
 }

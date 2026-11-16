@@ -1,4 +1,23 @@
 .gs-backdrop { position:fixed; inset:0; z-index:2600; background:rgba(26,26,24,.34); display:grid; place-items:center; padding:20px; }
+.gs-tab-detail { background:var(--bg); color:var(--ink); min-width:0; letter-spacing:0; }
+.gs-tab-mobile { position:fixed; inset:0; bottom:auto; height:calc(100dvh / var(--app-zoom,1)); z-index:250; display:flex; flex-direction:column; }
+.gs-tab-detail>header { display:flex; align-items:center; gap:12px; padding:16px; padding-top:max(16px,var(--safe-top)); border-bottom:1px solid var(--line); flex-shrink:0; }
+.gs-tab-detail>header button { border:0; background:none; color:inherit; font-size:28px; width:36px; height:40px; }
+.gs-tab-detail>header strong { font-size:18px; }.gs-tab-detail>header span { display:block; color:var(--muted); font-size:12px; margin-top:4px; }
+.gs-tab-body { padding:20px 16px; overflow:auto; min-height:0; padding-bottom:max(24px,env(safe-area-inset-bottom)); }
+.gs-tab-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:20px; }
+.gs-tab-title h2 { font-size:22px; margin:6px 0 0; }.gs-tab-title>span { font-size:12px; color:var(--muted); white-space:nowrap; }
+.gs-tab-title>div>span { font-size:17px; font-weight:600; }
+.gs-group-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--line); margin-bottom:20px; }
+.gs-group-tabs button { min-width:0; min-height:44px; padding:10px 2px; color:var(--muted); background:none; border:0; border-bottom:2px solid transparent; border-radius:0; font-size:13px; font-weight:600; }
+.gs-group-tabs button[aria-selected=true] { color:var(--ink); border-bottom-color:var(--ink); }
+.gs-group-tabs button span { font-size:11px; font-weight:400; }
+.gs-roster-heading { display:flex; justify-content:space-between; align-items:center; margin-top:24px; gap:8px; }
+.gs-roster-heading h3 { font-size:14px; margin:0; }.gs-roster-heading button { min-height:36px; width:36px; border:0; background:none; color:inherit; font-size:20px; }
+.gs-roster-tools { display:flex; align-items:center; }
+.gs-private-roster { font-size:13px; color:var(--muted); line-height:1.6; }
+.gs-assignment-open { display:flex; align-items:center; justify-content:space-between; width:100%; margin-top:20px; padding:12px; min-height:44px; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:8px; font-size:14px; font-weight:600; }
+.gs-group-information { border-top:1px solid var(--line); margin-top:24px; font-size:13px; }.gs-group-information summary { padding:14px 0; cursor:pointer; color:var(--muted); }.gs-group-memo { white-space:pre-wrap; overflow-wrap:anywhere; }
 .gs-editor { width:min(580px,100%); max-height:calc(90dvh / var(--app-zoom,1)); overflow:auto; background:var(--bg); color:var(--ink); border-radius:12px; box-shadow:0 12px 40px #0003; letter-spacing:0; }
 .gs-sheet-handle { display:none; }
 .gs-editor header { position:sticky; top:0; z-index:1; background:var(--bg); display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid var(--line); }
@@ -66,6 +85,9 @@
 .day-events .gs-event-time { width:auto; font-size:11px; }.day-events .gs-event-text strong { font-size:11px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .day-events .gs-event-text>span,.day-events .gs-event-block>button>span:last-child { display:none; }
 .day-events .gs-event-block[data-service-kind=group] .gs-event-text { display:none; }
+.day-events .gs-event-block[data-group-scope=true] { padding:2px 0; }
+.day-events .gs-event-block[data-group-scope=true] .gs-event-text { display:flex; }
+.day-events .gs-event-block[data-group-scope=true]>button { border-radius:0; }
 .day-cell .gs-day-select { border:0; background:transparent; padding:0; min-height:24px; width:24px; color:inherit; font:inherit; }
 .gs-application-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:8px; margin:0 0 14px; }
 .gs-application-actions button { min-height:44px; min-width:0; padding:10px 8px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font:inherit; font-size:14px; font-weight:600; letter-spacing:0; overflow-wrap:anywhere; cursor:pointer; }

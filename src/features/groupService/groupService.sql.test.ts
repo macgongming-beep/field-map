@@ -10,6 +10,10 @@ let source=readFileSync('supabase/migrations/20261116_1000_group_service.sql','u
   +readFileSync('supabase/migrations/20261116_1020_unassigned_service_templates.sql','utf8')
   +readFileSync('supabase/migrations/20261116_1030_preserve_cart_schedule_contract.sql','utf8')
   +readFileSync('supabase/migrations/20261116_1040_optional_meeting_access.sql','utf8')
+  +readFileSync('supabase/migrations/20261116_1200_group_service_tabs.sql','utf8')
+  +readFileSync('supabase/migrations/20261116_1210_group_service_scope_integrity.sql','utf8')
+if(process.env.GROUP_SERVICE_MUTATION==='scope')source=source.replace('case when e.group_service_scope then','case when false then')
+if(process.env.GROUP_SERVICE_MUTATION==='roster')source=source.replace('using (public.can_read_group_service_row(event_id,user_name))','using (true)')
 if(process.env.GROUP_SERVICE_MUTATION==='version')source=source.replace("if r->>'version' is null or (r->>'version')::bigint<>e.edit_version then",'if false then')
 if(process.env.GROUP_SERVICE_MUTATION==='privacy')source=source.replaceAll("if v_actor is null then raise exception 'Approved session required' using errcode='42501'; end if;",'-- mutation: session check removed')
 if(process.env.GROUP_SERVICE_MUTATION==='optional')source=source.slice(0,source.indexOf(readFileSync('supabase/migrations/20261116_1040_optional_meeting_access.sql','utf8')))
@@ -20,11 +24,13 @@ const seriesImpl=readFileSync('supabase/migrations/20260827_1000_series_update_t
 beforeAll(async()=>{
   db=new PGlite()
   await db.exec(`create role anon; create role authenticated; create schema private;
-    create table app_users(id int primary key,name text,role text,is_active boolean default true,approval_status text default 'approved');
+    create table app_users(id int primary key,name text,role text,group_name text,is_active boolean default true,approval_status text default 'approved');
     create table auth_sessions(token uuid primary key,user_id int,expires_at timestamptz);
     create table calendar_events(id serial primary key,event_date date,time text,end_time text,title text,place text default '',leader_name text,memo text,has_meeting boolean,allow_applications boolean,meeting_map_url text,series_id uuid,allow_cart_applications boolean default false,cart_capacity int);
     create table event_participants(event_id int references calendar_events on delete cascade,user_name text,role text,unique(event_id,user_name));
+    ${['event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments'].map(t=>`create table ${t}(event_id int,user_name text);`).join('')}
     create table event_cart_applications(event_id int references calendar_events on delete cascade,user_id int);
+    create table service_sessions(calendar_event_id int references calendar_events,user_name text);
     create table test_notices(recipient int,title text,body text);
     ${helper('request_session_token')} ${helper('request_session_user_id')} ${permission}
     create function public.verify_session(t uuid) returns int language sql as $$ select u.id from public.app_users u join public.auth_sessions a on a.user_id=u.id where a.token=t and a.expires_at>now() and u.is_active and u.approval_status='approved' $$;
@@ -35,11 +41,15 @@ beforeAll(async()=>{
     create function public.notify_on_calendar_event_change() returns trigger language plpgsql as $$ begin return new; end $$;
     create trigger on_calendar_event_update after update on calendar_events for each row execute function notify_on_calendar_event_change();
     ${seriesImpl}
-    ${source}`)
+    ${source}
+    alter table service_sessions enable row level security;create policy existing_read on service_sessions for select using(true);grant select on service_sessions to anon;
+    grant usage on schema private to anon;
+    grant execute on function private.request_session_user_id() to anon;
+    ${['event_participants','event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments'].map(t=>`alter table ${t} enable row level security;create policy existing_read on ${t} for select using(true);grant select on ${t} to anon;`).join('')}`)
 },30000)
 afterAll(async()=>{await db?.close()})
 beforeEach(async()=>{
-  await db.exec(`reset role; set request.headers='{}'; truncate calendar_events,app_users,auth_sessions,test_notices,private.service_event_imports cascade;
+  await db.exec(`reset role; set request.headers='{}'; truncate calendar_events,app_users,auth_sessions,test_notices,private.service_event_imports,event_card_assignments,event_card_assignment_cards,event_informal_assignments,event_restaurant_assignments cascade;
     insert into app_users(id,name,role) values(1,'Admin','admin'),(2,'Leader','leader'),(3,'Member','user'),(4,'Replacement','leader');`)
   for(let i=1;i<=4;i++)await db.query("insert into auth_sessions values($1,$2,now()+interval '1 day')",[token(i),i])
 })
@@ -166,4 +176,45 @@ test('all virtual connection fields are independently optional but supplied URLs
     await db.query('delete from calendar_events where id=$1',[id])
   }
   await expect(save([{payload:{...payload(),access:{joinUrl:'javascript:alert(1)',meetingNumber:'',passcode:''}}}])).rejects.toThrow('HTTPS')
+})
+
+test('independent groups enforce supervisor ownership even when another leader is listed',async()=>{
+  await db.exec("insert into private.service_group_supervisors values('dongtan',2),('singal',4)")
+  const rows=['dongtan','singal','cheoin','dongbaek'].map(code=>({payload:{...payload(),target_groups:[code],group_service_scope:true}}))
+  const {ids}=await save(rows)
+  expect(ids).toHaveLength(4)
+  expect((await db.query('select group_service_scope from calendar_events')).rows.every(r=>r.group_service_scope)).toBe(true)
+  expect((await db.query('select private.user_can_manage_event(2,$1) own,private.user_can_manage_event(2,$2) other,private.user_can_manage_event(4,$2) replacement',ids.slice(0,2))).rows[0]).toEqual({own:true,other:false,replacement:true})
+  await expect(save([{id:ids[1],version:'1',payload:rows[1].payload}],2)).rejects.toThrow('permission')
+  await save([{id:ids[0],version:'1',payload:{...rows[0].payload,memo:'allowed'}}],2)
+  await expect(save([{id:ids[0],version:await version(ids[0]),payload:{...rows[0].payload,target_groups:['cheoin']}}],2)).rejects.toThrow('ownership')
+  await expect(db.query('update calendar_events set group_service_scope=false where id=$1',[ids[0]])).rejects.toThrow('ownership')
+  await expect(save([{payload:{...payload('17:00','19:00'),group_service_scope:true}}])).rejects.toThrow('single_group')
+  const later=await save([{payload:{...rows[0].payload,time:'17:00',end_time:'19:00'}}])
+  await expect(db.query("update calendar_events set time='14:30' where id=$1",[later.ids[0]])).rejects.toThrow('group_service_scope_slot')
+})
+
+test('RLS hides other group names on every roster/assignment surface; self and admin remain readable',async()=>{
+  await db.exec("insert into private.service_group_supervisors values('dongtan',2),('singal',4);update app_users set group_name='新葛' where id=2")
+  const {ids}=await save(['dongtan','singal'].map(code=>({payload:{...payload(),target_groups:[code],group_service_scope:true}})))
+  const tables=['event_participants','event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments']
+  for(const table of tables)await db.query(`insert into ${table}(event_id,user_name)values($1,'Member'),($2,'Replacement'),($2,'Leader')`,ids)
+  await db.query("insert into service_sessions values($1,'Member'),($2,'Replacement'),($2,'Leader')",ids)
+  for(const [actor,expected] of [[2,['Member','Leader']],[4,['Replacement','Leader']],[1,['Member','Replacement','Leader']]] as const){
+    await session(actor);await db.exec('set role anon')
+    for(const table of tables)expect((await db.query(`select user_name from ${table} order by event_id,user_name`)).rows.map(r=>r.user_name).sort()).toEqual([...expected].sort())
+    expect((await db.query('select user_name from service_sessions')).rows.map(r=>r.user_name).sort()).toEqual([...expected].sort())
+    await db.exec('reset role')
+  }
+  await session(null);await db.exec('set role anon')
+  for(const table of tables)expect((await db.query(`select * from ${table}`)).rows).toHaveLength(0)
+  await expect(db.query('select get_group_service_context($1)',[ids[0]])).rejects.toThrow('Approved')
+  await db.exec('reset role');await session(2);await db.exec('set role anon')
+  const result=(await db.query<{r:{ownGroup:string;events:unknown[]}}>('select get_group_service_context($1) r',[ids[0]])).rows[0].r
+  expect(result.ownGroup).toBe('dongtan')
+  expect(result.events).toEqual([{id:ids[0],groupCode:'dongtan',count:1,canManage:true,canRead:true},{id:ids[1],groupCode:'singal',count:2,canManage:false,canRead:false}])
+  expect(JSON.stringify(result)).not.toContain('Member')
+  await expect(db.exec('select * from private.service_group_supervisors')).rejects.toThrow('permission')
+  await db.exec('reset role;update app_users set is_active=false where id=2');
+  expect((await db.query('select private.user_can_manage_event(2,$1) allowed',[ids[0]])).rows[0].allowed).toBe(false)
 })

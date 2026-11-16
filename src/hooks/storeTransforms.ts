@@ -90,6 +90,7 @@ export type RawCard = {
 
 export type RawCalendarEvent = {
   service_kind?: 'congregation' | 'group' | null
+  group_service_scope?: boolean
   target_groups?: import('../features/groupService/model').GroupCode[]
   primary_leader_user_id?: number | null
   meeting_mode?: 'none' | 'in_person' | 'virtual' | null
@@ -391,6 +392,7 @@ export function toCalendarEvent(
     id: raw.id,
     date: raw.event_date,
     serviceKind: raw.service_kind ?? undefined,
+    groupServiceScope: raw.group_service_scope ?? false,
     targetGroups: raw.target_groups ?? [],
     primaryLeaderUserId: raw.primary_leader_user_id ?? null,
     meetingMode: raw.meeting_mode ?? (raw.has_meeting ? 'in_person' : 'none'),

@@ -34,6 +34,7 @@ import { toPhoneHref } from '../utils/linkify'
 import { useEventLeaderContacts } from '../hooks/useEventLeaderContacts'
 import { groupServiceEnabled } from '../features/groupService/model'
 import { ServiceEventEditor } from '../features/groupService/ServiceEventEditor'
+import { GroupServiceDetail } from '../features/groupService/GroupServiceDetail'
 import { ServiceEventList } from '../features/groupService/ServiceEventList'
 import { MeetingAccessPanel } from '../features/groupService/MeetingAccessPanel'
 import { ServiceApplicationButtons, ReturnVisitApplicants } from '../features/groupService/ServiceApplications'
@@ -184,6 +185,7 @@ export function DesktopCalendar({
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [assignEventId, setAssignEventId] = useState<number | null>(null)
+  const [groupAssignmentId,setGroupAssignmentId] = useState<number|null>(null)
 
   // openChat=<eventId> 쿼리 처리: 해당 일정 날짜로 이동 + 채팅방 열기
   useEffect(() => {
@@ -797,6 +799,18 @@ export function DesktopCalendar({
 
             <div className="detail-stack">
               {selectedEvents.map((event) => {
+                if(groupServiceEnabled() && event.groupServiceScope) return <GroupServiceDetail
+                  key={`${event.date}:${event.time}:${event.endTime}`} event={event} events={events} language={language} currentVisitor={currentVisitor}
+                  onApply={onApplyToEvent}
+                  onAssignment={onAssignCardsToEventParticipantsBulk?id=>{setGroupAssignmentId(id);setAssignEventId(id)}:undefined}
+                  renderAssignments={selected=><SharedAssignmentTeams event={selected} cards={cards} buildings={buildings} informalAssets={informalAssets} eventInformalAssignments={eventInformalAssignments} eventRestaurantAssignments={eventRestaurantAssignments}/>}
+                  onDelete={actualRole==='admin'||actualRole==='developer'?id=>{
+                    const target=events.find(e=>e.id===id)
+                    if(!target)return
+                    if(target.seriesId)setScopeModal({kind:'delete',id,date:target.date,seriesId:target.seriesId,title:target.title})
+                    else setDeleteConfirmEvent(target)
+                  }:undefined}
+                  onEdit={id=>setEditingEventId(id)}/>
                 const isApplied = event.applicants.includes(currentVisitor)
                 const canAccessChat =
                   role === 'admin' ||
@@ -941,7 +955,7 @@ export function DesktopCalendar({
                 : card.assignedLeader ? [card.assignedLeader] : []
               return leaders.includes(currentVisitor)
             })
-        const canEditAssignment = isAdminLike || assignmentEvent.leaders.includes(currentVisitor)
+        const canEditAssignment = isAdminLike || (assignmentEvent.groupServiceScope ? groupAssignmentId===assignmentEvent.id : assignmentEvent.leaders.includes(currentVisitor))
         return (
           <AssignmentEditor
             event={assignmentEvent}

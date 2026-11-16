@@ -4,6 +4,17 @@ import { confirmDialog } from '../../lib/confirm'
 import { msg } from '../../lib/msg'
 import type { MeetingAccess, ServicePlan } from './model'
 
+export type GroupServiceContext = {
+  ownGroup: string | null
+  events: Array<{id:number;groupCode:string;count:number;canManage:boolean;canRead:boolean}>
+}
+export async function readGroupServiceContext(eventId:number):Promise<GroupServiceContext> {
+  const token=getAuthToken()
+  const {data,error}=await supabase.rpc('get_group_service_context',{p_event_id:eventId})
+  if(error || !token || token!==getAuthToken() || !Array.isArray(data?.events)) throw new Error(msg('신청자를 불러오지 못했습니다.'))
+  return data as GroupServiceContext
+}
+
 export async function applyServiceActivity(eventId: number, activity: 'service'|'return_visit') {
   const token = getAuthToken()
   if (!token) throw new Error(msg('다시 로그인해 주세요.'))

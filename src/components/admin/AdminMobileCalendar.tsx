@@ -37,13 +37,14 @@ import {
 import type { TimePreset } from '../../lib/timePresets'
 import { TimePresetEditor, MiniInput } from './TimePresetEditor'
 import { Card } from '../ui'
-import { AdminEventDetailSheet } from './AdminEventDetailSheet'
+import { AdminEventDetailSheet, SharedAssignmentTeams } from './AdminEventDetailSheet'
 import type { MentionUser } from '../CommentSection'
 import { msg } from '../../lib/msg'
 import { chatDisabled } from '../../lib/chatRetirement'
 import { getCurrentAppPath, readEventDetailReturnTo } from '../../lib/eventDetailNavigation'
-import { groupServiceEnabled } from '../../features/groupService/model'
+import { groupServiceEnabled, visibleServiceEventCount } from '../../features/groupService/model'
 import { ServiceEventEditor } from '../../features/groupService/ServiceEventEditor'
+import { GroupServiceDetail } from '../../features/groupService/GroupServiceDetail'
 import { ServiceEventList } from '../../features/groupService/ServiceEventList'
 
 // WEEKDAYS / WEEKDAY_LABELS defined inside component now via i18n
@@ -239,6 +240,7 @@ export function AdminMobileCalendar({
     detailOnly && Number.isSafeInteger(entryId) && entryId > 0 ? entryId : null)
   // 배정 에디터(풀스크린) 대상 이벤트
   const [assignEventId, setAssignEventId] = useState<number | null>(null)
+  const [groupAssignmentId,setGroupAssignmentId] = useState<number|null>(null)
   const detailEvent = detailEventId !== null ? events.find((e) => e.id === detailEventId) ?? null : null
   const editingEvent = editingEventId !== null ? events.find((e) => e.id === editingEventId) ?? null : null
 
@@ -517,7 +519,7 @@ export function AdminMobileCalendar({
               {t(language, 'calendar.dateHeader', { month, day: selectedDay, dow: WEEKDAY_LABELS[language][selectedDow] })}
               {selectedEvents.length > 0 && (
                 <span style={{ fontWeight: 500, color: 'var(--muted)', fontSize: 13, marginLeft: 6 }}>
-                  {selectedEvents.length}
+                  {groupServiceEnabled()?visibleServiceEventCount(selectedEvents):selectedEvents.length}
                 </span>
               )}
             </>
@@ -634,7 +636,20 @@ export function AdminMobileCalendar({
       )}
 
       {/* ── 일정 상세 시트 ─────────────── */}
-      {detailEvent && assignEventId === null && (
+      {detailEvent && assignEventId === null && groupServiceEnabled() && detailEvent.groupServiceScope && <GroupServiceDetail
+        key={`${detailEvent.date}:${detailEvent.time}:${detailEvent.endTime}`} mobile event={detailEvent} events={events} language={language} currentVisitor={currentVisitor}
+        onClose={returnFromDetail} onApply={onApplyToEvent}
+        onAssignment={onAssignCardsToEventParticipantsBulk?id=>{setGroupAssignmentId(id);setAssignEventId(id)}:undefined}
+        renderAssignments={event=><SharedAssignmentTeams event={event} cards={cards} language={language} translatePlaceNames={translatePlaceNames} buildings={buildings} informalAssets={informalAssets} eventInformalAssignments={eventInformalAssignments} eventRestaurantAssignments={eventRestaurantAssignments}/>}
+        onDelete={(role==='admin'||role==='developer')&&onDeleteEvent?async id=>{
+          const target=events.find(e=>e.id===id)
+          if(!target)return
+          if(target.seriesId&&onDeleteEventSeries){setScopeAction({kind:'delete',event:target});closeDetail()}
+          else if(await confirmDialog({message:t(language,'calendar.deleteConfirm'),danger:true,confirmLabel:msg('삭제')})){onDeleteEvent(id);closeDetail()}
+        }:undefined}
+        onEdit={onUpdateEvent?id=>{setEditingEventId(id);closeDetail()}:undefined}/>
+      }
+      {detailEvent && assignEventId === null && !(groupServiceEnabled() && detailEvent.groupServiceScope) && (
         <AdminEventDetailSheet
             buildings={buildings}
             informalAssets={informalAssets}
@@ -697,7 +712,7 @@ export function AdminMobileCalendar({
         const myCards = (role === 'admin' || role === 'developer')
           ? cards
           : cards.filter((c) => c.assignedLeader === currentVisitor || c.assignedLeaders?.includes(currentVisitor))
-        const canEdit = role === 'admin' || role === 'developer' || assignEvent.leaders.includes(currentVisitor)
+        const canEdit = role === 'admin' || role === 'developer' || (assignEvent.groupServiceScope ? groupAssignmentId===assignEvent.id : assignEvent.leaders.includes(currentVisitor))
         return (
           <AssignmentEditor
             event={assignEvent}

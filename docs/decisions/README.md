@@ -108,6 +108,8 @@
 
 재방·연구 신청: [0095 전체 인원 포함·명단 분리·기본 구역배정 제외](0095-demo-return-service-applications.md)
 
+집단별 신청 탭: [0096 독립 집단 일정과 감독자 조회·배정 범위](0096-demo-independent-group-tabs.md)
+
 ```markdown
 # 제목
 

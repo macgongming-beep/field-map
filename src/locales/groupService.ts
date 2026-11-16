@@ -1,4 +1,8 @@
 export const groupServiceZh: Record<string,string> = {
+  '집단 봉사':'小组传道','집단':'小组','일정':'安排','신청자':'报名者','인도자':'主持人',
+  '신청자를 불러오지 못했습니다.':'无法加载报名者。','신청자 명단은 해당 집단에서 확인할 수 있습니다.':'报名者名单仅限所属小组查看。',
+  '팀 구성 · 구역 배정':'编组 · 分配地区','모임 정보':'聚会信息',
+  '일정 삭제':'删除安排','배정 결과':'分配结果',
   '시간 설정':'时间设置',
   '시간 설정 저장':'保存时间设置','시간 설정의 이름, 시작 시간, 소요시간을 확인해 주세요.':'请检查时间设置的名称、开始时间和时长。','시간 설정을 저장하지 못했습니다. 다시 시도해 주세요.':'无法保存时间设置，请重试。',
   '봉사 신청 취소':'取消传道报名','재방·연구 신청 취소':'取消续访·圣经课程报名','참여':'加入',
@@ -29,6 +33,10 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '집단 봉사':'Group service','집단':'Group','일정':'Event','신청자':'Applicants','인도자':'Conductor',
+  '신청자를 불러오지 못했습니다.':'Could not load applicants.','신청자 명단은 해당 집단에서 확인할 수 있습니다.':'The applicant list is available to the corresponding group.',
+  '팀 구성 · 구역 배정':'Teams and territory','모임 정보':'Meeting details',
+  '일정 삭제':'Delete event','배정 결과':'Assignments',
   '시간 설정':'Time settings',
   '시간 설정 저장':'Save time settings','시간 설정의 이름, 시작 시간, 소요시간을 확인해 주세요.':'Check the preset name, start time and duration.','시간 설정을 저장하지 못했습니다. 다시 시도해 주세요.':'Could not save time settings. Please try again.',
   '봉사 신청 취소':'Cancel service application','재방·연구 신청 취소':'Cancel return visit / study application','참여':'Join',

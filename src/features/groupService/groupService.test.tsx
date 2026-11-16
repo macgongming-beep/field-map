@@ -33,7 +33,7 @@ test('groups visually by day and canonical targets without dropping ungrouped or
 test('adds a second independent time slot only when requested',async()=>{
   const submit=vi.fn(async()=>true)
   render(<ServiceEventEditor language="ko" date="2026-11-25" events={[]} users={users} onClose={vi.fn()} onSubmit={submit}/>)
-  fireEvent.click(screen.getByRole('button',{name:'집단봉사'}));fireEvent.click(screen.getByLabelText('동탄'))
+  fireEvent.click(screen.getByRole('button',{name:'집단봉사'}));for(const name of ['신갈','처인','동백'])fireEvent.click(screen.getByLabelText(name))
   fireEvent.change(screen.getByLabelText('제목'),{target:{value:'Group service'}})
   expect(screen.getAllByLabelText('시작 시간')).toHaveLength(1)
   fireEvent.click(screen.getByRole('button',{name:'시간대 추가'}))
@@ -81,7 +81,7 @@ test('Chinese labels and names render without replacing persisted codes',()=>{
 test('weekly templates keep separate time series and do not preassign rotating leaders',async()=>{
   const submit=vi.fn(async()=>true)
   render(<ServiceEventEditor language="ko" date="2026-11-25" events={[]} users={users} onClose={vi.fn()} onSubmit={submit}/>)
-  fireEvent.click(screen.getByRole('button',{name:'집단봉사'}));fireEvent.click(screen.getByLabelText('동탄'))
+  fireEvent.click(screen.getByRole('button',{name:'집단봉사'}));for(const name of ['신갈','처인','동백'])fireEvent.click(screen.getByLabelText(name))
   fireEvent.change(screen.getByLabelText('제목'),{target:{value:'Weekly'}})
   fireEvent.click(screen.getByRole('button',{name:'시간대 추가'}))
   fireEvent.click(screen.getByLabelText('Leader'))
@@ -97,7 +97,7 @@ test('weekly templates keep separate time series and do not preassign rotating l
 test('single slot uses saved shared presets and accepts completely empty virtual access',async()=>{
   const submit=vi.fn(async()=>true)
   render(<ServiceEventEditor language="ko" date="2026-11-25" events={[]} users={users} onClose={vi.fn()} onSubmit={submit} globalSettings={{calendar_time_presets:JSON.stringify([{label:'오후',time:'14:30',durationMinutes:90,title:'Saved title'}])}}/>)
-  fireEvent.click(screen.getByRole('button',{name:'집단봉사'}));fireEvent.click(screen.getByLabelText('동탄'))
+  fireEvent.click(screen.getByRole('button',{name:'집단봉사'}));for(const name of ['신갈','처인','동백'])fireEvent.click(screen.getByLabelText(name))
   fireEvent.click(screen.getByRole('button',{name:'시간대 추가'}))
   fireEvent.click(screen.getByRole('button',{name:'시간대 1 삭제'}))
   fireEvent.change(screen.getByLabelText('자주 쓰는 시간'),{target:{value:'0'}})
