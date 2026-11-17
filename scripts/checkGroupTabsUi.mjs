@@ -57,6 +57,27 @@ try{
     assert.equal(await admin.getByRole('button',{name:'팀 구성 · 구역 배정'}).count(),1)
   }
   await admin.getByRole('tab',{name:/^동탄/}).click()
+  // Server policy is exercised against the real DB by the rollback smoke suite.
+  // Inject only the refusal response here to verify the visible error/retained form.
+  await admin.locator('.gs-roster-tools button[aria-expanded]').click()
+  await admin.locator('.participant-add-content input[type=search]').fill(fixture.actors[6].name)
+  for(const [reason,message] of [['applications_closed','신청이 마감되어 참가자를 추가할 수 없습니다.'],['cart_application_exists','같은 일정에 전시대 봉사를 신청한 사람입니다. 기존 신청을 먼저 취소해 주세요.']]){
+    let called=false
+    await admin.route('**/rpc/manage_event_participant_versioned_tx',route=>{
+      const input=route.request().postDataJSON()
+      assert.equal(input.p_event_id,fixture.eventIds[0]);assert.equal(input.p_user_name,fixture.actors[6].name);assert.equal(input.p_action,'add')
+      called=true
+      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:false,reason})})
+    })
+    await admin.locator('.participant-add-person').filter({hasText:fixture.actors[6].name}).click()
+    await admin.getByText(message,{exact:true}).waitFor({timeout:10000})
+    assert.ok(called)
+    assert.equal(await admin.locator('.participant-add-content').count(),1,'Rejected addition keeps the form open')
+    assert.equal(await admin.locator('.gs-participant-list').getByText(fixture.actors[6].name,{exact:true}).count(),0)
+    await admin.unroute('**/rpc/manage_event_participant_versioned_tx')
+  }
+  await admin.locator('.gs-roster-tools button[aria-expanded]').click()
+  checks.push('closing/cart refusal shows translated reason, preserves add form and does not add a participant')
   const sharedResult=admin.locator('details').filter({has:admin.locator('summary',{hasText:'배정 결과'})})
   assert.equal(await sharedResult.evaluate(el=>el.open),true,'Shared result starts expanded')
   assert.equal(await admin.locator('details').filter({has:admin.locator('summary',{hasText:'모임 정보'})}).evaluate(el=>el.open),false)

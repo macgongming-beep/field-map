@@ -1,6 +1,6 @@
 # 관리 병합을 보존하고 대신 신청에도 마감과 전시대 중복을 검사한다
 
-- 상태: 데모 DB 검증 완료, 데모 화면 재검증 중. 운영 미적용.
+- 상태: 데모 검증·배포 완료. 운영 미적용.
 - 결정일: 2026-11-17
 - 관련: [0098](0098-demo-assignment-revision-maintenance.md), [0097](0097-demo-all-leader-assignment-permissions.md)
 
@@ -39,7 +39,11 @@
 - 실제 DB definer 목록과 anon/authenticated 실행권한 감사 통과.
 - SQL 단위시험에서 신청 검사 또는 병합 관리 표시를 제거하면 각각 관련 시험이 실패한다.
   세션의 0행 검사를 제거해도 해당 시험이 실패함을 확인하고 즉시 복원했다.
-- lint 및 TypeScript/배포 빌드 통과. 전체 시험/화면 최종 결과는 아래에 추가한다.
+- 전체 자동시험 2,554개, lint 및 TypeScript/배포 빌드 통과.
+- 배포된 데모 Playwright 11개 시나리오 통과, 화면 오류 0개. 모바일 430px,
+  320px/125%, PC 1440px에서 기존 신청·취소·타 집단 인도자 배정·공유·동시 저장 충돌을
+  재검증했다. 마감/전시대 중복 거절 응답을 주입한 화면 시험에서 이유 표시, 입력창 유지,
+  신청자 미추가도 확인했다. 실제 서버 거절은 앞의 롤백 검증으로 별도 확인했다.
 - 이번 성능 측정도 데모 10개 배정/33개 세션이다. 운영 규모를 대표하지 않는다.
 
 ## 적용과 복구
@@ -48,6 +52,8 @@
 - `groupTabsDemo.mjs apply-merge-review --confirm-demo`: 정확한 데모 프로젝트와 5432
   pooler 확인, 백업 검사 후 단일 트랜잭션 적용.
 - 백업과 직전 두 public 함수 복원 SQL: `backups/group-tabs-demo-1794877876498/`.
+- 데모 앱: `https://chinese-territory-app-demo.vercel.app`,
+  배포 `dpl_5jJAQsvrwuqx2qqL8WDpFguznRXE`, 기능 커밋 `1550216`.
 - 운영 전환은 0098의 추가형 준비/앱 보급/후속 차단 순서를 유지한다. 준비 단계에
   병합 wrapper도 포함해야 한다. 운영 DB, 운영 배포, main은 변경하지 않았다.
 
