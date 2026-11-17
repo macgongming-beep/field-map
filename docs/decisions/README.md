@@ -130,6 +130,8 @@
 
 운영 유사 자료량·실기기 준비: [0106 데모 전용 푸시 구성과 1배/5배 성능 측정](0106-demo-physical-push-and-scale-check.md)
 
+운영 후보 선행 조건: [0107 최신 main 기반 이식·후보 재검증 전 전환 보류](0107-production-candidate-required.md)
+
 ```markdown
 # 제목
 
