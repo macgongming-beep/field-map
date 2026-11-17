@@ -76,18 +76,16 @@ try{
     const stamp=phase
     if(recoveryPhases.has(stamp))try{recoveryTraffic.push({phase:stamp,endpoint:url.pathname,method:response.request().method(),status:response.status(),bodyBytes:(await response.body()).length})}catch{}
     if(!url.pathname.endsWith('/comments')&&!url.pathname.endsWith('/read_group_event_comments'))return
-    try{const body=await response.body();const rows=JSON.parse(body.toString());traffic.push({phase:stamp,method:response.request().method(),kind:url.pathname.endsWith('/read_group_event_comments')?'read':'write',query:url.search,rows:Array.isArray(rows)?rows.length:rows?.id?1:null,jsonBytes:body.length})}catch{}
+    try{const body=await response.body();const rows=JSON.parse(body.toString());traffic.push({phase:stamp,method:response.request().method(),kind:url.pathname.endsWith('/read_group_event_comments')?'read':'write',eventId:response.request().postDataJSON()?.p_event_id,query:url.search,rows:Array.isArray(rows)?rows.length:rows?.id?1:null,jsonBytes:body.length})}catch{}
   })
   await page.goto(app);await page.locator('#login-id').fill(reader.name);await page.locator('#pin').fill('0000');await page.locator('.login-form button[type=submit]').click()
   await page.waitForFunction(()=>!document.querySelector('#login-id'))
-  phase='closed'
+  phase='open'
   await page.goto(`${app}/calendar?openEvent=${ids[0]}`)
   await page.getByRole('tab',{name:/^신갈/}).waitFor();await page.getByRole('tab',{name:/^신갈/}).click()
-  await flush();check('closed comments issue no comment reads',traffic.filter(r=>r.phase==='closed').length===0)
-  phase='open'
-  await page.locator('.gs-event-comments summary').click()
   await page.getByText(marker+' seed 45',{exact:true}).waitFor({timeout:15000});await flush()
-  check('first open reads one bounded page of 20',traffic.filter(r=>r.phase==='open'&&r.kind==='read').length===1&&traffic.find(r=>r.phase==='open').rows===20)
+  check('comments and shared composer are visible without expanding',await page.locator('.gs-event-comments .comment-composer').isVisible()&&await page.locator('.gs-event-comments summary').count()===0&&await page.locator('.gs-event-comments .comment-section__head').isVisible())
+  check('first selection reads one bounded page of 20 for selected group',traffic.filter(r=>r.phase==='open'&&r.kind==='read'&&r.eventId===target).length===1&&traffic.find(r=>r.phase==='open'&&r.eventId===target).rows===20)
   const waitReads=async(expected)=>{const deadline=Date.now()+20000;while(traffic.filter(r=>r.phase===phase&&r.kind==='read').length<expected&&Date.now()<deadline)await new Promise(r=>setTimeout(r,100));await flush()}
   const foreground=async(label,expected)=>{
     phase=`${label}-hidden`
@@ -96,7 +94,7 @@ try{
     phase=label
     await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'))})
     await waitReads(expected)
-    check(`${label}: keeps expanded feed and reads only loaded pages`,await page.locator('.gs-event-comments').evaluate(el=>el.open)&&traffic.filter(r=>r.phase===label&&r.kind==='read').length===expected)
+    check(`${label}: keeps visible feed and reads only loaded pages`,await page.locator('.gs-event-comments .comment-composer').isVisible()&&traffic.filter(r=>r.phase===label&&r.kind==='read').length===expected)
   }
   await foreground('foreground-20',1)
   phase='older';await page.getByRole('button',{name:'이전 댓글 보기',exact:true}).click();await page.getByText(marker+' seed 6',{exact:true}).waitFor();await flush()
@@ -125,9 +123,8 @@ try{
   phase='write';await page.locator('.comment-composer textarea').fill(marker+' reader');await page.locator('.comment-composer button').last().click()
   await page.getByText(marker+' reader',{exact:true}).waitFor();await flush()
   check('own write returns row and never reloads full history',traffic.filter(r=>r.phase==='write'&&r.kind==='read').every(r=>r.rows<=1)&&traffic.some(r=>r.phase==='write'&&r.kind==='write'&&r.rows===1))
-  phase='collapsed';await page.locator('.gs-event-comments summary').click();await post(marker+' collapsed');await flush()
-  check('collapsed comments stop realtime reads',traffic.filter(r=>r.phase==='collapsed').length===0)
-  phase='other-tab';await page.getByRole('tab',{name:/^동탄/}).click();await page.locator('.gs-event-comments summary').click();await page.locator('.comment-empty').waitFor();await flush()
+  phase='other-tab';await page.getByRole('tab',{name:/^동탄/}).click();await page.locator('.comment-empty').waitFor();await flush()
+  check('empty meeting information is absent',await page.getByText('모임 정보',{exact:true}).count()===0)
   check('other group does not show previous comments',await page.locator('.comment-item').count()===0)
   await post(marker+' while-other');await flush();check('inactive group does not fetch on incoming comment',traffic.filter(r=>r.phase==='other-tab').length===1)
   phase='notification'
@@ -135,7 +132,8 @@ try{
   const bell=page.getByRole('button',{name:/^알림(?: \d+개)?$/}).first();await bell.click()
   const notification=page.locator('.notification-row').filter({hasText:marker+' notification'});await notification.waitFor({timeout:15000});await notification.click()
   await page.getByText(marker+' notification',{exact:true}).waitFor({timeout:15000})
-  check('actual mention click selects foreign group and expands comments',await page.getByRole('tab',{name:/^신갈/}).getAttribute('aria-selected')==='true'&&await page.locator('.gs-event-comments').evaluate(el=>el.open))
+  check('actual mention click selects foreign group with comments visible',await page.getByRole('tab',{name:/^신갈/}).getAttribute('aria-selected')==='true'&&await page.locator('.gs-event-comments .comment-composer').isVisible())
+  check('populated meeting information remains available',await page.getByText('모임 정보',{exact:true}).count()===1)
   await page.screenshot({path:'scratch/group-comments-mobile.png',fullPage:true})
   await page.setViewportSize({width:320,height:740});await page.evaluate(()=>{document.querySelector('#root').style.zoom='1.25';document.querySelector('#root').style.setProperty('--app-zoom','1.25')})
   await page.getByText(marker+' notification',{exact:true}).scrollIntoViewIfNeeded()
@@ -161,7 +159,7 @@ try{
   await post(marker+' session-expired')
   await page.getByRole('alert').filter({hasText:'다시 로그인'}).waitFor()
   check('expired session UI asks to sign in without pretending comments were deleted',await page.locator('.comment-item').count()===oldCount&&await page.locator('.comment-composer button').last().isDisabled())
-  await page.locator('.gs-event-comments summary').click();await page.locator('.gs-event-comments summary').click()
+  await page.getByRole('tab',{name:/^동탄/}).click()
   await page.getByRole('alert').filter({hasText:'다시 로그인'}).waitFor()
   check('expired initial page is login guidance, not an empty-list message',await page.locator('.comment-empty').count()===0)
   const pushTypes=JSON.parse(sql(`begin;

@@ -73,6 +73,7 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
   }
   const selectedMeta=context?.events.find(e=>e.id===selected)
   const current=siblings.find(e=>e.id===selected)
+  const hasMeetingInformation=Boolean(current&&(current.leader?.trim()||current.place?.trim()||current.memo?.trim()||current.meetingMode==='virtual'))
   const ownTeam=current?.cardAssignments.find(a=>a.userName===currentVisitor)?.teamKey
   const visibleAssignments=current?.cardAssignments.filter(a=>selectedMeta?.canManage || a.userName===currentVisitor || (ownTeam&&a.teamKey===ownTeam)) ?? []
   const group=serviceGroups.find(g=>g.code===selectedMeta?.groupCode)
@@ -119,11 +120,11 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
           </>:<p className="gs-private-roster">{msg('신청자 명단은 해당 집단에서 확인할 수 있습니다.')}</p>}
           {selectedMeta.canManage&&onAssignment&&<button className="gs-assignment-open" type="button" onClick={()=>onAssignment(current.id)}>{msg('팀 구성 · 구역 배정')} <span aria-hidden>›</span></button>}
           {current.assignmentStatus==='shared'&&visibleAssignments.length>0&&renderAssignments&&<details open className="gs-group-information" key={`assignments-${current.id}`}><summary>{msg('배정 결과')}</summary>{renderAssignments({...current,cardAssignments:visibleAssignments})}</details>}
-          <details className="gs-group-information" key={`info-${current.id}`}><summary>{msg('모임 정보')}</summary>
+          {hasMeetingInformation&&<details className="gs-group-information" key={`info-${current.id}`}><summary>{msg('모임 정보')}</summary>
             {current.leader&&<p>{msg('인도자')} · {current.leader}</p>}{current.place&&<p>{current.place}</p>}
             {current.meetingMode==='virtual'&&<MeetingAccessPanel eventId={current.id} version={current.editVersion}/>}
             {current.memo&&<p className="gs-group-memo">{current.memo}</p>}
-          </details>
+          </details>}
           <GroupEventComments key={`${current.id}:${currentUserId}:${commentEntry?.requestKey??commentEntry?.commentId??''}`} eventId={current.id} language={language} currentVisitor={currentVisitor}
             draft={commentDrafts.values[current.id]} onDraftChange={value=>setCommentDrafts(old=>({owner:currentUserId,values:{...(old.owner===currentUserId?old.values:{}),[current.id]:value}}))}
             currentUserId={currentUserId} role={role} users={mentionUsers} focusCommentId={commentEntry?.eventId===current.id?commentEntry.commentId:undefined}/>

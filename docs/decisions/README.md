@@ -122,6 +122,8 @@
 
 댓글 리뷰 후속: [0102 무효 세션 오류·재연결 예약·알림 본문 대조·복귀 비용](0102-demo-comment-review-followup.md)
 
+집단 상세 표시: [0103 빈 모임 정보 숨김·회중 봉사와 같은 기본 펼침 댓글창](0103-group-detail-common-comments.md)
+
 ```markdown
 # 제목
 

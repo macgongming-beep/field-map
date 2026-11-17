@@ -18,8 +18,6 @@
 .gs-private-roster { font-size:13px; color:var(--muted); line-height:1.6; }
 .gs-assignment-open { display:flex; align-items:center; justify-content:space-between; width:100%; margin-top:20px; padding:12px; min-height:44px; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:8px; font-size:14px; font-weight:600; }
 .gs-group-information { border-top:1px solid var(--line); margin-top:24px; font-size:13px; }.gs-group-information summary { padding:14px 0; cursor:pointer; color:var(--muted); }.gs-group-memo { white-space:pre-wrap; overflow-wrap:anywhere; }
-.gs-event-comments .comment-section { margin:0; padding:0; border:0; border-radius:0; background:transparent; }
-.gs-event-comments .comment-section__head { display:none; }
 .gs-event-comments .comment-item__meta { flex-wrap:wrap; }
 .gs-event-comments .comment-item__meta strong { min-width:0; max-width:100%; overflow-wrap:anywhere; }
 .gs-event-comments .comment-item__meta span { white-space:nowrap; }

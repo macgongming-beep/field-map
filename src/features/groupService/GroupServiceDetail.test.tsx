@@ -57,7 +57,7 @@ test('leader can arrange every tab but only admin can edit; foreground refreshes
   expect(screen.getByRole('button',{name:'일정 수정'})).toBeTruthy()
 })
 test('shared assignments open automatically but meeting info stays collapsed and foreign results stay hidden',async()=>{
-  const assigned=events.map(e=>({...e,assignmentStatus:'draft' as const,cardAssignments:[{id:e.id,eventId:e.id,userName:e.applicants[0],assignedCardId:1,assignedBy:'Admin',assignedAt:'',memo:''}]}))
+  const assigned=events.map(e=>({...e,place:'Meeting place',assignmentStatus:'draft' as const,cardAssignments:[{id:e.id,eventId:e.id,userName:e.applicants[0],assignedCardId:1,assignedBy:'Admin',assignedAt:'',memo:''}]}))
   const props={event:assigned[0],events:assigned,language:'ko' as const,currentVisitor:'User',renderAssignments:(e:CalendarEvent)=><div>{`Team ${e.id}`}</div>}
   const {rerender}=render(<GroupServiceDetail {...props}/> )
   await screen.findByRole('tab',{name:'동탄 1'})
@@ -76,6 +76,22 @@ test('shared assignments open automatically but meeting info stays collapsed and
   expect(screen.queryByText('Team 2')).toBeNull()
   fireEvent.click(screen.getByRole('tab',{name:'동탄 1'}))
   expect(screen.getByText('배정 결과').closest('details')!.open).toBe(true)
+})
+test('empty meeting information is absent including whitespace and disappears on group switch',async()=>{
+  const rows=events.map((e,i)=>({...e,leader:'  ',place:i===1?'Meeting place':'\n',memo:' ',meetingMode:'in_person' as const}))
+  render(<GroupServiceDetail event={rows[0]} events={rows} language="ko" currentVisitor="User"/> )
+  await screen.findByRole('tab',{name:'동탄 1'})
+  expect(screen.queryByText('모임 정보')).toBeNull()
+  fireEvent.click(screen.getByRole('tab',{name:'신갈 1'}))
+  expect(screen.getByText('모임 정보').closest('details')!.open).toBe(false)
+  fireEvent.click(screen.getByRole('tab',{name:'동탄 1'}))
+  expect(screen.queryByText('모임 정보')).toBeNull()
+})
+test.each([{leader:'Leader'},{place:'Meeting place'},{memo:'Meeting note'},{meetingMode:'virtual'}])('meeting information remains available when populated: %j',async fields=>{
+  const rows=events.map(e=>({...e,...fields} as CalendarEvent))
+  render(<GroupServiceDetail event={rows[0]} events={rows} language="ko" currentVisitor="User"/> )
+  await screen.findByRole('tab',{name:'동탄 1'})
+  expect(screen.getByText('모임 정보')).toBeTruthy()
 })
 test('new group schedule expands four independent children per time with separate weekly series',async()=>{
   const submit=vi.fn(async()=>true)
