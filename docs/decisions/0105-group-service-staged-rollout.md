@@ -8,7 +8,7 @@
 ## 바뀐 계약
 
 1. 전시대 표가 없어도 일반 봉사·재방 연구·대신 신청과 일정 알림이 동작한다. 전시대 표를 새로 만드는 부수 효과는 없다. 표가 있으면 같은 일정의 전시대 중복 검사는 그대로 유지한다.
-2. 집단 탭 표시와 배정 저장 전환을 분리한다. `VITE_ASSIGNMENT_REVISION_ENABLED=true`가 새 저장·참가자 관리·배정 권한·리비전 읽기를 켠다. `VITE_GROUP_SERVICE_ENABLED=false`여도 동시 저장 보호는 유지된다. 운영의 기본값은 둘 다 꺼짐이며, 데모 로그인/초기화 기능을 운영에서 켤 필요가 없다.
+2. 집단 탭 표시와 배정 저장 전환을 분리한다. `VITE_ASSIGNMENT_REVISION_ENABLED=true`가 새 저장·참가자 관리·배정 권한·리비전 읽기를 켠다. `VITE_GROUP_SERVICE_ENABLED=false`여도 동시 저장 보호는 유지된다. PC·모바일 인도자의 전체 구역 선택과 종료 시간·신청 마감 변경 알림 확인도 새 저장 설정을 따른다. 운영의 기본값은 둘 다 꺼짐이며, 데모 로그인/초기화 기능을 운영에서 켤 필요가 없다.
 3. 새 앱의 참가자 제외는 항상 단일 RPC다. 버전 경로에서는 기존 versioned RPC, 호환 경로에서는 팀 RPC 또는 새 generic atomic RPC를 사용한다. 함수가 없거나 권한이 거부되면 직접 표 삭제로 후퇴하지 않는다. 옛 다중 요청 삭제 구현은 제거했다.
 
 ## 구현
@@ -61,7 +61,7 @@ DB·기기·백업·감사 확인 기록을 `app.rollout_evidence`에 명시한 
 
 ## 실행 검증
 
-- 전체 자동 검사: 263파일 / 2,598개 통과. lint·build 통과.
+- 전체 자동 검사: 263파일 / 2,599개 통과. lint·build 통과. 데모 모드를 끄고 새 배정만 켠 조합에서, 명단에 없는 인도자의 PC 전체 구역 선택과 종료 시간·마감 알림 확인을 포함한다.
 - 격리 PGlite에서 실제 생성된 18개 파일 준비 묶음 전체를 실행했다. 전시대 표/칼럼 있는 경우와 없는 경우 모두 준비 → 옛/새 앱 혼용 호출 → 엄격 차단 → 호환 복귀를 통과했다.
 - 핵심 카드 저장·범위·팀·참가자 정리는 실제 과거 SQL 함수를 사용했다. 주변 스키마는 합성 자료, 외부 알림은 로컬 수신함으로 대체했다. 운영 사본 성능 시험이라고 주장하지 않는다.
 - 전시대 없음에도 본인 신청·대신 신청·게스트·일정/반복 일정 알림 성공, 있을 때 중복 거부, 재방 연구/일반 신청 중복 거부 확인.
@@ -72,6 +72,9 @@ DB·기기·백업·감사 확인 기록을 `app.rollout_evidence`에 명시한 
 - 실제 데모 기존 권한/동시 저장: 21개 통과. 관리 작업: 34개 통과.
 - 실제 데모 적용 전 백업: `backups/group-rollout-demo-1794891730536/before.dump`. 복구 SQL → 두 보완 파일 재적용 → 트랜잭션 롤백을 실행했고, 종료 시 함수 정의 해시·권한 감사가 원래 상태와 같았다.
 - 복구 파일 첫 검사에서 함수 정의 끝의 구분자 누락을 발견했다. 생성기와 해당 복구 파일을 수정한 뒤 실제 복구 재시험을 통과했다. 실패한 첫 시험도 트랜잭션 롤백되어 데모 최종 상태는 변하지 않았다.
+- 데모 앱 `8e5edb8` 배포 뒤 Playwright 화면 검사 12개, 댓글·알림·사용량 검사 34개가 통과했다. 두 인도자의 동시 공유 충돌과 초안 보존, 마감 후 대신 신청·게스트 추가, 회중 봉사의 명단 외 인도자 배정을 포함한다. PC·320px 큰 글씨 화면도 확인했다.
+- 댓글 변경은 해당 댓글만 다시 읽고 캘린더 전체를 다시 읽지 않았다. 화면 복귀 시 기존 20개/40개 분량만 읽고, 실제 소켓 재연결 시에도 댓글은 불러온 두 페이지에 한정됐다. 재연결의 기존 캘린더 복구 조회는 별도로 발생한다. 휴대폰 푸시는 실제 수신이 아니라 발송 요청 대기열까지만 확인했다.
+- 최종 데모 배포: `dpl_FFB1BCAEfdjXF9q7p6pxNkXcXNRU`, https://chinese-territory-app-demo.vercel.app. 운영 Vercel 프로젝트가 아니라 데모 프로젝트의 대표 주소 갱신이다.
 
 ## 아직 운영 승인으로 보지 않는 항목
 
@@ -82,4 +85,4 @@ DB·기기·백업·감사 확인 기록을 `app.rollout_evidence`에 명시한 
 
 ## 증거
 
-`scratch/group-service-rollout/manifest.json`, `scratch/group-rollout-demo-results.json`, `scratch/assignment-review-smoke.json`, `scratch/assignment-maintenance-smoke.json`에 로컬 결과가 있다. 백업·생성 SQL·자격증명·원시 시험 자료는 커밋하지 않는다.
+`scratch/group-service-rollout/manifest.json`, `scratch/group-rollout-demo-results.json`, `scratch/assignment-review-smoke.json`, `scratch/assignment-maintenance-smoke.json`, `scratch/group-tabs-ui-results.json`, `scratch/group-comments-results.json`에 로컬 결과가 있다. 백업·생성 SQL·자격증명·원시 시험 자료는 커밋하지 않는다.
