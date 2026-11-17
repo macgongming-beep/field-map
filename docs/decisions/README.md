@@ -128,6 +128,8 @@
 
 전환 보완·리허설: [0105 선택적 전시대·독립 배정 설정·호환 준비 후 엄격 차단](0105-group-service-staged-rollout.md)
 
+운영 유사 자료량·실기기 준비: [0106 데모 전용 푸시 구성과 1배/5배 성능 측정](0106-demo-physical-push-and-scale-check.md)
+
 ```markdown
 # 제목
 
