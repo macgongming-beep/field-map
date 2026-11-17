@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { CalendarEvent } from '../../types'
-const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), toast: vi.fn(), error: vi.fn(), log: vi.fn() }))
+const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), toast: vi.fn(), error: vi.fn(), log: vi.fn(),ensure:vi.fn((data:unknown[])=>Boolean(data?.length)) }))
 vi.mock('./shared', () => ({ supabase: { rpc: mocks.rpc, from: mocks.from }, showToast: mocks.toast,
-  reportMutationError: mocks.error, getCurrentVisitor: () => 'A', ensureAffectedRows: vi.fn() }))
+  reportMutationError: mocks.error, getCurrentVisitor: () => 'A', ensureAffectedRows: mocks.ensure }))
 vi.mock('./serviceLog', () => ({ logServiceAction: mocks.log }))
 vi.mock('../../lib/authToken', () => ({ getAuthToken: () => 'token' }))
 import { makeCalendarMutations } from './calendar'
@@ -66,4 +66,38 @@ test('other participant removal requires revision and conflicts refresh only the
   expect(mocks.rpc).toHaveBeenCalledWith('manage_event_participant_versioned_tx',expect.objectContaining({p_expected_revision:'8'}))
   expect(refreshUpdatedEvent).toHaveBeenCalledExactlyOnceWith(1)
   expect(fetchAll).not.toHaveBeenCalled()
+})
+
+test.each(['empty','deleted','denied','partial'])('legacy session cleanup distinguishes absent sessions from denied writes: %s',async mode=>{
+  vi.stubEnv('VITE_DEMO_MODE','false')
+  const writes:string[]=[],fetchAll=vi.fn()
+  mocks.from.mockImplementation((table:string)=>{
+    let deleting=false
+    const q={select:vi.fn(()=>q),eq:vi.fn(()=>q),in:vi.fn(()=>q),delete:vi.fn(()=>{deleting=true;return q}),
+      then:(resolve:(value:unknown)=>void)=>{
+        if(deleting)writes.push(table)
+        const data=table!=='service_sessions'?[{id:1}]:!deleting?(mode==='empty'?[]:[{id:7},{id:8}]):mode==='deleted'?[{id:7},{id:8}]:mode==='partial'?[{id:7}]:[]
+        return Promise.resolve({data,error:null}).then(resolve)
+      }}
+    return q
+  })
+  await makeCalendarMutations({calendarEvents:[],fetchAll}).removeParticipantFromEvent(1,'B')
+  if(mode==='denied'||mode==='partial'){
+    expect(mocks.ensure).toHaveBeenCalledWith([],expect.any(String))
+    expect(writes).toEqual(['service_sessions']);expect(fetchAll).not.toHaveBeenCalled()
+    expect(mocks.log).not.toHaveBeenCalled();expect(mocks.toast).not.toHaveBeenCalled()
+  }else{
+    expect(writes.includes('service_sessions')).toBe(mode==='deleted')
+    expect(writes).toContain('event_participants');expect(fetchAll).toHaveBeenCalledOnce();expect(mocks.log).toHaveBeenCalledOnce()
+  }
+})
+
+test.each(['applications_closed','cart_application_exists'])('substitute application shows the actual policy refusal: %s',async reason=>{
+  vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','true')
+  mocks.rpc.mockResolvedValue({data:{ok:false,reason},error:null})
+  const fetchAll=vi.fn()
+  const mutation=makeCalendarMutations({calendarEvents:[{...event,assignmentRevision:'1'}],fetchAll})
+  await mutation.addParticipantToEvent(1,'B','신청')
+  expect(mocks.toast).toHaveBeenCalledWith(expect.stringContaining(reason==='applications_closed'?'마감':'전시대'),'error')
+  expect(fetchAll).not.toHaveBeenCalled();expect(mocks.log).not.toHaveBeenCalled()
 })

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {readFileSync,writeFileSync} from 'node:fs'
 import {parseEnv} from 'node:util'
 import {spawnSync} from 'node:child_process'
+import {assignmentInventorySql,assertAssignmentInventory} from './assignmentDefinerInventory.mjs'
 const config=parseEnv(readFileSync(process.env.DEMO_ENV_FILE,'utf8'))
 const db=new URL(config.SUPABASE_DB_URL)
 assert.equal(config.VITE_SUPABASE_URL,'https://itjlykpjmlcvanqpmkmc.supabase.co')
@@ -25,6 +26,7 @@ for(const actor of [fixture.actors[0],fixture.actors[5]])for(const table of ['ev
 }
 const grants=JSON.parse(sql(`select json_agg(x) from (select p.proname,has_function_privilege('anon',p.oid,'execute') as anon_execute from pg_proc p join pg_namespace n on n.oid=p.pronamespace where p.proname in ('save_event_assignments_versioned_tx','manage_event_participant_versioned_tx','mutate_personal_assignment_versioned_tx','rename_user_name_references_before_assignment_guard','purge_user_name_references_before_assignment_guard','user_can_edit_event','track_assignment_revision','assign_team_service_bulk_tx','assign_scoped_cards_bulk_tx','assign_cards_bulk_tx','remove_team_event_participant_tx') and n.nspname in ('public','private') order by p.proname)x;`))
 for(const grant of grants)assert.equal(grant.anon_execute,['save_event_assignments_versioned_tx','manage_event_participant_versioned_tx','mutate_personal_assignment_versioned_tx'].includes(grant.proname),grant.proname)
-const report={project:'itjlykpjmlcvanqpmkmc',plans,grants,note:'Demo data only. Not a production-scale performance result.'}
+const inventory=assertAssignmentInventory(JSON.parse(sql(assignmentInventorySql)))
+const report={project:'itjlykpjmlcvanqpmkmc',plans,grants,inventory,note:'Demo data only. Not a production-scale performance result.'}
 writeFileSync('scratch/assignment-review-audit.json',JSON.stringify(report,null,2))
 console.log(JSON.stringify(report))

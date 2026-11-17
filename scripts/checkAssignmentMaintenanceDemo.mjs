@@ -80,10 +80,48 @@ select pg_temp.expect((mutate_personal_assignment_versioned_tx(${q(leader.token)
 delete from informal_assets where id=(select asset_id from test_context);
 delete from buildings where id=(select building_id from test_context);
 select pg_temp.expect(not exists(select 1 from event_informal_assignments where event_id=c.event_id) and not exists(select 1 from event_restaurant_assignments where event_id=c.event_id),'asset and building FK cleanup remains available') from test_context c;
+rollback to maintenance;
+${headers(admin)}
+update calendar_events set allow_applications=false where id=(select event_id from test_context);
+select pg_temp.expect(manage_event_participant_versioned_tx(${q(leader.token)},event_id,${q(newMember.name)},'add',revision)->>'reason'='applications_closed','substitute leader respects application closing') from test_context;
+select pg_temp.expect(manage_event_participant_versioned_tx(${q(admin.token)},event_id,${q(newMember.name)},'add',revision)->>'reason'='applications_closed','admin substitute respects application closing') from test_context;
+select pg_temp.expect((manage_event_participant_versioned_tx(${q(member.token)},event_id,${q(member.name)},'remove',null)->>'ok')::boolean,'self cancellation still works after closing') from test_context;
+rollback to maintenance;
+${headers(admin)}
+insert into event_cart_applications(event_id,user_id) select event_id,${Number(newMember.id)} from test_context;
+select pg_temp.expect(manage_event_participant_versioned_tx(${q(leader.token)},event_id,${q(newMember.name)},'add',revision)->>'reason'='cart_application_exists','substitute checks same-event cart application') from test_context;
+select pg_temp.expect(manage_event_participant_versioned_tx(${q(admin.token)},event_id,${q(newMember.name)},'add',revision)->>'reason'='cart_application_exists','admin cannot bypass cart duplicate') from test_context;
+select pg_temp.expect(exists(select 1 from event_cart_applications a where a.event_id=c.event_id and a.user_id=${Number(newMember.id)}) and not exists(select 1 from event_participants p where p.event_id=c.event_id and p.user_name=${q(newMember.name)}) and (select assignment_revision(e)=c.revision from calendar_events e where e.id=c.event_id),'denied addition preserves cart application and revision') from test_context c;
+delete from event_cart_applications where event_id=(select event_id from test_context);
+select pg_temp.expect((manage_event_participant_versioned_tx(${q(leader.token)},event_id,${q(newMember.name)},'add',revision)->>'ok')::boolean,'substitute succeeds once duplicate is removed') from test_context;
+rollback to maintenance;
+${headers(admin)}
+create temp table merge_fixture(id integer);
+with b as(insert into buildings(card_id,name,address,type,lat,lng) values
+ (${Number(f.cardIds[0])},'merge_review_keep','경기도 용인시 데모검증로 99999','상가',0,0),
+ (${Number(f.cardIds[0])},'merge_review_absorb','경기도 용인시 데모검증로 99999','상가',0,0) returning id) insert into merge_fixture select id from b;
+set local app.assignment_maintenance='on';
+insert into event_restaurant_assignments(event_id,user_name,building_id,assigned_by)
+ select c.event_id,${q(member.name)},b.id,${q(leader.name)} from test_context c cross join merge_fixture b;
+insert into event_restaurant_assignments(event_id,user_name,building_id,assigned_by)
+ select event_id,${q(partner.name)},(select max(id) from merge_fixture),${q(leader.name)} from test_context;
+set local app.assignment_maintenance='';
+update test_context set revision=(select assignment_revision(e) from calendar_events e where e.id=test_context.event_id);
+savepoint before_merge;
+do $$declare rejected boolean:=false;begin
+ begin perform merge_duplicate_buildings_tx(${q(leader.token)},${Number(f.cardIds[0])},'{}',array[(select min(id) from merge_fixture)]);exception when others then rejected:=true;end;
+ perform pg_temp.expect(rejected,'real merge remains administrator-only');end$$;
+select merge_duplicate_buildings_tx(${q(admin.token)},${Number(f.cardIds[0])},'{}',array[(select min(id) from merge_fixture)]);
+select pg_temp.expect((select count(*)=2 and bool_and(building_id=(select min(id) from merge_fixture)) from event_restaurant_assignments a where a.event_id=c.event_id) and not exists(select 1 from buildings where id=(select max(id) from merge_fixture)),'actual merge deduplicates and moves restaurant assignments') from test_context c;
+select pg_temp.expect((select assignment_revision(e)>c.revision from calendar_events e where e.id=c.event_id) and (save_event_assignments_versioned_tx(${q(leader.token)},c.event_id,${q(rows)},c.revision,null,null)->>'conflict')::boolean,'merge invalidates open assignment draft') from test_context c;
+select pg_temp.expect(coalesce(current_setting('app.assignment_maintenance',true),'')='','real merge restores maintenance flag');
+rollback to before_merge;
+select merge_selected_duplicate_buildings_tx(${q(admin.token)},${Number(f.cardIds[0])},'{}',array[(select min(id) from merge_fixture)],'{}');
+select pg_temp.expect((select count(*)=2 and bool_and(building_id=(select min(id) from merge_fixture)) from event_restaurant_assignments a where a.event_id=c.event_id),'selected-candidate merge also uses guarded core') from test_context c;
 rollback;`
 const result=spawnSync('psql',['-X','-qAt','-v','ON_ERROR_STOP=1'],{input:setup,encoding:'utf8',env:{...process.env,PGHOST:db.hostname,PGPORT:db.port,PGUSER:decodeURIComponent(db.username),PGDATABASE:db.pathname.slice(1),PGPASSWORD:decodeURIComponent(db.password),PGSSLMODE:'require',PGCONNECT_TIMEOUT:'15'}})
 if(result.error||result.status){let error=result.stderr;for(const actor of [admin,...f.actors])error=error.replaceAll(actor.token,'[redacted]');throw result.error??Error(error)}
 const checks=result.stderr.split('\n').filter(s=>s.includes('PASS:')).map(s=>s.split('PASS: ')[1])
-assert.ok(checks.length>=17)
+assert.equal(checks.length,30)
 writeFileSync('scratch/assignment-maintenance-smoke.json',JSON.stringify({project,checks,rolledBack:true},null,2),{mode:0o600})
 console.log(JSON.stringify({project,passed:checks.length,rolledBack:true}))

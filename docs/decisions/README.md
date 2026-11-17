@@ -114,6 +114,8 @@
 
 배정 리뷰 후속: [0098 버전 검사와 이름 변경·사용자 정리·카드 삭제 분리](0098-demo-assignment-revision-maintenance.md)
 
+병합·대신 신청 후속: [0099 병합 보호, 세션 0행 확인, 마감·전시대 중복 검사](0099-demo-merge-and-substitute-application-guards.md)
+
 ```markdown
 # 제목
 

@@ -1497,6 +1497,7 @@ test('session-only read failure preserves sessions and histories', async () => {
 
 test('production session end skips histories even without personal session filtering', async () => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
+  state.sessions = [{id:1,user_name:'Volunteer',status:'active',service_date:'2026-10-26',time_slot:'오후'}]
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   state.reads = []

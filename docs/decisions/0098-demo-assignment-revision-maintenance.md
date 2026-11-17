@@ -3,6 +3,7 @@
 - 상태: 데모 검증 완료, 운영 미적용.
 - 결정일: 2026-11-17
 - 관련: [0097](0097-demo-all-leader-assignment-permissions.md)의 버전 증가·취소·직접 쓰기 계약을 보완한다.
+- 추가 보완: [0099](0099-demo-merge-and-substitute-application-guards.md)의 건물 병합·세션 0행 처리·대신 신청 마감/전시대 중복 검사.
 
 ## 유지하는 권한
 

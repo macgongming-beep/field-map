@@ -95,6 +95,12 @@ export function makeCalendarMutations(deps: {
       p_token:token,p_event_id:event.id,p_user_name:userName,p_action:action,p_expected_revision:ownCancel?null:event.assignmentRevision,p_role:role,
     })
     if(result.error||!result.data?.ok){
+      if(result.data?.reason==='applications_closed'){
+        showToast(msg('신청이 마감되어 참가자를 추가할 수 없습니다.'),'error');return false
+      }
+      if(result.data?.reason==='cart_application_exists'){
+        showToast(msg('같은 일정에 전시대 봉사를 신청한 사람입니다. 기존 신청을 먼저 취소해 주세요.'),'error');return false
+      }
       reportMutationError(msg(action==='add'?'참가자를 추가하지 못했습니다.':'참가자를 제외하지 못했습니다.'),result.error??new Error(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.')))
       if(result.data?.conflict){
         try { await (deps.refreshUpdatedEvent?deps.refreshUpdatedEvent(event.id):fetchAll()) }
@@ -442,6 +448,25 @@ export function makeCalendarMutations(deps: {
       await removeTeamParticipant(event!, userName, false)
       return
     }
+    // No assigned session is a valid case. Existing rows must actually be removed
+    // before continuing; an RLS-filtered zero-row delete is not success.
+    const expectedSessions = await supabase.from('service_sessions').select('id')
+      .eq('calendar_event_id', eventId).eq('user_name', userName).eq('source', 'assigned')
+    if (expectedSessions.error || !Array.isArray(expectedSessions.data)) {
+      reportMutationError(msg('참가자의 자동 봉사 세션을 정리하지 못했습니다.'), expectedSessions.error ?? new Error('Session lookup failed'))
+      return
+    }
+    if (expectedSessions.data.length > 0) {
+      const sessionResult = await supabase.from('service_sessions').delete()
+        .eq('calendar_event_id', eventId).eq('user_name', userName).eq('source', 'assigned')
+        .in('id', expectedSessions.data.map(row => row.id)).select('id')
+      if (sessionResult.error) {
+        reportMutationError(msg('참가자의 자동 봉사 세션을 정리하지 못했습니다.'), sessionResult.error)
+        return
+      }
+      const removedIds = new Set(sessionResult.data?.map(row => row.id))
+      if (!ensureAffectedRows(expectedSessions.data.every(row => removedIds.has(row.id)) ? sessionResult.data : [], msg('참가자의 자동 봉사 세션을 정리하지 못했습니다.'))) return
+    }
     const multiCardResult = await supabase.from('event_card_assignment_cards')
       .delete()
       .eq('event_id', eventId)
@@ -475,16 +500,6 @@ export function makeCalendarMutations(deps: {
       .eq('user_name', userName)
     if (restaurantResult.error) {
       reportMutationError(msg('참가자의 식당 배정을 정리하지 못했습니다.'), restaurantResult.error)
-      return
-    }
-
-    const sessionResult = await supabase.from('service_sessions')
-      .delete()
-      .eq('calendar_event_id', eventId)
-      .eq('user_name', userName)
-      .eq('source', 'assigned')
-    if (sessionResult.error) {
-      reportMutationError(msg('참가자의 자동 봉사 세션을 정리하지 못했습니다.'), sessionResult.error)
       return
     }
 

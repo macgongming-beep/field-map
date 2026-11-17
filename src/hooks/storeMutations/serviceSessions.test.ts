@@ -5,26 +5,29 @@ import type { ServiceSession } from '../../types'
 const state = vi.hoisted(() => ({
   metadata: { id: 42, calendar_event_id: 7, primary_card_id: 9, time_slot: '오전' },
   error: null as Error | null, reads: vi.fn(), writes: vi.fn(), log: vi.fn(), report: vi.fn(),
-  updateError: null as Error | null, tables: vi.fn(), readIds: vi.fn(), writeIds: vi.fn(),
+  updateError: null as Error | null, updated: [{id:42}] as {id:number}[], tables: vi.fn(), readIds: vi.fn(), writeIds: vi.fn(), writeSelect: vi.fn(), toast: vi.fn(),
 }))
 vi.mock('./serviceLog', () => ({ logServiceAction: state.log }))
 vi.mock('./shared', () => ({
-  showToast: vi.fn(), reportMutationError: state.report,
+  showToast: state.toast, reportMutationError: state.report,
+  ensureAffectedRows: (rows: unknown[],message: string) => {if(rows?.length)return true;state.report(message,{code:'P0001'});return false},
   getLocalDateString: () => '2026-10-26', getCurrentVisitor: () => 'Me',
   supabase: { from: (table: string) => {
     state.tables(table)
     const q = {
       select: (columns: string) => { state.reads(columns); return q },
       eq: (column: string, value: unknown) => { state.readIds(column, value); return q },
+      limit: () => q, is: () => q,
+      then: (resolve: (result:unknown)=>unknown) => Promise.resolve({data:[],error:null}).then(resolve),
       single: async () => ({ data: state.metadata, error: state.error }),
-      update: (payload: unknown) => { state.writes(payload); return { eq: async (column: string, value: unknown) => {
-        state.writeIds(column, value); return { error: state.updateError }
-      } } },
+      update: (payload: unknown) => { state.writes(payload); return { eq: (column: string, value: unknown) => {
+        state.writeIds(column, value); return {select:async(columns:string)=>{state.writeSelect(columns);return {data:state.updated,error:state.updateError}}}
+      }, in: () => ({select:async()=>({data:state.updated,error:state.updateError})}) } },
     }
     return q
   } },
 }))
-afterEach(() => { state.error = null; state.updateError = null; state.metadata.id = 42; vi.clearAllMocks() })
+afterEach(() => { state.error = null; state.updateError = null; state.updated=[{id:42}];state.metadata.id = 42; vi.clearAllMocks() })
 
 test('ending an older session outside the read window retains its event/card log metadata', async () => {
   const refresh = vi.fn()
@@ -66,4 +69,21 @@ test('cached metadata avoids another read and a failed update does not log or re
   expect(state.log).not.toHaveBeenCalled()
   expect(refresh).not.toHaveBeenCalled()
   expect(state.report).toHaveBeenCalledTimes(1)
+})
+
+test('RLS-filtered zero rows never report or log a completed session',async()=>{
+  state.updated=[]
+  const refresh=vi.fn()
+  await makeServiceSessionMutations({fetchAll:refresh,serviceSessions:[],buildings:[]}).endServiceSession(42)
+  expect(state.writeSelect).toHaveBeenCalledExactlyOnceWith('id')
+  expect(state.report).toHaveBeenCalledOnce()
+  expect(state.log).not.toHaveBeenCalled();expect(refresh).not.toHaveBeenCalled();expect(state.toast).not.toHaveBeenCalled()
+})
+
+test.each([{updated:[]},{updated:[{id:42}]}])('starting a session stops if previous sessions are only partly ended: %j',async ({updated})=>{
+  state.updated=updated
+  const sessions=[42,43].map(id=>({id,userName:'Me',serviceDate:'2026-10-26',status:'active',endedAt:null})) as ServiceSession[]
+  const refresh=vi.fn()
+  const result=await makeServiceSessionMutations({fetchAll:refresh,serviceSessions:sessions,buildings:[]}).startServiceSession({role:'user',timeSlot:'오후'})
+  expect(result).toBeNull();expect(state.report).toHaveBeenCalledOnce();expect(state.log).not.toHaveBeenCalled();expect(refresh).not.toHaveBeenCalled()
 })

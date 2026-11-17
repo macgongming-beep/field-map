@@ -5,11 +5,13 @@ import {beforeAll,beforeEach,afterAll,expect,test} from 'vitest'
 let db:PGlite
 const token=(id:number)=>`00000000-0000-0000-0000-${String(id).padStart(12,'0')}`
 const cleanup=readFileSync('supabase/migrations/20260930_1600_atomic_team_participant_removal.sql','utf8').split('create or replace function public.remove_team_event_participant_tx')[0]
-let migration=readFileSync('supabase/migrations/20261117_1000_assignment_and_schedule_permissions.sql','utf8')+readFileSync('supabase/migrations/20261117_1010_assignment_revisions.sql','utf8')+readFileSync('supabase/migrations/20261117_1100_assignment_revision_followup.sql','utf8')
+let migration=readFileSync('supabase/migrations/20261117_1000_assignment_and_schedule_permissions.sql','utf8')+readFileSync('supabase/migrations/20261117_1010_assignment_revisions.sql','utf8')+readFileSync('supabase/migrations/20261117_1100_assignment_revision_followup.sql','utf8')+readFileSync('supabase/migrations/20261117_1200_assignment_merge_and_application_guards.sql','utf8')
 if(process.env.ASSIGNMENT_REVIEW_MUTATION==='revision')migration=migration.replaceAll('p_expected_revision is null or p_expected_revision<>rev','false')
 if(process.env.ASSIGNMENT_REVIEW_MUTATION==='permission')migration=migration.replace("and u.role in ('admin','developer'));","and u.role in ('leader','admin','developer'));")
 if(process.env.ASSIGNMENT_REVIEW_MUTATION==='maintenance')migration=migration.replace('not(guarded or maintenance or cascading)','not guarded')
 if(process.env.ASSIGNMENT_REVIEW_MUTATION==='identity')migration=migration.replace('not private.event_participant_identity_allowed(p_user_name,p_role)','false')
+if(process.env.ASSIGNMENT_REVIEW_MUTATION==='application')migration=migration.replace("if p_action='add' then\n    if not coalesce", "if false then\n    if not coalesce")
+if(process.env.ASSIGNMENT_REVIEW_MUTATION==='merge')migration=migration.replace("perform set_config('app.assignment_maintenance','on',true);\n  result:=private.merge", "perform set_config('app.assignment_maintenance','',true);\n  result:=private.merge")
 beforeAll(async()=>{
   db=new PGlite()
   await db.exec(`create role anon;create role authenticated;create schema private;
@@ -19,6 +21,8 @@ beforeAll(async()=>{
     insert into service_groups values('dongtan','동탄','东滩','东滩'),('singal','신갈','新葛','新葛');
     create table calendar_events(id serial primary key,event_date date default '2099-11-18',time text default '14:30',end_time text default '16:30',title text default 'Test',group_service_scope boolean default true,target_groups text[] default array['dongtan'],assignment_status text,assignment_shared_at timestamptz,assignment_team_scopes jsonb default '{}',assignment_team_informal jsonb);
     create table cards(id int primary key);create table informal_assets(id int primary key,archived boolean default false,parent_id int);create table buildings(id int primary key);create table units(id int primary key,building_id int references buildings on delete cascade);
+    alter table calendar_events add allow_applications boolean default true;
+    create table event_cart_applications(event_id int references calendar_events on delete cascade,user_id int references app_users on delete cascade);
     create table event_participants(id serial primary key,event_id int references calendar_events on delete cascade,user_name text,role text default '신청',service_activity text default 'service',unique(event_id,user_name));
     ${['event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments'].map(t=>`create table ${t}(id serial primary key,event_id int references calendar_events on delete cascade,user_name text,team_key text,assigned_by text);alter table ${t} enable row level security;create policy existing_read on ${t} for select using(true);create policy group_service_scoped_read on ${t} as restrictive for select using(true);grant select,insert,update,delete on ${t} to anon;`).join('')}
     create table service_sessions(calendar_event_id int,user_name text,source text,status text,ended_at timestamptz);
@@ -58,6 +62,12 @@ beforeAll(async()=>{
       update calendar_events set assignment_team_informal='{}',assignment_status=p_status where id=p_event_id;
       return jsonb_build_object('ok',true);
     end$$;
+    create function public.merge_duplicate_buildings_tx(p_token uuid,p_scope_card_id integer default null,p_name_overrides jsonb default '{}',p_selected_primary_ids integer[] default null) returns jsonb language plpgsql security definer as $$begin
+      if public.verify_session(p_token) is distinct from 1 then raise exception 'permission';end if;
+      delete from public.event_restaurant_assignments a where building_id=21 and exists(select 1 from public.event_restaurant_assignments b where b.building_id=20 and b.event_id=a.event_id and b.user_name=a.user_name);
+      update public.event_restaurant_assignments set building_id=20 where building_id=21;
+      delete from public.buildings where id=21;
+      return '{"ok":true}'::jsonb;end$$;
     ${cleanup}
     ${migration}
     grant usage on schema private to anon;
@@ -186,4 +196,34 @@ test('leaders cannot rewrite or delete other people service sessions, owners and
   expect((await db.query("update service_sessions set status='ended' returning *")).rows).toHaveLength(1)
   await db.exec("set test.actor='1'")
   expect((await db.query('delete from service_sessions returning *')).rows).toHaveLength(1)
+})
+
+test('substitute applications enforce closing and same-event cart checks for admins and leaders',async()=>{
+  const add=(actor:number,name='Leader A',role='신청')=>db.query<{r:unknown}>('select manage_event_participant_versioned_tx($1,1,$2,\'add\',$3,$4) r',[token(actor),name,0,role])
+  await db.exec('update calendar_events set allow_applications=false where id=1')
+  for(const actor of [1,2]){
+    expect((await add(actor)).rows[0].r).toMatchObject({ok:false,reason:'applications_closed'})
+    expect((await add(actor,'Guest','게스트')).rows[0].r).toMatchObject({ok:false,reason:'applications_closed'})
+  }
+  await db.exec('update calendar_events set allow_applications=true where id=1;insert into event_cart_applications values(1,2)')
+  for(const actor of [1,2])expect((await add(actor,' leader a ')).rows[0].r).toMatchObject({ok:false,reason:'cart_application_exists'})
+  expect(await rev()).toBe(0)
+  expect((await db.query("select * from event_participants where user_name='Leader A'")).rows).toHaveLength(0)
+  expect((await db.query('select * from event_cart_applications')).rows).toHaveLength(1)
+  await db.exec('update event_cart_applications set event_id=2')
+  expect((await add(2)).rows[0].r).toMatchObject({ok:true})
+  await db.exec('update calendar_events set allow_applications=false where id=1')
+  expect((await db.query('select manage_event_participant_versioned_tx($1,1,\'Leader A\',\'remove\',null) r',[token(2)])).rows[0].r).toMatchObject({ok:true})
+})
+
+test('building merge preserves authorization, moves restaurant assignments and invalidates drafts',async()=>{
+  await db.exec("insert into buildings values(20),(21);set app.assignment_maintenance='on';insert into event_restaurant_assignments(event_id,user_name,building_id)values(1,'Member',20),(1,'Member',21),(1,'Partner',21);set app.assignment_maintenance=''")
+  const before=await rev()
+  await expect(db.query('select merge_duplicate_buildings_tx($1)',[token(2)])).rejects.toThrow('permission')
+  await db.query('select merge_duplicate_buildings_tx($1)',[token(1)])
+  expect((await db.query('select user_name,building_id from event_restaurant_assignments order by user_name')).rows).toEqual([{user_name:'Member',building_id:20},{user_name:'Partner',building_id:20}])
+  expect(await rev()).toBeGreaterThan(before)
+  expect((await save(2,before)).conflict).toBe(true)
+  expect((await db.query("select current_setting('app.assignment_maintenance',true) v")).rows[0].v).not.toBe('on')
+  expect((await db.query("select has_function_privilege('anon','private.merge_duplicate_buildings_before_assignment_guard(uuid,integer,jsonb,integer[])','execute') v")).rows[0].v).toBe(false)
 })

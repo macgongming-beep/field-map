@@ -17,12 +17,19 @@ function run(command,args,input){const r=spawnSync(command,args,{env,input,encod
 const sql=q=>run('psql',['-X','-At','-v','ON_ERROR_STOP=1'],q)
 const quote=s=>`'${s.replaceAll("'","''")}'`
 const mode=process.argv[2]
-assert.ok(['apply','apply-integrity','apply-signals','apply-review','apply-followup','review-smoke','fixture','smoke'].includes(mode))
+assert.ok(['apply','apply-integrity','apply-signals','apply-review','apply-followup','apply-merge-review','review-smoke','fixture','smoke'].includes(mode))
 const tables=['event_participants','event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments']
-if(mode==='apply'||mode==='apply-integrity'||mode==='apply-signals'||mode==='apply-review'||mode==='apply-followup'){
+if(mode==='apply'||mode==='apply-integrity'||mode==='apply-signals'||mode==='apply-review'||mode==='apply-followup'||mode==='apply-merge-review'){
   assert.equal(sql("select count(*) from information_schema.columns where table_name='calendar_events' and column_name='group_service_scope'"),mode==='apply'?'0':'1')
   const dir=resolve('backups',`group-tabs-demo-${Date.now()}`);mkdirSync(dir,{recursive:true})
   run('pg_dump',['--format=custom','--no-owner','--schema=public','--schema=private','--file',resolve(dir,'before.dump')]);run('pg_restore',['--list',resolve(dir,'before.dump')])
+  if(mode==='apply-merge-review'){
+    assert.equal(sql("select to_regprocedure('private.merge_duplicate_buildings_before_assignment_guard(uuid,integer,jsonb,integer[])') is null"),'t')
+    const signatures=['public.merge_duplicate_buildings_tx(uuid,integer,jsonb,integer[])','public.manage_event_participant_versioned_tx(uuid,integer,text,text,bigint,text)']
+    writeFileSync(resolve(dir,'rollback.sql'),signatures.map(s=>sql(`select pg_get_functiondef(${quote(s)}::regprocedure)`)).join('\n')+"\ndrop function private.merge_duplicate_buildings_before_assignment_guard(uuid,integer,jsonb,integer[]);\nnotify pgrst,'reload schema';\n")
+    run('psql',['-X','-v','ON_ERROR_STOP=1','--single-transaction','-f','supabase/migrations/20261117_1200_assignment_merge_and_application_guards.sql'])
+    console.log(JSON.stringify({project,backup:dir,mergeReviewApplied:true}));process.exit()
+  }
   if(mode==='apply-followup'){
     assert.equal(sql("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname='rename_user_name_references_before_assignment_guard'"),'0')
     const signatures=['public.rename_user_name_references(uuid,text,text)','public.purge_user_name_references(uuid,text)','private.track_assignment_revision()','public.manage_event_participant_versioned_tx(uuid,integer,text,text,bigint,text)']

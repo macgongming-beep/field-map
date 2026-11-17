@@ -235,6 +235,8 @@ export const messagesEn: Record<string, string> = {
   '업데이트를 적용하지 못했습니다. 잠시 후 다시 눌러 주세요.': 'The update could not be applied. Please try again shortly.',
   '자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.': 'Could not load the data. Check your connection and try again.',
   '배정하지 못했습니다.': 'Could not save the assignment.',
+  '신청이 마감되어 참가자를 추가할 수 없습니다.': 'Applications are closed. Participants cannot be added.',
+  '같은 일정에 전시대 봉사를 신청한 사람입니다. 기존 신청을 먼저 취소해 주세요.': 'This person has a cart application for the same event. Cancel that application first.',
   '데이터 불러오는 중...': 'Loading data...',
   '로그인 화면 불러오는 중...': 'Loading sign-in...',
   '화면 구성 불러오는 중...': 'Loading the screen...',
