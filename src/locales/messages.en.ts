@@ -5,6 +5,8 @@
 
 import { groupServiceEn } from './groupService'
 export const messagesEn: Record<string, string> = {
+  "댓글을 불러오지 못했습니다.": "Could not load comments.",
+  "이전 댓글 보기": "Earlier comments",
   ...groupServiceEn,
   '사용자 목록을 불러오지 못했습니다.': 'Could not load the user list.',
   '방문 기록을 불러오지 못했습니다.': 'Could not load visit records.',

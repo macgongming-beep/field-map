@@ -1,4 +1,4 @@
-import {useEffect,useState,type ReactNode} from 'react'
+import {useEffect,useRef,useState,type ReactNode} from 'react'
 import type {CalendarEvent} from '../../types'
 import {t,type AppLanguage} from '../../i18n'
 import {msg} from '../../lib/msg'
@@ -11,8 +11,12 @@ import {ParticipantAddContent} from '../../components/calendar/ParticipantAddCon
 import type {EventParticipantUser} from '../../utils/eventParticipantUsers'
 import {confirmDialog} from '../../lib/confirm'
 import './groupService.css'
+import {GroupEventComments} from './GroupEventComments'
+import type {MentionUser} from '../../components/CommentSection'
+import type {Role} from '../../types'
 
 type Props={event:CalendarEvent;events:CalendarEvent[];language:AppLanguage;currentVisitor:string;
+  currentUserId?:number|null;role?:Role;mentionUsers?:MentionUser[];commentEntry?:{eventId:number;commentId:number};
   mobile?:boolean;onClose?:()=>void;onApply?:(id:number,activity?:'service'|'return_visit')=>unknown;
   onAssignment?:(id:number)=>void;onEdit?:(id:number)=>void;onDelete?:(id:number)=>void;
   participantUsers?:EventParticipantUser[];
@@ -20,12 +24,14 @@ type Props={event:CalendarEvent;events:CalendarEvent[];language:AppLanguage;curr
   onRemoveParticipant?:(id:number,name:string)=>unknown;
   renderAssignments?:(event:CalendarEvent)=>ReactNode}
 
-export function GroupServiceDetail({event,events,language,currentVisitor,mobile,onClose,onApply,onAssignment,onEdit,onDelete,renderAssignments,participantUsers=[],onAddParticipant,onRemoveParticipant}:Props){
+export function GroupServiceDetail({event,events,language,currentVisitor,currentUserId,role,mentionUsers,commentEntry,mobile,onClose,onApply,onAssignment,onEdit,onDelete,renderAssignments,participantUsers=[],onAddParticipant,onRemoveParticipant}:Props){
   const [response,setResponse]=useState<{key:string;data:GroupServiceContext|null;failed:boolean}|null>(null)
   const [selected,setSelected]=useState<number|null>(null)
   const [retry,setRetry]=useState(0)
   const [addingGroup,setAddingGroup]=useState<number|null>(null)
   const [removingGroup,setRemovingGroup]=useState<number|null>(null)
+  const handledCommentEntry=useRef('')
+  const [commentDrafts,setCommentDrafts]=useState<Record<number,string>>({})
   const siblings=groupSlotEvents(event,events)
   const membershipKey=siblings.map(e=>`${e.id}:${e.editVersion}:${e.applicants.join(',')}:${e.assigned.join(',')}:${e.returnVisitApplicants?.join(',')}`).join('|')
   const requestKey=`${event.id}:${membershipKey}:${retry}`
@@ -54,11 +60,14 @@ export function GroupServiceDetail({event,events,language,currentVisitor,mobile,
     void readGroupServiceContext(event.id).then(value=>{
       if(!active)return
       setResponse({key:requestKey,data:value,failed:false})
-      setSelected(previous=>value.events.some(e=>e.id===previous)?previous:
-        value.events.find(e=>e.groupCode===value.ownGroup)?.id ?? event.id)
+      const entryKey=commentEntry?`${commentEntry.eventId}:${commentEntry.commentId}`:''
+      const focus=commentEntry&&entryKey!==handledCommentEntry.current&&value.events.some(e=>e.id===commentEntry.eventId)?commentEntry.eventId:undefined
+      handledCommentEntry.current=entryKey
+      setSelected(previous=>focus??(value.events.some(e=>e.id===previous)?previous:
+        value.events.find(e=>e.groupCode===value.ownGroup)?.id ?? event.id))
     }).catch(()=>{if(active)setResponse({key:requestKey,data:null,failed:true})})
     return()=>{active=false}
-  },[event.id,requestKey])
+  },[event.id,requestKey,commentEntry])
   const selectedMeta=context?.events.find(e=>e.id===selected)
   const current=siblings.find(e=>e.id===selected)
   const ownTeam=current?.cardAssignments.find(a=>a.userName===currentVisitor)?.teamKey
@@ -112,6 +121,9 @@ export function GroupServiceDetail({event,events,language,currentVisitor,mobile,
             {current.meetingMode==='virtual'&&<MeetingAccessPanel eventId={current.id} version={current.editVersion}/>}
             {current.memo&&<p className="gs-group-memo">{current.memo}</p>}
           </details>
+          <GroupEventComments key={`${current.id}:${currentUserId}:${commentEntry?.commentId??''}`} eventId={current.id} language={language} currentVisitor={currentVisitor}
+            draft={commentDrafts[current.id]} onDraftChange={value=>setCommentDrafts(old=>({...old,[current.id]:value}))}
+            currentUserId={currentUserId} role={role} users={mentionUsers} focusCommentId={commentEntry?.eventId===current.id?commentEntry.commentId:undefined}/>
         </div>}
       </>}
     </div>

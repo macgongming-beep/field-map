@@ -225,6 +225,7 @@ export function AdminMobileCalendar({
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const entryId = Number(searchParams.get('openEvent'))
+  const [commentEntry,setCommentEntry]=useState<{eventId:number;commentId:number}|undefined>(undefined)
   const today = useMemo(() => new Date(), [])
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth() + 1)
@@ -246,7 +247,7 @@ export function AdminMobileCalendar({
   const closeDetail = () => setDetailEventId(null)
   const detailReturnToRef = useRef(readEventDetailReturnTo(location.state) ?? (detailOnly ? '/' : '/calendar'))
   const detailReturnsThroughHistoryRef = useRef(readEventDetailReturnTo(location.state) !== null)
-  const handledDetailEntry = useRef<number | null>(null)
+  const handledDetailEntry = useRef<string | null>(null)
   const returnFromDetail = () => {
     if (requestBackHandler()) return
     setDetailEventId(null)
@@ -262,7 +263,8 @@ export function AdminMobileCalendar({
     const targetIdRaw = openChatId ?? openEventId
     const targetId = Number(targetIdRaw)
     if (!Number.isFinite(targetId)) return
-    if (detailOnly && handledDetailEntry.current === targetId) return
+    const entryKey=`${targetId}:${searchParams.get('comment')??''}`
+    if (detailOnly && handledDetailEntry.current === entryKey) return
     const targetEvent = events.find((e) => e.id === targetId)
     if (!targetEvent) return
 
@@ -286,14 +288,17 @@ export function AdminMobileCalendar({
       detailReturnToRef.current = returnTo ?? (detailOnly ? '/' : '/calendar')
       detailReturnsThroughHistoryRef.current = returnTo !== null
       setDetailEventId(targetEvent.id)
+      const commentId=Number(searchParams.get('comment'))
+      setCommentEntry(Number.isSafeInteger(commentId)&&commentId>0?{eventId:targetEvent.id,commentId}:undefined)
     }
 
     // Keep the home entry while editing so full-series demand remains explicit.
-    if (detailOnly) { handledDetailEntry.current = targetId; return }
+    if (detailOnly) { handledDetailEntry.current = entryKey; return }
 
     const next = new URLSearchParams(searchParams)
     next.delete('openChat')
     next.delete('openEvent')
+    next.delete('comment')
     setSearchParams(next, { replace: true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, events, detailOnly])
@@ -556,7 +561,7 @@ export function AdminMobileCalendar({
             <p>{t(language, 'calendar.noEvents')}</p>
           </div>
         ) : groupServiceEnabled() ? <ServiceEventList language={language} events={selectedEvents} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{
-          detailReturnToRef.current=getCurrentAppPath(location); detailReturnsThroughHistoryRef.current=false; setDetailEventId(id)
+          detailReturnToRef.current=getCurrentAppPath(location); detailReturnsThroughHistoryRef.current=false; setCommentEntry(undefined); setDetailEventId(id)
         }}/> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
             {selectedEvents.map((event) => (
@@ -638,6 +643,7 @@ export function AdminMobileCalendar({
       {detailEvent && assignEventId === null && groupServiceEnabled() && detailEvent.groupServiceScope && <GroupServiceDetail
         key={`${detailEvent.date}:${detailEvent.time}:${detailEvent.endTime}`} mobile event={detailEvent} events={events} language={language} currentVisitor={currentVisitor}
         onClose={returnFromDetail} onApply={onApplyToEvent}
+        currentUserId={currentUserId} role={role} mentionUsers={mentionUsers} commentEntry={commentEntry}
         participantUsers={participantUsers} onAddParticipant={onAddParticipantToEvent} onRemoveParticipant={onRemoveParticipantFromEvent}
         onAssignment={onAssignCardsToEventParticipantsBulk?id=>setAssignEventId(id):undefined}
         renderAssignments={event=><SharedAssignmentTeams event={event} cards={cards} language={language} translatePlaceNames={translatePlaceNames} buildings={buildings} informalAssets={informalAssets} eventInformalAssignments={eventInformalAssignments} eventRestaurantAssignments={eventRestaurantAssignments}/>}

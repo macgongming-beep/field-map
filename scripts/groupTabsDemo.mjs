@@ -17,12 +17,19 @@ function run(command,args,input){const r=spawnSync(command,args,{env,input,encod
 const sql=q=>run('psql',['-X','-At','-v','ON_ERROR_STOP=1'],q)
 const quote=s=>`'${s.replaceAll("'","''")}'`
 const mode=process.argv[2]
-assert.ok(['apply','apply-integrity','apply-signals','apply-review','apply-followup','apply-merge-review','apply-staff-closing','review-smoke','fixture','smoke'].includes(mode))
+assert.ok(['apply','apply-integrity','apply-signals','apply-review','apply-followup','apply-merge-review','apply-staff-closing','apply-comments','review-smoke','fixture','smoke'].includes(mode))
 const tables=['event_participants','event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments']
-if(mode==='apply'||mode==='apply-integrity'||mode==='apply-signals'||mode==='apply-review'||mode==='apply-followup'||mode==='apply-merge-review'||mode==='apply-staff-closing'){
+if(mode==='apply'||mode==='apply-integrity'||mode==='apply-signals'||mode==='apply-review'||mode==='apply-followup'||mode==='apply-merge-review'||mode==='apply-staff-closing'||mode==='apply-comments'){
   assert.equal(sql("select count(*) from information_schema.columns where table_name='calendar_events' and column_name='group_service_scope'"),mode==='apply'?'0':'1')
   const dir=resolve('backups',`group-tabs-demo-${Date.now()}`);mkdirSync(dir,{recursive:true})
   run('pg_dump',['--format=custom','--no-owner','--schema=public','--schema=private','--file',resolve(dir,'before.dump')]);run('pg_restore',['--list',resolve(dir,'before.dump')])
+  if(mode==='apply-comments'){
+    const before=sql("select pg_get_functiondef('public.notify_on_comment()'::regprocedure)")
+    // Keep the additive privacy policy on rollback so existing group comments never become public.
+    writeFileSync(resolve(dir,'rollback.sql'),before+"\nnotify pgrst,'reload schema';\n")
+    run('psql',['-X','-v','ON_ERROR_STOP=1','--single-transaction','-f','supabase/migrations/20261117_1400_group_event_comments.sql'])
+    console.log(JSON.stringify({project,backup:dir,groupCommentsApplied:true}));process.exit()
+  }
   if(mode==='apply-staff-closing'){
     const signature='public.manage_event_participant_versioned_tx(uuid,integer,text,text,bigint,text)'
     writeFileSync(resolve(dir,'rollback.sql'),sql(`select pg_get_functiondef(${quote(signature)}::regprocedure)`)+"\nnotify pgrst,'reload schema';\n")

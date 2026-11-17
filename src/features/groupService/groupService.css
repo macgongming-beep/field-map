@@ -18,6 +18,12 @@
 .gs-private-roster { font-size:13px; color:var(--muted); line-height:1.6; }
 .gs-assignment-open { display:flex; align-items:center; justify-content:space-between; width:100%; margin-top:20px; padding:12px; min-height:44px; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:8px; font-size:14px; font-weight:600; }
 .gs-group-information { border-top:1px solid var(--line); margin-top:24px; font-size:13px; }.gs-group-information summary { padding:14px 0; cursor:pointer; color:var(--muted); }.gs-group-memo { white-space:pre-wrap; overflow-wrap:anywhere; }
+.gs-event-comments .comment-section { margin:0; padding:0; border:0; border-radius:0; background:transparent; }
+.gs-event-comments .comment-section__head { display:none; }
+.gs-event-comments .comment-item__meta { flex-wrap:wrap; }
+.gs-event-comments .comment-item__meta strong { min-width:0; max-width:100%; overflow-wrap:anywhere; }
+.gs-event-comments .comment-item__meta span { white-space:nowrap; }
+.gs-event-comments .comment-composer > button { letter-spacing:0; flex-shrink:0; }
 .gs-editor { width:min(580px,100%); max-height:calc(90dvh / var(--app-zoom,1)); overflow:auto; background:var(--bg); color:var(--ink); border-radius:12px; box-shadow:0 12px 40px #0003; letter-spacing:0; }
 .gs-sheet-handle { display:none; }
 .gs-editor header { position:sticky; top:0; z-index:1; background:var(--bg); display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid var(--line); }

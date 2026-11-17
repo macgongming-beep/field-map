@@ -118,6 +118,8 @@
 
 신청 마감 예외: [0100 인도자·관리자의 마감 후 봉사자/게스트 추가 허용](0100-demo-staff-add-after-closing.md)
 
+집단별 댓글: [0101 승인 사용자 공개·정확한 알림·필요할 때만 조회](0101-demo-group-event-comments.md)
+
 ```markdown
 # 제목
 

@@ -5,6 +5,8 @@
 
 import { groupServiceZh } from './groupService'
 export const messagesZh: Record<string, string> = {
+  "댓글을 불러오지 못했습니다.": "无法加载评论。",
+  "이전 댓글 보기": "查看之前的评论",
   ...groupServiceZh,
   '사용자 목록을 불러오지 못했습니다.': '无法加载用户列表。',
   '방문 기록을 불러오지 못했습니다.': '无法加载探访记录。',

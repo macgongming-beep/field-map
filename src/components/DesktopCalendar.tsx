@@ -186,6 +186,7 @@ export function DesktopCalendar({
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [assignEventId, setAssignEventId] = useState<number | null>(null)
+  const [commentEntry,setCommentEntry]=useState<{eventId:number;commentId:number}|undefined>(undefined)
 
   // openChat=<eventId> 쿼리 처리: 해당 일정 날짜로 이동 + 채팅방 열기
   useEffect(() => {
@@ -198,6 +199,9 @@ export function DesktopCalendar({
     setYear(d.getFullYear())
     setMonth(d.getMonth() + 1)
     setSelectedDay(d.getDate())
+    setSelectedEventId(targetEvent.id)
+    const commentId=Number(searchParams.get('comment'))
+    setCommentEntry(Number.isSafeInteger(commentId)&&commentId>0?{eventId:targetEvent.id,commentId}:undefined)
     if (!chatDisabled()) setChatEvent(targetEvent)
 
     // 다음 tick에 스크롤
@@ -210,6 +214,7 @@ export function DesktopCalendar({
     const next = new URLSearchParams(searchParams)
     next.delete('openChat')
     if (chatDisabled()) next.delete('openEvent')
+    next.delete('comment')
     setSearchParams(next, { replace: true })
   }, [events, searchParams, setSearchParams])
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -749,7 +754,7 @@ export function DesktopCalendar({
                     </span>}
                   </div>
                   <div className="day-events">
-                    {groupServiceEnabled() ? <ServiceEventList events={dayEvents} language={language} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{if(day)setSelectedDay(day);setSelectedEventId(id);setShowCreateForm(false)}}/> : dayEvents.map((event) => (
+                    {groupServiceEnabled() ? <ServiceEventList events={dayEvents} language={language} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{if(day)setSelectedDay(day);setCommentEntry(undefined);setSelectedEventId(id);setShowCreateForm(false)}}/> : dayEvents.map((event) => (
                       <small 
                         className={`event-pill ${eventTimeClass(event.time)}${event.hasMeeting ? ' has-meeting' : ''} ${selectedEventId === event.id ? 'active' : ''}`} 
                         key={event.id}
@@ -802,6 +807,7 @@ export function DesktopCalendar({
                 if(groupServiceEnabled() && event.groupServiceScope) return <GroupServiceDetail
                   key={`${event.date}:${event.time}:${event.endTime}`} event={event} events={events} language={language} currentVisitor={currentVisitor}
                   onApply={onApplyToEvent}
+                  currentUserId={currentUserId} role={actualRole} mentionUsers={mentionUsers} commentEntry={commentEntry}
                   participantUsers={participantUsers} onAddParticipant={onAddParticipant} onRemoveParticipant={onRemoveParticipant}
                   onAssignment={onAssignCardsToEventParticipantsBulk?id=>setAssignEventId(id):undefined}
                   renderAssignments={selected=><SharedAssignmentTeams event={selected} cards={cards} buildings={buildings} informalAssets={informalAssets} eventInformalAssignments={eventInformalAssignments} eventRestaurantAssignments={eventRestaurantAssignments}/>}

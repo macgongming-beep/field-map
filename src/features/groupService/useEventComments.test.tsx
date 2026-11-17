@@ -1,0 +1,65 @@
+import {act,cleanup,renderHook,waitFor} from '@testing-library/react'
+import {afterEach,beforeEach,expect,test,vi} from 'vitest'
+import {useEventComments} from './useEventComments'
+const mocks=vi.hoisted(()=>({page:vi.fn(),rows:vi.fn(),watch:vi.fn(),stop:vi.fn(),ready:()=>{},change:(_id:number)=>{}}))
+vi.mock('./commentApi',()=>({COMMENT_PAGE_SIZE:20,readCommentPage:mocks.page,readCommentRows:mocks.rows,watchEventComments:mocks.watch}))
+const row=(id:number,content=`C${id}`)=>({id,target_type:'calendar_event' as const,target_id:1,author_id:1,author_name:'A',content,mention_ids:[],mention_names:[],created_at:'2026-11-18',deleted_at:null})
+beforeEach(()=>{
+  vi.clearAllMocks();Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true})
+  mocks.page.mockResolvedValue(Array.from({length:20},(_,i)=>row(40-i)));mocks.rows.mockResolvedValue([])
+  mocks.watch.mockImplementation((_id,change,ready)=>{mocks.change=change;mocks.ready=ready;return mocks.stop})
+})
+afterEach(()=>cleanup())
+test('closed means zero reads/subscriptions; open fetches just one page, then explicit cursor page',async()=>{
+  const {result,rerender}=renderHook(({open})=>useEventComments(1,open),{initialProps:{open:false}})
+  expect(mocks.page).not.toHaveBeenCalled();expect(mocks.watch).not.toHaveBeenCalled()
+  rerender({open:true});act(()=>mocks.ready());await waitFor(()=>expect(result.current.rows).toHaveLength(20))
+  expect(mocks.page).toHaveBeenCalledTimes(1)
+  mocks.page.mockResolvedValue(Array.from({length:20},(_,i)=>row(20-i)))
+  await act(()=>result.current.more());expect(mocks.page.mock.calls[1][1]).toBe(21);expect(result.current.rows).toHaveLength(40)
+  rerender({open:false});expect(mocks.stop).toHaveBeenCalledOnce()
+})
+test('signals read changed IDs, not full history; edits/deletes and own writes do not reset the page',async()=>{
+  const {result}=renderHook(()=>useEventComments(1,true));act(()=>mocks.ready());await waitFor(()=>expect(result.current.rows).toHaveLength(20))
+  mocks.rows.mockResolvedValue([row(40,'edited')])
+  act(()=>{mocks.change(40);mocks.change(40)})
+  await waitFor(()=>expect(result.current.rows.at(-1)?.content).toBe('edited'))
+  expect(mocks.rows).toHaveBeenCalledTimes(1);expect(mocks.rows.mock.calls[0][1]).toEqual([40]);expect(mocks.page).toHaveBeenCalledTimes(1)
+  mocks.rows.mockResolvedValue([]);act(()=>mocks.change(40));await waitFor(()=>expect(result.current.rows).toHaveLength(19))
+  act(()=>result.current.accept(row(41)))
+  expect(result.current.rows.at(-1)?.id).toBe(41);expect(mocks.page).toHaveBeenCalledTimes(1)
+})
+test('background disconnects and stale reads cannot repopulate a closed or switched feed',async()=>{
+  let finish!:(rows:unknown[])=>void
+  mocks.page.mockImplementation(()=>new Promise(resolve=>{finish=resolve}))
+  const {result}=renderHook(()=>useEventComments(1,true));act(()=>mocks.ready())
+  Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});act(()=>document.dispatchEvent(new Event('visibilitychange')))
+  await act(async()=>finish([row(99)]));expect(result.current.rows).toHaveLength(0);expect(mocks.stop).toHaveBeenCalledOnce()
+  mocks.page.mockResolvedValue([row(2)])
+  Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});act(()=>document.dispatchEvent(new Event('visibilitychange')))
+  act(()=>mocks.ready());await waitFor(()=>expect(result.current.rows.map(r=>r.id)).toEqual([2]))
+  expect(mocks.watch).toHaveBeenCalledTimes(2)
+})
+test('an older notification reads only its exact additional comment, not every intervening page',async()=>{
+  mocks.rows.mockResolvedValue([row(2)])
+  const {result}=renderHook(()=>useEventComments(1,true,2));act(()=>mocks.ready());await waitFor(()=>expect(result.current.rows).toHaveLength(21))
+  expect(mocks.rows.mock.calls[0][1]).toEqual([2]);expect(mocks.page).toHaveBeenCalledTimes(1)
+})
+test('slow initial page cannot overwrite a newer local edit or deleted row',async()=>{
+  let finish!:(rows:unknown[])=>void
+  mocks.page.mockImplementation(()=>new Promise(resolve=>{finish=resolve}))
+  const {result}=renderHook(()=>useEventComments(1,true));act(()=>mocks.ready())
+  act(()=>{result.current.accept(row(40,'new'));result.current.accept({...row(39),deleted_at:'now'})})
+  await act(async()=>finish([row(40,'old'),row(39)]))
+  expect(result.current.rows.map(r=>[r.id,r.content])).toEqual([[40,'new']])
+})
+test('reconnect resets the older cursor so a burst of missed comments stays reachable',async()=>{
+  const {result}=renderHook(()=>useEventComments(1,true));act(()=>mocks.ready());await waitFor(()=>expect(result.current.rows).toHaveLength(20))
+  mocks.page.mockResolvedValue(Array.from({length:20},(_,i)=>row(100-i)))
+  mocks.rows.mockResolvedValue(Array.from({length:20},(_,i)=>row(40-i)))
+  act(()=>mocks.ready());await waitFor(()=>expect(result.current.rows.at(-1)?.id).toBe(100))
+  mocks.page.mockResolvedValue(Array.from({length:20},(_,i)=>row(80-i)))
+  await act(()=>result.current.more())
+  expect(mocks.page.mock.calls.at(-1)?.[1]).toBe(81)
+  expect(result.current.rows.some(r=>r.id===80)).toBe(true)
+})
