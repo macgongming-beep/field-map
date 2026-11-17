@@ -116,6 +116,8 @@
 
 병합·대신 신청 후속: [0099 병합 보호, 세션 0행 확인, 마감·전시대 중복 검사](0099-demo-merge-and-substitute-application-guards.md)
 
+신청 마감 예외: [0100 인도자·관리자의 마감 후 봉사자/게스트 추가 허용](0100-demo-staff-add-after-closing.md)
+
 ```markdown
 # 제목
 

@@ -10,7 +10,7 @@ if(process.env.ASSIGNMENT_REVIEW_MUTATION==='revision')migration=migration.repla
 if(process.env.ASSIGNMENT_REVIEW_MUTATION==='permission')migration=migration.replace("and u.role in ('admin','developer'));","and u.role in ('leader','admin','developer'));")
 if(process.env.ASSIGNMENT_REVIEW_MUTATION==='maintenance')migration=migration.replace('not(guarded or maintenance or cascading)','not guarded')
 if(process.env.ASSIGNMENT_REVIEW_MUTATION==='identity')migration=migration.replace('not private.event_participant_identity_allowed(p_user_name,p_role)','false')
-if(process.env.ASSIGNMENT_REVIEW_MUTATION==='application')migration=migration.replace("if p_action='add' then\n    if not coalesce", "if false then\n    if not coalesce")
+if(process.env.ASSIGNMENT_REVIEW_MUTATION!=='staff-closing')migration+=readFileSync('supabase/migrations/20261117_1300_allow_staff_add_after_closing.sql','utf8')
 if(process.env.ASSIGNMENT_REVIEW_MUTATION==='merge')migration=migration.replace("perform set_config('app.assignment_maintenance','on',true);\n  result:=private.merge", "perform set_config('app.assignment_maintenance','',true);\n  result:=private.merge")
 beforeAll(async()=>{
   db=new PGlite()
@@ -198,14 +198,21 @@ test('leaders cannot rewrite or delete other people service sessions, owners and
   expect((await db.query('delete from service_sessions returning *')).rows).toHaveLength(1)
 })
 
-test('substitute applications enforce closing and same-event cart checks for admins and leaders',async()=>{
+test('staff add late arrivals and guests after closing; members cannot use the staff RPC',async()=>{
   const add=(actor:number,name='Leader A',role='신청')=>db.query<{r:unknown}>('select manage_event_participant_versioned_tx($1,1,$2,\'add\',$3,$4) r',[token(actor),name,0,role])
   await db.exec('update calendar_events set allow_applications=false where id=1')
   for(const actor of [1,2]){
-    expect((await add(actor)).rows[0].r).toMatchObject({ok:false,reason:'applications_closed'})
-    expect((await add(actor,'Guest','게스트')).rows[0].r).toMatchObject({ok:false,reason:'applications_closed'})
+    expect((await add(actor,actor===1?'Admin':'Leader A')).rows[0].r).toMatchObject({ok:true,changed:true})
+    expect((await add(actor,`Guest ${actor}`,'게스트')).rows[0].r).toMatchObject({ok:true,changed:true})
   }
-  await db.exec('update calendar_events set allow_applications=true where id=1;insert into event_cart_applications values(1,2)')
+  await expect(add(4,'Leader B')).rejects.toThrow('permission')
+  expect(await rev()).toBe(0)
+  expect((await db.query('select allow_applications from calendar_events where id=1')).rows[0]).toEqual({allow_applications:false})
+})
+
+test('staff additions retain same-event cart checks after closing',async()=>{
+  const add=(actor:number,name='Leader A')=>db.query<{r:unknown}>('select manage_event_participant_versioned_tx($1,1,$2,\'add\',$3,\'신청\') r',[token(actor),name,0])
+  await db.exec('update calendar_events set allow_applications=false where id=1;insert into event_cart_applications values(1,2)')
   for(const actor of [1,2])expect((await add(actor,' leader a ')).rows[0].r).toMatchObject({ok:false,reason:'cart_application_exists'})
   expect(await rev()).toBe(0)
   expect((await db.query("select * from event_participants where user_name='Leader A'")).rows).toHaveLength(0)

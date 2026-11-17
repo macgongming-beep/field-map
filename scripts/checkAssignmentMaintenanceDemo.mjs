@@ -83,11 +83,20 @@ select pg_temp.expect(not exists(select 1 from event_informal_assignments where 
 rollback to maintenance;
 ${headers(admin)}
 update calendar_events set allow_applications=false where id=(select event_id from test_context);
-select pg_temp.expect(manage_event_participant_versioned_tx(${q(leader.token)},event_id,${q(newMember.name)},'add',revision)->>'reason'='applications_closed','substitute leader respects application closing') from test_context;
-select pg_temp.expect(manage_event_participant_versioned_tx(${q(admin.token)},event_id,${q(newMember.name)},'add',revision)->>'reason'='applications_closed','admin substitute respects application closing') from test_context;
+select pg_temp.expect((manage_event_participant_versioned_tx(${q(leader.token)},event_id,${q(newMember.name)},'add',revision)->>'changed')::boolean,'leader adds late arrival after closing') from test_context;
+select pg_temp.expect((manage_event_participant_versioned_tx(${q(admin.token)},event_id,'Late guest admin','add',revision,'게스트')->>'changed')::boolean,'admin adds guest after closing') from test_context;
+select pg_temp.expect((manage_event_participant_versioned_tx(${q(leader.token)},event_id,'Late guest leader','add',revision,'게스트')->>'changed')::boolean,'leader adds guest after closing') from test_context;
+select pg_temp.expect((manage_event_participant_versioned_tx(${q(admin.token)},event_id,${q(f.actors[6].name)},'add',revision)->>'changed')::boolean,'admin adds late arrival after closing') from test_context;
+do $$declare eid integer;rejected boolean:=false;begin
+ select event_id into eid from test_context;
+ begin perform apply_service_activity_tx(${q(f.actors[8].token)},eid,'service');exception when others then rejected:=position('closed' in sqlerrm)>0;end;
+ perform pg_temp.expect(rejected,'member self application remains closed');rejected:=false;
+ begin perform manage_event_participant_versioned_tx(${q(f.actors[8].token)},eid,'Forbidden guest','add',0,'게스트');exception when insufficient_privilege then rejected:=true;end;
+ perform pg_temp.expect(rejected,'member cannot bypass closing with staff RPC');end$$;
 select pg_temp.expect((manage_event_participant_versioned_tx(${q(member.token)},event_id,${q(member.name)},'remove',null)->>'ok')::boolean,'self cancellation still works after closing') from test_context;
 rollback to maintenance;
 ${headers(admin)}
+update calendar_events set allow_applications=false where id=(select event_id from test_context);
 insert into event_cart_applications(event_id,user_id) select event_id,${Number(newMember.id)} from test_context;
 select pg_temp.expect(manage_event_participant_versioned_tx(${q(leader.token)},event_id,${q(newMember.name)},'add',revision)->>'reason'='cart_application_exists','substitute checks same-event cart application') from test_context;
 select pg_temp.expect(manage_event_participant_versioned_tx(${q(admin.token)},event_id,${q(newMember.name)},'add',revision)->>'reason'='cart_application_exists','admin cannot bypass cart duplicate') from test_context;
@@ -122,6 +131,6 @@ rollback;`
 const result=spawnSync('psql',['-X','-qAt','-v','ON_ERROR_STOP=1'],{input:setup,encoding:'utf8',env:{...process.env,PGHOST:db.hostname,PGPORT:db.port,PGUSER:decodeURIComponent(db.username),PGDATABASE:db.pathname.slice(1),PGPASSWORD:decodeURIComponent(db.password),PGSSLMODE:'require',PGCONNECT_TIMEOUT:'15'}})
 if(result.error||result.status){let error=result.stderr;for(const actor of [admin,...f.actors])error=error.replaceAll(actor.token,'[redacted]');throw result.error??Error(error)}
 const checks=result.stderr.split('\n').filter(s=>s.includes('PASS:')).map(s=>s.split('PASS: ')[1])
-assert.equal(checks.length,30)
+assert.equal(checks.length,34)
 writeFileSync('scratch/assignment-maintenance-smoke.json',JSON.stringify({project,checks,rolledBack:true},null,2),{mode:0o600})
 console.log(JSON.stringify({project,passed:checks.length,rolledBack:true}))

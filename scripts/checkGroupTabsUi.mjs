@@ -61,7 +61,7 @@ try{
   // Inject only the refusal response here to verify the visible error/retained form.
   await admin.locator('.gs-roster-tools button[aria-expanded]').click()
   await admin.locator('.participant-add-content input[type=search]').fill(fixture.actors[6].name)
-  for(const [reason,message] of [['applications_closed','신청이 마감되어 참가자를 추가할 수 없습니다.'],['cart_application_exists','같은 일정에 전시대 봉사를 신청한 사람입니다. 기존 신청을 먼저 취소해 주세요.']]){
+  for(const [reason,message] of [['cart_application_exists','같은 일정에 전시대 봉사를 신청한 사람입니다. 기존 신청을 먼저 취소해 주세요.']]){
     let called=false
     await admin.route('**/rpc/manage_event_participant_versioned_tx',route=>{
       const input=route.request().postDataJSON()
@@ -77,7 +77,7 @@ try{
     await admin.unroute('**/rpc/manage_event_participant_versioned_tx')
   }
   await admin.locator('.gs-roster-tools button[aria-expanded]').click()
-  checks.push('closing/cart refusal shows translated reason, preserves add form and does not add a participant')
+  checks.push('cart refusal shows translated reason, preserves add form and does not add a participant')
   const sharedResult=admin.locator('details').filter({has:admin.locator('summary',{hasText:'배정 결과'})})
   assert.equal(await sharedResult.evaluate(el=>el.open),true,'Shared result starts expanded')
   assert.equal(await admin.locator('details').filter({has:admin.locator('summary',{hasText:'모임 정보'})}).evaluate(el=>el.open),false)
@@ -190,10 +190,25 @@ try{
     assert.ok(r.ok,await r.clone().text());return r.json()
   }
   const [{token:adminToken}]=await request('rpc/auth_login',{p_login_id:config.TEST_LOGIN_ID,p_pin:config.TEST_LOGIN_PIN})
-  const [congregation]=await request('calendar_events',{event_date:'2026-11-18',time:'20:00',end_time:'21:00',title:'UI congregation permission test',place:'',leader_name:fixture.actors[0].name,service_kind:'congregation',group_service_scope:false,allow_applications:true},adminToken)
+  const [congregation]=await request('calendar_events',{event_date:'2026-11-18',time:'20:00',end_time:'21:00',title:'UI congregation permission test',place:'',leader_name:fixture.actors[0].name,service_kind:'congregation',group_service_scope:false,allow_applications:false},adminToken)
   try{
     await congregationSession.page.goto(`${root}/calendar?openEvent=${congregation.id}`)
     await congregationSession.page.getByText('UI congregation permission test',{exact:true}).first().waitFor({timeout:30000})
+    await congregationSession.page.getByRole('button',{name:'+ 추가',exact:true}).click()
+    await congregationSession.page.locator('.participant-add-content input[type=search]').fill(fixture.actors[6].name)
+    await congregationSession.page.locator('.participant-add-person').filter({hasText:fixture.actors[6].name}).click()
+    await congregationSession.page.locator('.participant-add-content').waitFor({state:'hidden',timeout:15000})
+    await congregationSession.page.getByRole('button',{name:'+ 추가',exact:true}).click()
+    const lateGuest=`Late guest ${congregation.id}`
+    await congregationSession.page.getByRole('textbox',{name:'게스트 이름',exact:true}).fill(lateGuest)
+    await congregationSession.page.locator('.participant-add-guest-button').click()
+    await congregationSession.page.locator('.participant-add-content').waitFor({state:'hidden',timeout:15000})
+    const lateRows=await request(`event_participants?event_id=eq.${congregation.id}&select=user_name,role`,undefined,adminToken,'GET')
+    assert.ok(lateRows.some(r=>r.user_name===fixture.actors[6].name&&r.role==='신청'))
+    assert.ok(lateRows.some(r=>r.user_name===lateGuest&&r.role==='게스트'))
+    const closed=await request(`calendar_events?id=eq.${congregation.id}&select=allow_applications`,undefined,adminToken,'GET')
+    assert.equal(closed[0].allow_applications,false)
+    checks.push('unnamed leader adds registered late arrival and guest through closed-event UI without reopening applications')
     const arrange=congregationSession.page.getByRole('button',{name:/봉사 팀 구성 & 배정/})
     await arrange.waitFor({timeout:30000})
     assert.equal(await congregationSession.page.getByRole('button',{name:'일정 수정',exact:true}).count(),0)
