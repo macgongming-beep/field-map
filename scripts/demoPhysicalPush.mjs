@@ -97,6 +97,24 @@ if(mode==='bootstrap'){
     insert into event_participants(event_id,user_name,role)select id,${quote(admin.name)},'신청' from calendar_events where title='[데모] 휴대폰 알림 확인' and event_date=current_date and time='23:47' and target_groups=array['singal'];commit;`))
   state.events=events;state.admin=admin;state.deliveries=[];writeFileSync(stateFile,JSON.stringify(state,null,2),{mode:0o600})
   console.log(JSON.stringify({prepared:true,recipient:admin.name,link:`${app}/calendar?openEvent=${events.find(e=>e.group==='singal').id}`,realPushSent:false}))
+}else if(mode==='cleanup'){
+  const state=JSON.parse(readFileSync(stateFile,'utf8'));assert.equal(state.project,project);assert.ok(!state.cleaned)
+  assert.equal(state.events.length,4);assert.equal(state.deliveries.length,2)
+  assert.ok(state.deliveries.every(d=>d.physicalReceipt.startsWith('user-confirmed-')),'Wait for physical receipt confirmation')
+  const events=state.events.map(e=>Number(e.id)),comments=state.deliveries.map(d=>Number(d.commentId))
+  assert.ok([...events,...comments].every(id=>Number.isSafeInteger(id)&&id>0))
+  const result=JSON.parse(sql(`begin;do $$begin
+    if (select count(*) from calendar_events where id in(${events}) and title='[데모] 휴대폰 알림 확인')<>4 then raise exception 'Test events changed';end if;
+    if exists(select 1 from event_participants where event_id in(${events}) and user_name<>${quote(state.admin.name)}) then raise exception 'Unrelated participant';end if;
+    if exists(select 1 from comments where target_type='calendar_event' and target_id in(${events}) and id not in(${comments})) then raise exception 'Unrelated comment';end if;
+    if exists(select 1 from event_card_assignments where event_id in(${events}) union all select 1 from event_card_assignment_cards where event_id in(${events}) union all select 1 from event_informal_assignments where event_id in(${events}) union all select 1 from event_restaurant_assignments where event_id in(${events}) union all select 1 from service_sessions where calendar_event_id in(${events})) then raise exception 'Unexpected assignment or session';end if;
+  end$$;
+  delete from notifications where type in('comment','mention') and related_id in(${comments});
+  delete from comments where target_type='calendar_event' and target_id in(${events}) and id in(${comments});
+  delete from calendar_events where id in(${events}) and title='[데모] 휴대폰 알림 확인';
+  select json_build_object('remainingEvents',(select count(*) from calendar_events where id in(${events})),'remainingComments',(select count(*) from comments where id in(${comments})),'remainingNotifications',(select count(*) from notifications where type in('comment','mention') and related_id in(${comments})));commit;`))
+  assert.ok(Object.values(result).every(n=>n===0));state.cleaned=true;writeFileSync(stateFile,JSON.stringify(state,null,2),{mode:0o600})
+  console.log(JSON.stringify({cleaned:true,...result,deviceSubscriptionPreserved:true}))
 }else if(mode==='send'){
   const kind=process.argv[3];assert.ok(['comment','mention'].includes(kind))
   const state=JSON.parse(readFileSync(stateFile,'utf8'));assert.equal(state.project,project);assert.ok(state.events)
@@ -118,4 +136,4 @@ if(mode==='bootstrap'){
   state.deliveries.push({kind,at:new Date().toISOString(),...result,physicalReceipt:'awaiting-user'})
   writeFileSync(stateFile,JSON.stringify(state,null,2),{mode:0o600})
   console.log(JSON.stringify({sent:true,...result,physicalReceipt:'awaiting-user'}))
-}else throw Error('Use bootstrap, configure, probe, status, prepare, recipient ID or send comment/mention')
+}else throw Error('Use bootstrap, configure, probe, status, prepare, recipient ID, send comment/mention or cleanup')
