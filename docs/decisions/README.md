@@ -126,6 +126,8 @@
 
 운영 전 최종 점검: [0104 데모 검증 통과·운영 전환 세 항목 보완 전 배포 보류](0104-group-service-release-preflight.md)
 
+전환 보완·리허설: [0105 선택적 전시대·독립 배정 설정·호환 준비 후 엄격 차단](0105-group-service-staged-rollout.md)
+
 ```markdown
 # 제목
 

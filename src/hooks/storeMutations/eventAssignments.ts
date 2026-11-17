@@ -1,14 +1,14 @@
 import { teamServiceEnabled } from '../../config/teamService'
 import { supabase, showToast, reportMutationError, getCurrentVisitor, ensureAffectedRows } from './shared'
 import { msg } from '../../lib/msg'
-import { groupServiceEnabled } from '../../features/groupService/model'
+import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
 import { fetchUpdatedCalendarEvent } from '../calendarEventRefresh'
 
 export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<void>; refreshEvent?: (id:number)=>Promise<void> }) {
   const { fetchAll } = deps
 
   const assignCardToEventParticipant = async (eventId: number, userName: string, cardId: number | null) => {
-    if(groupServiceEnabled()) {
+    if(assignmentRevisionEnabled()) {
       const event=await fetchUpdatedCalendarEvent(eventId)
       if(!event?.assignmentRevision)throw new Error('Reload event before assigning')
       const assignments=event.cardAssignments.filter(a=>a.userName!==userName).map(a=>({userName:a.userName,cardIds:a.assignedCardIds??(a.assignedCardId?[a.assignedCardId]:[]),teamKey:a.teamKey??`person:${a.userName}`,cardScope:a.cardScope,informalAssetIds:a.teamKey?event.assignmentTeamInformal?.[a.teamKey]??[]:[]}))
@@ -120,7 +120,7 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
       }))
     const token = (await import('../../lib/authToken')).getAuthToken()
     if (token) {
-      const versioned=groupServiceEnabled()
+      const versioned=assignmentRevisionEnabled()
       if(versioned&&options?.expectedRevision==null)throw new Error('Reload assignment before saving')
       const rpcRes = await supabase.rpc(versioned ? 'save_event_assignments_versioned_tx' : teamService ? 'assign_team_service_bulk_tx' : scoped ? 'assign_scoped_cards_bulk_tx' : 'assign_cards_bulk_tx', {
         p_token: token,

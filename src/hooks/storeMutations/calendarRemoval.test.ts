@@ -68,28 +68,27 @@ test('other participant removal requires revision and conflicts refresh only the
   expect(fetchAll).not.toHaveBeenCalled()
 })
 
-test.each(['empty','deleted','denied','partial'])('legacy session cleanup distinguishes absent sessions from denied writes: %s',async mode=>{
+test.each([true,false])('non-team removal is one atomic RPC, never sequential cleanup (success=%s)',async success=>{
   vi.stubEnv('VITE_DEMO_MODE','false')
-  const writes:string[]=[],fetchAll=vi.fn()
-  mocks.from.mockImplementation((table:string)=>{
-    let deleting=false
-    const q={select:vi.fn(()=>q),eq:vi.fn(()=>q),in:vi.fn(()=>q),delete:vi.fn(()=>{deleting=true;return q}),
-      then:(resolve:(value:unknown)=>void)=>{
-        if(deleting)writes.push(table)
-        const data=table!=='service_sessions'?[{id:1}]:!deleting?(mode==='empty'?[]:[{id:7},{id:8}]):mode==='deleted'?[{id:7},{id:8}]:mode==='partial'?[{id:7}]:[]
-        return Promise.resolve({data,error:null}).then(resolve)
-      }}
-    return q
-  })
-  await makeCalendarMutations({calendarEvents:[],fetchAll}).removeParticipantFromEvent(1,'B')
-  if(mode==='denied'||mode==='partial'){
-    expect(mocks.ensure).toHaveBeenCalledWith([],expect.any(String))
-    expect(writes).toEqual(['service_sessions']);expect(fetchAll).not.toHaveBeenCalled()
-    expect(mocks.log).not.toHaveBeenCalled();expect(mocks.toast).not.toHaveBeenCalled()
-  }else{
-    expect(writes.includes('service_sessions')).toBe(mode==='deleted')
-    expect(writes).toContain('event_participants');expect(fetchAll).toHaveBeenCalledOnce();expect(mocks.log).toHaveBeenCalledOnce()
-  }
+  vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED','false')
+  mocks.rpc.mockResolvedValue(success?{data:{ok:true},error:null}:{data:null,error:{code:'PGRST202'}})
+  const fetchAll=vi.fn()
+  await makeCalendarMutations({calendarEvents:[{...event,assignmentTeamInformal:undefined,cardAssignments:[]}],fetchAll}).removeParticipantFromEvent(1,'B')
+  expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('remove_service_participant_compat_tx',expect.objectContaining({p_user_name:'B',p_expected_shared_at:event.assignmentSharedAt}))
+  expect(mocks.from).not.toHaveBeenCalled()
+  expect(fetchAll).toHaveBeenCalledTimes(success?1:0)
+  expect(mocks.log).toHaveBeenCalledTimes(success?1:0)
+})
+test('missing event never starts partial participant cleanup',async()=>{
+  await makeCalendarMutations({calendarEvents:[],fetchAll:vi.fn()}).removeParticipantFromEvent(1,'B')
+  expect(mocks.from).not.toHaveBeenCalled();expect(mocks.rpc).not.toHaveBeenCalled()
+})
+test('production with group UI off still uses versioned removal',async()=>{
+  vi.stubEnv('VITE_DEMO_MODE','false');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','false')
+  vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED','true')
+  await makeCalendarMutations({calendarEvents:[{...event,assignmentRevision:'8'}],fetchAll:vi.fn()}).removeParticipantFromEvent(1,'B')
+  expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('manage_event_participant_versioned_tx',expect.objectContaining({p_expected_revision:'8'}))
+  expect(mocks.from).not.toHaveBeenCalled()
 })
 
 test.each(['applications_closed','cart_application_exists'])('substitute application shows the actual policy refusal: %s',async reason=>{

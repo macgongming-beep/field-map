@@ -1,5 +1,7 @@
-// Enable team assignments independently from demo-only login/reset tools.
+import { assignmentRevisionEnabled } from './assignmentRevision'
+
+// Versioned saves use the team contract even before the group tabs are enabled.
 export function teamServiceEnabled() {
-  return import.meta.env.VITE_TEAM_SERVICE_ENABLED === 'true'
+  return assignmentRevisionEnabled() || import.meta.env.VITE_TEAM_SERVICE_ENABLED === 'true'
     || import.meta.env.VITE_DEMO_MODE === 'true'
 }

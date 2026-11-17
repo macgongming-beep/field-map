@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase'
 import type { CalendarEvent } from '../types'
 import type { ParticipantRow } from './participantSignalReceipts'
-import { groupServiceEnabled } from '../features/groupService/model'
+import { assignmentRevisionEnabled } from '../config/assignmentRevision'
 
 type Participants = Pick<CalendarEvent, 'applicants' | 'assigned' | 'guests' | 'returnVisitApplicants' | 'assignmentRevision'>
 
@@ -9,8 +9,9 @@ type Participants = Pick<CalendarEvent, 'applicants' | 'assigned' | 'guests' | '
 export async function readCalendarParticipants(eventIds: number[], onRows?: (rows: Map<number, ParticipantRow[]>) => void) {
   const result = new Map<number, Participants>()
   const snapshots = new Map<number, ParticipantRow[]>()
-  const activity = groupServiceEnabled()
-  const columns = `id${activity?',assignment_revision':''},event_participants(${onRows ? 'id,' : ''}user_name,role${activity ? ',service_activity' : ''})`
+  const activity = assignmentRevisionEnabled()
+  const versioned = assignmentRevisionEnabled()
+  const columns = `id${versioned?',assignment_revision':''},event_participants(${onRows ? 'id,' : ''}user_name,role${activity ? ',service_activity' : ''})`
   if (eventIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid participant event id')
   const ids = [...new Set(eventIds)]
   for (let start = 0; start < ids.length; start += 100) {
@@ -26,7 +27,7 @@ export async function readCalendarParticipants(eventIds: number[], onRows?: (row
         throw new Error('Invalid calendar participants response')
       }
       for (const row of data) result.set(row.id, {
-        ...(activity&&row.assignment_revision!=null?{assignmentRevision:String(row.assignment_revision)}:{}),
+        ...(versioned&&row.assignment_revision!=null?{assignmentRevision:String(row.assignment_revision)}:{}),
         applicants: row.event_participants.map(p => p.user_name),
         assigned: row.event_participants.filter(p => p.role === '입명').map(p => p.user_name),
         guests: row.event_participants.filter(p => p.role === '게스트').map(p => p.user_name),

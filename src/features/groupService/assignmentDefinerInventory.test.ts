@@ -12,3 +12,12 @@ test('reopening a private maintenance core fails the audit',()=>{
   const rows=baseline();rows.find(r=>r.signature.startsWith('private.merge_')).anon_execute=true
   expect(()=>assertAssignmentInventory(rows)).toThrow('private.merge_')
 })
+test('production stage inventory excludes demo reset and only compatibility permits old team saves',()=>{
+  const rows=baseline().filter(r=>r.signature!=='public.reset_demo_environment_tx(uuid)')
+  expect(assertAssignmentInventory(rows,{environment:'production',phase:'strict'})).toHaveLength(12)
+  const team=rows.find(r=>r.signature.startsWith('public.assign_team_service_bulk_tx'))!
+  team.anon_execute=true;team.authenticated_execute=true
+  expect(assertAssignmentInventory(rows,{environment:'production',phase:'compatibility'})).toHaveLength(12)
+  expect(()=>assertAssignmentInventory(rows,{environment:'production',phase:'strict'})).toThrow()
+  expect(()=>assertAssignmentInventory(baseline(),{environment:'production',phase:'strict'})).toThrow('inventory changed')
+})

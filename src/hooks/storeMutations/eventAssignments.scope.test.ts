@@ -4,6 +4,18 @@ vi.mock('./shared', () => ({ supabase: mocks, showToast: vi.fn(), reportMutation
 vi.mock('../../lib/authToken', () => ({ getAuthToken: () => 'test-token' }))
 import { makeEventAssignmentMutations } from './eventAssignments'
 
+test.each(['Could not find the function','permission denied'])('production group UI off never falls back after versioned save failure: %s',async message=>{
+  vi.stubEnv('VITE_DEMO_MODE','false');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','false')
+  vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED','true');vi.stubEnv('VITE_TEAM_SERVICE_ENABLED','false')
+  try {
+    mocks.rpc.mockClear();mocks.from.mockClear();mocks.rpc.mockResolvedValue({error:{message}})
+    const mutation=makeEventAssignmentMutations({fetchAll:vi.fn()})
+    await expect(mutation.assignCardsToEventParticipantsBulk(1,[{userName:'A',teamKey:'pair',cardIds:[],informalAssetIds:[9]}],{expectedRevision:'4'})).rejects.toMatchObject({message})
+    expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith('save_event_assignments_versioned_tx',expect.objectContaining({p_expected_revision:'4',p_assignments:[{userName:'A',teamKey:'pair',cardIds:[],cardScope:'전체',informalAssetIds:[9]}]}))
+    expect(mocks.from).not.toHaveBeenCalled()
+  }finally{vi.unstubAllEnvs()}
+})
+
 test('versioned demo save forwards revision, rejects missing revision and reports conflicts without fallback',async()=>{
   vi.stubEnv('VITE_DEMO_MODE','true');vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co')
   try{

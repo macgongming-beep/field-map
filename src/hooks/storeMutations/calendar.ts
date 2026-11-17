@@ -1,4 +1,5 @@
 import { teamServiceEnabled } from '../../config/teamService'
+import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
 import type { CalendarEvent } from '../../types'
 import { supabase, showToast, reportMutationError, getCurrentVisitor, ensureAffectedRows } from './shared'
 import { logServiceAction } from './serviceLog'
@@ -67,7 +68,7 @@ export function makeCalendarMutations(deps: {
   const removeTeamParticipant = async (event: CalendarEvent, userName: string, self: boolean) => {
     const token = getAuthToken()
     if (!token) return false
-    const result = await supabase.rpc('remove_team_event_participant_tx', {
+    const result = await supabase.rpc(usesTeamAssignments(event) ? 'remove_team_event_participant_tx' : 'remove_service_participant_compat_tx', {
       p_token: token, p_event_id: event.id, p_user_name: userName, p_self: self,
       p_expected_shared_at: event.assignmentSharedAt ?? null,
     })
@@ -273,7 +274,7 @@ export function makeCalendarMutations(deps: {
     const currentVisitor = getCurrentVisitor()
     const event = calendarEvents.find((e) => e.id === eventId)
     const isApplied = event?.applicants.includes(currentVisitor)
-    if(groupServiceEnabled()&&isApplied&&event){await manageVersionedParticipant(event,currentVisitor,'remove');return}
+    if(assignmentRevisionEnabled()&&isApplied&&event){await manageVersionedParticipant(event,currentVisitor,'remove');return}
     if (isApplied && usesTeamAssignments(event)) {
       await removeTeamParticipant(event!, currentVisitor, true)
       return
@@ -282,7 +283,7 @@ export function makeCalendarMutations(deps: {
       showToast(msg('이 일정은 봉사 신청을 받지 않습니다.'), 'info')
       return
     }
-    if (!isApplied && groupServiceEnabled()) {
+    if (!isApplied && assignmentRevisionEnabled()) {
       try { if (!await confirmOverlappingApplication(eventId)) return }
       catch (error) { reportMutationError(msg('신청 시간을 확인하지 못했습니다. 다시 시도해 주세요.'), error); return }
       try {
@@ -443,83 +444,13 @@ export function makeCalendarMutations(deps: {
 
   const removeParticipantFromEvent = async (eventId: number, userName: string) => {
     const event = calendarEvents.find((item) => item.id === eventId)
-    if(groupServiceEnabled()&&event)return manageVersionedParticipant(event,userName,'remove')
-    if (usesTeamAssignments(event)) {
-      await removeTeamParticipant(event!, userName, false)
-      return
+    if (!event) {
+      showToast(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'), 'error')
+      return false
     }
-    // No assigned session is a valid case. Existing rows must actually be removed
-    // before continuing; an RLS-filtered zero-row delete is not success.
-    const expectedSessions = await supabase.from('service_sessions').select('id')
-      .eq('calendar_event_id', eventId).eq('user_name', userName).eq('source', 'assigned')
-    if (expectedSessions.error || !Array.isArray(expectedSessions.data)) {
-      reportMutationError(msg('참가자의 자동 봉사 세션을 정리하지 못했습니다.'), expectedSessions.error ?? new Error('Session lookup failed'))
-      return
-    }
-    if (expectedSessions.data.length > 0) {
-      const sessionResult = await supabase.from('service_sessions').delete()
-        .eq('calendar_event_id', eventId).eq('user_name', userName).eq('source', 'assigned')
-        .in('id', expectedSessions.data.map(row => row.id)).select('id')
-      if (sessionResult.error) {
-        reportMutationError(msg('참가자의 자동 봉사 세션을 정리하지 못했습니다.'), sessionResult.error)
-        return
-      }
-      const removedIds = new Set(sessionResult.data?.map(row => row.id))
-      if (!ensureAffectedRows(expectedSessions.data.every(row => removedIds.has(row.id)) ? sessionResult.data : [], msg('참가자의 자동 봉사 세션을 정리하지 못했습니다.'))) return
-    }
-    const multiCardResult = await supabase.from('event_card_assignment_cards')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (multiCardResult.error) {
-      reportMutationError(msg('참가자의 추가 카드 배정을 정리하지 못했습니다.'), multiCardResult.error)
-      return
-    }
-
-    const cardAssignmentResult = await supabase.from('event_card_assignments')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (cardAssignmentResult.error) {
-      reportMutationError(msg('참가자의 카드 배정을 정리하지 못했습니다.'), cardAssignmentResult.error)
-      return
-    }
-
-    const informalResult = await supabase.from('event_informal_assignments')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (informalResult.error) {
-      reportMutationError(msg('참가자의 비공식 배정을 정리하지 못했습니다.'), informalResult.error)
-      return
-    }
-
-    const restaurantResult = await supabase.from('event_restaurant_assignments')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (restaurantResult.error) {
-      reportMutationError(msg('참가자의 식당 배정을 정리하지 못했습니다.'), restaurantResult.error)
-      return
-    }
-
-    const participantResult = await supabase.from('event_participants')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (participantResult.error) {
-      reportMutationError(msg('참가자를 제외하지 못했습니다.'), participantResult.error)
-      return
-    }
-
-    await logServiceAction({
-      eventId,
-      action: 'left',
-      targetType: 'event_participant',
-      details: { user_name: userName, source: 'admin_remove' },
-    })
-    await (refetchAfterParticipantRemoval ?? fetchAll)()
-    showToast(msg('{userName}님을 참가자와 배정에서 제외했습니다', { userName: userName }))
+    if (assignmentRevisionEnabled()) return manageVersionedParticipant(event,userName,'remove')
+    // Compatibility RPC is atomic for legacy non-team events too. No table-write fallback.
+    return removeTeamParticipant(event,userName,false)
   }
 
   /**
@@ -547,7 +478,7 @@ export function makeCalendarMutations(deps: {
       showToast(msg('이미 이 일정에 있는 이름입니다.'), 'info')
       return false
     }
-    if(groupServiceEnabled())return manageVersionedParticipant(event,normalizedName,'add',role)
+    if(assignmentRevisionEnabled())return manageVersionedParticipant(event,normalizedName,'add',role)
     const result = await supabase.from('event_participants').upsert(
       { event_id: eventId, user_name: normalizedName, role },
       { onConflict: 'event_id,user_name' },

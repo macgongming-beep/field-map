@@ -1,5 +1,6 @@
 import { teamServiceEnabled } from '../../config/teamService'
-import { groupServiceEnabled, territoryApplicants } from '../../features/groupService/model'
+import { territoryApplicants } from '../../features/groupService/model'
+import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
 import { fetchUpdatedCalendarEvent } from '../../hooks/calendarEventRefresh'
 // 인도자 배정 에디터 (호스트) — 화면1(팀짓기) ↔ 화면2(구역배분) + 배정 공유
 // 설계: docs/leader-assignment-redesign.md v3
@@ -67,7 +68,7 @@ export function AssignmentEditor(props: Props) {
 }
 
 function AssignmentEditorSnapshot(props: Props) {
-  const versioned=groupServiceEnabled()
+  const versioned=assignmentRevisionEnabled()
   const [snapshot,setSnapshot]=useState<CalendarEvent|null>(null)
   const [failed,setFailed]=useState(false)
   useEffect(()=>{
@@ -103,7 +104,7 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
   // A successful personal operation advances exactly one version. Do not adopt
   // an arbitrary refreshed version: it may include another editor's changes.
   const personalSaved=()=>{
-    if(!groupServiceEnabled()||revisionRef.current==null)return
+    if(!assignmentRevisionEnabled()||revisionRef.current==null)return
     revisionRef.current=(BigInt(revisionRef.current)+1n).toString()
     dispatch({type:'SET_BASE_REVISION',revision:revisionRef.current})
   }
@@ -198,7 +199,7 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
     try {
       await onShare(event.id, draftToAssignments(draft), {
         expectedSharedAt: entrySharedAt,
-        ...(groupServiceEnabled()?{expectedRevision:revisionRef.current}:{}),
+        ...(assignmentRevisionEnabled()?{expectedRevision:revisionRef.current}:{}),
         onConflict: () => { conflicted = true; setShareConflict(true) },
       })
       if (conflicted) {
@@ -339,9 +340,9 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
       {shareConflict && (
         <div className="asg-confirm-backdrop">
           <div className="asg-confirm" onClick={(e) => e.stopPropagation()}>
-            <h2>{msg(groupServiceEnabled()?'배정 내용이 변경됐어요':'다른 곳에서 먼저 공유됐어요')}</h2>
+            <h2>{msg(assignmentRevisionEnabled()?'배정 내용이 변경됐어요':'다른 곳에서 먼저 공유됐어요')}</h2>
             <p>
-              {groupServiceEnabled()?msg('신청자 또는 배정이 변경되어 저장하지 않았습니다. 다시 열어 최신 내용을 확인해 주세요.'):msg('편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다. 덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.')}
+              {assignmentRevisionEnabled()?msg('신청자 또는 배정이 변경되어 저장하지 않았습니다. 다시 열어 최신 내용을 확인해 주세요.'):msg('편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다. 덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.')}
             </p>
             <button className="asg-confirm-primary" onClick={() => { setShareConflict(false); onClose() }} type="button">{msg('닫고 새로고침')}</button>
           </div>

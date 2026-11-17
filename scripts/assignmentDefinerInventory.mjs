@@ -27,14 +27,19 @@ export const assignmentInventorySql = `select coalesce(json_agg(x),'[]') from (
  and p.prosrc ~* 'event_(card_assignments|card_assignment_cards|informal_assignments|restaurant_assignments)'
  order by 1)x;`
 
-export function assertAssignmentInventory(rows) {
-  assert.deepEqual(rows.map(r=>r.signature).sort(),Object.keys(assignmentDefiners).sort(),
+export function assertAssignmentInventory(rows,{environment='demo',phase='strict'}={}) {
+  assert.ok(['demo','production'].includes(environment))
+  assert.ok(['compatibility','strict'].includes(phase))
+  const expected={...assignmentDefiners}
+  if(environment==='production')delete expected['public.reset_demo_environment_tx(uuid)']
+  if(phase==='compatibility')expected['public.assign_team_service_bulk_tx(uuid, integer, jsonb, text, text)']=[true,'Temporary compatibility entry; legacy authorization and revision tracking, no stale draft guarantee']
+  assert.deepEqual(rows.map(r=>r.signature).sort(),Object.keys(expected).sort(),
     'Assignment definer inventory changed: review every added/removed function and its guard before updating the inventory')
   for(const row of rows){
-    const [callable,protection]=assignmentDefiners[row.signature]
+    const [callable,protection]=expected[row.signature]
     assert.ok(protection)
     assert.equal(row.anon_execute,callable,row.signature)
     assert.equal(row.authenticated_execute,callable,row.signature)
   }
-  return rows.map(row=>({...row,protection:assignmentDefiners[row.signature][1]}))
+  return rows.map(row=>({...row,protection:expected[row.signature][1]}))
 }

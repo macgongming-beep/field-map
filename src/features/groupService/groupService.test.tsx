@@ -16,11 +16,13 @@ const make=(id:number,time='14:30',groups=['dongtan','singal']):CalendarEvent=>(
 const users=[{id:2,name:'Leader',role:'leader',isActive:true,approvalStatus:'approved' as const},{id:3,name:'Member',role:'user',isActive:true,approvalStatus:'approved' as const}]
 beforeEach(()=>{vi.stubEnv('VITE_DEMO_MODE','true');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','true');vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co');setCurrentLang('ko');mocks.read.mockReset();mocks.token.mockReturnValue('session')})
 afterEach(()=>{cleanup();vi.unstubAllEnvs();setCurrentLang('ko')})
-test('feature cannot activate on production or outside demo, explicit false disables it',()=>{
+test('feature requires revision opt-in outside demo, explicit false disables it',()=>{
   expect(groupServiceEnabled()).toBe(true)
   expect(willNotifyOnEventChange({endTime:'16:00'},{endTime:'16:30'})).toBe(true)
   expect(willNotifyOnEventChange({allowApplications:true},{allowApplications:false})).toBe(true)
   vi.stubEnv('VITE_SUPABASE_URL','https://qdxemvdorasoryfysuoq.supabase.co');expect(groupServiceEnabled()).toBe(false)
+  vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED','true');expect(groupServiceEnabled()).toBe(true)
+  vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED',undefined)
   vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co');vi.stubEnv('VITE_DEMO_MODE','false');expect(groupServiceEnabled()).toBe(false)
   vi.stubEnv('VITE_DEMO_MODE','true');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','false');expect(groupServiceEnabled()).toBe(false)
 })

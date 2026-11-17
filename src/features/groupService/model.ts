@@ -1,18 +1,21 @@
 import type { AppLanguage } from '../../i18n'
 import type { CalendarEvent, Role } from '../../types'
+import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
 
 export function canArrangeService(role: Role, event: CalendarEvent, name: string) {
-  return role==='admin'||role==='developer'||(role==='leader'&&(groupServiceEnabled()||event.leaders.includes(name)))
+  return role==='admin'||role==='developer'||(role==='leader'&&(assignmentRevisionEnabled()||event.leaders.includes(name)))
 }
 export function canEditServiceSchedule(role: Role, event: CalendarEvent, name: string) {
-  return role==='admin'||role==='developer'||(!groupServiceEnabled()&&role==='leader'&&event.leaders.includes(name))
+  return role==='admin'||role==='developer'||(!assignmentRevisionEnabled()&&role==='leader'&&event.leaders.includes(name))
 }
 
-// Never enable this demo implementation against a production database.
+// Group UI is an independent opt-in, but may never use unversioned writes.
 export function groupServiceEnabled() {
-  return import.meta.env.VITE_DEMO_MODE === 'true'
-    && import.meta.env.VITE_GROUP_SERVICE_ENABLED !== 'false'
-    && import.meta.env.VITE_SUPABASE_URL === 'https://itjlykpjmlcvanqpmkmc.supabase.co'
+  const configured = import.meta.env.VITE_GROUP_SERVICE_ENABLED
+  const enabled = configured != null ? configured === 'true'
+    : import.meta.env.VITE_DEMO_MODE === 'true'
+      && import.meta.env.VITE_SUPABASE_URL === 'https://itjlykpjmlcvanqpmkmc.supabase.co'
+  return enabled && assignmentRevisionEnabled()
 }
 export const serviceGroups = [
   { code: 'dongtan', ko: '동탄', zh: '东滩', en: 'Dongtan' },
