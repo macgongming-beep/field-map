@@ -620,6 +620,13 @@ App.css          [모바일 공통] 0px~
 8. **거대 파일 수정** 시 부분 Read (offset/limit 사용)
 9. 데이터 삭제·권한·자동 병합·화면 의미를 바꾸기 전에 `docs/decisions/README.md`를 읽는다.
    기존 결정을 바꾸면 문서를 지우지 말고 새 결정 기록으로 대체 이유를 남긴다.
+10. 배정 관리 감싸개(20261117_1100/1200)가 설치된 환경에서는 rename·purge·merge의
+    본문 변경을 `private.*_before_assignment_guard`에 적용한다. 공개 함수를 본문으로
+    덮어써 관리 작업 표시를 제거하지 않는다. 미전환 운영과 설치된 데모의 함수 구성을
+    먼저 구분하고, 내부 core의 인증·실행권한 및 공개 wrapper를 함께 검증한다.
+    배정 관련 DB 변경마다 실제 DB definer 목록/권한 감사를 수행한다. Vitest만으로
+    대체하지 않으며 운영 목록은 데모 전용 reset 함수를 분리해 별도 승인한다.
+    전환 절차: `docs/decisions/0099-demo-merge-and-substitute-application-guards.md`.
 
 ### 문구 다국어 규칙
 - **화면 문구**: `t(language, 'key')` — 컴포넌트는 `language` prop 을 받아 쓴다.
