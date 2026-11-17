@@ -33,6 +33,7 @@ import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { toPhoneHref } from '../utils/linkify'
 import { useEventLeaderContacts } from '../hooks/useEventLeaderContacts'
 import { canArrangeService, canEditServiceSchedule, groupServiceEnabled } from '../features/groupService/model'
+import { assignmentRevisionEnabled } from '../config/assignmentRevision'
 import { ServiceEventEditor } from '../features/groupService/ServiceEventEditor'
 import { GroupServiceDetail } from '../features/groupService/GroupServiceDetail'
 import { ServiceEventList } from '../features/groupService/ServiceEventList'
@@ -956,7 +957,7 @@ export function DesktopCalendar({
         const assignmentEvent = events.find((event) => event.id === assignEventId)
         if (!assignmentEvent) return null
         const isAdminLike = actualRole === 'admin' || actualRole === 'developer'
-        const assignmentCards = isAdminLike || (groupServiceEnabled()&&actualRole==='leader')
+        const assignmentCards = isAdminLike || (assignmentRevisionEnabled()&&actualRole==='leader')
           ? cards
           : cards.filter((card) => {
               const leaders = card.assignedLeaders?.length

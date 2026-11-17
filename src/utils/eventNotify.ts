@@ -8,7 +8,7 @@
 // SQL 쪽: notify_on_calendar_event_change 의 이른 return 조건
 //   event_date / time / place / meeting_map_url / leader_name / title
 
-import { groupServiceEnabled } from '../features/groupService/model'
+import { assignmentRevisionEnabled } from '../config/assignmentRevision'
 export type NotifiableEventFields = {
   date?: string
   time?: string
@@ -30,8 +30,8 @@ export function willNotifyOnEventChange(
   return (
     norm(before.date) !== norm(after.date) ||
     norm(before.time) !== norm(after.time) ||
-    (groupServiceEnabled() && norm(before.endTime) !== norm(after.endTime)) ||
-    (groupServiceEnabled() && before.allowApplications !== after.allowApplications) ||
+    (assignmentRevisionEnabled() && norm(before.endTime) !== norm(after.endTime)) ||
+    (assignmentRevisionEnabled() && before.allowApplications !== after.allowApplications) ||
     norm(before.place) !== norm(after.place) ||
     norm(before.mapLink) !== norm(after.mapLink) ||
     norm(before.leader) !== norm(after.leader) ||

@@ -184,6 +184,13 @@ async function openAssignment(overrides: Record<string, unknown> = {}) {
 }
 
 describe('PC 일정 배정 권한', () => {
+  test('운영 전환에서는 집단 화면을 꺼도 다른 인도자의 구역까지 대신 배정한다', async () => {
+    vi.stubEnv('VITE_DEMO_MODE','false');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','false')
+    vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED','true')
+    const editor=await openAssignment({currentVisitor:'다른 인도자',role:'leader',actualRole:'leader'})
+    expect(editor.textContent).toContain('편집 가능')
+    expect(editor.textContent).toContain('인도자 담당 구역,다른 인도자 구역')
+  })
   test('관리자는 화면 모드와 무관하게 모든 구역을 편집한다', async () => {
     const editor = await openAssignment({ role: 'leader', actualRole: 'admin' })
 

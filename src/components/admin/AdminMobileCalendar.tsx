@@ -5,6 +5,7 @@ import { pushBackHandler, requestBackHandler } from '../../lib/backStack'
 import { showToast } from '../../lib/toast'
 import { findActivePeriod } from '../../utils/specialPeriod'
 import { CART_APPLICATIONS_ENABLED } from '../../config/features'
+import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
 //
 // 구조:
 //   - 월 카드 (헤더 + nav + grid)
@@ -714,8 +715,8 @@ export function AdminMobileCalendar({
       {assignEventId !== null && onAssignCardsToEventParticipantsBulk && (() => {
         const assignEvent = events.find((e) => e.id === assignEventId)
         if (!assignEvent) return null
-        // 데모에서는 다른 집단을 대신 배정할 수 있어 전체 카드를 선택한다.
-        const myCards = (role === 'admin' || role === 'developer' || (groupServiceEnabled()&&role==='leader'))
+        // 배정 권한 전환 후에는 다른 집단을 대신 배정할 수 있어 전체 카드를 선택한다.
+        const myCards = (role === 'admin' || role === 'developer' || (assignmentRevisionEnabled()&&role==='leader'))
           ? cards
           : cards.filter((c) => c.assignedLeader === currentVisitor || c.assignedLeaders?.includes(currentVisitor))
         const canEdit = canArrangeService(role,assignEvent,currentVisitor)
