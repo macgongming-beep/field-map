@@ -24,6 +24,7 @@ export type AssignmentDraft = {
   mode: AssignmentMode
   status: AssignmentStatus
   updatedAt: string | null
+  baseRevision?: string
   teams: DraftTeam[]
 }
 

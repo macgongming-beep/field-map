@@ -15,9 +15,9 @@ beforeEach(() => { state.rows = []; state.error = null; state.batches = []; stat
 afterEach(()=>vi.unstubAllEnvs())
 test('demo participant-only recovery preserves return visit type and rejects unknown values',async()=>{
   vi.stubEnv('VITE_DEMO_MODE','true');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','true');vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co')
-  state.rows=[{id:7,event_participants:[{id:1,user_name:'A',role:'신청',service_activity:'return_visit'}]}]
-  expect((await readCalendarParticipants([7])).get(7)).toMatchObject({applicants:['A'],returnVisitApplicants:['A']})
-  expect(state.columns).toEqual(['id,event_participants(user_name,role,service_activity)'])
+  state.rows=[{id:7,assignment_revision:12,event_participants:[{id:1,user_name:'A',role:'신청',service_activity:'return_visit'}]}]
+  expect((await readCalendarParticipants([7])).get(7)).toMatchObject({applicants:['A'],returnVisitApplicants:['A'],assignmentRevision:'12'})
+  expect(state.columns).toEqual(['id,assignment_revision,event_participants(user_name,role,service_activity)'])
   state.rows=[{id:7,event_participants:[{id:1,user_name:'A',role:'신청',service_activity:'invalid'}]}]
   await expect(readCalendarParticipants([7])).rejects.toThrow('Invalid calendar participants response')
 })

@@ -18,11 +18,11 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 } }))
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); state.callbacks.clear(); vi.clearAllMocks() })
 
-test('demo private roster signal refreshes only event IDs and updates tab counts', async () => {
+test.each(['true','false'])('demo private roster signal stays targeted with navigation reuse=%s', async flag => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')
   vi.stubEnv('VITE_GROUP_SERVICE_ENABLED', 'true')
   vi.stubEnv('VITE_SUPABASE_URL', 'https://itjlykpjmlcvanqpmkmc.supabase.co')
-  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', flag)
   vi.useFakeTimers()
   const onParticipants = vi.fn(), onChange = vi.fn(), changed = vi.fn()
   window.addEventListener('group-participants-changed', changed)

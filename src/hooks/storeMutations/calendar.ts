@@ -84,6 +84,26 @@ export function makeCalendarMutations(deps: {
     return true
   }
 
+  const manageVersionedParticipant=async(event:CalendarEvent,userName:string,action:'add'|'remove',role:'신청'|'게스트'='신청')=>{
+    const token=getAuthToken()
+    if(!token||event.assignmentRevision==null){
+      showToast(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'),'error')
+      return false
+    }
+    const result=await supabase.rpc('manage_event_participant_versioned_tx',{
+      p_token:token,p_event_id:event.id,p_user_name:userName,p_action:action,p_expected_revision:event.assignmentRevision,p_role:role,
+    })
+    if(result.error||!result.data?.ok){
+      reportMutationError(msg(action==='add'?'참가자를 추가하지 못했습니다.':'참가자를 제외하지 못했습니다.'),result.error??new Error(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.')))
+      if(result.data?.conflict)await fetchAll()
+      return false
+    }
+    await logServiceAction({eventId:event.id,action:action==='add'?'joined':'left',targetType:'event_participant',details:{user_name:userName,source:'versioned_participant_management'}})
+    await (refetchAfterParticipantRemoval??fetchAll)()
+    showToast(msg(action==='add'?'신청자를 추가했습니다':'참가자를 제외했습니다'))
+    return true
+  }
+
   // ─── 일정 CRUD ───────────────────────────────────────────────
   const savePlan = async (plan: ServicePlan): Promise<boolean> => {
     if (!groupServiceEnabled()) return false
@@ -243,6 +263,7 @@ export function makeCalendarMutations(deps: {
     const currentVisitor = getCurrentVisitor()
     const event = calendarEvents.find((e) => e.id === eventId)
     const isApplied = event?.applicants.includes(currentVisitor)
+    if(groupServiceEnabled()&&isApplied&&event){await manageVersionedParticipant(event,currentVisitor,'remove');return}
     if (isApplied && usesTeamAssignments(event)) {
       await removeTeamParticipant(event!, currentVisitor, true)
       return
@@ -412,6 +433,7 @@ export function makeCalendarMutations(deps: {
 
   const removeParticipantFromEvent = async (eventId: number, userName: string) => {
     const event = calendarEvents.find((item) => item.id === eventId)
+    if(groupServiceEnabled()&&event)return manageVersionedParticipant(event,userName,'remove')
     if (usesTeamAssignments(event)) {
       await removeTeamParticipant(event!, userName, false)
       return
@@ -506,6 +528,7 @@ export function makeCalendarMutations(deps: {
       showToast(msg('이미 이 일정에 있는 이름입니다.'), 'info')
       return false
     }
+    if(groupServiceEnabled())return manageVersionedParticipant(event,normalizedName,'add',role)
     const result = await supabase.from('event_participants').upsert(
       { event_id: eventId, user_name: normalizedName, role },
       { onConflict: 'event_id,user_name' },

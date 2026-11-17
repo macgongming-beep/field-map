@@ -50,6 +50,7 @@ export type CalendarEvent = import('./features/groupService/model').ServiceField
   cardAssignments: EventCardAssignment[]
   assignmentStatus?: 'draft' | 'confirmed' | 'shared'
   assignmentSharedAt?: string | null
+  assignmentRevision?: string
   assignmentTeamInformal?: Record<string, number[]> | null
   assignmentSharedBy?: string | null
   memo: string

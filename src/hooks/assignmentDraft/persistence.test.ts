@@ -25,6 +25,15 @@ function draft(teams: AssignmentDraft['teams']): AssignmentDraft {
   return { mode: 'card', status: 'draft', updatedAt: null, teams }
 }
 
+it('unpublished local draft detects server revision changes even when both sharing dates are null',()=>{
+  const event=ev({assignmentRevision:'10'})
+  const local=buildDraftFromServer(event)
+  saveLocalDraft(1,'Revision Tester',local)
+  expect(resolveDraftEntry(event,'Revision Tester').kind).not.toBe('conflict')
+  expect(resolveDraftEntry({...event,assignmentRevision:'11'},'Revision Tester').kind).toBe('conflict')
+  clearLocalDraft(1,'Revision Tester')
+})
+
 describe('공유 배정 (여러 팀이 같은 구역) 왕복', () => {
   it('두 팀이 같은 카드를 맡아도 저장 형식에 각자 보존된다 (teamKey 포함)', () => {
     const d = draft([

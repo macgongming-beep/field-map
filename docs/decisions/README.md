@@ -110,6 +110,8 @@
 
 집단별 신청 탭: [0096 독립 집단 일정과 감독자 조회·배정 범위](0096-demo-independent-group-tabs.md)
 
+배정 권한 확대: [0097 모든 인도자의 회중·집단 배정과 관리자 일정 편집 분리](0097-demo-all-leader-assignment-permissions.md)
+
 ```markdown
 # 제목
 

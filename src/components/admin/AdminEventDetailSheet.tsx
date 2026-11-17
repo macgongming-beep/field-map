@@ -12,7 +12,7 @@
 // 단순화: 댓글/지도 썸네일은 기본 placeholder 만, 본격 기능은 다음 라운드.
 
 import { useMemo, useState } from 'react'
-import { groupServiceEnabled } from '../../features/groupService/model'
+import { canArrangeService, canEditServiceSchedule, groupServiceEnabled } from '../../features/groupService/model'
 import { MeetingAccessPanel } from '../../features/groupService/MeetingAccessPanel'
 import { ServiceApplicationButtons, ReturnVisitApplicants } from '../../features/groupService/ServiceApplications'
 import type { Building, CalendarEvent, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, Role, TerritoryCard } from '../../types'
@@ -198,13 +198,10 @@ export function AdminEventDetailSheet({
   const isApplied = useMemo(() => event.applicants.includes(currentVisitor), [event.applicants, currentVisitor])
   const canApply = event.allowApplications
   const applicants = event.applicants ?? []
-  // 편집/삭제/참가자 관리 권한 (PC DesktopCalendar 와 통일된 정책)
-  //  - 수정·참가자 관리: 관리자·개발자 또는 본인이 인도자인 일정
-  //  - 삭제: 관리자·개발자만
-  const isLeaderOfThisEvent = role === 'leader' && event.leaders.includes(currentVisitor)
-  const canEditEvent = role === 'admin' || role === 'developer' || isLeaderOfThisEvent
+  // 일정 편집과 배정 관리는 별도 권한이다. PC도 같은 판정을 사용한다.
+  const canEditEvent = canEditServiceSchedule(role,event,currentVisitor)
   const canDeleteEvent = role === 'admin' || role === 'developer'
-  const canManageParticipants = canEditEvent
+  const canManageParticipants = canArrangeService(role,event,currentVisitor)
   const leaders = event.leaders.length > 0
     ? event.leaders
     : event.leader.split(',').map((name) => name.trim()).filter(Boolean)

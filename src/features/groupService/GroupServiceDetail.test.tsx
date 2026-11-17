@@ -39,6 +39,22 @@ test('failed context is closed to names and management, retry restores only allo
   await screen.findByRole('alert');expect(screen.queryByText('Member0')).toBeNull()
   fireEvent.click(screen.getByRole('button',{name:'다시 시도'}));await screen.findByRole('tab',{name:'동탄 1'})
 })
+test('leader can arrange every tab but only admin can edit; foreground refreshes counts',async()=>{
+  const context={ownGroup:'dongtan',events:events.map(e=>({id:e.id,groupCode:e.targetGroups![0],count:1,canManage:true,canEdit:false,canRead:true}))}
+  mocks.context.mockResolvedValue(context)
+  const assign=vi.fn(),edit=vi.fn()
+  render(<GroupServiceDetail event={events[0]} events={events} language="ko" currentVisitor="Leader" onAssignment={assign} onEdit={edit}/>)
+  await screen.findByRole('tab',{name:'신갈 1'})
+  fireEvent.click(screen.getByRole('tab',{name:'신갈 1'}))
+  expect(screen.getByText('Member1')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button',{name:'팀 구성 · 구역 배정'}))
+  expect(assign).toHaveBeenCalledWith(2)
+  expect(screen.queryByRole('button',{name:'일정 수정'})).toBeNull()
+  mocks.context.mockResolvedValue({...context,events:context.events.map(e=>({...e,count:3,canEdit:true}))})
+  fireEvent(document,new Event('visibilitychange'))
+  await screen.findByRole('tab',{name:'신갈 3'})
+  expect(screen.getByRole('button',{name:'일정 수정'})).toBeTruthy()
+})
 test('shared assignments open automatically but meeting info stays collapsed and foreign results stay hidden',async()=>{
   const assigned=events.map(e=>({...e,assignmentStatus:'draft' as const,cardAssignments:[{id:e.id,eventId:e.id,userName:e.applicants[0],assignedCardId:1,assignedBy:'Admin',assignedAt:'',memo:''}]}))
   const props={event:assigned[0],events:assigned,language:'ko' as const,currentVisitor:'User',renderAssignments:(e:CalendarEvent)=><div>{`Team ${e.id}`}</div>}

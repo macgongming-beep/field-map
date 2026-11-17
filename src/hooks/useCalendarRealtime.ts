@@ -90,12 +90,14 @@ export function useCalendarRealtime(
         const id = payload.new?.event_id ?? payload.old?.event_id
         if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) return
         groupChanges.add(id)
-        if (calendarNavigationReuseEnabled()) participants({ new: { event_id: id } })
-        else trigger()
+        participants({ new: { event_id: id } })
       })
     }
     // 재연결 시 끊긴 동안 놓친 일정 변경 catch-up
-    subscribeWithRecovery(channel, () => cbRef.current())
+    subscribeWithRecovery(channel, () => {
+      if (groupServiceEnabled()) notifyGroupParticipantsChanged(null)
+      cbRef.current()
+    })
 
     return () => {
       if (pending) clearTimeout(pending)

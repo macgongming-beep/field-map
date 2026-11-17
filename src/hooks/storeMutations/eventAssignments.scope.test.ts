@@ -4,6 +4,21 @@ vi.mock('./shared', () => ({ supabase: mocks, showToast: vi.fn(), reportMutation
 vi.mock('../../lib/authToken', () => ({ getAuthToken: () => 'test-token' }))
 import { makeEventAssignmentMutations } from './eventAssignments'
 
+test('versioned demo save forwards revision, rejects missing revision and reports conflicts without fallback',async()=>{
+  vi.stubEnv('VITE_DEMO_MODE','true');vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co')
+  try{
+    mocks.rpc.mockClear();mocks.from.mockClear()
+    const fetchAll=vi.fn(),onConflict=vi.fn(),mutation=makeEventAssignmentMutations({fetchAll})
+    await expect(mutation.assignCardsToEventParticipantsBulk(1,[])).rejects.toThrow('Reload assignment')
+    expect(mocks.rpc).not.toHaveBeenCalled()
+    mocks.rpc.mockResolvedValue({data:{ok:false,conflict:true},error:null})
+    await mutation.assignCardsToEventParticipantsBulk(1,[],{expectedRevision:'7',onConflict})
+    expect(mocks.rpc).toHaveBeenLastCalledWith('save_event_assignments_versioned_tx',expect.objectContaining({p_expected_revision:'7'}))
+    expect(onConflict).toHaveBeenCalledOnce();expect(fetchAll).toHaveBeenCalledOnce()
+    expect(mocks.from).not.toHaveBeenCalled()
+  }finally{vi.unstubAllEnvs()}
+})
+
 test('범위 저장 RPC가 없으면 옛 직접 저장으로 폴백하지 않고 초안을 유지하도록 거부한다', async () => {
   mocks.from.mockClear()
   mocks.rpc.mockResolvedValue({ error: { message: 'Could not find the function' } })

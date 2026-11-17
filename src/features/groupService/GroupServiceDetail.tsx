@@ -1,23 +1,31 @@
 import {useEffect,useState,type ReactNode} from 'react'
 import type {CalendarEvent} from '../../types'
-import type {AppLanguage} from '../../i18n'
+import {t,type AppLanguage} from '../../i18n'
 import {msg} from '../../lib/msg'
 import {readGroupServiceContext,type GroupServiceContext} from './api'
 import {groupSlotEvents,serviceGroups,territoryApplicants} from './model'
 import {ServiceApplicationButtons,ReturnVisitApplicants} from './ServiceApplications'
 import {MeetingAccessPanel} from './MeetingAccessPanel'
 import {GROUP_PARTICIPANTS_CHANGED} from './participantChanges'
+import {ParticipantAddContent} from '../../components/calendar/ParticipantAddContent'
+import type {EventParticipantUser} from '../../utils/eventParticipantUsers'
+import {confirmDialog} from '../../lib/confirm'
 import './groupService.css'
 
 type Props={event:CalendarEvent;events:CalendarEvent[];language:AppLanguage;currentVisitor:string;
   mobile?:boolean;onClose?:()=>void;onApply?:(id:number,activity?:'service'|'return_visit')=>unknown;
   onAssignment?:(id:number)=>void;onEdit?:(id:number)=>void;onDelete?:(id:number)=>void;
+  participantUsers?:EventParticipantUser[];
+  onAddParticipant?:(id:number,name:string,role:'신청'|'게스트')=>boolean|void|Promise<boolean|void>;
+  onRemoveParticipant?:(id:number,name:string)=>unknown;
   renderAssignments?:(event:CalendarEvent)=>ReactNode}
 
-export function GroupServiceDetail({event,events,language,currentVisitor,mobile,onClose,onApply,onAssignment,onEdit,onDelete,renderAssignments}:Props){
+export function GroupServiceDetail({event,events,language,currentVisitor,mobile,onClose,onApply,onAssignment,onEdit,onDelete,renderAssignments,participantUsers=[],onAddParticipant,onRemoveParticipant}:Props){
   const [response,setResponse]=useState<{key:string;data:GroupServiceContext|null;failed:boolean}|null>(null)
   const [selected,setSelected]=useState<number|null>(null)
   const [retry,setRetry]=useState(0)
+  const [addingGroup,setAddingGroup]=useState<number|null>(null)
+  const [removingGroup,setRemovingGroup]=useState<number|null>(null)
   const siblings=groupSlotEvents(event,events)
   const membershipKey=siblings.map(e=>`${e.id}:${e.editVersion}:${e.applicants.join(',')}:${e.assigned.join(',')}:${e.returnVisitApplicants?.join(',')}`).join('|')
   const requestKey=`${event.id}:${membershipKey}:${retry}`
@@ -25,10 +33,13 @@ export function GroupServiceDetail({event,events,language,currentVisitor,mobile,
   useEffect(()=>{
     const ids=new Set(siblingIds.split(',').map(Number))
     const changed=(signal:Event)=>{
-      if((signal as CustomEvent<number[]>).detail.some(id=>ids.has(id)))setRetry(n=>n+1)
+      const changedIds=(signal as CustomEvent<number[]|null>).detail
+      if(changedIds===null||changedIds.some(id=>ids.has(id)))setRetry(n=>n+1)
     }
+    const visible=()=>{if(document.visibilityState==='visible')setRetry(n=>n+1)}
     window.addEventListener(GROUP_PARTICIPANTS_CHANGED,changed)
-    return()=>window.removeEventListener(GROUP_PARTICIPANTS_CHANGED,changed)
+    document.addEventListener('visibilitychange',visible)
+    return()=>{window.removeEventListener(GROUP_PARTICIPANTS_CHANGED,changed);document.removeEventListener('visibilitychange',visible)}
   },[siblingIds])
   const context=response?.key===requestKey?response.data:null
   const failed=response?.key===requestKey&&response.failed
@@ -50,14 +61,18 @@ export function GroupServiceDetail({event,events,language,currentVisitor,mobile,
   },[event.id,requestKey])
   const selectedMeta=context?.events.find(e=>e.id===selected)
   const current=siblings.find(e=>e.id===selected)
-  const visibleAssignments=current?.cardAssignments.filter(a=>selectedMeta?.canRead || a.userName===currentVisitor) ?? []
+  const ownTeam=current?.cardAssignments.find(a=>a.userName===currentVisitor)?.teamKey
+  const visibleAssignments=current?.cardAssignments.filter(a=>selectedMeta?.canManage || a.userName===currentVisitor || (ownTeam&&a.teamKey===ownTeam)) ?? []
   const group=serviceGroups.find(g=>g.code===selectedMeta?.groupCode)
   const names=current?territoryApplicants(current):[]
+  const remove=async(name:string)=>{
+    if(current&&selectedMeta?.canManage&&await confirmDialog({message:msg('{name}님을 이 일정에서 제외할까요?',{name}),danger:true,confirmLabel:msg('제외')}))await onRemoveParticipant?.(current.id,name)
+  }
   const dateLabel=new Intl.DateTimeFormat(language==='zh'?'zh-CN':language==='en'?'en-US':'ko-KR',{month:'long',day:'numeric',weekday:'short'}).format(new Date(`${event.date}T12:00:00`))
   return <section className={`gs-tab-detail${mobile?' gs-tab-mobile':''}`} aria-label={msg('집단 봉사')}>
     {(mobile||onClose)&&<header>{onClose&&<button type="button" aria-label={msg('뒤로')} onClick={onClose}>‹</button>}<div><strong>{msg('일정')}</strong><span>{dateLabel}</span></div></header>}
     <div className="gs-tab-body">
-      <div className="gs-tab-title"><div><span>{event.time}{event.endTime?`–${event.endTime}`:''}</span><h2>{msg('집단 봉사')}</h2></div>{context&&<span>{msg('신청자')} {context.events.reduce((n,e)=>n+e.count,0)}</span>}</div>
+      <div className="gs-tab-title"><div><span>{event.time}{event.endTime?`–${event.endTime}`:''}</span><h2>{msg('집단 봉사')}</h2></div>{context&&<span>{msg('신청 {n}건',{n:context.events.reduce((n,e)=>n+e.count,0)})}</span>}</div>
       {!context&&!failed&&<p role="status">{msg('불러오는 중...')}</p>}
       {failed&&<div role="alert"><p>{msg('신청자를 불러오지 못했습니다.')}</p><button type="button" onClick={()=>setRetry(n=>n+1)}>{msg('다시 시도')}</button></div>}
       {context&&<>
@@ -76,14 +91,19 @@ export function GroupServiceDetail({event,events,language,currentVisitor,mobile,
             onApply={onApply?activity=>onApply(current.id,activity):undefined} onCancel={onApply?()=>onApply(current.id):undefined}/>
           <div className="gs-roster-heading"><h3>{group?.[language]} · {msg('신청자')} {selectedMeta.count}</h3>
             {selectedMeta.canManage&&<div className="gs-roster-tools">
+              {onAddParticipant&&<button type="button" aria-label={t(language,'calendar.addSelf')} title={t(language,'calendar.addSelf')} aria-expanded={addingGroup===current.id} onClick={()=>setAddingGroup(addingGroup===current.id?null:current.id)}>+</button>}
+              {onRemoveParticipant&&<button type="button" aria-label={t(language,'calendar.removeShort')} title={t(language,'calendar.removeShort')} aria-pressed={removingGroup===current.id} onClick={()=>setRemovingGroup(removingGroup===current.id?null:current.id)}>−</button>}
+            </div>}
+            {selectedMeta.canEdit&&<div className="gs-roster-tools">
               {onEdit&&<button type="button" title={msg('일정 수정')} aria-label={msg('일정 수정')} onClick={()=>onEdit(current.id)}>✎</button>}
               {onDelete&&<button type="button" title={msg('일정 삭제')} aria-label={msg('일정 삭제')} onClick={()=>onDelete(current.id)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>}
             </div>}
           </div>
+          {selectedMeta.canManage&&addingGroup===current.id&&onAddParticipant&&<ParticipantAddContent users={participantUsers} existingNames={current.applicants} onAdd={(name,role)=>onAddParticipant(current.id,name,role)} onAdded={()=>setAddingGroup(null)}/>}
           {selectedMeta.canRead?<>
             <h4 className="gs-applicant-heading">{msg('봉사')} <span>{names.length}</span></h4>
-            <div className="gs-participant-list">{names.map(name=><span className="gs-participant" key={name}><span className="gs-participant-avatar" aria-hidden>{name.slice(0,1)}</span>{name}</span>)}</div>
-            <ReturnVisitApplicants event={current}/>
+            <div className="gs-participant-list">{names.map(name=><span className="gs-participant" key={name}><span className="gs-participant-avatar" aria-hidden>{name.slice(0,1)}</span>{name}{selectedMeta.canManage&&removingGroup===current.id&&<button type="button" aria-label={msg('{name} 참가자 제외',{name})} onClick={()=>void remove(name)}>×</button>}</span>)}</div>
+            <ReturnVisitApplicants event={current} onRemove={selectedMeta.canManage&&removingGroup===current.id?remove:undefined}/>
           </>:<p className="gs-private-roster">{msg('신청자 명단은 해당 집단에서 확인할 수 있습니다.')}</p>}
           {selectedMeta.canManage&&onAssignment&&<button className="gs-assignment-open" type="button" onClick={()=>onAssignment(current.id)}>{msg('팀 구성 · 구역 배정')} <span aria-hidden>›</span></button>}
           {current.assignmentStatus==='shared'&&visibleAssignments.length>0&&renderAssignments&&<details open className="gs-group-information" key={`assignments-${current.id}`}><summary>{msg('배정 결과')}</summary>{renderAssignments({...current,cardAssignments:visibleAssignments})}</details>}

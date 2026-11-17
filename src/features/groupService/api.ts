@@ -6,7 +6,7 @@ import type { MeetingAccess, ServicePlan } from './model'
 
 export type GroupServiceContext = {
   ownGroup: string | null
-  events: Array<{id:number;groupCode:string;count:number;canManage:boolean;canRead:boolean}>
+  events: Array<{id:number;groupCode:string;count:number;canManage:boolean;canEdit:boolean;canRead:boolean}>
 }
 export async function readGroupServiceContext(eventId:number):Promise<GroupServiceContext> {
   const token=getAuthToken()

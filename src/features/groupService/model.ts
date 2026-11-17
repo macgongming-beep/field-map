@@ -1,5 +1,12 @@
 import type { AppLanguage } from '../../i18n'
-import type { CalendarEvent } from '../../types'
+import type { CalendarEvent, Role } from '../../types'
+
+export function canArrangeService(role: Role, event: CalendarEvent, name: string) {
+  return role==='admin'||role==='developer'||(role==='leader'&&(groupServiceEnabled()||event.leaders.includes(name)))
+}
+export function canEditServiceSchedule(role: Role, event: CalendarEvent, name: string) {
+  return role==='admin'||role==='developer'||(!groupServiceEnabled()&&role==='leader'&&event.leaders.includes(name))
+}
 
 // Never enable this demo implementation against a production database.
 export function groupServiceEnabled() {
@@ -59,7 +66,7 @@ export function sameServiceDay(a: CalendarEvent,b: CalendarEvent) {
 }
 
 export function groupSlotEvents(event: CalendarEvent, events: CalendarEvent[]) {
-  return events.filter(e=>e.groupServiceScope && e.date===event.date && e.time===event.time && e.endTime===event.endTime)
+  return events.filter(e=>e.groupServiceScope && e.date===event.date && e.time===event.time && (e.endTime??'')===(event.endTime??''))
 }
 
 export function visibleServiceEventCount(events: CalendarEvent[]) {

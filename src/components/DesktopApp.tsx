@@ -218,6 +218,7 @@ export function DesktopApp({
       silentSuccess?: boolean
       status?: 'confirmed' | 'shared'
       expectedSharedAt?: string | null
+      expectedRevision?: string
       onConflict?: (serverSharedAt: string | null) => void
     },
   ) => Promise<void> | void

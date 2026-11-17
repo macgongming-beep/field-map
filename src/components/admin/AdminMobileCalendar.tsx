@@ -42,7 +42,7 @@ import type { MentionUser } from '../CommentSection'
 import { msg } from '../../lib/msg'
 import { chatDisabled } from '../../lib/chatRetirement'
 import { getCurrentAppPath, readEventDetailReturnTo } from '../../lib/eventDetailNavigation'
-import { groupServiceEnabled, visibleServiceEventCount } from '../../features/groupService/model'
+import { canArrangeService, groupServiceEnabled, visibleServiceEventCount } from '../../features/groupService/model'
 import { ServiceEventEditor } from '../../features/groupService/ServiceEventEditor'
 import { GroupServiceDetail } from '../../features/groupService/GroupServiceDetail'
 import { ServiceEventList } from '../../features/groupService/ServiceEventList'
@@ -88,7 +88,7 @@ type Props = {
   onAssignCardsToEventParticipantsBulk?: (
     eventId: number,
     assignments: Array<{ userName: string; cardId?: number | null; cardIds?: number[] | null }>,
-    options?: { silentSuccess?: boolean; status?: 'confirmed' | 'shared'; expectedSharedAt?: string | null; onConflict?: (serverSharedAt: string | null) => void },
+    options?: { silentSuccess?: boolean; status?: 'confirmed' | 'shared'; expectedSharedAt?: string | null; expectedRevision?: string; onConflict?: (serverSharedAt: string | null) => void },
   ) => Promise<void> | void
   informalAssets?: InformalAsset[]
   informalGroups?: InformalGroup[]
@@ -240,7 +240,6 @@ export function AdminMobileCalendar({
     detailOnly && Number.isSafeInteger(entryId) && entryId > 0 ? entryId : null)
   // 배정 에디터(풀스크린) 대상 이벤트
   const [assignEventId, setAssignEventId] = useState<number | null>(null)
-  const [groupAssignmentId,setGroupAssignmentId] = useState<number|null>(null)
   const detailEvent = detailEventId !== null ? events.find((e) => e.id === detailEventId) ?? null : null
   const editingEvent = editingEventId !== null ? events.find((e) => e.id === editingEventId) ?? null : null
 
@@ -639,7 +638,8 @@ export function AdminMobileCalendar({
       {detailEvent && assignEventId === null && groupServiceEnabled() && detailEvent.groupServiceScope && <GroupServiceDetail
         key={`${detailEvent.date}:${detailEvent.time}:${detailEvent.endTime}`} mobile event={detailEvent} events={events} language={language} currentVisitor={currentVisitor}
         onClose={returnFromDetail} onApply={onApplyToEvent}
-        onAssignment={onAssignCardsToEventParticipantsBulk?id=>{setGroupAssignmentId(id);setAssignEventId(id)}:undefined}
+        participantUsers={participantUsers} onAddParticipant={onAddParticipantToEvent} onRemoveParticipant={onRemoveParticipantFromEvent}
+        onAssignment={onAssignCardsToEventParticipantsBulk?id=>setAssignEventId(id):undefined}
         renderAssignments={event=><SharedAssignmentTeams event={event} cards={cards} language={language} translatePlaceNames={translatePlaceNames} buildings={buildings} informalAssets={informalAssets} eventInformalAssignments={eventInformalAssignments} eventRestaurantAssignments={eventRestaurantAssignments}/>}
         onDelete={(role==='admin'||role==='developer')&&onDeleteEvent?async id=>{
           const target=events.find(e=>e.id===id)
@@ -708,11 +708,11 @@ export function AdminMobileCalendar({
       {assignEventId !== null && onAssignCardsToEventParticipantsBulk && (() => {
         const assignEvent = events.find((e) => e.id === assignEventId)
         if (!assignEvent) return null
-        // 인도자는 본인 담당 카드만, 관리자/개발자는 전체
-        const myCards = (role === 'admin' || role === 'developer')
+        // 데모에서는 다른 집단을 대신 배정할 수 있어 전체 카드를 선택한다.
+        const myCards = (role === 'admin' || role === 'developer' || (groupServiceEnabled()&&role==='leader'))
           ? cards
           : cards.filter((c) => c.assignedLeader === currentVisitor || c.assignedLeaders?.includes(currentVisitor))
-        const canEdit = role === 'admin' || role === 'developer' || (assignEvent.groupServiceScope ? groupAssignmentId===assignEvent.id : assignEvent.leaders.includes(currentVisitor))
+        const canEdit = canArrangeService(role,assignEvent,currentVisitor)
         return (
           <AssignmentEditor
             event={assignEvent}
@@ -736,6 +736,7 @@ export function AdminMobileCalendar({
               onAssignCardsToEventParticipantsBulk(eventId, assignments, {
                 status: 'shared',
                 expectedSharedAt: opts.expectedSharedAt,
+                expectedRevision: opts.expectedRevision,
                 onConflict: opts.onConflict,
               })
             }

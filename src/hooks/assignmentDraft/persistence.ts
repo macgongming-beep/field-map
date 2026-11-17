@@ -52,6 +52,7 @@ export function buildDraftFromServer(event: CalendarEvent): AssignmentDraft {
     mode: 'card',
     status: event.assignmentStatus === 'shared' ? 'shared' : 'draft',
     updatedAt: event.assignmentSharedAt ?? null,
+    ...(event.assignmentRevision!=null?{baseRevision:event.assignmentRevision}:{}),
     teams,
   }
 }
@@ -134,6 +135,12 @@ export type DraftEntryResult =
 export function resolveDraftEntry(event: CalendarEvent, userName: string): DraftEntryResult {
   const local = loadLocalDraft(event.id, userName)
   const serverShared = event.assignmentStatus === 'shared'
+  if(event.assignmentRevision!=null){
+    const server=buildDraftFromServer(event)
+    if(!local)return {kind:'fresh',draft:server}
+    if(local.baseRevision!==event.assignmentRevision)return {kind:'conflict',local,server}
+    return {kind:'local',draft:local}
+  }
 
   if (!local) {
     // 로컬 없음 → 서버 공유본 있으면 그걸로, 아니면 빈 draft

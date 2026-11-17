@@ -1,4 +1,7 @@
 export const groupServiceZh: Record<string,string> = {
+  '편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다. 덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.':'编辑期间，其他人分享了此安排的分配。未覆盖，请刷新查看最新内容。',
+  '배정 내용이 변경됐어요':'分配内容已更改','신청자 또는 배정이 변경되어 저장하지 않았습니다. 다시 열어 최신 내용을 확인해 주세요.':'报名者或分配已更改，未保存。请重新打开查看最新内容。',
+  '신청 {n}건':'报名 {n} 次','신청자를 추가했습니다':'已添加报名者','참가자를 제외했습니다':'已移除参加者','일정을 불러오지 못했습니다.':'无法加载安排。',
   '집단 봉사':'小组传道','집단':'小组','일정':'安排','신청자':'报名者','인도자':'主持人',
   '신청자를 불러오지 못했습니다.':'无法加载报名者。','신청자 명단은 해당 집단에서 확인할 수 있습니다.':'报名者名单仅限所属小组查看。',
   '팀 구성 · 구역 배정':'编组 · 分配地区','모임 정보':'聚会信息',
@@ -33,6 +36,9 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다. 덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.':'Someone shared this assignment while you were editing. Nothing was overwritten. Refresh to see the latest version.',
+  '배정 내용이 변경됐어요':'Assignments have changed','신청자 또는 배정이 변경되어 저장하지 않았습니다. 다시 열어 최신 내용을 확인해 주세요.':'Participants or assignments have changed. Nothing was saved. Reopen to review the latest version.',
+  '신청 {n}건':'{n} applications','신청자를 추가했습니다':'Applicant added','참가자를 제외했습니다':'Participant removed','일정을 불러오지 못했습니다.':'Could not load the event.',
   '집단 봉사':'Group service','집단':'Group','일정':'Event','신청자':'Applicants','인도자':'Conductor',
   '신청자를 불러오지 못했습니다.':'Could not load applicants.','신청자 명단은 해당 집단에서 확인할 수 있습니다.':'The applicant list is available to the corresponding group.',
   '팀 구성 · 구역 배정':'Teams and territory','모임 정보':'Meeting details',

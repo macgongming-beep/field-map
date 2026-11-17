@@ -32,7 +32,7 @@ import { CartApplicantSection } from './calendar/CartApplicantSection'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { toPhoneHref } from '../utils/linkify'
 import { useEventLeaderContacts } from '../hooks/useEventLeaderContacts'
-import { groupServiceEnabled } from '../features/groupService/model'
+import { canArrangeService, canEditServiceSchedule, groupServiceEnabled } from '../features/groupService/model'
 import { ServiceEventEditor } from '../features/groupService/ServiceEventEditor'
 import { GroupServiceDetail } from '../features/groupService/GroupServiceDetail'
 import { ServiceEventList } from '../features/groupService/ServiceEventList'
@@ -154,6 +154,7 @@ export function DesktopCalendar({
       silentSuccess?: boolean
       status?: 'confirmed' | 'shared'
       expectedSharedAt?: string | null
+      expectedRevision?: string
       onConflict?: (serverSharedAt: string | null) => void
     },
   ) => Promise<void> | void
@@ -185,7 +186,6 @@ export function DesktopCalendar({
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [assignEventId, setAssignEventId] = useState<number | null>(null)
-  const [groupAssignmentId,setGroupAssignmentId] = useState<number|null>(null)
 
   // openChat=<eventId> 쿼리 처리: 해당 일정 날짜로 이동 + 채팅방 열기
   useEffect(() => {
@@ -802,7 +802,8 @@ export function DesktopCalendar({
                 if(groupServiceEnabled() && event.groupServiceScope) return <GroupServiceDetail
                   key={`${event.date}:${event.time}:${event.endTime}`} event={event} events={events} language={language} currentVisitor={currentVisitor}
                   onApply={onApplyToEvent}
-                  onAssignment={onAssignCardsToEventParticipantsBulk?id=>{setGroupAssignmentId(id);setAssignEventId(id)}:undefined}
+                  participantUsers={participantUsers} onAddParticipant={onAddParticipant} onRemoveParticipant={onRemoveParticipant}
+                  onAssignment={onAssignCardsToEventParticipantsBulk?id=>setAssignEventId(id):undefined}
                   renderAssignments={selected=><SharedAssignmentTeams event={selected} cards={cards} buildings={buildings} informalAssets={informalAssets} eventInformalAssignments={eventInformalAssignments} eventRestaurantAssignments={eventRestaurantAssignments}/>}
                   onDelete={actualRole==='admin'||actualRole==='developer'?id=>{
                     const target=events.find(e=>e.id===id)
@@ -854,10 +855,10 @@ export function DesktopCalendar({
                   )
                 }
 
-                // 편집/참가자 관리: 관리자·개발자 또는 본인이 인도자인 일정만 (모바일 정책과 통일)
-                const canEdit = role === 'admin' || role === 'developer' || event.leaders.includes(currentVisitor)
+                // 일정 편집과 배정 관리는 모바일과 같은 별도 판정을 사용한다.
+                const canEdit = canEditServiceSchedule(actualRole,event,currentVisitor)
                 const canManage = role === 'admin' || role === 'developer'
-                const canManageParticipants = canEdit
+                const canManageParticipants = canArrangeService(actualRole,event,currentVisitor)
 
                 return (
                   <EventDetailCard
@@ -889,7 +890,7 @@ export function DesktopCalendar({
                     onRemoveParticipant={onRemoveParticipant}
                     onOpenChat={() => setChatEvent(event)}
                     onOpenAssignment={
-                      onAssignCardsToEventParticipantsBulk && (actualRole === 'admin' || actualRole === 'developer' || event.leaders.includes(currentVisitor))
+                      onAssignCardsToEventParticipantsBulk && canArrangeService(actualRole,event,currentVisitor)
                         ? () => setAssignEventId(event.id)
                         : undefined
                     }
@@ -947,7 +948,7 @@ export function DesktopCalendar({
         const assignmentEvent = events.find((event) => event.id === assignEventId)
         if (!assignmentEvent) return null
         const isAdminLike = actualRole === 'admin' || actualRole === 'developer'
-        const assignmentCards = isAdminLike
+        const assignmentCards = isAdminLike || (groupServiceEnabled()&&actualRole==='leader')
           ? cards
           : cards.filter((card) => {
               const leaders = card.assignedLeaders?.length
@@ -955,7 +956,7 @@ export function DesktopCalendar({
                 : card.assignedLeader ? [card.assignedLeader] : []
               return leaders.includes(currentVisitor)
             })
-        const canEditAssignment = isAdminLike || (assignmentEvent.groupServiceScope ? groupAssignmentId===assignmentEvent.id : assignmentEvent.leaders.includes(currentVisitor))
+        const canEditAssignment = canArrangeService(actualRole,assignmentEvent,currentVisitor)
         return (
           <AssignmentEditor
             event={assignmentEvent}
@@ -978,6 +979,7 @@ export function DesktopCalendar({
             onShare={(eventId, assignments, options) => onAssignCardsToEventParticipantsBulk(eventId, assignments, {
               status: 'shared',
               expectedSharedAt: options.expectedSharedAt,
+              expectedRevision: options.expectedRevision,
               onConflict: options.onConflict,
             })}
           />

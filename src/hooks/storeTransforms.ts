@@ -111,6 +111,7 @@ export type RawCalendarEvent = {
   cart_capacity?: number | null
   assignment_status?: 'draft' | 'confirmed' | 'shared' | null
   assignment_shared_at?: string | null
+  assignment_revision?: string | number
   assignment_shared_by?: string | null
   assignment_team_scopes?: Record<string, '전체' | '주택' | '상가'> | null
   assignment_team_informal?: Record<string, number[]> | null
@@ -428,6 +429,7 @@ export function toCalendarEvent(
     })),
     assignmentStatus: raw.assignment_status ?? 'draft',
     assignmentSharedAt: raw.assignment_shared_at ?? null,
+    assignmentRevision: raw.assignment_revision == null ? undefined : String(raw.assignment_revision),
     assignmentTeamInformal: raw.assignment_team_informal ?? null,
     assignmentSharedBy: raw.assignment_shared_by ?? null,
     memo: raw.memo,
