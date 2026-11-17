@@ -17,12 +17,24 @@ function run(command,args,input){const r=spawnSync(command,args,{env,input,encod
 const sql=q=>run('psql',['-X','-At','-v','ON_ERROR_STOP=1'],q)
 const quote=s=>`'${s.replaceAll("'","''")}'`
 const mode=process.argv[2]
-assert.ok(['apply','apply-integrity','apply-signals','apply-review','review-smoke','fixture','smoke'].includes(mode))
+assert.ok(['apply','apply-integrity','apply-signals','apply-review','apply-followup','review-smoke','fixture','smoke'].includes(mode))
 const tables=['event_participants','event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments']
-if(mode==='apply'||mode==='apply-integrity'||mode==='apply-signals'||mode==='apply-review'){
+if(mode==='apply'||mode==='apply-integrity'||mode==='apply-signals'||mode==='apply-review'||mode==='apply-followup'){
   assert.equal(sql("select count(*) from information_schema.columns where table_name='calendar_events' and column_name='group_service_scope'"),mode==='apply'?'0':'1')
   const dir=resolve('backups',`group-tabs-demo-${Date.now()}`);mkdirSync(dir,{recursive:true})
   run('pg_dump',['--format=custom','--no-owner','--schema=public','--schema=private','--file',resolve(dir,'before.dump')]);run('pg_restore',['--list',resolve(dir,'before.dump')])
+  if(mode==='apply-followup'){
+    assert.equal(sql("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname='rename_user_name_references_before_assignment_guard'"),'0')
+    const signatures=['public.rename_user_name_references(uuid,text,text)','public.purge_user_name_references(uuid,text)','private.track_assignment_revision()','public.manage_event_participant_versioned_tx(uuid,integer,text,text,bigint,text)']
+    writeFileSync(resolve(dir,'rollback.sql'),signatures.map(s=>sql(`select pg_get_functiondef(${quote(s)}::regprocedure)`)).join('\n')+`\ndrop function public.mutate_personal_assignment_versioned_tx(uuid,integer,bigint,text,text,text,bigint,bigint,integer);
+drop function private.rename_user_name_references_before_assignment_guard(uuid,text,text);
+drop function private.purge_user_name_references_before_assignment_guard(uuid,text);
+drop policy service_session_owner_update on public.service_sessions;
+drop policy service_session_owner_delete on public.service_sessions;
+notify pgrst,'reload schema';\n`)
+    run('psql',['-X','-v','ON_ERROR_STOP=1','--single-transaction','-f','supabase/migrations/20261117_1100_assignment_revision_followup.sql'])
+    console.log(JSON.stringify({project,backup:dir,followupApplied:true}));process.exit()
+  }
   if(mode==='apply-review'){
     assert.equal(sql("select count(*) from information_schema.tables where table_schema='private' and table_name='event_assignment_revisions'"),'0')
     const signatures=['private.user_can_manage_event(integer,integer)','public.save_service_events_tx(uuid,jsonb,uuid,boolean)','public.update_calendar_event_tx(uuid,integer,jsonb,boolean)','public.update_calendar_event_series_tx(uuid,uuid,date,jsonb,boolean)','public.can_read_group_service_row(integer,text)','public.get_group_service_context(integer)','private.cleanup_team_participant_removal()']
@@ -149,7 +161,7 @@ if(mode==='review-smoke'){
     check('old draft cannot restore removed teammate',(await save(b,group,before,'shared')).conflict)
     check('removed assignment cleaned',(await rest(`event_card_assignments?event_id=eq.${group}&user_name=eq.${third.name}`,undefined,a.token,'GET')).length===0)
     const added=await rest('rpc/manage_event_participant_versioned_tx',{p_token:b.token,p_event_id:group,p_user_name:third.name,p_action:'add',p_expected_revision:removed.revision},b.token)
-    check('other leader can add participant with new revision',added.ok&&Number(added.revision)===Number(removed.revision)+1)
+    check('new participant does not invalidate existing teams',added.ok&&Number(added.revision)===Number(removed.revision))
     const cancel=await rest('rpc/manage_event_participant_versioned_tx',{p_token:member.token,p_event_id:group,p_user_name:member.name,p_action:'remove',p_expected_revision:added.revision},member.token)
     check('assigned self-cancellation cleans own row without removing partner',cancel.ok&&(await rest(`event_card_assignments?event_id=eq.${group}&select=user_name`,undefined,a.token,'GET')).some(r=>r.user_name===partner.name))
     await rest('rpc/update_calendar_event_tx',{p_token:admin.token,p_event_id:congregation,p_payload:{title:marker+' admin'},p_notify:false},admin.token)

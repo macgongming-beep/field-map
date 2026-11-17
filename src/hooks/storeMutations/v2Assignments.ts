@@ -7,10 +7,15 @@ import { showToast } from '../../lib/toast'
 import { getAuthToken } from '../../lib/authToken'
 import { msg } from '../../lib/msg'
 import { ensureAffectedRows, reportMutationError } from './shared'
-import type { InformalKind } from '../../types'
+import type { CalendarEvent, EventInformalAssignment, EventRestaurantAssignment, InformalKind } from '../../types'
+import { groupServiceEnabled } from '../../features/groupService/model'
 
 export function makeV2AssignmentMutations(deps: {
   fetchAll: () => Promise<void>
+  calendarEvents?: CalendarEvent[]
+  eventInformalAssignments?: EventInformalAssignment[]
+  eventRestaurantAssignments?: EventRestaurantAssignment[]
+  refreshAssignmentEvent?: (eventId:number)=>Promise<void>
   refreshRestaurantBuildings?: (buildingIds: number[]) => Promise<void>
   refreshGroups?: () => Promise<void>
   refreshGroupsFallback?: () => Promise<void>
@@ -20,6 +25,24 @@ export function makeV2AssignmentMutations(deps: {
 }) {
   const { fetchAll } = deps
   const refreshRestaurants = deps.refreshRestaurantBuildings ?? fetchAll
+
+  const personalAssignment=async(kind:'informal'|'restaurant',action:'add'|'remove',eventId:number|undefined,
+    input:{userName?:string;targetId?:number;unitId?:number|null;assignmentId?:number;expectedRevision?:string})=>{
+    const revision=input.expectedRevision??deps.calendarEvents?.find(e=>e.id===eventId)?.assignmentRevision
+    const token=getAuthToken()
+    if(!token||eventId==null||revision==null)throw Error(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'))
+    const {data,error}=await supabase.rpc('mutate_personal_assignment_versioned_tx',{
+      p_token:token,p_event_id:eventId,p_expected_revision:revision,p_kind:kind,p_action:action,
+      p_user_name:input.userName??null,p_target_id:input.targetId??null,p_unit_id:input.unitId??null,p_assignment_id:input.assignmentId??null,
+    })
+    if(error||!data?.ok){
+      if(data?.conflict)await deps.refreshAssignmentEvent?.(eventId)
+      throw error??Error(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'))
+    }
+    // A committed write must advance the editor even when the subsequent read fails.
+    try { await fetchAll(); await deps.refreshAssignmentEvent?.(eventId) }
+    catch(error) { reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'),error) }
+  }
 
   // ── 비공식 자료 풀 ────────────────────────────────
   /**
@@ -383,7 +406,12 @@ export function makeV2AssignmentMutations(deps: {
     userName: string
     assetId: number
     assignedBy: string
+    expectedRevision?: string
   }) => {
+    if(groupServiceEnabled()){
+      try{await personalAssignment('informal','add',input.eventId,{...input,targetId:input.assetId});return true}
+      catch(error){reportMutationError(msg('배정하지 못했습니다.'),error);return false}
+    }
     const { error } = await supabase.from('event_informal_assignments').insert({
       event_id: input.eventId,
       user_name: input.userName,
@@ -402,7 +430,8 @@ export function makeV2AssignmentMutations(deps: {
     return true
   }
 
-  const removeInformalAssignment = async (assignmentId: number) => {
+  const removeInformalAssignment = async (assignmentId: number,expectedRevision?:string) => {
+    if(groupServiceEnabled())return personalAssignment('informal','remove',deps.eventInformalAssignments?.find(a=>a.id===assignmentId)?.eventId,{assignmentId,expectedRevision})
     const { error } = await supabase
       .from('event_informal_assignments')
       .delete()
@@ -418,7 +447,12 @@ export function makeV2AssignmentMutations(deps: {
     buildingId: number
     unitId?: number | null
     assignedBy: string
+    expectedRevision?: string
   }) => {
+    if(groupServiceEnabled()){
+      try{await personalAssignment('restaurant','add',input.eventId,{...input,targetId:input.buildingId});return true}
+      catch(error){reportMutationError(msg('배정하지 못했습니다.'),error);return false}
+    }
     const { error } = await supabase.from('event_restaurant_assignments').insert({
       event_id: input.eventId,
       user_name: input.userName,
@@ -434,7 +468,8 @@ export function makeV2AssignmentMutations(deps: {
     return true
   }
 
-  const removeRestaurantAssignment = async (assignmentId: number) => {
+  const removeRestaurantAssignment = async (assignmentId: number,expectedRevision?:string) => {
+    if(groupServiceEnabled())return personalAssignment('restaurant','remove',deps.eventRestaurantAssignments?.find(a=>a.id===assignmentId)?.eventId,{assignmentId,expectedRevision})
     const { error } = await supabase
       .from('event_restaurant_assignments')
       .delete()

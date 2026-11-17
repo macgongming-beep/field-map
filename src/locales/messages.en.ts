@@ -234,6 +234,7 @@ export const messagesEn: Record<string, string> = {
   '오류가 발생했습니다': 'Something went wrong',
   '업데이트를 적용하지 못했습니다. 잠시 후 다시 눌러 주세요.': 'The update could not be applied. Please try again shortly.',
   '자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.': 'Could not load the data. Check your connection and try again.',
+  '배정하지 못했습니다.': 'Could not save the assignment.',
   '데이터 불러오는 중...': 'Loading data...',
   '로그인 화면 불러오는 중...': 'Loading sign-in...',
   '화면 구성 불러오는 중...': 'Loading the screen...',

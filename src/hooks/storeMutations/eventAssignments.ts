@@ -4,7 +4,7 @@ import { msg } from '../../lib/msg'
 import { groupServiceEnabled } from '../../features/groupService/model'
 import { fetchUpdatedCalendarEvent } from '../calendarEventRefresh'
 
-export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<void> }) {
+export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<void>; refreshEvent?: (id:number)=>Promise<void> }) {
   const { fetchAll } = deps
 
   const assignCardToEventParticipant = async (eventId: number, userName: string, cardId: number | null) => {
@@ -134,7 +134,10 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
         const result = rpcRes.data as { ok: boolean; conflict?: boolean; server_shared_at?: string | null; count?: number }
         if (result && result.conflict) {
           options?.onConflict?.(result.server_shared_at ?? null)
-          if(versioned)await fetchAll()
+          if(versioned){
+            try { await (deps.refreshEvent?deps.refreshEvent(eventId):fetchAll()) }
+            catch(error) { reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'),error) }
+          }
           return
         }
         await fetchAll()

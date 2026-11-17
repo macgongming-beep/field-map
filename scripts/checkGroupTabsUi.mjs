@@ -8,7 +8,7 @@ assert.equal(config.VITE_SUPABASE_URL,'https://itjlykpjmlcvanqpmkmc.supabase.co'
 const root=process.env.DEMO_APP_URL||'http://localhost:5179'
 assert.ok(['http://localhost:5179','https://chinese-territory-app-demo.vercel.app'].includes(root))
 const fixture=JSON.parse(readFileSync('scratch/group-tabs-fixture.json','utf8'))
-const browser=await chromium.launch({headless:true}),errors=[],checks=[]
+const browser=await chromium.launch({headless:true}),errors=[],checks=[],saves=[]
 async function pageFor(width,actor){
   const context=await browser.newContext({viewport:{width,height:932},serviceWorkers:'block'})
   await context.route('**/*.supabase.co/**',route=>{
@@ -16,6 +16,11 @@ async function pageFor(width,actor){
     return route.continue()
   })
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message))
+  page.on('response',async response=>{
+    if(!response.url().includes('/rpc/save_event_assignments_versioned_tx'))return
+    const input=response.request().postDataJSON()
+    saves.push({eventId:input.p_event_id,revision:input.p_expected_revision,status:response.status(),result:await response.json()})
+  })
   let signalReady=false
   page.on('websocket',socket=>socket.on('framereceived',({payload})=>{
     const wire=JSON.parse(String(payload))
@@ -146,12 +151,15 @@ try{
     await session.page.locator('.asg-editor-titles').waitFor({timeout:30000})
     assert.ok(await session.page.getByRole('button',{name:'배정 공유',exact:true}).isEnabled())
   }
+  assert.ok((await applyLiveApplicant(fixture.eventIds[0])).ok)
   await first.page.getByRole('button',{name:'배정 공유',exact:true}).click()
   await first.page.getByRole('tab',{name:/^동탄/}).waitFor({timeout:30000})
+  checks.push('new applicant while editor is open does not cause a false save conflict')
   await second.page.getByRole('button',{name:'배정 공유',exact:true}).click()
   await second.page.getByRole('heading',{name:'배정 내용이 변경됐어요'}).waitFor({timeout:30000})
   await second.page.screenshot({path:'scratch/group-tabs-conflict.png',fullPage:true})
   checks.push('two leader editors keep original revisions; second sharing shows conflict and retains local draft')
+  assert.ok((await removeLiveApplicant()).ok)
   await first.context.close();await second.context.close()
   const congregationSession=await pageFor(430,fixture.actors[1])
   const request=async(path,body,token,method='POST')=>{
@@ -177,4 +185,11 @@ try{
   assert.deepEqual(errors,[])
   writeFileSync('scratch/group-tabs-ui-results.json',JSON.stringify({root,checks,errors},null,2))
   console.log(JSON.stringify({checks,errors}))
+}catch(error){
+  for(const [i,page] of browser.contexts().flatMap(c=>c.pages()).entries()){
+    await page.screenshot({path:`scratch/group-tabs-failure-${i}.png`,fullPage:true})
+    console.error((await page.locator('body').innerText()).slice(-2000))
+  }
+  console.error(JSON.stringify({saves,errors,checks}))
+  throw error
 }finally{await browser.close()}

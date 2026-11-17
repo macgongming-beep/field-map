@@ -86,16 +86,20 @@ export function makeCalendarMutations(deps: {
 
   const manageVersionedParticipant=async(event:CalendarEvent,userName:string,action:'add'|'remove',role:'신청'|'게스트'='신청')=>{
     const token=getAuthToken()
-    if(!token||event.assignmentRevision==null){
+    const ownCancel=action==='remove'&&userName===getCurrentVisitor()
+    if(!token||(!ownCancel&&event.assignmentRevision==null)){
       showToast(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'),'error')
       return false
     }
     const result=await supabase.rpc('manage_event_participant_versioned_tx',{
-      p_token:token,p_event_id:event.id,p_user_name:userName,p_action:action,p_expected_revision:event.assignmentRevision,p_role:role,
+      p_token:token,p_event_id:event.id,p_user_name:userName,p_action:action,p_expected_revision:ownCancel?null:event.assignmentRevision,p_role:role,
     })
     if(result.error||!result.data?.ok){
       reportMutationError(msg(action==='add'?'참가자를 추가하지 못했습니다.':'참가자를 제외하지 못했습니다.'),result.error??new Error(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.')))
-      if(result.data?.conflict)await fetchAll()
+      if(result.data?.conflict){
+        try { await (deps.refreshUpdatedEvent?deps.refreshUpdatedEvent(event.id):fetchAll()) }
+        catch(error) { reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'),error) }
+      }
       return false
     }
     await logServiceAction({eventId:event.id,action:action==='add'?'joined':'left',targetType:'event_participant',details:{user_name:userName,source:'versioned_participant_management'}})

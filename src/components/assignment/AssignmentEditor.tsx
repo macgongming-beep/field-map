@@ -50,10 +50,10 @@ type Props = {
   informalGroups?: InformalGroup[]
   eventInformalAssignments?: EventInformalAssignment[]
   eventRestaurantAssignments?: EventRestaurantAssignment[]
-  onAssignInformalToUser?: (input: { eventId: number; userName: string; assetId: number; assignedBy: string }) => Promise<boolean>
-  onRemoveInformalAssignment?: (assignmentId: number) => Promise<void>
-  onAssignRestaurantToUser?: (input: { eventId: number; userName: string; buildingId: number; unitId?: number | null; assignedBy: string }) => Promise<boolean>
-  onRemoveRestaurantAssignment?: (assignmentId: number) => Promise<void>
+  onAssignInformalToUser?: (input: { eventId: number; userName: string; assetId: number; assignedBy: string; expectedRevision?:string }) => Promise<boolean>
+  onRemoveInformalAssignment?: (assignmentId: number,expectedRevision?:string) => Promise<void>
+  onAssignRestaurantToUser?: (input: { eventId: number; userName: string; buildingId: number; unitId?: number | null; assignedBy: string; expectedRevision?:string }) => Promise<boolean>
+  onRemoveRestaurantAssignment?: (assignmentId: number,expectedRevision?:string) => Promise<void>
   onClose: () => void
   onShare: (
     eventId: number,
@@ -84,6 +84,7 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
   // 편집 시작 시점의 서버 공유시각 — 공유 때 충돌 감지에 사용 (P0-3)
   const [entrySharedAt] = useState<string | null>(event.assignmentSharedAt ?? null)
   const [entryRevision] = useState(event.assignmentRevision)
+  const revisionRef=useRef(entryRevision)
   // 진입 시 draft 결정 (lazy 1회). 충돌이면 server로 시작하고 모달 띄움.
   const [{ initial, conflictPair }] = useState(() => {
     const entry = resolveDraftEntry(event, currentVisitor)
@@ -99,6 +100,13 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
     currentVisitor,
     initial,
   )
+  // A successful personal operation advances exactly one version. Do not adopt
+  // an arbitrary refreshed version: it may include another editor's changes.
+  const personalSaved=()=>{
+    if(!groupServiceEnabled()||revisionRef.current==null)return
+    revisionRef.current=(BigInt(revisionRef.current)+1n).toString()
+    dispatch({type:'SET_BASE_REVISION',revision:revisionRef.current})
+  }
 
   const participants = useMemo(
     () => territoryApplicants(event),
@@ -190,8 +198,8 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
     try {
       await onShare(event.id, draftToAssignments(draft), {
         expectedSharedAt: entrySharedAt,
-        ...(groupServiceEnabled()?{expectedRevision:entryRevision}:{}),
-        onConflict: () => { conflicted = true },
+        ...(groupServiceEnabled()?{expectedRevision:revisionRef.current}:{}),
+        onConflict: () => { conflicted = true; setShareConflict(true) },
       })
       if (conflicted) {
         setShareConflict(true)  // 그 사이 남이 공유함 → 모달, draft는 유지
@@ -250,10 +258,18 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
           informalGroups={informalGroups}
           eventInformalAssignments={informalHere}
           eventRestaurantAssignments={restaurantHere}
-          onAssignInformalToUser={onAssignInformalToUser}
-          onRemoveInformalAssignment={onRemoveInformalAssignment}
-          onAssignRestaurantToUser={onAssignRestaurantToUser}
-          onRemoveRestaurantAssignment={onRemoveRestaurantAssignment}
+          onAssignInformalToUser={onAssignInformalToUser?async input=>{
+            const ok=await onAssignInformalToUser({...input,expectedRevision:revisionRef.current});if(ok)personalSaved();return ok
+          }:undefined}
+          onRemoveInformalAssignment={onRemoveInformalAssignment?async id=>{
+            await onRemoveInformalAssignment(id,revisionRef.current);personalSaved()
+          }:undefined}
+          onAssignRestaurantToUser={onAssignRestaurantToUser?async input=>{
+            const ok=await onAssignRestaurantToUser({...input,expectedRevision:revisionRef.current});if(ok)personalSaved();return ok
+          }:undefined}
+          onRemoveRestaurantAssignment={onRemoveRestaurantAssignment?async id=>{
+            await onRemoveRestaurantAssignment(id,revisionRef.current);personalSaved()
+          }:undefined}
           onBack={() => setScreen('teams')}
         />
       </div>

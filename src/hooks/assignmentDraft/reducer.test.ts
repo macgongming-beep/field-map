@@ -12,6 +12,16 @@ function makeState(teams: DraftTeam[], activeTeamId: string | null = teams[0]?.i
 }
 
 describe('draftReducer — 팀', () => {
+  it('a committed personal write updates current and undo revision without discarding team edits', () => {
+    const state=makeState([team({members:['A']})])
+    state.undo={...state.draft,baseRevision:'4',teams:[team({members:['B']})]}
+    const next=draftReducer(state,{type:'SET_BASE_REVISION',revision:'5'})
+    expect(next.draft.baseRevision).toBe('5')
+    expect(next.draft.teams[0].members).toEqual(['A'])
+    expect(next.undo?.baseRevision).toBe('5')
+    expect(draftReducer(next,{type:'UNDO'}).draft.teams[0].members).toEqual(['B'])
+    expect(draftReducer(next,{type:'UNDO'}).draft.baseRevision).toBe('5')
+  })
   it('CREATE_TEAM: 선택 멤버로 새 팀 생성 + 활성화', () => {
     const s = makeState([])
     const next = draftReducer(s, { type: 'CREATE_TEAM', members: ['김민준', '이영희'] })

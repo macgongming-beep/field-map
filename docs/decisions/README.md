@@ -112,6 +112,8 @@
 
 배정 권한 확대: [0097 모든 인도자의 회중·집단 배정과 관리자 일정 편집 분리](0097-demo-all-leader-assignment-permissions.md)
 
+배정 리뷰 후속: [0098 버전 검사와 이름 변경·사용자 정리·카드 삭제 분리](0098-demo-assignment-revision-maintenance.md)
+
 ```markdown
 # 제목
 

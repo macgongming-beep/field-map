@@ -269,7 +269,8 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
     const members = activeTeam.members
     const toRemove = (informalAssigns.get(assetId) ?? []).filter((a) => members.includes(a.user))
     if (toRemove.length > 0) {
-      for (const a of toRemove) await onRemoveInformalAssignment?.(a.assignmentId)
+      try { for (const a of toRemove) await onRemoveInformalAssignment?.(a.assignmentId) }
+      catch { showToast(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'),'error');return }
       showToast(msg('"{label}" → {name} 배정 해제', { label: label, name: activeTeam.name }))
       return
     }
@@ -289,7 +290,8 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
     const members = activeTeam.members
     const toRemove = (restaurantAssigns.get(`${buildingId}:${unitId ?? 0}`) ?? []).filter((a) => members.includes(a.user))
     if (toRemove.length > 0) {
-      for (const a of toRemove) await onRemoveRestaurantAssignment?.(a.assignmentId)
+      try { for (const a of toRemove) await onRemoveRestaurantAssignment?.(a.assignmentId) }
+      catch { showToast(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'),'error');return }
       showToast(msg('"{label}" → {name} 배정 해제', { label: label, name: activeTeam.name }))
       return
     }

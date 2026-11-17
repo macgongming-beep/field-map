@@ -33,6 +33,17 @@ test('범위 저장 RPC가 없으면 옛 직접 저장으로 폴백하지 않고
   expect(fetchAll).not.toHaveBeenCalled()
 })
 
+test('conflict remains a conflict if the targeted refresh fails',async()=>{
+  vi.stubEnv('VITE_DEMO_MODE','true');vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co')
+  try{
+    mocks.rpc.mockResolvedValue({data:{ok:false,conflict:true},error:null})
+    const fetchAll=vi.fn(),refreshEvent=vi.fn().mockRejectedValue(Error('superseded')),onConflict=vi.fn()
+    await expect(makeEventAssignmentMutations({fetchAll,refreshEvent}).assignCardsToEventParticipantsBulk(1,[],{expectedRevision:'2',onConflict})).resolves.toBeUndefined()
+    expect(onConflict).toHaveBeenCalledOnce();expect(refreshEvent).toHaveBeenCalledExactlyOnceWith(1)
+    expect(fetchAll).not.toHaveBeenCalled()
+  }finally{vi.unstubAllEnvs()}
+})
+
 test('데모는 비공식 팀 목록을 새 RPC로 보내며 비어 있는 전체 배정도 새 RPC로 해제한다', async () => {
   vi.stubEnv('VITE_DEMO_MODE','true')
   try {
