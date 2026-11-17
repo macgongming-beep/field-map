@@ -2,9 +2,10 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import type { CalendarEvent, TerritoryCard } from '../types'
 import { DesktopCalendar } from './DesktopCalendar'
+import * as groupServiceModel from '../features/groupService/model'
 
 vi.mock('./assignment/AssignmentEditor', () => ({
   AssignmentEditor: ({ cards, canEdit }: { cards: TerritoryCard[]; canEdit: boolean }) => (
@@ -22,6 +23,17 @@ vi.mock('./CommentSection', () => ({
 vi.mock('./ChatRoom', () => ({
   ChatRoom: () => <div data-testid="chat-room" />,
 }))
+
+vi.mock('../features/groupService/GroupServiceDetail', () => ({
+  GroupServiceDetail: ({ event, commentEntry }: { event: CalendarEvent; commentEntry?: { eventId: number; commentId: number; requestKey: string } }) => (
+    <div data-testid="group-detail" data-event-id={event.id} data-comment-id={commentEntry?.commentId}
+      data-comment-event-id={commentEntry?.eventId} data-entry-key={commentEntry?.requestKey} />
+  ),
+}))
+
+function LocationProbe() {
+  return <output data-testid="location">{useLocation().search}</output>
+}
 
 function localDateString() {
   const now = new Date()
@@ -78,7 +90,43 @@ function calendarProps(overrides: Record<string, unknown> = {}) {
   }
 }
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
+})
+test.each(['true', 'false'])('desktop comment link is independent of chat retirement=%s without demo defaults', async (flag) => {
+  Element.prototype.scrollIntoView = vi.fn()
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_GROUP_SERVICE_ENABLED', 'true')
+  vi.stubEnv('VITE_CHAT_DISABLED', flag)
+  // Exercise the future rollout combination without weakening the real demo-only guard.
+  vi.spyOn(groupServiceModel, 'groupServiceEnabled').mockReturnValue(true)
+  const target = { ...event, id: 92, date: '2031-02-11', groupServiceScope: true }
+  render(<MemoryRouter initialEntries={['/calendar?openEvent=92&comment=123&keep=1']}>
+    <DesktopCalendar {...(calendarProps({ events: [event, target] }) as never)} />
+    <LocationProbe />
+  </MemoryRouter>)
+  const detail = await screen.findByTestId('group-detail')
+  expect(detail.getAttribute('data-event-id')).toBe('92')
+  expect(detail.getAttribute('data-comment-event-id')).toBe('92')
+  expect(detail.getAttribute('data-comment-id')).toBe('123')
+  expect(detail.getAttribute('data-entry-key')).toBeTruthy()
+  expect(screen.queryByTestId('chat-room')).toBeNull()
+  expect(screen.getByTestId('location').textContent).toBe('?keep=1')
+})
+
+test('desktop legacy chat link still opens chat when enabled', async () => {
+  Element.prototype.scrollIntoView = vi.fn()
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CHAT_DISABLED', 'false')
+  render(<MemoryRouter initialEntries={['/calendar?openChat=91&keep=1']}>
+    <DesktopCalendar {...(calendarProps() as never)} />
+    <LocationProbe />
+  </MemoryRouter>)
+  expect(await screen.findByTestId('chat-room')).toBeTruthy()
+  expect(screen.getByTestId('location').textContent).toBe('?keep=1')
+})
+
 test.each(['openChat', 'openEvent'])('retired desktop %s link selects the event day and keeps comments, not chat', async (param) => {
   Element.prototype.scrollIntoView = vi.fn()
   vi.stubEnv('VITE_CHAT_DISABLED', 'true')

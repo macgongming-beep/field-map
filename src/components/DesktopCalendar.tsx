@@ -188,11 +188,14 @@ export function DesktopCalendar({
   const [assignEventId, setAssignEventId] = useState<number | null>(null)
   const [commentEntry,setCommentEntry]=useState<{eventId:number;commentId:number;requestKey:string}|undefined>(undefined)
 
-  // openChat=<eventId> 쿼리 처리: 해당 일정 날짜로 이동 + 채팅방 열기
+  // 댓글 알림은 채팅 종료 설정과 무관하게 해당 일정/댓글로 이동한다.
   useEffect(() => {
-    const openChatId = searchParams.get('openChat') ?? (chatDisabled() ? searchParams.get('openEvent') : null)
-    if (!openChatId) return
-    const targetEvent = events.find((ev: CalendarEvent) => ev.id === Number(openChatId))
+    const commentId = Number(searchParams.get('comment'))
+    const hasComment = Number.isSafeInteger(commentId) && commentId > 0
+    const commentEventId = hasComment ? searchParams.get('openEvent') : null
+    const targetEventId = commentEventId ?? searchParams.get('openChat') ?? (chatDisabled() ? searchParams.get('openEvent') : null)
+    if (!targetEventId) return
+    const targetEvent = events.find((ev: CalendarEvent) => ev.id === Number(targetEventId))
     if (!targetEvent) return
 
     const d = new Date(targetEvent.date)
@@ -200,20 +203,19 @@ export function DesktopCalendar({
     setMonth(d.getMonth() + 1)
     setSelectedDay(d.getDate())
     setSelectedEventId(targetEvent.id)
-    const commentId=Number(searchParams.get('comment'))
-    setCommentEntry(Number.isSafeInteger(commentId)&&commentId>0?{eventId:targetEvent.id,commentId,requestKey:crypto.randomUUID()}:undefined)
-    if (!chatDisabled()) setChatEvent(targetEvent)
+    setCommentEntry(hasComment?{eventId:targetEvent.id,commentId,requestKey:crypto.randomUUID()}:undefined)
+    setChatEvent(!hasComment && !chatDisabled() ? targetEvent : null)
 
     // 다음 tick에 스크롤
     setTimeout(() => {
-      const el = document.getElementById(`event-card-${openChatId}`)
+      const el = document.getElementById(`event-card-${targetEventId}`)
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 200)
 
     // 쿼리 제거
     const next = new URLSearchParams(searchParams)
     next.delete('openChat')
-    if (chatDisabled()) next.delete('openEvent')
+    if (commentEventId || chatDisabled()) next.delete('openEvent')
     next.delete('comment')
     setSearchParams(next, { replace: true })
   }, [events, searchParams, setSearchParams])
