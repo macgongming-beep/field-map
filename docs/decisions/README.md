@@ -23,6 +23,7 @@
 화면 보완: [0111 좁은 PC 상세와 긴 제목 줄바꿈](0111-candidate-calendar-responsive-layout.md).
 운영 사전 대조: [0112 운영 DB 선행 함수·권한 읽기 전용 확인](0112-production-db-readonly-candidate-audit.md).
 운영 전환: [0113 준비 DB와 기능 OFF 호환 첫 배포](0113-production-group-service-compatibility-release.md).
+운영 활성화: [0114 집단 신청·새 배정 저장 ON](0114-production-group-service-enabled.md).
 
 | 번호 | 상태 | 결정 |
 | --- | --- | --- |
