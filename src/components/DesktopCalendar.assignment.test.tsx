@@ -115,6 +115,40 @@ test.each(['true', 'false'])('desktop comment link is independent of chat retire
   expect(screen.getByTestId('location').textContent).toBe('?keep=1')
 })
 
+test.each(['true', 'false'])('desktop keeps the comment link until its event arrives (chat retirement=%s)', async (flag) => {
+  Element.prototype.scrollIntoView = vi.fn()
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CHAT_DISABLED', flag)
+  vi.spyOn(groupServiceModel, 'groupServiceEnabled').mockReturnValue(true)
+  const link = '/calendar?openEvent=92&comment=123&keep=1'
+  const target = { ...event, id: 92, date: '2031-02-11', groupServiceScope: true }
+  const view = (events: CalendarEvent[]) => <MemoryRouter initialEntries={[link]}>
+    <DesktopCalendar {...(calendarProps({ events }) as never)} />
+    <LocationProbe />
+  </MemoryRouter>
+  const { rerender } = render(view([]))
+  expect(screen.getByTestId('location').textContent).toBe('?openEvent=92&comment=123&keep=1')
+  expect(screen.queryByTestId('group-detail')).toBeNull()
+  expect(screen.queryByTestId('chat-room')).toBeNull()
+
+  rerender(view([event]))
+  expect(screen.getByTestId('location').textContent).toBe('?openEvent=92&comment=123&keep=1')
+  expect(screen.queryByTestId('group-detail')).toBeNull()
+
+  rerender(view([event, target]))
+  const detail = await screen.findByTestId('group-detail')
+  expect(detail.getAttribute('data-event-id')).toBe('92')
+  expect(detail.getAttribute('data-comment-event-id')).toBe('92')
+  expect(detail.getAttribute('data-comment-id')).toBe('123')
+  const entryKey = detail.getAttribute('data-entry-key')
+  expect(entryKey).toBeTruthy()
+  expect(screen.getByTestId('location').textContent).toBe('?keep=1')
+  expect(screen.queryByTestId('chat-room')).toBeNull()
+
+  rerender(view([event, { ...target, memo: 'refreshed' }]))
+  expect(screen.getByTestId('group-detail').getAttribute('data-entry-key')).toBe(entryKey)
+})
+
 test('desktop legacy chat link still opens chat when enabled', async () => {
   Element.prototype.scrollIntoView = vi.fn()
   vi.stubEnv('VITE_DEMO_MODE', 'false')
