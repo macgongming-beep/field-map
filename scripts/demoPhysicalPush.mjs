@@ -60,7 +60,29 @@ if(mode==='bootstrap'){
   const result=await response.json();assert.equal(response.status,200);assert.equal(result.sent,0)
   console.log(JSON.stringify({backendConfigurationValidated:true,sent:0}))
 }else if(mode==='status'){
-  console.log(sql(`begin read only;select json_build_object('demoAdmin',(select json_build_object('id',id,'name',name,'subscriptions',(select count(*) from push_subscriptions s where s.user_id=u.id)) from app_users u where login_id=${quote(config.TEST_LOGIN_ID)}),'totalSubscriptions',(select count(*) from push_subscriptions),'configured',exists(select 1 from app_private_settings where key='push_edge_function_url'));rollback;`))
+  const recipient=existsSync(stateFile)?JSON.parse(readFileSync(stateFile,'utf8')).admin:null
+  console.log(sql(`begin read only;select json_build_object('recipient',(select json_build_object('id',id,'name',name,'subscriptions',(select count(*) from push_subscriptions s where s.user_id=u.id)) from app_users u where ${recipient?`id=${Number(recipient.id)}`:`login_id=${quote(config.TEST_LOGIN_ID)}` }),'totalSubscriptions',(select count(*) from push_subscriptions),'configured',exists(select 1 from app_private_settings where key='push_edge_function_url'));rollback;`))
+}else if(mode==='recipient'){
+  const id=Number(process.argv[3]);assert.ok(Number.isSafeInteger(id)&&id>0)
+  const state=JSON.parse(readFileSync(stateFile,'utf8'));assert.equal(state.project,project);assert.ok(state.events);assert.equal(state.deliveries.length,0)
+  const admin=JSON.parse(sql(`select json_build_object('id',id,'name',name) from app_users u where id=${id} and is_active and approval_status='approved' and role in('admin','developer') and exists(select 1 from push_subscriptions where user_id=u.id)`))
+  assert.ok(admin?.id)
+  const event=Number(state.events.find(e=>e.group==='singal').id)
+  const login=await fetch(`${origin}/rest/v1/rpc/auth_login`,{method:'POST',headers:{apikey:config.VITE_SUPABASE_ANON_KEY,'Content-Type':'application/json'},body:JSON.stringify({p_login_id:config.TEST_LOGIN_ID,p_pin:config.TEST_LOGIN_PIN})})
+  assert.ok(login.ok);const [{token}]=await login.json();assert.ok(token)
+  sql(`begin;do $$declare result jsonb;rev bigint;begin
+    perform 1 from calendar_events where id=${event} and title='[데모] 휴대폰 알림 확인' for update;
+    if not found then raise exception 'Test event required';end if;
+    if exists(select 1 from event_participants where event_id=${event} and user_name<>${quote(state.admin.name)})then raise exception 'Unexpected participant';end if;
+    select assignment_revision(e) into rev from calendar_events e where id=${event};
+    result:=manage_event_participant_versioned_tx(${quote(token)}::uuid,${event},${quote(state.admin.name)},'remove',rev);
+    if result->>'ok' is distinct from 'true' then raise exception 'Removal failed';end if;
+    select assignment_revision(e) into rev from calendar_events e where id=${event};
+    result:=manage_event_participant_versioned_tx(${quote(token)}::uuid,${event},${quote(admin.name)},'add',rev);
+    if result->>'ok' is distinct from 'true' then raise exception 'Addition failed';end if;
+  end$$;commit;`)
+  state.admin=admin;writeFileSync(stateFile,JSON.stringify(state,null,2),{mode:0o600})
+  console.log(JSON.stringify({recipient:admin.name,realPushSent:false}))
 }else if(mode==='prepare'){
   const state=JSON.parse(readFileSync(stateFile,'utf8'));assert.equal(state.project,project);assert.ok(state.configured);assert.ok(!state.events)
   const admin=JSON.parse(sql(`select json_build_object('id',id,'name',name) from app_users where login_id=${quote(config.TEST_LOGIN_ID)} and role in('admin','developer') and is_active and approval_status='approved'`))
@@ -96,4 +118,4 @@ if(mode==='bootstrap'){
   state.deliveries.push({kind,at:new Date().toISOString(),...result,physicalReceipt:'awaiting-user'})
   writeFileSync(stateFile,JSON.stringify(state,null,2),{mode:0o600})
   console.log(JSON.stringify({sent:true,...result,physicalReceipt:'awaiting-user'}))
-}else throw Error('Use bootstrap, configure, probe, status, prepare or send comment/mention')
+}else throw Error('Use bootstrap, configure, probe, status, prepare, recipient ID or send comment/mention')
