@@ -124,6 +124,8 @@
 
 집단 상세 표시: [0103 빈 모임 정보 숨김·회중 봉사와 같은 기본 펼침 댓글창](0103-group-detail-common-comments.md)
 
+운영 전 최종 점검: [0104 데모 검증 통과·운영 전환 세 항목 보완 전 배포 보류](0104-group-service-release-preflight.md)
+
 ```markdown
 # 제목
 
