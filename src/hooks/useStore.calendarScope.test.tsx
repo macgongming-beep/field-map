@@ -6,7 +6,7 @@ import { SupersededReadError } from './supersededRead'
 import { calendarReadScope } from './calendarReadScope'
 import { useCalendarRealtime } from './useCalendarRealtime'
 
-const state = vi.hoisted(() => ({ probe: vi.fn(), callbacks: new Map<string, (payload?: unknown) => void>(), participants: vi.fn(), scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null, pendingResource: null as Promise<unknown> | null }))
+const state = vi.hoisted(() => ({ rpc: vi.fn(), probe: vi.fn(), callbacks: new Map<string, (payload?: unknown) => void>(), participants: vi.fn(), scoped: vi.fn(), reads: [] as string[], events: [] as unknown[], assignments: [] as unknown[], failure: '', pendingFull: null as Promise<unknown> | null, pendingResource: null as Promise<unknown> | null }))
 vi.mock('./calendarParticipants', () => ({ readCalendarParticipants: state.participants }))
 vi.mock('./calendarReadScope', async importOriginal => ({ ...await importOriginal<typeof import('./calendarReadScope')>(), readScopedCalendar: state.scoped }))
 vi.mock('../lib/supabase', () => ({ supabase: {
@@ -18,7 +18,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     return channel
   },
   removeChannel: vi.fn(),
-  rpc: () => Promise.resolve({ data: null, error: null }),
+  rpc: state.rpc,
   from: (table: string) => {
     const q: Record<string, unknown> = {}
     let lookup = false
@@ -43,6 +43,28 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 const old = { id: 1, event_date: '2026-08-02', title: 'Old', time: '10:00', event_participants: [{ user_name: 'A', role: '신청' }] }
 beforeEach(() => { state.reads = []; state.events = [old]; state.assignments = []; state.failure = ''; state.pendingFull = null; state.pendingResource = null; state.participants.mockReset().mockResolvedValue(new Map()); state.scoped.mockReset().mockResolvedValue([]); vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', undefined) })
 afterEach(() => { cleanup(); state.callbacks.clear(); vi.useRealTimers(); vi.unstubAllEnvs() })
+beforeEach(()=>state.rpc.mockReset().mockResolvedValue({data:null,error:null}))
+
+test('assignment conflict replaces one event in a date-window snapshot without a full calendar reload',async()=>{
+  vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co')
+  vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','true')
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED','true')
+  state.scoped.mockResolvedValue([{id:1,date:'2026-08-02',time:'10:00',title:'Cached',applicants:['A'],cardAssignments:[]}])
+  localStorage.setItem('auth_token','test-token')
+  try{
+    const {result}=renderHook(()=>useStore(true,'leader',undefined,'window:2026-08-01:2026-08-31'))
+    await waitFor(()=>expect(result.current.loading).toBe(false))
+    state.reads=[];state.scoped.mockClear()
+    state.probe.mockResolvedValue({data:{...old,title:'Latest',assignment_revision:9},error:null})
+    state.rpc.mockResolvedValue({data:{ok:false,conflict:true,revision:9},error:null})
+    const onConflict=vi.fn()
+    await act(async()=>result.current.assignCardsToEventParticipantsBulk(1,[],{expectedRevision:'1',onConflict}))
+    expect(onConflict).toHaveBeenCalledOnce()
+    expect(result.current.calendarEvents[0].title).toBe('Latest')
+    expect(state.reads).toEqual(['calendar_events:probe','event_card_assignments','event_card_assignment_cards'])
+    expect(state.scoped).not.toHaveBeenCalled()
+  }finally{localStorage.removeItem('auth_token')}
+})
 
 test.each((['user', 'leader', 'admin', 'developer'] as const).flatMap(role => [
   { role, demo: 'true', flag: undefined }, { role, demo: 'false', flag: 'true' },

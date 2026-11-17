@@ -1603,12 +1603,19 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     publishCalendarEvents(next)
   }, [clearCalendarWindows, publishCalendarEvents])
   const refreshAssignmentEvent = useCallback(async (eventId: number) => {
-    // A live calendar read already refreshes this event. Do not turn that race
-    // into a connection-error toast after a correctly rejected stale save.
+    clearCalendarWindows()
+    // A cached screen can safely replace one fully read event without claiming
+    // that the rest of its calendar snapshot is complete.
     if (calendarReadsPending.current) return
-    try { await refreshUpdatedEvent(eventId) }
-    catch (error) { if (!(error instanceof SupersededReadError)) throw error }
-  }, [refreshUpdatedEvent])
+    const version = ++calendarReadVersion.current
+    const scope = calendarScopeRef.current
+    const event = await fetchUpdatedCalendarEvent(eventId)
+    if (version !== calendarReadVersion.current || scope !== calendarScopeRef.current) return
+    const replace = (events: CalendarEvent[]) => events.map(current => current.id === eventId ? event : current)
+    if (!calendarEventsRef.current.some(current => current.id === eventId)) return
+    publishCalendarEvents(replace(calendarEventsRef.current))
+    if (recipientCalendarRef.current) recipientCalendarRef.current = replace(recipientCalendarRef.current)
+  }, [clearCalendarWindows, publishCalendarEvents])
   const refreshMovedBuilding = useCallback(async (buildingId: number) => {
     if (buildingFullReadsPending.current) throw new Error('Building snapshot refresh in progress')
     const version = buildingFullReadVersion.current

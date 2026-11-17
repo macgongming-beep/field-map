@@ -157,6 +157,8 @@ try{
   checks.push('new applicant while editor is open does not cause a false save conflict')
   await second.page.getByRole('button',{name:'배정 공유',exact:true}).click()
   await second.page.getByRole('heading',{name:'배정 내용이 변경됐어요'}).waitFor({timeout:30000})
+  await second.page.getByRole('button',{name:'배정 공유',exact:true}).waitFor({timeout:30000})
+  assert.equal(await second.page.getByText('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.',{exact:true}).count(),0,'Cached calendar conflict does not produce a false connection error')
   await second.page.screenshot({path:'scratch/group-tabs-conflict.png',fullPage:true})
   checks.push('two leader editors keep original revisions; second sharing shows conflict and retains local draft')
   assert.ok((await removeLiveApplicant()).ok)
