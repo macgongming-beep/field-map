@@ -28,13 +28,17 @@ test.each([false,true])('full prepare -> mixed clients -> strict -> compatibilit
   const db=new PGlite()
   try{
     await db.exec(rolloutFixture(cart));await seed(db)
-    expect((await db.query(compatibilityReadinessSql)).rows[0].readiness).toEqual({manifestInstalled:false,rolloutInstalled:false,compatRemovalExists:false,anonCanRemove:false,authenticatedCanRemove:false})
+    expect((await db.query(compatibilityReadinessSql)).rows[0].readiness).toEqual({manifestInstalled:false,rolloutInstalled:false,compatRemovalExists:false,anonCanRemove:false,authenticatedCanRemove:false,notificationFeedExists:false,anonCanReadFeed:false,authenticatedCanReadFeed:false})
     // Install the entire generated artifact, not a special test-only migration order.
     let prepare=bundle.prepare
     if(process.env.GROUP_ROLLOUT_MUTATION==='cart')prepare=prepare.replace('if to_regclass(\'public.event_cart_applications\') is null then return; end if;','')
     if(process.env.GROUP_ROLLOUT_MUTATION==='compat')prepare=prepare.replace("select private.set_assignment_rollout_phase('compatibility','Prepare bundle: old clients retained; no strict adoption approval');",'')
     await transaction(db,prepare)
-    expect((await db.query(compatibilityReadinessSql)).rows[0].readiness).toEqual({manifestInstalled:true,rolloutInstalled:true,compatRemovalExists:true,anonCanRemove:true,authenticatedCanRemove:true})
+    expect((await db.query(compatibilityReadinessSql)).rows[0].readiness).toEqual({manifestInstalled:true,rolloutInstalled:true,compatRemovalExists:true,anonCanRemove:true,authenticatedCanRemove:true,notificationFeedExists:true,anonCanReadFeed:true,authenticatedCanReadFeed:true})
+    await db.exec("insert into notifications(user_id,type,title) select 2,'comment','hidden' from generate_series(1,60);insert into notifications(user_id,type,title) values(2,'mention','visible'),(3,'mention','foreign')")
+    await db.exec('set role anon')
+    expect((await db.query('select title from get_my_notification_feed($1,50)',[token(2)])).rows).toEqual([{title:'visible'}])
+    await db.exec('reset role')
     expect((await db.query('select phase from private.assignment_rollout')).rows).toEqual([{phase:'compatibility'}])
     await expect(transaction(db,bundle.prepare)).rejects.toThrow('unconverted')
     await db.exec('set role anon')
@@ -87,7 +91,7 @@ test.each([false,true])('full prepare -> mixed clients -> strict -> compatibilit
     await expect(transaction(db,bundle.strict)).rejects.toThrow('rollout_evidence')
     await db.exec("set app.rollout_evidence='isolated fixture: mixed clients and backup reviewed'")
     await transaction(db,bundle.strict)
-    expect((await db.query(compatibilityReadinessSql)).rows[0].readiness).toEqual({manifestInstalled:true,rolloutInstalled:true,compatRemovalExists:true,anonCanRemove:false,authenticatedCanRemove:false})
+    expect((await db.query(compatibilityReadinessSql)).rows[0].readiness).toEqual({manifestInstalled:true,rolloutInstalled:true,compatRemovalExists:true,anonCanRemove:false,authenticatedCanRemove:false,notificationFeedExists:true,anonCanReadFeed:true,authenticatedCanReadFeed:true})
     await actor(db,2);await db.exec('set role anon')
     await expect(oldSave(db)).rejects.toThrow('permission')
     await expect(db.query('select remove_service_participant_compat_tx($1,1,\'Member\',false,null)',[token(2)])).rejects.toThrow('permission')

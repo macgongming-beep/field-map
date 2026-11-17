@@ -33,7 +33,7 @@ if(process.argv.includes('--require-prerequisites')) {
 }
 if(process.argv.includes('--require-compat-ready')) {
   assert.ok(Object.values(compatibilityReadiness).every(value=>value===true),
-    'First deployment blocked: prepare bundle and executable compatibility removal RPC required before main merge. Strict installations require the separate strict-stage audit.')
+    'First deployment blocked: prepare bundle, executable compatibility removal and filtered notification feed RPCs required before main merge. Strict installations require the separate strict-stage audit.')
 }
 const list=values=>values.map(v=>`'${v}'`).join(',')
 const metadata=read(`select json_build_object(

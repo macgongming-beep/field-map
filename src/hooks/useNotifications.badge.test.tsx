@@ -31,7 +31,7 @@ test('badge reads exactly the same 50-row RPC with no title/body, and polls meta
   expect(response.select).toHaveBeenCalledWith(NOTIFICATION_BADGE_COLUMNS)
   expect(NOTIFICATION_BADGE_COLUMNS.split(',')).not.toContain('body')
   expect(NOTIFICATION_BADGE_COLUMNS.split(',')).not.toContain('title')
-  expect(mocks.rpc).toHaveBeenCalledWith('get_my_notifications', { p_token: 'token-a', p_limit: 50 })
+  expect(mocks.rpc).toHaveBeenCalledWith('get_my_notification_feed', { p_token: 'token-a', p_limit: 50 })
   expect(result.current.unreadCount).toBe(1)
   expect(result.current.detailsReady).toBe(false)
   expect(result.current.notifications[0].body).toBeNull()

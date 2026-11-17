@@ -29,6 +29,7 @@ export function rolloutFixture(cart) {
   create table service_sessions(id serial primary key,calendar_event_id int,user_name text,source text,status text,ended_at timestamptz);
   create table comments(id bigserial primary key,target_type text,target_id int,author_id int,author_name text,content text,mention_ids int[],mention_names text[],created_at timestamptz default now(),deleted_at timestamptz);
   create table test_notices(recipient int,kind text,link text);
+  create table notifications(id bigserial primary key,user_id int,type text not null,title text,body text,link text,related_id int,is_read boolean default false,created_at timestamptz default now());
   create function public.verify_session(t uuid) returns int language sql stable as $$select u.id from public.app_users u join public.auth_sessions s on s.user_id=u.id where s.token=t and s.expires_at>now() and u.is_active and u.approval_status='approved'$$;
   create function private.request_session_user_id() returns int language sql stable security definer as $$select public.verify_session(nullif(current_setting('test.token',true),'')::uuid)$$;
   create function private.request_is_admin() returns boolean language sql stable security definer as $$select role in ('admin','developer') from public.app_users where id=private.request_session_user_id()$$;

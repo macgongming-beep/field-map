@@ -18,6 +18,7 @@
 운영 미반영 후보: [0108 최신 main 기반 집단 봉사 후보](0108-main-based-group-service-candidate.md).
 이전 데모 결정/검증은 0093~0107, 전환 절차는 [0105](0105-group-service-staged-rollout.md).
 이전 데모 시험 결과를 운영 후보의 결과로 재사용하지 않는다.
+후속 합의 반영: [0109 일반 댓글은 푸시만, 멘션은 알림함에도](0109-candidate-comment-notification-agreement.md).
 
 | 번호 | 상태 | 결정 |
 | --- | --- | --- |

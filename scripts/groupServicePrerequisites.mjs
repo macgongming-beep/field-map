@@ -32,6 +32,7 @@ const columns = {
   service_sessions: ['calendar_event_id','user_name','source','status','ended_at'],
   app_users: ['id','name','role','group_name','is_active','approval_status'],
   comments: ['id','target_type','target_id','author_id','author_name','content','mention_ids','mention_names','created_at','deleted_at'],
+  notifications: ['id','user_id','type','title','body','link','related_id','is_read','created_at'],
 }
 const quote = value => `'${value.replaceAll("'","''")}'`
 const functionValues = signatures.map(s => `(${quote(s)})`).join(',')

@@ -616,6 +616,8 @@ App.css          [모바일 공통] 0px~
 검증과 남은 관문은 `docs/decisions/0108-main-based-group-service-candidate.md`를 읽는다.
 **준비 DB 적용과 `--require-compat-ready` 확인 전에 main 병합/운영 배포 금지.**
 새 앱은 기능 설정을 꺼도 원자적 참가자 제외 RPC가 필요하다.
+0109 후속부터 댓글 제외 알림함 `get_my_notification_feed(uuid,integer)`도 필수다.
+일반 댓글은 푸시를 유지하되 알림함/안 읽음 숫자에서 제외하고, 멘션은 유지한다.
 
 리비전 보호 설치 후 rename/purge/merge 본문은 해당
 `private.*_before_assignment_guard` core에서 수정한다. 공개 감싸개를 통째로

@@ -16,7 +16,7 @@ test('private notifications use authenticated RPC without a forbidden table subs
   const { result } = renderHook(() => useNotifications(10))
   await act(async () => {})
   expect(mocks.channel).not.toHaveBeenCalled()
-  expect(mocks.rpc).toHaveBeenCalledWith('get_my_notifications', { p_token: 'test-token', p_limit: 50 })
+  expect(mocks.rpc).toHaveBeenCalledWith('get_my_notification_feed', { p_token: 'test-token', p_limit: 50 })
   expect(result.current.unreadCount).toBe(1)
   mocks.rpc.mockResolvedValue({ data: [{ ...notification, is_read: true }], error: null })
   await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })

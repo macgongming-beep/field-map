@@ -7,12 +7,16 @@ import { prerequisiteGuardSql } from './groupServicePrerequisites.mjs'
 export const compatibilityReadinessSql = `select json_build_object(
   'manifestInstalled',to_regclass('private.group_service_release_manifest') is not null,
   'rolloutInstalled',to_regclass('private.assignment_rollout') is not null,
+  'notificationFeedExists',to_regprocedure('public.get_my_notification_feed(uuid,integer)') is not null,
+  'anonCanReadFeed',coalesce(has_function_privilege('anon',to_regprocedure('public.get_my_notification_feed(uuid,integer)'),'execute'),false),
+  'authenticatedCanReadFeed',coalesce(has_function_privilege('authenticated',to_regprocedure('public.get_my_notification_feed(uuid,integer)'),'execute'),false),
   'compatRemovalExists',to_regprocedure('public.remove_service_participant_compat_tx(uuid,integer,text,boolean,text)') is not null,
   'anonCanRemove',coalesce(has_function_privilege('anon',to_regprocedure('public.remove_service_participant_compat_tx(uuid,integer,text,boolean,text)'),'execute'),false),
   'authenticatedCanRemove',coalesce(has_function_privilege('authenticated',to_regprocedure('public.remove_service_participant_compat_tx(uuid,integer,text,boolean,text)'),'execute'),false)
 ) readiness;`
 
 export const rolloutMigrations = [
+  '20261110_1600_notification_feed_without_comments.sql',
   '20261116_1000_group_service.sql', '20261116_1010_service_event_conflict_response.sql',
   '20261116_1020_unassigned_service_templates.sql', '20261116_1030_preserve_cart_schedule_contract.sql',
   '20261116_1040_optional_meeting_access.sql', '20261116_1100_service_application_activity.sql',

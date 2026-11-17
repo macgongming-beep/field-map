@@ -6,6 +6,8 @@
 - 운영 기준: `f8ccae471b22fe3dcff1c694d56592b43e49ef78` (작업 시작/종료 전 origin 갱신으로 확인).
 - 기능 원본: `21a725c2a91141d2d7b773296b0179774fe6e811..586cbdb8960273c2fb165c604d5ed553858d030a`.
 
+**후속 변경:** 이 문서는 최초 후보 `b1cfa90`의 기록이다. 사용자 재확인에 따라 [0109](0109-candidate-comment-notification-agreement.md)에서 일반 댓글 제외 알림 피드를 추가했다. 아래의 useNotifications 미변경/18개 SQL/묶음 해시는 최초 후보에만 해당한다. 최신 준비 묶음은 0109를 따른다.
+
 ## 이식 범위
 
 전체 데모 브랜치를 병합하지 않았다. 최초 집단 기능 이전/이후의 차이 중 앱 코드, 관련 시험, 신규 SQL 18개, 준비/감사 도구만 main 위에 적용했다. 직접 충돌한 `calendarParticipants`, `useCalendarRealtime` 및 그 시험은 main의 기존 경량 조회를 유지하고 집단 신호/리비전 읽기만 연결했다.

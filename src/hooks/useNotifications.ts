@@ -97,7 +97,8 @@ export function useNotifications(userId: number | null | undefined, options: { b
         await Promise.allSettled([...pendingWrites.current])
         if (!current()) return
       }
-      const query = supabase.rpc('get_my_notifications', { p_token: token, p_limit: PAGE_SIZE })
+      // Filter before LIMIT on the server so comments cannot crowd out mentions.
+      const query = supabase.rpc('get_my_notification_feed', { p_token: token, p_limit: PAGE_SIZE })
       const { data, error: readError } = await (badgeOnly ? query.select(NOTIFICATION_BADGE_COLUMNS) : query)
       if (!current()) return
       if (readError) throw readError
