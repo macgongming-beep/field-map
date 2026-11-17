@@ -29,7 +29,20 @@
 
 준비 DB 사후 검사 통과 후 운영 main에 후보를 반영한다. 운영 환경변수 목록을 다시 읽었고 `VITE_ASSIGNMENT_REVISION_ENABLED`, `VITE_GROUP_SERVICE_ENABLED`, `VITE_DEMO_MODE`는 모두 미설정이다. 기존 기본값에 따라 새 기능 OFF로 배포하며 운영 환경변수를 이번에 변경하지 않는다.
 
-배포 전 운영: `dpl_78m3LP4By7PgN7oRrm2MJRkdo79U`. 최종 배포 식별자와 확인 결과는 완료 후 이 문서에 추가한다.
+배포 전 운영: `dpl_78m3LP4By7PgN7oRrm2MJRkdo79U`.
+
+첫 운영 배포 완료:
+
+- `main`은 강제 갱신 없이 `f8ccae4`에서 `3b848dd6d0d17528ee01ecf863cf1c9cd7f84086`로 fast-forward했다. 다른 작업 폴더의 미커밋 변경은 건드리지 않았다.
+- 운영 배포 `dpl_7x6VBaKH1JuaQ4M7hRhCVSFVhvUM`, READY. Vercel API의 프로젝트 ID, production 대상, Git SHA, 대표 주소 연결을 확인했다.
+- 대표 주소: `https://chinese-territory-app.vercel.app`.
+- PC 1365px/모바일 390px에서 실제 운영 `/calendar` 접속 후 로그인 화면 정상 표시, 가로 넘침 없음, 런타임 오류/실패한 앱 파일 0건. DB 쓰기 요청도 0건. 신규 브라우저의 비로그인 검사이며 로그인 후 신청/배정 전체 검사를 대신하지 않는다.
+- 실제 배포 앱 파일: `/assets/index-Br-bK2gD.js`. 화면 기록은 `scratch/production-first-release-ui.json`과 `production-first-release-{390,1365}.png`.
+- 준비 전후 관련 업무 표 8개의 행 수가 같음을 확인했다. 행 수 대조가 모든 셀의 동일성을 증명하는 것은 아니며, 성원의 실제 신청/배정을 시험 목적으로 수정하지 않았다.
+- 격리 전환/선행 조건 시험 2파일/6개를 다시 실행해 통과했다. 이번 후속은 배포 도구와 기록뿐이며 전체 2,533개 검사를 다시 실행했다고 주장하지 않는다.
+- 사용자에게 아이폰 운영 앱 업데이트 후 홈/캘린더/상세 확인을 요청했다. 이 기록 시점에는 답변 대기이며 실제 기기 전환 완료로 표시하지 않는다.
+
+이 완료 기록만 후보 브랜치에 추가한다. 기록을 위해 같은 앱을 다시 운영 배포하지 않는다.
 
 ## 남은 단계
 
