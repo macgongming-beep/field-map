@@ -24,6 +24,7 @@ export type AssignmentDraft = {
   mode: AssignmentMode
   status: AssignmentStatus
   updatedAt: string | null
+  baseRevision?: string
   teams: DraftTeam[]
 }
 
@@ -40,6 +41,7 @@ export const TEAM_COLORS = ['blue', 'green', 'orange', 'purple', 'slate', 'rose'
 export type DraftAction =
   // 초기화 / 로드
   | { type: 'LOAD'; draft: AssignmentDraft; activeTeamId?: string | null }
+  | { type: 'SET_BASE_REVISION'; revision: string }
   // 팀
   | { type: 'CREATE_TEAM'; members?: string[] }      // 선택한 멤버로 새 팀 ("묶기")
   | { type: 'DELETE_TEAM'; teamId: string }

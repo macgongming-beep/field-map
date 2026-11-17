@@ -6,6 +6,8 @@
 import type { CalendarEvent, TerritoryCard } from '../../types'
 import type { AppLanguage } from '../../i18n'
 import { t, formatPeriod } from '../../i18n'
+import { groupServiceEnabled, visibleServiceEventCount } from '../../features/groupService/model'
+import { ServiceEventList } from '../../features/groupService/ServiceEventList'
 
 type ChevRIconProps = { size?: number; color?: string }
 function ChevR({ size = 14, color = 'var(--muted-2)' }: ChevRIconProps) {
@@ -35,6 +37,7 @@ function UserIcon() {
 }
 
 type Props = {
+  groupName?: string
   language: AppLanguage
   todayEvents: CalendarEvent[]
   cards: TerritoryCard[]
@@ -57,6 +60,7 @@ import { ServiceSuggestionsSection } from '../ServiceSuggestionsSection'
 import { MeetingHome } from '../../features/meetingNotes/MeetingHome'
 
 export function AdminMobileHome({
+  groupName,
   language,
   todayEvents,
   cards,
@@ -80,14 +84,14 @@ export function AdminMobileHome({
         <div className="mh-sec-head">
           <h2>
             {t(language, 'home.todayService')}
-            <span className="mh-cnt">{todayEvents.length}</span>
+            <span className="mh-cnt">{groupServiceEnabled()?visibleServiceEventCount(todayEvents):todayEvents.length}</span>
           </h2>
         </div>
         {todayEvents.length === 0 ? (
           <div className="mh-empty-line">
             <span>{t(language, 'home.noTodayServiceShort')}</span>
           </div>
-        ) : (
+        ) : groupServiceEnabled() ? <ServiceEventList events={todayEvents} groupName={groupName} language={language} onOpen={onOpenEventDetail}/> : (
           <div className="mh-today-list">
             {todayEvents.map((event) => {
               const tb = timeBlock(event.time || '', language)

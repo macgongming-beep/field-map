@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { CalendarEvent } from '../../types'
-const state = vi.hoisted(() => ({ cart: false, rpc: vi.fn(), write: vi.fn(), toast: vi.fn(), error: vi.fn() }))
+const state = vi.hoisted(() => ({ cart: false, rpc: vi.fn(), write: vi.fn(), toast: vi.fn(), error: vi.fn(), activity:vi.fn(), overlap:vi.fn() }))
+vi.mock('../../features/groupService/api',()=>({applyServiceActivity:state.activity,confirmOverlappingApplication:state.overlap,saveServicePlan:vi.fn()}))
 vi.mock('../../config/features', () => ({ get CART_APPLICATIONS_ENABLED() { return state.cart } }))
 vi.mock('./shared', () => ({ supabase: { rpc: state.rpc, from: () => {
   const q: Record<string, unknown> = {}
@@ -16,6 +17,7 @@ beforeEach(() => {
   vi.clearAllMocks(); state.cart = false; vi.stubEnv('VITE_DEMO_MODE', 'true')
   state.write.mockResolvedValue({ data: [{ id: 1 }], error: null })
   state.rpc.mockResolvedValue({ data: { ok: true, state: 'applied' }, error: null })
+  state.activity.mockResolvedValue({ok:true,created:true});state.overlap.mockResolvedValue(true)
 })
 afterEach(() => vi.unstubAllEnvs())
 function setup(cancelled = false, team = false) {
@@ -60,4 +62,20 @@ test('failed writes never refresh or claim success', async () => {
   const s = setup(); state.write.mockResolvedValue({ data: null, error: new Error('offline') })
   await s.mutations.applyToEvent(1)
   expect(s.refreshApplication).not.toHaveBeenCalled(); expect(s.fetchAll).not.toHaveBeenCalled(); expect(state.toast).not.toHaveBeenCalled()
+})
+test('demo application persists chosen activity before targeted refresh; overlap cancel writes nothing',async()=>{
+  vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','true')
+  const s=setup();await s.mutations.applyToEvent(1,'return_visit')
+  expect(state.activity).toHaveBeenCalledWith(1,'return_visit')
+  expect(s.refreshApplication).toHaveBeenCalledWith(1,false)
+  expect(state.write).not.toHaveBeenCalled();expect(s.fetchAll).not.toHaveBeenCalled()
+  state.activity.mockClear();s.refreshApplication.mockClear();state.overlap.mockResolvedValue(false)
+  await s.mutations.applyToEvent(1,'service')
+  expect(state.activity).not.toHaveBeenCalled();expect(s.refreshApplication).not.toHaveBeenCalled()
+})
+test('failed activity save neither refreshes nor claims success',async()=>{
+  vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','true')
+  state.activity.mockRejectedValue(new Error('offline'))
+  const s=setup();await s.mutations.applyToEvent(1,'return_visit')
+  expect(s.refreshApplication).not.toHaveBeenCalled();expect(state.toast).not.toHaveBeenCalled();expect(state.error).toHaveBeenCalledOnce()
 })

@@ -1,13 +1,14 @@
 import { supabase } from '../lib/supabase'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
+import { assignmentRevisionEnabled } from '../config/assignmentRevision'
 import {
   mergeEventCardAssignments, toCalendarEvent, toEventCardAssignment,
   type RawCalendarEvent, type RawEventCardAssignment, type RawEventCardAssignmentCard,
 } from './storeTransforms'
 
-export const CALENDAR_EVENT_COLUMNS = CART_APPLICATIONS_ENABLED
+export const CALENDAR_EVENT_COLUMNS = (CART_APPLICATIONS_ENABLED
   ? '*, event_participants(*), event_cart_applications(user_id,is_team_lead,created_at,user:app_users!event_cart_applications_user_id_fkey(name))'
-  : '*, event_participants(*)'
+  : '*, event_participants(*)') + (assignmentRevisionEnabled() ? ',assignment_revision' : '')
 
 async function readAssignments<T extends { event_id: number }>(
   table: 'event_card_assignments' | 'event_card_assignment_cards',
@@ -28,8 +29,12 @@ async function readAssignments<T extends { event_id: number }>(
 
 export async function fetchUpdatedCalendarEvent(eventId: number) {
   if (!Number.isSafeInteger(eventId) || eventId <= 0) throw new Error('Invalid calendar event target')
+  // Read the version before its rows. A concurrent write then causes a safe
+  // conflict, never a newer version paired with an older assignment snapshot.
+  const request = supabase.from('calendar_events').select(CALENDAR_EVENT_COLUMNS).eq('id', eventId).single()
+  const versioned = assignmentRevisionEnabled() ? await request : request
   const [event, assignments, assignmentCards] = await Promise.all([
-    supabase.from('calendar_events').select(CALENDAR_EVENT_COLUMNS).eq('id', eventId).single(),
+    versioned,
     readAssignments<RawEventCardAssignment>('event_card_assignments', eventId),
     readAssignments<RawEventCardAssignmentCard>('event_card_assignment_cards', eventId),
   ])

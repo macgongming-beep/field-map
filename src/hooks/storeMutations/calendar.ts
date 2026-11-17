@@ -1,4 +1,5 @@
 import { teamServiceEnabled } from '../../config/teamService'
+import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
 import type { CalendarEvent } from '../../types'
 import { supabase, showToast, reportMutationError, getCurrentVisitor, ensureAffectedRows } from './shared'
 import { logServiceAction } from './serviceLog'
@@ -7,9 +8,12 @@ import { getAuthToken } from '../../lib/authToken'
 import { eventParticipantNameKey, normalizeEventParticipantName } from '../../utils/eventParticipantUsers'
 import { alertDialog, confirmDialog } from '../../lib/confirm'
 import { CART_APPLICATIONS_ENABLED } from '../../config/features'
+import { groupServiceEnabled, type ServicePlan } from '../../features/groupService/model'
+import { saveServicePlan, confirmOverlappingApplication, applyServiceActivity } from '../../features/groupService/api'
 
 /** 일정 입력 공통 타입 */
 export type CalendarEventInput = {
+  servicePlan?: ServicePlan
   time: string
   endTime?: string
   title: string
@@ -64,7 +68,7 @@ export function makeCalendarMutations(deps: {
   const removeTeamParticipant = async (event: CalendarEvent, userName: string, self: boolean) => {
     const token = getAuthToken()
     if (!token) return false
-    const result = await supabase.rpc('remove_team_event_participant_tx', {
+    const result = await supabase.rpc(usesTeamAssignments(event) ? 'remove_team_event_participant_tx' : 'remove_service_participant_compat_tx', {
       p_token: token, p_event_id: event.id, p_user_name: userName, p_self: self,
       p_expected_shared_at: event.assignmentSharedAt ?? null,
     })
@@ -81,8 +85,44 @@ export function makeCalendarMutations(deps: {
     return true
   }
 
+  const manageVersionedParticipant=async(event:CalendarEvent,userName:string,action:'add'|'remove',role:'신청'|'게스트'='신청')=>{
+    const token=getAuthToken()
+    const ownCancel=action==='remove'&&userName===getCurrentVisitor()
+    if(!token||(!ownCancel&&event.assignmentRevision==null)){
+      showToast(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'),'error')
+      return false
+    }
+    const result=await supabase.rpc('manage_event_participant_versioned_tx',{
+      p_token:token,p_event_id:event.id,p_user_name:userName,p_action:action,p_expected_revision:ownCancel?null:event.assignmentRevision,p_role:role,
+    })
+    if(result.error||!result.data?.ok){
+      if(result.data?.reason==='applications_closed'){
+        showToast(msg('신청이 마감되어 참가자를 추가할 수 없습니다.'),'error');return false
+      }
+      if(result.data?.reason==='cart_application_exists'){
+        showToast(msg('같은 일정에 전시대 봉사를 신청한 사람입니다. 기존 신청을 먼저 취소해 주세요.'),'error');return false
+      }
+      reportMutationError(msg(action==='add'?'참가자를 추가하지 못했습니다.':'참가자를 제외하지 못했습니다.'),result.error??new Error(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.')))
+      if(result.data?.conflict){
+        try { await (deps.refreshUpdatedEvent?deps.refreshUpdatedEvent(event.id):fetchAll()) }
+        catch(error) { reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'),error) }
+      }
+      return false
+    }
+    await logServiceAction({eventId:event.id,action:action==='add'?'joined':'left',targetType:'event_participant',details:{user_name:userName,source:'versioned_participant_management'}})
+    await (refetchAfterParticipantRemoval??fetchAll)()
+    showToast(msg(action==='add'?'신청자를 추가했습니다':'참가자를 제외했습니다'))
+    return true
+  }
+
   // ─── 일정 CRUD ───────────────────────────────────────────────
+  const savePlan = async (plan: ServicePlan): Promise<boolean> => {
+    if (!groupServiceEnabled()) return false
+    try { await saveServicePlan(plan); await fetchAll(); showToast(msg('일정이 저장됐습니다')); return true }
+    catch (error) { reportMutationError(msg('일정을 저장하지 못했습니다.'), error); return false }
+  }
   const createCalendarEvent = async (input: { date: string } & CalendarEventInput) => {
+    if (input.servicePlan) return savePlan(input.servicePlan)
     const payload = { ...buildEventPayload(input), event_date: input.date }
     const result = await supabase.from('calendar_events').insert(payload).select('id').single()
     if (result.error) {
@@ -121,6 +161,7 @@ export function makeCalendarMutations(deps: {
   //   '권한 없음' 을 우회하고, '보내지 않기' 를 골라도 알림이 나갔다.
   //   실패하면 실패로 끝낸다.
   const updateCalendarEvent = async (eventId: number, input: CalendarEventInput, notify = true): Promise<boolean> => {
+    if (input.servicePlan) return savePlan(input.servicePlan)
     const token = getAuthToken()
     if (!token) {
       showToast(msg('로그인 정보가 없습니다. 다시 로그인해 주세요.'), 'error')
@@ -229,16 +270,28 @@ export function makeCalendarMutations(deps: {
   }
 
   // ─── 참가자 / 신청 ───────────────────────────────────────────
-  const applyToEvent = async (eventId: number) => {
+  const applyToEvent = async (eventId: number, activity: 'service'|'return_visit' = 'service') => {
     const currentVisitor = getCurrentVisitor()
     const event = calendarEvents.find((e) => e.id === eventId)
     const isApplied = event?.applicants.includes(currentVisitor)
+    if(assignmentRevisionEnabled()&&isApplied&&event){await manageVersionedParticipant(event,currentVisitor,'remove');return}
     if (isApplied && usesTeamAssignments(event)) {
       await removeTeamParticipant(event!, currentVisitor, true)
       return
     }
     if (event && !event.allowApplications && !isApplied) {
       showToast(msg('이 일정은 봉사 신청을 받지 않습니다.'), 'info')
+      return
+    }
+    if (!isApplied && assignmentRevisionEnabled()) {
+      try { if (!await confirmOverlappingApplication(eventId)) return }
+      catch (error) { reportMutationError(msg('신청 시간을 확인하지 못했습니다. 다시 시도해 주세요.'), error); return }
+      try {
+        const result = await applyServiceActivity(eventId,activity)
+        if(result.created) await logServiceAction({eventId,action:'joined',targetType:'event_participant',details:{user_name:currentVisitor,source:'self_apply',service_activity:activity}})
+        await refreshApplication(eventId,false)
+        showToast(activity==='return_visit' ? msg('재방·연구 신청이 완료됐습니다') : msg('일정에 신청됐습니다'))
+      } catch(error) { reportMutationError(msg('봉사 신청을 저장하지 못했습니다.'),error) }
       return
     }
     if (!CART_APPLICATIONS_ENABLED) {
@@ -391,73 +444,13 @@ export function makeCalendarMutations(deps: {
 
   const removeParticipantFromEvent = async (eventId: number, userName: string) => {
     const event = calendarEvents.find((item) => item.id === eventId)
-    if (usesTeamAssignments(event)) {
-      await removeTeamParticipant(event!, userName, false)
-      return
+    if (!event) {
+      showToast(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'), 'error')
+      return false
     }
-    const multiCardResult = await supabase.from('event_card_assignment_cards')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (multiCardResult.error) {
-      reportMutationError(msg('참가자의 추가 카드 배정을 정리하지 못했습니다.'), multiCardResult.error)
-      return
-    }
-
-    const cardAssignmentResult = await supabase.from('event_card_assignments')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (cardAssignmentResult.error) {
-      reportMutationError(msg('참가자의 카드 배정을 정리하지 못했습니다.'), cardAssignmentResult.error)
-      return
-    }
-
-    const informalResult = await supabase.from('event_informal_assignments')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (informalResult.error) {
-      reportMutationError(msg('참가자의 비공식 배정을 정리하지 못했습니다.'), informalResult.error)
-      return
-    }
-
-    const restaurantResult = await supabase.from('event_restaurant_assignments')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (restaurantResult.error) {
-      reportMutationError(msg('참가자의 식당 배정을 정리하지 못했습니다.'), restaurantResult.error)
-      return
-    }
-
-    const sessionResult = await supabase.from('service_sessions')
-      .delete()
-      .eq('calendar_event_id', eventId)
-      .eq('user_name', userName)
-      .eq('source', 'assigned')
-    if (sessionResult.error) {
-      reportMutationError(msg('참가자의 자동 봉사 세션을 정리하지 못했습니다.'), sessionResult.error)
-      return
-    }
-
-    const participantResult = await supabase.from('event_participants')
-      .delete()
-      .eq('event_id', eventId)
-      .eq('user_name', userName)
-    if (participantResult.error) {
-      reportMutationError(msg('참가자를 제외하지 못했습니다.'), participantResult.error)
-      return
-    }
-
-    await logServiceAction({
-      eventId,
-      action: 'left',
-      targetType: 'event_participant',
-      details: { user_name: userName, source: 'admin_remove' },
-    })
-    await (refetchAfterParticipantRemoval ?? fetchAll)()
-    showToast(msg('{userName}님을 참가자와 배정에서 제외했습니다', { userName: userName }))
+    if (assignmentRevisionEnabled()) return manageVersionedParticipant(event,userName,'remove')
+    // Compatibility RPC is atomic for legacy non-team events too. No table-write fallback.
+    return removeTeamParticipant(event,userName,false)
   }
 
   /**
@@ -485,6 +478,7 @@ export function makeCalendarMutations(deps: {
       showToast(msg('이미 이 일정에 있는 이름입니다.'), 'info')
       return false
     }
+    if(assignmentRevisionEnabled())return manageVersionedParticipant(event,normalizedName,'add',role)
     const result = await supabase.from('event_participants').upsert(
       { event_id: eventId, user_name: normalizedName, role },
       { onConflict: 'event_id,user_name' },

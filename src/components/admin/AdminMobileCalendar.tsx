@@ -5,6 +5,7 @@ import { pushBackHandler, requestBackHandler } from '../../lib/backStack'
 import { showToast } from '../../lib/toast'
 import { findActivePeriod } from '../../utils/specialPeriod'
 import { CART_APPLICATIONS_ENABLED } from '../../config/features'
+import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
 //
 // 구조:
 //   - 월 카드 (헤더 + nav + grid)
@@ -27,7 +28,6 @@ import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
 import { savePlacePresets, normalizePlacePresets, resolvePlacePresets, parsePlacePresetsValue, PLACE_PRESET_SETTING_KEY, PLACE_PRESETS_MAX } from '../../lib/placePresets'
 import type { PlacePreset } from '../../lib/placePresets'
 import {
-  TIME_PRESETS_MAX,
   TIME_PRESET_SETTING_KEY,
   addMinutesToTime,
   normalizeTimePresets,
@@ -36,12 +36,17 @@ import {
   saveTimePresets,
 } from '../../lib/timePresets'
 import type { TimePreset } from '../../lib/timePresets'
+import { TimePresetEditor, MiniInput } from './TimePresetEditor'
 import { Card } from '../ui'
-import { AdminEventDetailSheet } from './AdminEventDetailSheet'
+import { AdminEventDetailSheet, SharedAssignmentTeams } from './AdminEventDetailSheet'
 import type { MentionUser } from '../CommentSection'
 import { msg } from '../../lib/msg'
 import { chatDisabled } from '../../lib/chatRetirement'
 import { getCurrentAppPath, readEventDetailReturnTo } from '../../lib/eventDetailNavigation'
+import { canArrangeService, groupServiceEnabled, visibleServiceEventCount } from '../../features/groupService/model'
+import { ServiceEventEditor } from '../../features/groupService/ServiceEventEditor'
+import { GroupServiceDetail } from '../../features/groupService/GroupServiceDetail'
+import { ServiceEventList } from '../../features/groupService/ServiceEventList'
 
 // WEEKDAYS / WEEKDAY_LABELS defined inside component now via i18n
 // 시간 프리셋(TimePreset, 기본값, load/save 등)은 ../../lib/timePresets 로 이동 (PC 공용)
@@ -84,7 +89,7 @@ type Props = {
   onAssignCardsToEventParticipantsBulk?: (
     eventId: number,
     assignments: Array<{ userName: string; cardId?: number | null; cardIds?: number[] | null }>,
-    options?: { silentSuccess?: boolean; status?: 'confirmed' | 'shared'; expectedSharedAt?: string | null; onConflict?: (serverSharedAt: string | null) => void },
+    options?: { silentSuccess?: boolean; status?: 'confirmed' | 'shared'; expectedSharedAt?: string | null; expectedRevision?: string; onConflict?: (serverSharedAt: string | null) => void },
   ) => Promise<void> | void
   informalAssets?: InformalAsset[]
   informalGroups?: InformalGroup[]
@@ -100,7 +105,7 @@ type Props = {
   onDeleteEventSeries?: (seriesId: string, fromDate: string) => void
   onUpdateEvent?: (id: number, input: EventInput, notify?: boolean) => void | Promise<boolean>
   onUpdateEventSeries?: (seriesId: string, fromDate: string, input: EventInput, notify?: boolean) => void | Promise<boolean>
-  onApplyToEvent?: (eventId: number) => void
+  onApplyToEvent?: (eventId: number, activity?: 'service'|'return_visit') => void
   onApplyToCartEvent?: (eventId: number) => void
   onManageCartApplication?: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
   onSetCartTeamLeader?: (eventId: number, userId: number | null) => Promise<boolean> | boolean
@@ -221,6 +226,7 @@ export function AdminMobileCalendar({
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const entryId = Number(searchParams.get('openEvent'))
+  const [commentEntry,setCommentEntry]=useState<{eventId:number;commentId:number;requestKey:string}|undefined>(undefined)
   const today = useMemo(() => new Date(), [])
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth() + 1)
@@ -242,7 +248,7 @@ export function AdminMobileCalendar({
   const closeDetail = () => setDetailEventId(null)
   const detailReturnToRef = useRef(readEventDetailReturnTo(location.state) ?? (detailOnly ? '/' : '/calendar'))
   const detailReturnsThroughHistoryRef = useRef(readEventDetailReturnTo(location.state) !== null)
-  const handledDetailEntry = useRef<number | null>(null)
+  const handledDetailEntry = useRef<string | null>(null)
   const returnFromDetail = () => {
     if (requestBackHandler()) return
     setDetailEventId(null)
@@ -258,7 +264,8 @@ export function AdminMobileCalendar({
     const targetIdRaw = openChatId ?? openEventId
     const targetId = Number(targetIdRaw)
     if (!Number.isFinite(targetId)) return
-    if (detailOnly && handledDetailEntry.current === targetId) return
+    const entryKey=`${targetId}:${searchParams.get('comment')??''}:${location.key}`
+    if (detailOnly && handledDetailEntry.current === entryKey) return
     const targetEvent = events.find((e) => e.id === targetId)
     if (!targetEvent) return
 
@@ -282,17 +289,20 @@ export function AdminMobileCalendar({
       detailReturnToRef.current = returnTo ?? (detailOnly ? '/' : '/calendar')
       detailReturnsThroughHistoryRef.current = returnTo !== null
       setDetailEventId(targetEvent.id)
+      const commentId=Number(searchParams.get('comment'))
+      setCommentEntry(Number.isSafeInteger(commentId)&&commentId>0?{eventId:targetEvent.id,commentId,requestKey:entryKey}:undefined)
     }
 
     // Keep the home entry while editing so full-series demand remains explicit.
-    if (detailOnly) { handledDetailEntry.current = targetId; return }
+    if (detailOnly) { handledDetailEntry.current = entryKey; return }
 
     const next = new URLSearchParams(searchParams)
     next.delete('openChat')
     next.delete('openEvent')
+    next.delete('comment')
     setSearchParams(next, { replace: true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, events, detailOnly])
+  }, [searchParams, events, detailOnly,location.key])
 
   useEffect(() => {
     if (detailOnly && detailEventId === null && assignEventId === null && editingEventId === null && !scopeAction) {
@@ -514,7 +524,7 @@ export function AdminMobileCalendar({
               {t(language, 'calendar.dateHeader', { month, day: selectedDay, dow: WEEKDAY_LABELS[language][selectedDow] })}
               {selectedEvents.length > 0 && (
                 <span style={{ fontWeight: 500, color: 'var(--muted)', fontSize: 13, marginLeft: 6 }}>
-                  {selectedEvents.length}
+                  {groupServiceEnabled()?visibleServiceEventCount(selectedEvents):selectedEvents.length}
                 </span>
               )}
             </>
@@ -551,7 +561,9 @@ export function AdminMobileCalendar({
             <CalendarEmptyIcon />
             <p>{t(language, 'calendar.noEvents')}</p>
           </div>
-        ) : (
+        ) : groupServiceEnabled() ? <ServiceEventList language={language} events={selectedEvents} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{
+          detailReturnToRef.current=getCurrentAppPath(location); detailReturnsThroughHistoryRef.current=false; setCommentEntry(undefined); setDetailEventId(id)
+        }}/> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
             {selectedEvents.map((event) => (
               <DayEventCard
@@ -578,7 +590,9 @@ export function AdminMobileCalendar({
       </div>}
 
       {/* ── 일정 추가/편집 시트 ─────────── */}
-      {(addOpen || editingEvent) && (
+      {groupServiceEnabled() && (addOpen || editingEvent?.serviceKind) && <ServiceEventEditor key={editingEvent?.id ?? 'new'} language={language} globalSettings={globalSettings} onUpsertGlobalSetting={onUpsertGlobalSetting} date={selectedDateStr} event={editingEvent} events={events} users={participantUsers}
+        onClose={()=>{setAddOpen(false);setEditingEventId(null)}} onSubmit={input=>editingEvent ? onUpdateEvent?.(editingEvent.id,input) : onCreateEvent?.(input)}/>}
+      {(!groupServiceEnabled() || (editingEvent && !editingEvent.serviceKind)) && (addOpen || editingEvent) && (
         <EventAddSheet language={language}
           defaultDate={selectedDateStr}
           editingEvent={editingEvent}
@@ -627,7 +641,22 @@ export function AdminMobileCalendar({
       )}
 
       {/* ── 일정 상세 시트 ─────────────── */}
-      {detailEvent && assignEventId === null && (
+      {detailEvent && assignEventId === null && groupServiceEnabled() && detailEvent.groupServiceScope && <GroupServiceDetail
+        key={`${detailEvent.date}:${detailEvent.time}:${detailEvent.endTime}`} mobile event={detailEvent} events={events} language={language} currentVisitor={currentVisitor}
+        onClose={returnFromDetail} onApply={onApplyToEvent}
+        currentUserId={currentUserId} role={role} mentionUsers={mentionUsers} commentEntry={commentEntry}
+        participantUsers={participantUsers} onAddParticipant={onAddParticipantToEvent} onRemoveParticipant={onRemoveParticipantFromEvent}
+        onAssignment={onAssignCardsToEventParticipantsBulk?id=>setAssignEventId(id):undefined}
+        renderAssignments={event=><SharedAssignmentTeams event={event} cards={cards} language={language} translatePlaceNames={translatePlaceNames} buildings={buildings} informalAssets={informalAssets} eventInformalAssignments={eventInformalAssignments} eventRestaurantAssignments={eventRestaurantAssignments}/>}
+        onDelete={(role==='admin'||role==='developer')&&onDeleteEvent?async id=>{
+          const target=events.find(e=>e.id===id)
+          if(!target)return
+          if(target.seriesId&&onDeleteEventSeries){setScopeAction({kind:'delete',event:target});closeDetail()}
+          else if(await confirmDialog({message:t(language,'calendar.deleteConfirm'),danger:true,confirmLabel:msg('삭제')})){onDeleteEvent(id);closeDetail()}
+        }:undefined}
+        onEdit={onUpdateEvent?id=>{setEditingEventId(id);closeDetail()}:undefined}/>
+      }
+      {detailEvent && assignEventId === null && !(groupServiceEnabled() && detailEvent.groupServiceScope) && (
         <AdminEventDetailSheet
             buildings={buildings}
             informalAssets={informalAssets}
@@ -645,7 +674,7 @@ export function AdminMobileCalendar({
           onAddParticipant={(userName, participantRole) => onAddParticipantToEvent?.(detailEvent.id, userName, participantRole)}
           onRemoveParticipant={(userName) => onRemoveParticipantFromEvent?.(detailEvent.id, userName)}
           onClose={returnFromDetail}
-          onApply={onApplyToEvent ? () => onApplyToEvent(detailEvent.id) : undefined}
+          onApply={onApplyToEvent ? (activity) => activity ? onApplyToEvent(detailEvent.id,activity) : onApplyToEvent(detailEvent.id) : undefined}
           onCancelApply={onApplyToEvent ? () => onApplyToEvent(detailEvent.id) : undefined}
           onApplyToCart={onApplyToCartEvent ? () => onApplyToCartEvent(detailEvent.id) : undefined}
           onManageCartApplicant={onManageCartApplication ? (userId, action) => onManageCartApplication(detailEvent.id, userId, action) : undefined}
@@ -686,11 +715,11 @@ export function AdminMobileCalendar({
       {assignEventId !== null && onAssignCardsToEventParticipantsBulk && (() => {
         const assignEvent = events.find((e) => e.id === assignEventId)
         if (!assignEvent) return null
-        // 인도자는 본인 담당 카드만, 관리자/개발자는 전체
-        const myCards = (role === 'admin' || role === 'developer')
+        // 배정 권한 전환 후에는 다른 집단을 대신 배정할 수 있어 전체 카드를 선택한다.
+        const myCards = (role === 'admin' || role === 'developer' || (assignmentRevisionEnabled()&&role==='leader'))
           ? cards
           : cards.filter((c) => c.assignedLeader === currentVisitor || c.assignedLeaders?.includes(currentVisitor))
-        const canEdit = role === 'admin' || role === 'developer' || assignEvent.leaders.includes(currentVisitor)
+        const canEdit = canArrangeService(role,assignEvent,currentVisitor)
         return (
           <AssignmentEditor
             event={assignEvent}
@@ -714,6 +743,7 @@ export function AdminMobileCalendar({
               onAssignCardsToEventParticipantsBulk(eventId, assignments, {
                 status: 'shared',
                 expectedSharedAt: opts.expectedSharedAt,
+                expectedRevision: opts.expectedRevision,
                 onConflict: opts.onConflict,
               })
             }
@@ -1698,212 +1728,6 @@ export function PlacePresetEditor({ language,
 }
 
 
-export function TimePresetEditor({ language, 
-  presets,
-  onChange,
-}: {
-  presets: TimePreset[]
-  onChange: (presets: TimePreset[]) => void
-; language: AppLanguage }) {
-  const updatePreset = (index: number, patch: Partial<TimePreset>) => {
-    onChange(presets.map((preset, i) => i === index ? { ...preset, ...patch } : preset))
-  }
-
-  const addPreset = () => {
-    if (presets.length >= TIME_PRESETS_MAX) return
-    const baseHour = 10 + presets.length * 2
-    const time = `${pad2(Math.min(baseHour, 21))}:00`
-    onChange([
-      ...presets,
-      {
-        label: t(language, 'calendar.timePresetLabel', { count: presets.length + 1 }),
-        time,
-        durationMinutes: 120,
-        title: t(language, 'calendar.defaultEventTitle'),
-      },
-    ])
-  }
-
-  const removePreset = (index: number) => {
-    if (presets.length <= 1) return
-    onChange(presets.filter((_, i) => i !== index))
-  }
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        padding: 8,
-        border: '1px solid var(--line)',
-        borderRadius: 12,
-        background: 'var(--bg)',
-        minWidth: 0,
-        boxSizing: 'border-box',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 750, color: 'var(--ink)' }}>{t(language, 'calendar.editTimeSettings')}</span>
-        <button
-          type="button"
-          disabled={presets.length >= TIME_PRESETS_MAX}
-          onClick={addPreset}
-          style={{
-            minHeight: 0,
-            border: '1px solid var(--line)',
-            borderRadius: 8,
-            background: presets.length >= TIME_PRESETS_MAX ? 'var(--surface)' : '#fff',
-            color: presets.length >= TIME_PRESETS_MAX ? 'var(--muted-2)' : 'var(--text)',
-            cursor: presets.length >= TIME_PRESETS_MAX ? 'not-allowed' : 'pointer',
-            fontSize: 12,
-            fontWeight: 750,
-            padding: '6px 9px',
-          }}
-        >
-          {t(language, 'common.add')}
-        </button>
-      </div>
-
-      {presets.map((preset, index) => (
-        <div
-          key={index}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 5,
-            minWidth: 0,
-          }}
-        >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.7fr) 24px',
-              gap: 5,
-              alignItems: 'center',
-              minWidth: 0,
-            }}
-          >
-            <MiniInput
-              ariaLabel={t(language, 'calendar.timePresetLabelField')}
-              value={preset.label}
-              onChange={(value) => updatePreset(index, { label: value })}
-              placeholder={t(language, 'calendar.label')}
-            />
-            <MiniInput
-              ariaLabel={t(language, 'calendar.startTime')}
-              type="time"
-              value={preset.time}
-              onChange={(value) => updatePreset(index, { time: value })}
-            />
-            <MiniInput
-              ariaLabel={t(language, 'calendar.duration')}
-              type="number"
-              value={String(preset.durationMinutes)}
-              onChange={(value) => updatePreset(index, { durationMinutes: Number(value) || 120 })}
-              suffix={t(language, 'common.minutes')}
-            />
-            <button
-              type="button"
-              disabled={presets.length <= 1}
-              onClick={() => removePreset(index)}
-              style={{
-                width: 24,
-                height: 24,
-                minHeight: 24,
-                border: 'none',
-                borderRadius: 6,
-                background: 'transparent',
-                color: presets.length <= 1 ? 'var(--muted-2)' : 'var(--status-danger)',
-                cursor: presets.length <= 1 ? 'not-allowed' : 'pointer',
-                fontSize: 16,
-                lineHeight: 1,
-                padding: 0,
-                display: 'grid',
-                placeItems: 'center',
-              }}
-              aria-label={t(language, 'common.delete')}
-            >
-              ×
-            </button>
-          </div>
-          <MiniInput
-            ariaLabel={t(language, 'calendar.defaultTitle')}
-            value={preset.title}
-            onChange={(value) => updatePreset(index, { title: value })}
-            placeholder={msg('기본 제목')}
-          />
-        </div>
-      ))}
-
-      <p style={{ margin: 0, color: 'var(--muted)', fontSize: 11.5, lineHeight: 1.35 }}>
-        {msg('시간을 누르면 종료시간은 소요시간만큼 자동 입력됩니다. 기본 소요시간은 120분입니다.')}
-      </p>
-    </div>
-  )
-}
-
-function MiniInput({
-  ariaLabel,
-  onChange,
-  placeholder,
-  suffix,
-  type = 'text',
-  value,
-}: {
-  ariaLabel: string
-  onChange: (value: string) => void
-  placeholder?: string
-  suffix?: string
-  type?: string
-  value: string
-}) {
-  return (
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        minWidth: 0,
-        height: 32,
-        border: '1px solid var(--line)',
-        borderRadius: 8,
-        background: '#fff',
-        padding: '0 7px',
-        boxSizing: 'border-box',
-      }}
-    >
-      <input
-        aria-label={ariaLabel}
-        type={type}
-        min={type === 'number' ? 15 : undefined}
-        max={type === 'number' ? 480 : undefined}
-        step={type === 'number' ? 15 : undefined}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        style={{
-          display: 'block',
-          minWidth: 0,
-          width: '100%',
-          maxWidth: '100%',
-          border: 'none',
-          background: 'transparent',
-          color: 'var(--ink)',
-          font: 'inherit',
-          fontSize: 11.5,
-          fontWeight: 650,
-          outline: 'none',
-          padding: 0,
-          boxSizing: 'border-box',
-          accentColor: 'var(--ink)',
-          WebkitAppearance: type === 'time' ? 'none' : undefined,
-          appearance: type === 'time' ? 'none' : undefined,
-        }}
-      />
-      {suffix && <span style={{ flex: '0 0 auto', color: 'var(--muted)', fontSize: 11, fontWeight: 700 }}>{suffix}</span>}
-    </label>
-  )
-}
 
 function TextArea({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (

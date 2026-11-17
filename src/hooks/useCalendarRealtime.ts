@@ -12,6 +12,10 @@ import { supabase } from '../lib/supabase'
 import { subscribeWithRecovery } from '../lib/realtimeRecovery'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { calendarNavigationReuseEnabled } from './calendarNavigationCache'
+import { groupServiceEnabled } from '../features/groupService/model'
+import { notifyGroupParticipantsChanged } from '../features/groupService/participantChanges'
+
+type ParticipantSignal = { new?: { event_id?: unknown }; old?: { event_id?: unknown } }
 
 export function useCalendarRealtime(
   onChange: () => void,
@@ -34,6 +38,7 @@ export function useCalendarRealtime(
     let broad = false
     let unknownParticipant = false
     const participantIds = new Set<number>()
+    const groupChanges = new Set<number>()
     const schedule = () => {
       if (calendarNavigationReuseEnabled()) optionsRef.current?.invalidate?.()
       if (pending) clearTimeout(pending)
@@ -44,6 +49,10 @@ export function useCalendarRealtime(
         broad = false
         unknownParticipant = false
         participantIds.clear()
+        if (groupChanges.size) {
+          notifyGroupParticipantsChanged([...groupChanges])
+          groupChanges.clear()
+        }
         if (all) cbRef.current()
         else optionsRef.current?.onParticipants?.(ids)
       }, debounceMs)
@@ -72,8 +81,19 @@ export function useCalendarRealtime(
     if (CART_APPLICATIONS_ENABLED) {
       channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'event_cart_applications' }, trigger)
     }
+    if (groupServiceEnabled()) {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table: 'group_participant_signals' }, (payload: ParticipantSignal) => {
+        const id = payload.new?.event_id ?? payload.old?.event_id
+        if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) return
+        groupChanges.add(id)
+        participants({ new: { event_id: id } })
+      })
+    }
     // 재연결 시 끊긴 동안 놓친 일정 변경 catch-up
-    subscribeWithRecovery(channel, () => cbRef.current())
+    subscribeWithRecovery(channel, () => {
+      if (groupServiceEnabled()) notifyGroupParticipantsChanged(null)
+      cbRef.current()
+    })
 
     return () => {
       if (pending) clearTimeout(pending)

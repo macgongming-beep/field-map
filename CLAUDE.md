@@ -610,6 +610,19 @@ App.css          [모바일 공통] 0px~
 
 ## 9. 협업 규칙 (Claude / Codex / 기타 AI)
 
+### 집단 봉사 운영 후보 (2026-11-17, 운영 미적용)
+
+`codex/group-service-release-candidate`는 최신 main 위에 필요한 기능만 이식한 후보다.
+검증과 남은 관문은 `docs/decisions/0108-main-based-group-service-candidate.md`를 읽는다.
+**준비 DB 적용과 `--require-compat-ready` 확인 전에 main 병합/운영 배포 금지.**
+새 앱은 기능 설정을 꺼도 원자적 참가자 제외 RPC가 필요하다.
+
+리비전 보호 설치 후 rename/purge/merge 본문은 해당
+`private.*_before_assignment_guard` core에서 수정한다. 공개 감싸개를 통째로
+덮어쓰면 관리 작업 표시가 사라진다. 매 마이그레이션 뒤 실제 DB 카탈로그로
+`assertAssignmentInventory`를 환경/전환 단계에 맞춰 확인한다.
+감독자 연결 표는 권한 판정에 다시 쓰지 않는다.
+
 1. **이 파일을 먼저 읽기**
 2. `git status --short` 로 다른 에이전트 변경사항 확인
 3. 파일 수정 전 **반드시 Read** 후 Edit

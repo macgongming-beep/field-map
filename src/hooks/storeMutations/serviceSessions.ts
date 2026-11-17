@@ -1,5 +1,5 @@
 import type { Building, Role, ServiceSession, ServiceSessionStatus, TimeSlot } from '../../types'
-import { supabase, showToast, reportMutationError, getLocalDateString, getCurrentVisitor } from './shared'
+import { supabase, showToast, reportMutationError, getLocalDateString, getCurrentVisitor, ensureAffectedRows } from './shared'
 import { logServiceAction } from './serviceLog'
 import { msg } from '../../lib/msg'
 
@@ -91,11 +91,14 @@ export function makeServiceSessionMutations(deps: {
         .from('service_sessions')
         .update({ status: 'ended', ended_at: new Date().toISOString() })
         .in('id', activeSessionsToEnd.map((session) => session.id))
+        .select('id')
 
       if (endResult.error) {
         reportMutationError(msg('기존 봉사 세션을 종료하지 못했습니다.'), endResult.error)
         return null
       }
+      const endedIds = new Set(endResult.data?.map(row => row.id))
+      if (!ensureAffectedRows(activeSessionsToEnd.every(session => endedIds.has(session.id)) ? endResult.data : [], msg('기존 봉사 세션을 종료하지 못했습니다.'))) return null
     }
 
     const payload = {
@@ -160,11 +163,13 @@ export function makeServiceSessionMutations(deps: {
       .from('service_sessions')
       .update({ status: 'ended', ended_at: new Date().toISOString() })
       .eq('id', sessionId)
+      .select('id')
 
     if (result.error) {
       reportMutationError(msg('봉사 세션을 종료하지 못했습니다.'), result.error)
       return
     }
+    if (!ensureAffectedRows(result.data, msg('봉사 세션을 종료하지 못했습니다.'))) return
 
     // 시스템 채팅 메시지 ("봉사를 종료했습니다") 제거 — 불필요 알림 줄이기
 

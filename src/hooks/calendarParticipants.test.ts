@@ -1,4 +1,4 @@
-import { beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { readCalendarParticipants } from './calendarParticipants'
 
 const state = vi.hoisted(() => ({ rows: [] as unknown[], error: null as unknown, batches: [] as number[][], columns: [] as string[] }))
@@ -12,6 +12,15 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: () => {
   return q
 } } }))
 beforeEach(() => { state.rows = []; state.error = null; state.batches = []; state.columns = [] })
+afterEach(()=>vi.unstubAllEnvs())
+test('production participant-only recovery preserves return visit type and revision without group UI',async()=>{
+  vi.stubEnv('VITE_DEMO_MODE','false');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','false');vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED','true')
+  state.rows=[{id:7,assignment_revision:12,event_participants:[{id:1,user_name:'A',role:'신청',service_activity:'return_visit'}]}]
+  expect((await readCalendarParticipants([7])).get(7)).toMatchObject({applicants:['A'],returnVisitApplicants:['A'],assignmentRevision:'12'})
+  expect(state.columns).toEqual(['id,assignment_revision,event_participants(user_name,role,service_activity)'])
+  state.rows=[{id:7,event_participants:[{id:1,user_name:'A',role:'신청',service_activity:'invalid'}]}]
+  await expect(readCalendarParticipants([7])).rejects.toThrow('Invalid calendar participants response')
+})
 test('membership projection preserves applicants, assigned members and guests only', async () => {
   state.rows = [{ id: 7, event_participants: [{ user_name: 'A', role: '입명' }, { user_name: 'B', role: '게스트' }, { user_name: 'C', role: '신청' }] }]
   expect((await readCalendarParticipants([7, 7])).get(7)).toEqual({ applicants: ['A', 'B', 'C'], assigned: ['A'], guests: ['B'] })

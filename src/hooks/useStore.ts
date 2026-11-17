@@ -1477,6 +1477,20 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     recipientCalendarRef.current = next
     publishCalendarEvents(next)
   }, [clearCalendarWindows, publishCalendarEvents])
+  const refreshAssignmentEvent = useCallback(async (eventId: number) => {
+    clearCalendarWindows()
+    // A cached screen can safely replace one fully read event without claiming
+    // that the rest of its calendar snapshot is complete.
+    if (calendarReadsPending.current) return
+    const version = ++calendarReadVersion.current
+    const scope = calendarScopeRef.current
+    const event = await fetchUpdatedCalendarEvent(eventId)
+    if (version !== calendarReadVersion.current || scope !== calendarScopeRef.current) return
+    const replace = (events: CalendarEvent[]) => events.map(current => current.id === eventId ? event : current)
+    if (!calendarEventsRef.current.some(current => current.id === eventId)) return
+    publishCalendarEvents(replace(calendarEventsRef.current))
+    if (recipientCalendarRef.current) recipientCalendarRef.current = replace(recipientCalendarRef.current)
+  }, [clearCalendarWindows, publishCalendarEvents])
   const refreshMovedBuilding = useCallback(async (buildingId: number) => {
     if (buildingFullReadsPending.current) throw new Error('Building snapshot refresh in progress')
     const version = buildingFullReadVersion.current
@@ -1550,7 +1564,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     })
 
   const { assignCardToEventParticipant, assignCardsToEventParticipantsBulk } =
-    makeEventAssignmentMutations({ fetchAll: refetchCalendar })
+    makeEventAssignmentMutations({ fetchAll: refetchCalendar, refreshEvent: refreshAssignmentEvent })
 
   const {
     assignLeaderToCard,
@@ -1680,6 +1694,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     bulkSetRestaurantFlag,
   } = makeV2AssignmentMutations({
     fetchAll: refetchResources, refreshRestaurantBuildings,
+    calendarEvents, eventInformalAssignments, eventRestaurantAssignments, refreshAssignmentEvent,
     refreshGroups: (import.meta.env.VITE_INFORMAL_GROUP_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
       ? () => fetchSlices(['informalGroups'], { triggeredBy: 'mutation:informalGroups' }) : undefined,
     // Only rename recovery requires groups; ordinary startup remains nonfatal.

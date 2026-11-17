@@ -352,7 +352,7 @@ export function MobileHome({
   onChangePin: (newPin: string) => Promise<boolean>
   onUpdateMyProfile: (input: { name: string; phone?: string | null }) => Promise<boolean>
   onFetchMyLoginLogs: (limit?: number) => Promise<LoginLogRecord[]>
-  onApplyToEvent: (eventId: number) => void
+  onApplyToEvent: (eventId: number, activity?: 'service'|'return_visit') => void
   onApplyToCartEvent: (eventId: number) => void
   onManageCartApplication: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
   onSetCartTeamLeader: (eventId: number, userId: number | null) => Promise<boolean> | boolean
@@ -922,6 +922,7 @@ export function MobileHome({
                     language={language}
                     
                     todayEvents={todayEvents}
+                    groupName={myGroupName ?? undefined}
                     cards={cards}
                     totalUnits={totalUnits}
                     completedUnits={completedUnits}
@@ -941,6 +942,7 @@ export function MobileHome({
                     language={language}
                     
                     myTodayEvents={myTodayEvents}
+                    groupName={myGroupName ?? undefined}
                     
                     
                     

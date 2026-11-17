@@ -1,11 +1,20 @@
 import { teamServiceEnabled } from '../../config/teamService'
 import { supabase, showToast, reportMutationError, getCurrentVisitor, ensureAffectedRows } from './shared'
 import { msg } from '../../lib/msg'
+import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
+import { fetchUpdatedCalendarEvent } from '../calendarEventRefresh'
 
-export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<void> }) {
+export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<void>; refreshEvent?: (id:number)=>Promise<void> }) {
   const { fetchAll } = deps
 
   const assignCardToEventParticipant = async (eventId: number, userName: string, cardId: number | null) => {
+    if(assignmentRevisionEnabled()) {
+      const event=await fetchUpdatedCalendarEvent(eventId)
+      if(!event?.assignmentRevision)throw new Error('Reload event before assigning')
+      const assignments=event.cardAssignments.filter(a=>a.userName!==userName).map(a=>({userName:a.userName,cardIds:a.assignedCardIds??(a.assignedCardId?[a.assignedCardId]:[]),teamKey:a.teamKey??`person:${a.userName}`,cardScope:a.cardScope,informalAssetIds:a.teamKey?event.assignmentTeamInformal?.[a.teamKey]??[]:[]}))
+      if(cardId)assignments.push({userName,cardIds:[cardId],teamKey:`person:${userName}`,cardScope:'전체',informalAssetIds:[]})
+      return assignCardsToEventParticipantsBulk(eventId,assignments,{expectedRevision:event.assignmentRevision,expectedSharedAt:event.assignmentSharedAt,onConflict:()=>showToast(msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'),'error')})
+    }
     if (!cardId) {
       await supabase
         .from('event_card_assignment_cards')
@@ -69,6 +78,7 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
       silentSuccess?: boolean
       status?: 'confirmed' | 'shared'
       expectedSharedAt?: string | null      // 편집 시작 때 본 공유시각 (충돌 감지)
+      expectedRevision?: string
       onConflict?: (serverSharedAt: string | null) => void  // 충돌 시 호출
     },
   ) => {
@@ -110,17 +120,24 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
       }))
     const token = (await import('../../lib/authToken')).getAuthToken()
     if (token) {
-      const rpcRes = await supabase.rpc(teamService ? 'assign_team_service_bulk_tx' : scoped ? 'assign_scoped_cards_bulk_tx' : 'assign_cards_bulk_tx', {
+      const versioned=assignmentRevisionEnabled()
+      if(versioned&&options?.expectedRevision==null)throw new Error('Reload assignment before saving')
+      const rpcRes = await supabase.rpc(versioned ? 'save_event_assignments_versioned_tx' : teamService ? 'assign_team_service_bulk_tx' : scoped ? 'assign_scoped_cards_bulk_tx' : 'assign_cards_bulk_tx', {
         p_token: token,
         p_event_id: eventId,
         p_assignments: rpcPayload,
         p_status: options?.status ?? null,
         p_expected_shared_at: options?.expectedSharedAt ?? null,
+        ...(versioned?{p_expected_revision:options!.expectedRevision}:{}),
       })
       if (!rpcRes.error) {
         const result = rpcRes.data as { ok: boolean; conflict?: boolean; server_shared_at?: string | null; count?: number }
         if (result && result.conflict) {
           options?.onConflict?.(result.server_shared_at ?? null)
+          if(versioned){
+            try { await (deps.refreshEvent?deps.refreshEvent(eventId):fetchAll()) }
+            catch(error) { reportMutationError(msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.'),error) }
+          }
           return
         }
         await fetchAll()
@@ -134,7 +151,7 @@ export function makeEventAssignmentMutations(deps: { fetchAll: () => Promise<voi
       //   2026-08-30 봉사 중 본 오류 문구("event_card_assignments SQL 을 먼저…")도
       //   이 폴백이 직접 쓰기를 하다 막힌 것이었다.
       const functionMissing = String(rpcRes.error.message ?? '').includes('Could not find the function')
-      if (scoped || !functionMissing) throw rpcRes.error
+      if (versioned || scoped || !functionMissing) throw rpcRes.error
       console.warn('[assign_cards_bulk_tx] 함수가 없어 폴백을 쓴다:', rpcRes.error.message)
     }
 

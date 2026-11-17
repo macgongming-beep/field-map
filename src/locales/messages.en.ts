@@ -3,7 +3,12 @@
 // 열쇠는 한국어 원문 그대로다 (lib/msg.ts 설명 참고).
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
+import { groupServiceEn } from './groupService'
 export const messagesEn: Record<string, string> = {
+  "삭제되었거나 찾을 수 없는 댓글입니다.": "This comment was deleted or could not be found.",
+  "댓글을 불러오지 못했습니다.": "Could not load comments.",
+  "이전 댓글 보기": "Earlier comments",
+  ...groupServiceEn,
   '사용자 목록을 불러오지 못했습니다.': 'Could not load the user list.',
   '방문 기록을 불러오지 못했습니다.': 'Could not load visit records.',
   '지역 선택': 'Select district',
@@ -232,6 +237,9 @@ export const messagesEn: Record<string, string> = {
   '오류가 발생했습니다': 'Something went wrong',
   '업데이트를 적용하지 못했습니다. 잠시 후 다시 눌러 주세요.': 'The update could not be applied. Please try again shortly.',
   '자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.': 'Could not load the data. Check your connection and try again.',
+  '배정하지 못했습니다.': 'Could not save the assignment.',
+  '신청이 마감되어 참가자를 추가할 수 없습니다.': 'Applications are closed. Participants cannot be added.',
+  '같은 일정에 전시대 봉사를 신청한 사람입니다. 기존 신청을 먼저 취소해 주세요.': 'This person has a cart application for the same event. Cancel that application first.',
   '데이터 불러오는 중...': 'Loading data...',
   '로그인 화면 불러오는 중...': 'Loading sign-in...',
   '화면 구성 불러오는 중...': 'Loading the screen...',

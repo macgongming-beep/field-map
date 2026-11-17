@@ -1,0 +1,27 @@
+import type { CalendarEvent } from '../../types'
+import type { AppLanguage } from '../../i18n'
+import { msg } from '../../lib/msg'
+import { eventBlocks, groupLabel, serviceGroups } from './model'
+import './groupService.css'
+
+export function ServiceEventList({events,language,onOpen,groupName,statusById}: {events:CalendarEvent[];language:AppLanguage;onOpen:(id:number)=>void;groupName?:string;statusById?:Record<number,'lead'|'join'|'avail'>}) {
+  const own=serviceGroups.find(g=>[g.code,g.ko,g.zh].some(n=>n===groupName))?.code
+  return <div className="gs-event-list">{eventBlocks(events,groupName).map(block=>{
+    const scoped=block[0].groupServiceScope
+    const rows=scoped?[block.find(e=>own&&e.targetGroups?.includes(own)) ?? block[0]]:block
+    return <section className="gs-event-block" data-service-kind={block[0].serviceKind} data-group-scope={scoped || undefined} key={block[0].id}>
+      {!scoped&&block[0].serviceKind==='group'&&<h3>{groupLabel(block[0].targetGroups ?? [],language)}</h3>}
+      {rows.map(e=>{
+        const statuses=(scoped?block:[e]).map(item=>statusById?.[item.id])
+        return <button type="button" key={e.id} title={`${e.time} · ${e.title} · ${e.leader}`} onClick={click=>{click.stopPropagation();onOpen(e.id)}}>
+          <span className="gs-event-time">{e.time}{e.endTime?`–${e.endTime}`:''}</span>
+          <span className="gs-event-text">
+            <strong>{scoped?msg('집단 봉사'):e.title}</strong>
+            <span>{scoped?groupLabel(block.flatMap(b=>b.targetGroups ?? []),language):<>{e.leader}{e.meetingMode==='virtual'?` · ${msg('화상 모임')}`:e.place?` · ${e.place}`:''}</>}</span>
+            {statuses.includes('lead')?<span>{msg('인도')}</span>:statuses.includes('join')?<span>{msg('신청 완료')}</span>:null}
+          </span><span aria-hidden="true">›</span>
+        </button>
+      })}
+    </section>
+  })}</div>
+}

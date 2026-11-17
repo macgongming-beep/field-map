@@ -71,6 +71,9 @@ function reassignMember(teams: DraftTeam[], name: string, toTeamId: string): Dra
 
 export function draftReducer(state: DraftState, action: DraftAction): DraftState {
   switch (action.type) {
+    case 'SET_BASE_REVISION':
+      return {...state,draft:{...state.draft,baseRevision:action.revision},
+        undo:state.undo?{...state.undo,baseRevision:action.revision}:null}
     case 'LOAD':
       return {
         draft: action.draft,

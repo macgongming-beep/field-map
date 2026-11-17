@@ -23,11 +23,11 @@ const NARROWED_TABLES = new Set([
   'login_logs', 'special_periods', 'chat_room_mutes', 'comments',
   'territory_regions', 'service_suggestions', 'informal_groups', 'informal_assets',
   'phone_surveys', 'review_tasks', 'restaurant_requests',
-  'calendar_events', 'return_visit_logs',
+  'calendar_events', 'return_visit_logs', 'service_sessions',
 ])
 
 /** 아직 TEMP 관문인 표들의 현재 위반 수. **줄이기만 한다.** */
-const REMAINING_MAX = 103
+const REMAINING_MAX = 100
 
 type Violation = { file: string; line: number; table: string }
 

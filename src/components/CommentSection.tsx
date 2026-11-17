@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { showToast } from '../lib/toast'
 import { t, type AppLanguage } from '../i18n'
 import type { Role } from '../types'
 import { LinkifiedText } from './LinkifiedText'
 import { msg } from '../lib/msg'
+import {useEventComments} from '../features/groupService/useEventComments'
+import {writeEventComment} from '../features/groupService/commentApi'
 
 export type MentionUser = {
   id: number
@@ -38,6 +40,10 @@ type CommentSectionProps = {
   compact?: boolean
   headerRight?: import('react').ReactNode  // sec-head 우측 (예: '채팅 열기' 링크)
   language?: AppLanguage
+  demandEvent?: boolean
+  focusCommentId?: number
+  initialDraft?:string
+  onDraftChange?:(value:string)=>void
 }
 
 function getMentionQuery(value: string) {
@@ -74,15 +80,29 @@ export function CommentSection({
   compact = false,
   headerRight,
   language = 'ko',
+  demandEvent = false,
+  focusCommentId,
+  initialDraft='',onDraftChange,
 }: CommentSectionProps) {
   const lang = language
-  const [comments, setComments] = useState<CommentRecord[]>([])
-  const [draft, setDraft] = useState('')
+  const [legacyComments, setComments] = useState<CommentRecord[]>([])
+  const [draft, updateDraft] = useState(initialDraft)
+  const setDraft=(value:string|((old:string)=>string))=>{const next=typeof value==='function'?value(draft):value;updateDraft(next);onDraftChange?.(next)}
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const [menuCommentId, setMenuCommentId] = useState<number | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [legacyLoading, setLoading] = useState(false)
   const [missingTable, setMissingTable] = useState(false)
+  const [saving,setSaving]=useState(false)
+  const feed=useEventComments(targetId,demandEvent,focusCommentId)
+  const comments=demandEvent?feed.rows:legacyComments
+  const loading=demandEvent?feed.loading:legacyLoading
+  const focused=useRef<number|undefined>(undefined)
+  useEffect(()=>{
+    if(demandEvent&&focusCommentId&&focused.current!==focusCommentId&&comments.some(c=>c.id===focusCommentId)){
+      document.getElementById(`comment-${targetId}-${focusCommentId}`)?.scrollIntoView?.({block:'center'});focused.current=focusCommentId
+    }
+  },[demandEvent,focusCommentId,targetId,comments])
 
   const mentionQuery = getMentionQuery(draft)
   const mentionSuggestions = useMemo(() => {
@@ -116,6 +136,7 @@ export function CommentSection({
   }
 
   useEffect(() => {
+    if(demandEvent)return
     void fetchComments()
 
     const channel = supabase
@@ -131,13 +152,19 @@ export function CommentSection({
       void supabase.removeChannel(channel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetId, targetType])
+  }, [targetId, targetType,demandEvent])
 
   const submitComment = async () => {
     const content = draft.trim()
-    if (!content) return
+    if (!content||saving) return
 
     const mentions = getMentionPayload(content, users)
+    if(demandEvent){
+      setSaving(true)
+      try{feed.accept(await writeEventComment(targetId,{content,author_id:currentUserId,author_name:currentVisitor,mention_ids:mentions.ids,mention_names:mentions.names}));setDraft('')}
+      catch(error){reportCommentError(error)}finally{setSaving(false)}
+      return
+    }
     const { error } = await supabase.from('comments').insert({
       target_type: targetType,
       target_id: targetId,
@@ -158,6 +185,12 @@ export function CommentSection({
   }
 
   const deleteComment = async (comment: CommentRecord) => {
+    if(demandEvent){
+      if(saving)return;setSaving(true)
+      try{feed.accept(await writeEventComment(targetId,{id:comment.id,deleted_at:new Date().toISOString()}))}
+      catch{showToast(msg('댓글을 삭제하지 못했습니다.'),'error')}finally{setSaving(false)}
+      return
+    }
     const { error } = await supabase
       .from('comments')
       .update({ deleted_at: new Date().toISOString() })
@@ -186,6 +219,12 @@ export function CommentSection({
     if (!content) return
 
     const mentions = getMentionPayload(content, users)
+    if(demandEvent){
+      if(saving)return;setSaving(true)
+      try{feed.accept(await writeEventComment(targetId,{id:comment.id,content,mention_ids:mentions.ids,mention_names:mentions.names}));cancelEdit()}
+      catch{showToast(msg('댓글을 수정하지 못했습니다.'),'error')}finally{setSaving(false)}
+      return
+    }
     const { error } = await supabase
       .from('comments')
       .update({
@@ -211,7 +250,7 @@ export function CommentSection({
   const canEdit = (comment: CommentRecord) => comment.author_name === currentVisitor
   const hasActions = (comment: CommentRecord) => canEdit(comment) || canDelete(comment)
 
-  if (missingTable) {
+  if (!demandEvent&&missingTable) {
     return (
       <section className={`comment-section${compact ? ' comment-section--compact' : ''}`}>
         <div className="comment-empty">{t(lang, 'comment.notReady')}</div>
@@ -223,18 +262,21 @@ export function CommentSection({
     <section className={`comment-section${compact ? ' comment-section--compact' : ''}`}>
       <div className="comment-section__head">
         <strong>{title ?? t(lang, 'comment.title')}</strong>
-        <span>{t(lang, 'comment.count', { n: comments.length })}</span>
+        {!demandEvent&&<span>{t(lang, 'comment.count', { n: comments.length })}</span>}
         {headerRight && <div style={{ marginLeft: 'auto' }}>{headerRight}</div>}
       </div>
 
       <div className="comment-list">
+        {demandEvent&&feed.error&&<div role="alert">{feed.error==='session'?msg('로그인 세션을 확인할 수 없습니다. 앱에서 다시 로그인해 주세요.'):msg('댓글을 불러오지 못했습니다.')} <button type="button" onClick={feed.retry}>{msg('다시 시도')}</button></div>}
+        {demandEvent&&!feed.error&&feed.focusMissing&&<p role="status">{msg('삭제되었거나 찾을 수 없는 댓글입니다.')}</p>}
+        {demandEvent&&feed.hasMore&&<button type="button" disabled={loading} onClick={()=>void feed.more()}>{msg('이전 댓글 보기')}</button>}
         {loading && comments.length === 0 ? (
           <div className="comment-empty">{t(lang, 'comment.loading')}</div>
-        ) : comments.length === 0 ? (
+        ) : comments.length === 0 && !(demandEvent&&(feed.error||feed.focusMissing)) ? (
           <div className="comment-empty">{t(lang, 'comment.empty')}</div>
         ) : (
           comments.map((comment) => (
-            <article className="comment-item" key={comment.id}>
+            <article className="comment-item" key={comment.id} id={`comment-${targetId}-${comment.id}`}>
               <div className="comment-item__avatar">{comment.author_name.slice(0, 1)}</div>
               <div className="comment-item__body">
                 <div className="comment-item__meta">
@@ -271,7 +313,7 @@ export function CommentSection({
                       value={editDraft}
                     />
                     <div className="comment-edit-actions">
-                      <button disabled={!editDraft.trim()} onClick={() => saveEdit(comment)} type="button">{t(lang, 'common.save')}</button>
+                      <button disabled={saving||!editDraft.trim()} onClick={() => saveEdit(comment)} type="button">{t(lang, 'common.save')}</button>
                       <button onClick={cancelEdit} type="button">{t(lang, 'common.cancel')}</button>
                     </div>
                   </div>
@@ -308,7 +350,7 @@ export function CommentSection({
             ))}
           </div>
         )}
-        <button disabled={!draft.trim()} onClick={submitComment} type="button">{t(lang, 'comment.submit')}</button>
+        <button disabled={saving||!draft.trim()||(demandEvent&&feed.error==='session')} onClick={submitComment} type="button">{t(lang, 'comment.submit')}</button>
       </div>
     </section>
   )

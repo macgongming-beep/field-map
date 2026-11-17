@@ -89,6 +89,12 @@ export type RawCard = {
 }
 
 export type RawCalendarEvent = {
+  service_kind?: 'congregation' | 'group' | null
+  group_service_scope?: boolean
+  target_groups?: import('../features/groupService/model').GroupCode[]
+  primary_leader_user_id?: number | null
+  meeting_mode?: 'none' | 'in_person' | 'virtual' | null
+  edit_version?: number | string
   id: number
   event_date: string
   time: string
@@ -105,12 +111,13 @@ export type RawCalendarEvent = {
   cart_capacity?: number | null
   assignment_status?: 'draft' | 'confirmed' | 'shared' | null
   assignment_shared_at?: string | null
+  assignment_revision?: string | number
   assignment_shared_by?: string | null
   assignment_team_scopes?: Record<string, '전체' | '주택' | '상가'> | null
   assignment_team_informal?: Record<string, number[]> | null
   memo: string
   series_id: string | null
-  event_participants: { user_name: string; role: string }[]
+  event_participants: { user_name: string; role: string; service_activity?: string }[]
   event_cart_applications?: Array<{
     user_id: number
     is_team_lead: boolean
@@ -385,6 +392,12 @@ export function toCalendarEvent(
   return {
     id: raw.id,
     date: raw.event_date,
+    serviceKind: raw.service_kind ?? undefined,
+    groupServiceScope: raw.group_service_scope ?? false,
+    targetGroups: raw.target_groups ?? [],
+    primaryLeaderUserId: raw.primary_leader_user_id ?? null,
+    meetingMode: raw.meeting_mode ?? (raw.has_meeting ? 'in_person' : 'none'),
+    editVersion: raw.edit_version == null ? undefined : String(raw.edit_version),
     time: raw.time,
     endTime: raw.end_time ?? undefined,
     title: raw.title,
@@ -397,6 +410,7 @@ export function toCalendarEvent(
     hasMeeting: raw.has_meeting,
     allowApplications: raw.allow_applications ?? true,
     applicants: participants.map((p) => p.user_name),
+    returnVisitApplicants: participants.filter(p => p.service_activity === 'return_visit').map(p => p.user_name),
     allowCartApplications: raw.allow_cart_applications ?? false,
     cartCapacity: raw.cart_capacity ?? null,
     cartApplicants: (raw.event_cart_applications ?? [])
@@ -415,6 +429,7 @@ export function toCalendarEvent(
     })),
     assignmentStatus: raw.assignment_status ?? 'draft',
     assignmentSharedAt: raw.assignment_shared_at ?? null,
+    assignmentRevision: raw.assignment_revision == null ? undefined : String(raw.assignment_revision),
     assignmentTeamInformal: raw.assignment_team_informal ?? null,
     assignmentSharedBy: raw.assignment_shared_by ?? null,
     memo: raw.memo,

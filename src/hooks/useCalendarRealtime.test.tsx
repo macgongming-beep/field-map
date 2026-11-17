@@ -18,6 +18,27 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 } }))
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); state.callbacks.clear(); vi.clearAllMocks() })
 
+test.each(['true','false'])('production group roster signal stays targeted with navigation reuse=%s', async flag => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED', 'true')
+  vi.stubEnv('VITE_GROUP_SERVICE_ENABLED', 'true')
+  vi.stubEnv('VITE_SUPABASE_URL', 'https://itjlykpjmlcvanqpmkmc.supabase.co')
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', flag)
+  vi.useFakeTimers()
+  const onParticipants = vi.fn(), onChange = vi.fn(), changed = vi.fn()
+  window.addEventListener('group-participants-changed', changed)
+  try {
+    renderHook(() => useCalendarRealtime(onChange, { onParticipants }))
+    state.callbacks.get('group_participant_signals')!({ new: { event_id: 7, revision: 2 } })
+    state.callbacks.get('group_participant_signals')!({ new: { event_id: 8, revision: 3 } })
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+    expect(onParticipants).toHaveBeenCalledExactlyOnceWith([7, 8])
+    expect(onChange).not.toHaveBeenCalled()
+    expect(changed).toHaveBeenCalledOnce()
+    expect(changed.mock.calls[0][0].detail).toEqual([7, 8])
+  } finally { window.removeEventListener('group-participants-changed', changed) }
+})
+
 test.each([true, false])('restaurant assignment invalidation follows navigation reuse flag=%s', async enabled => {
   vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', String(enabled))
   vi.useFakeTimers()

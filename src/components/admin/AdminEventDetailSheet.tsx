@@ -12,6 +12,9 @@
 // 단순화: 댓글/지도 썸네일은 기본 placeholder 만, 본격 기능은 다음 라운드.
 
 import { useMemo, useState } from 'react'
+import { canArrangeService, canEditServiceSchedule, groupServiceEnabled } from '../../features/groupService/model'
+import { MeetingAccessPanel } from '../../features/groupService/MeetingAccessPanel'
+import { ServiceApplicationButtons, ReturnVisitApplicants } from '../../features/groupService/ServiceApplications'
 import type { Building, CalendarEvent, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, Role, TerritoryCard } from '../../types'
 import { buildSharedAssignmentTeams } from './sharedAssignmentTeams'
 import { useSharedCardNames } from '../../hooks/useCardDirectory'
@@ -45,7 +48,7 @@ type Props = {
   onClose: () => void
   onDelete?: () => void
   onEdit?: () => void
-  onApply?: () => void
+  onApply?: (activity?: 'service'|'return_visit') => void
   onCancelApply?: () => void
   onApplyToCart?: () => void
   onManageCartApplicant?: (userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
@@ -109,7 +112,7 @@ function formatDateHeader(iso: string, language = 'ko') {
 }
 
 
-function SharedAssignmentTeams({
+export function SharedAssignmentTeams({
   event,
   cards,
   language,
@@ -195,13 +198,10 @@ export function AdminEventDetailSheet({
   const isApplied = useMemo(() => event.applicants.includes(currentVisitor), [event.applicants, currentVisitor])
   const canApply = event.allowApplications
   const applicants = event.applicants ?? []
-  // 편집/삭제/참가자 관리 권한 (PC DesktopCalendar 와 통일된 정책)
-  //  - 수정·참가자 관리: 관리자·개발자 또는 본인이 인도자인 일정
-  //  - 삭제: 관리자·개발자만
-  const isLeaderOfThisEvent = role === 'leader' && event.leaders.includes(currentVisitor)
-  const canEditEvent = role === 'admin' || role === 'developer' || isLeaderOfThisEvent
+  // 일정 편집과 배정 관리는 별도 권한이다. PC도 같은 판정을 사용한다.
+  const canEditEvent = canEditServiceSchedule(role,event,currentVisitor)
   const canDeleteEvent = role === 'admin' || role === 'developer'
-  const canManageParticipants = canEditEvent
+  const canManageParticipants = canArrangeService(role,event,currentVisitor)
   const leaders = event.leaders.length > 0
     ? event.leaders
     : event.leader.split(',').map((name) => name.trim()).filter(Boolean)
@@ -432,10 +432,11 @@ export function AdminEventDetailSheet({
         </section>
 
         {/* 신청 버튼 */}
-        {canApply && (
+        {(canApply || isApplied) && groupServiceEnabled() && <ServiceApplicationButtons event={event} currentVisitor={currentVisitor} onApply={onApply} onCancel={onCancelApply}/>}
+        {canApply && !groupServiceEnabled() && (
           <button
             type="button"
-            onClick={isApplied ? onCancelApply : onApply}
+            onClick={isApplied ? onCancelApply : () => onApply?.()}
             style={{
               height: 44,
               minHeight: 44,
@@ -468,6 +469,7 @@ export function AdminEventDetailSheet({
         {/* 위치 — mapLink 있으면 카드 전체가 네이버 지도 링크,
             없으면 단순 한 줄 표시.
             지도 썸네일 미리보기는 네이버 X-Frame-Options 차단으로 불가능. */}
+        {groupServiceEnabled() && event.meetingMode==='virtual' && <MeetingAccessPanel eventId={event.id} version={event.editVersion}/>}
         {event.place && event.mapLink && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <SectionHead title={t(language, 'calendar.location')} />
@@ -576,6 +578,7 @@ export function AdminEventDetailSheet({
               </div>
             )}
           </div>
+          {groupServiceEnabled() && <h4 className="gs-applicant-heading">{msg('봉사')} <span>{applicants.filter(name=>!event.returnVisitApplicants?.includes(name)).length}</span></h4>}
           <div
             style={{
               display: 'flex',
@@ -586,7 +589,7 @@ export function AdminEventDetailSheet({
               paddingBottom: 4,
             }}
           >
-            {applicants.map((name) => (
+            {applicants.filter(name=>!groupServiceEnabled()||!event.returnVisitApplicants?.includes(name)).map((name) => (
               <span
                 aria-label={event.guests.includes(name) ? `${name}, ${msg('손님')}` : name}
                 className={`event-detail-participant-chip${event.guests.includes(name) ? ' is-guest' : ''}`}
@@ -633,6 +636,7 @@ export function AdminEventDetailSheet({
               </span>
             )}
           </div>
+          {groupServiceEnabled() && <ReturnVisitApplicants event={event} onRemove={isRemoveParticipantMode&&onRemoveParticipant ? handleRemoveParticipant : undefined}/>}
         </section>
 
         )}

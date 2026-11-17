@@ -15,7 +15,8 @@ import { savePlacePresets, normalizePlacePresets, resolvePlacePresets, parsePlac
 import type { PlacePreset } from '../lib/placePresets'
 import { saveTimePresets, normalizeTimePresets, resolveTimePresets, parseTimePresetsValue, TIME_PRESET_SETTING_KEY, addMinutesToTime } from '../lib/timePresets'
 import type { TimePreset } from '../lib/timePresets'
-import { PlacePresetEditor, TimePresetEditor } from './admin/AdminMobileCalendar'
+import { PlacePresetEditor } from './admin/AdminMobileCalendar'
+import { TimePresetEditor } from './admin/TimePresetEditor'
 import { ExportEventsModal } from './calendar/ExportEventsModal'
 import { ImportEventsModal } from './calendar/ImportEventsModal'
 import { msg } from '../lib/msg'
@@ -31,6 +32,13 @@ import { CartApplicantSection } from './calendar/CartApplicantSection'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { toPhoneHref } from '../utils/linkify'
 import { useEventLeaderContacts } from '../hooks/useEventLeaderContacts'
+import { canArrangeService, canEditServiceSchedule, groupServiceEnabled } from '../features/groupService/model'
+import { assignmentRevisionEnabled } from '../config/assignmentRevision'
+import { ServiceEventEditor } from '../features/groupService/ServiceEventEditor'
+import { GroupServiceDetail } from '../features/groupService/GroupServiceDetail'
+import { ServiceEventList } from '../features/groupService/ServiceEventList'
+import { MeetingAccessPanel } from '../features/groupService/MeetingAccessPanel'
+import { ServiceApplicationButtons, ReturnVisitApplicants } from '../features/groupService/ServiceApplications'
 
 
 function getCalendarDays(year: number, month: number): (number | null)[] {
@@ -135,7 +143,7 @@ export function DesktopCalendar({
   actualRole?: Role
   participantUsers?: EventParticipantUser[]
   mentionUsers?: MentionUser[]
-  onApplyToEvent: (eventId: number) => void
+  onApplyToEvent: (eventId: number, activity?: 'service'|'return_visit') => void
   onApplyToCartEvent: (eventId: number) => void
   onManageCartApplication: (eventId: number, userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
   onSetCartTeamLeader: (eventId: number, userId: number | null) => Promise<boolean> | boolean
@@ -147,6 +155,7 @@ export function DesktopCalendar({
       silentSuccess?: boolean
       status?: 'confirmed' | 'shared'
       expectedSharedAt?: string | null
+      expectedRevision?: string
       onConflict?: (serverSharedAt: string | null) => void
     },
   ) => Promise<void> | void
@@ -178,30 +187,37 @@ export function DesktopCalendar({
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [assignEventId, setAssignEventId] = useState<number | null>(null)
+  const [commentEntry,setCommentEntry]=useState<{eventId:number;commentId:number;requestKey:string}|undefined>(undefined)
 
-  // openChat=<eventId> 쿼리 처리: 해당 일정 날짜로 이동 + 채팅방 열기
+  // 댓글 알림은 채팅 종료 설정과 무관하게 해당 일정/댓글로 이동한다.
   useEffect(() => {
-    const openChatId = searchParams.get('openChat') ?? (chatDisabled() ? searchParams.get('openEvent') : null)
-    if (!openChatId) return
-    const targetEvent = events.find((ev: CalendarEvent) => ev.id === Number(openChatId))
+    const commentId = Number(searchParams.get('comment'))
+    const hasComment = Number.isSafeInteger(commentId) && commentId > 0
+    const commentEventId = hasComment ? searchParams.get('openEvent') : null
+    const targetEventId = commentEventId ?? searchParams.get('openChat') ?? (chatDisabled() ? searchParams.get('openEvent') : null)
+    if (!targetEventId) return
+    const targetEvent = events.find((ev: CalendarEvent) => ev.id === Number(targetEventId))
     if (!targetEvent) return
 
     const d = new Date(targetEvent.date)
     setYear(d.getFullYear())
     setMonth(d.getMonth() + 1)
     setSelectedDay(d.getDate())
-    if (!chatDisabled()) setChatEvent(targetEvent)
+    setSelectedEventId(targetEvent.id)
+    setCommentEntry(hasComment?{eventId:targetEvent.id,commentId,requestKey:crypto.randomUUID()}:undefined)
+    setChatEvent(!hasComment && !chatDisabled() ? targetEvent : null)
 
     // 다음 tick에 스크롤
     setTimeout(() => {
-      const el = document.getElementById(`event-card-${openChatId}`)
+      const el = document.getElementById(`event-card-${targetEventId}`)
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 200)
 
     // 쿼리 제거
     const next = new URLSearchParams(searchParams)
     next.delete('openChat')
-    if (chatDisabled()) next.delete('openEvent')
+    if (commentEventId || chatDisabled()) next.delete('openEvent')
+    next.delete('comment')
     setSearchParams(next, { replace: true })
   }, [events, searchParams, setSearchParams])
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -431,7 +447,9 @@ export function DesktopCalendar({
       )}
 
       {/* ── Create event modal ───────────────────── */}
-      {showCreateForm && (
+      {groupServiceEnabled() && showCreateForm && <ServiceEventEditor language={language} globalSettings={globalSettings} onUpsertGlobalSetting={onUpsertGlobalSetting} date={newDate} events={events} users={participantUsers} onClose={closeCreate} onSubmit={onCreateEvent}/>}
+      {groupServiceEnabled() && editingEventId!==null && events.find(e=>e.id===editingEventId)?.serviceKind && <ServiceEventEditor key={editingEventId} language={language} globalSettings={globalSettings} onUpsertGlobalSetting={onUpsertGlobalSetting} date={newDate} event={events.find(e=>e.id===editingEventId)} events={events} users={participantUsers} onClose={clearEdit} onSubmit={input=>onUpdateEvent(editingEventId,input)}/>}
+      {!groupServiceEnabled() && showCreateForm && (
         <div className="cal-modal-backdrop" onClick={closeCreate}>
           <div className="cal-modal" onClick={(e) => e.stopPropagation()}>
             <div className="cal-modal-head">
@@ -714,10 +732,11 @@ export function DesktopCalendar({
               const dayStr = day ? toDateStr(year, month, day) : null
               const dayEvents = dayStr ? events.filter((e) => e.date === dayStr) : []
               const activePeriod = dayStr ? findActivePeriod(specialPeriods, dayStr) : null
+              const DayCell = groupServiceEnabled() ? 'div' : 'button'
               return (
-                <button
+                <DayCell
                   className={['day-cell', day === selectedDay ? 'selected' : '', !day ? 'muted' : '', activePeriod ? 'in-period' : ''].join(' ')}
-                  disabled={!day}
+                  {...(groupServiceEnabled() ? {} : {disabled:!day,type:'button' as const})}
                   key={`${day ?? 'blank'}-${index}`}
                   onClick={() => {
                     if (day) {
@@ -727,18 +746,18 @@ export function DesktopCalendar({
                       setEditingEventId(null)
                     }
                   }}
-                  type="button"
                 >
                   <div className="day-head">
-                    <span
+                    {groupServiceEnabled() ? <button type="button" className="day-number gs-day-select" disabled={!day} aria-label={dayStr ?? undefined}
+                      style={activePeriod && day !== selectedDay ? {background:activePeriod.color+'20'}:undefined}>{day ?? ''}</button> : <span
                       className="day-number"
                       style={activePeriod && day !== selectedDay ? { background: activePeriod.color + '20' } : undefined}
                     >
                       {day ?? ''}
-                    </span>
+                    </span>}
                   </div>
                   <div className="day-events">
-                    {dayEvents.map((event) => (
+                    {groupServiceEnabled() ? <ServiceEventList events={dayEvents} language={language} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{if(day)setSelectedDay(day);setCommentEntry(undefined);setSelectedEventId(id);setShowCreateForm(false)}}/> : dayEvents.map((event) => (
                       <small 
                         className={`event-pill ${eventTimeClass(event.time)}${event.hasMeeting ? ' has-meeting' : ''} ${selectedEventId === event.id ? 'active' : ''}`} 
                         key={event.id}
@@ -756,7 +775,7 @@ export function DesktopCalendar({
                       </small>
                     ))}
                   </div>
-                </button>
+                </DayCell>
               )
             })}
           </div>
@@ -788,6 +807,20 @@ export function DesktopCalendar({
 
             <div className="detail-stack">
               {selectedEvents.map((event) => {
+                if(groupServiceEnabled() && event.groupServiceScope) return <GroupServiceDetail
+                  key={`${event.date}:${event.time}:${event.endTime}`} event={event} events={events} language={language} currentVisitor={currentVisitor}
+                  onApply={onApplyToEvent}
+                  currentUserId={currentUserId} role={actualRole} mentionUsers={mentionUsers} commentEntry={commentEntry}
+                  participantUsers={participantUsers} onAddParticipant={onAddParticipant} onRemoveParticipant={onRemoveParticipant}
+                  onAssignment={onAssignCardsToEventParticipantsBulk?id=>setAssignEventId(id):undefined}
+                  renderAssignments={selected=><SharedAssignmentTeams event={selected} cards={cards} buildings={buildings} informalAssets={informalAssets} eventInformalAssignments={eventInformalAssignments} eventRestaurantAssignments={eventRestaurantAssignments}/>}
+                  onDelete={actualRole==='admin'||actualRole==='developer'?id=>{
+                    const target=events.find(e=>e.id===id)
+                    if(!target)return
+                    if(target.seriesId)setScopeModal({kind:'delete',id,date:target.date,seriesId:target.seriesId,title:target.title})
+                    else setDeleteConfirmEvent(target)
+                  }:undefined}
+                  onEdit={id=>setEditingEventId(id)}/>
                 const isApplied = event.applicants.includes(currentVisitor)
                 const canAccessChat =
                   role === 'admin' ||
@@ -799,7 +832,7 @@ export function DesktopCalendar({
                   event.leaders.includes(currentVisitor)
                 const isEditing = editingEventId === event.id
 
-                if (isEditing && editDraft) {
+                if (isEditing && editDraft && (!groupServiceEnabled() || !event.serviceKind)) {
                   return (
                     <EditCard
                       key={event.id}
@@ -831,10 +864,10 @@ export function DesktopCalendar({
                   )
                 }
 
-                // 편집/참가자 관리: 관리자·개발자 또는 본인이 인도자인 일정만 (모바일 정책과 통일)
-                const canEdit = role === 'admin' || role === 'developer' || event.leaders.includes(currentVisitor)
+                // 일정 편집과 배정 관리는 모바일과 같은 별도 판정을 사용한다.
+                const canEdit = canEditServiceSchedule(actualRole,event,currentVisitor)
                 const canManage = role === 'admin' || role === 'developer'
-                const canManageParticipants = canEdit
+                const canManageParticipants = canArrangeService(actualRole,event,currentVisitor)
 
                 return (
                   <EventDetailCard
@@ -859,14 +892,14 @@ export function DesktopCalendar({
                     participantUsers={participantUsers}
                     addParticipantEventId={addParticipantEventId}
                     onAddParticipant={onAddParticipant}
-                    onApply={() => onApplyToEvent(event.id)}
+                    onApply={(activity) => activity ? onApplyToEvent(event.id,activity) : onApplyToEvent(event.id)}
                     onApplyToCart={() => onApplyToCartEvent(event.id)}
                     onManageCartApplicant={(userId, action) => onManageCartApplication(event.id, userId, action)}
                     onSetCartTeamLead={(userId) => onSetCartTeamLeader(event.id, userId)}
                     onRemoveParticipant={onRemoveParticipant}
                     onOpenChat={() => setChatEvent(event)}
                     onOpenAssignment={
-                      onAssignCardsToEventParticipantsBulk && (actualRole === 'admin' || actualRole === 'developer' || event.leaders.includes(currentVisitor))
+                      onAssignCardsToEventParticipantsBulk && canArrangeService(actualRole,event,currentVisitor)
                         ? () => setAssignEventId(event.id)
                         : undefined
                     }
@@ -924,7 +957,7 @@ export function DesktopCalendar({
         const assignmentEvent = events.find((event) => event.id === assignEventId)
         if (!assignmentEvent) return null
         const isAdminLike = actualRole === 'admin' || actualRole === 'developer'
-        const assignmentCards = isAdminLike
+        const assignmentCards = isAdminLike || (assignmentRevisionEnabled()&&actualRole==='leader')
           ? cards
           : cards.filter((card) => {
               const leaders = card.assignedLeaders?.length
@@ -932,7 +965,7 @@ export function DesktopCalendar({
                 : card.assignedLeader ? [card.assignedLeader] : []
               return leaders.includes(currentVisitor)
             })
-        const canEditAssignment = isAdminLike || assignmentEvent.leaders.includes(currentVisitor)
+        const canEditAssignment = canArrangeService(actualRole,assignmentEvent,currentVisitor)
         return (
           <AssignmentEditor
             event={assignmentEvent}
@@ -955,6 +988,7 @@ export function DesktopCalendar({
             onShare={(eventId, assignments, options) => onAssignCardsToEventParticipantsBulk(eventId, assignments, {
               status: 'shared',
               expectedSharedAt: options.expectedSharedAt,
+              expectedRevision: options.expectedRevision,
               onConflict: options.onConflict,
             })}
           />
@@ -1061,7 +1095,7 @@ function EventDetailCard({
   participantUsers: EventParticipantUser[]
   addParticipantEventId: number | null
   onAddParticipant?: (eventId: number, userName: string, participantRole?: '신청' | '게스트') => boolean | void | Promise<boolean | void>
-  onApply: () => void
+  onApply: (activity?: 'service'|'return_visit') => void
   onApplyToCart: () => void
   onManageCartApplicant: (userId: number, action: 'add' | 'remove') => Promise<boolean> | boolean
   onSetCartTeamLead: (userId: number | null) => Promise<boolean> | boolean
@@ -1139,10 +1173,11 @@ function EventDetailCard({
       </div>
 
       {/* 신청 버튼 */}
-      {event.allowApplications && (
+      {(event.allowApplications || isApplied) && groupServiceEnabled() && <ServiceApplicationButtons event={event} currentVisitor={currentVisitor} onApply={onApply} onCancel={()=>onApply()}/>}
+      {event.allowApplications && !groupServiceEnabled() && (
         <button
           className={`cal-apply-big-btn${isApplied ? ' applied' : ''}`}
-          onClick={onApply}
+          onClick={() => onApply()}
           type="button"
           style={{ marginBottom: 14 }}
         >
@@ -1159,6 +1194,7 @@ function EventDetailCard({
       )}
 
       {/* 위치 카드 */}
+      {groupServiceEnabled() && event.meetingMode==='virtual' && <MeetingAccessPanel eventId={event.id} version={event.editVersion}/>}
       {event.place && (
         <div style={{ marginBottom: 12 }}>
           <div className="cal-section-head"><h3>위치</h3></div>
@@ -1250,8 +1286,9 @@ function EventDetailCard({
               </div>
             )}
           </div>
+        {groupServiceEnabled() && <h4 className="gs-applicant-heading">{msg('봉사')} <span>{event.applicants.filter(name=>!event.returnVisitApplicants?.includes(name)).length}</span></h4>}
         <div className="event-applicants-strip">
-          {event.applicants.map((name) => (
+          {event.applicants.filter(name=>!groupServiceEnabled()||!event.returnVisitApplicants?.includes(name)).map((name) => (
             <span
               aria-label={event.guests.includes(name) ? `${name}, ${msg('손님')}` : name}
               className={`event-applicant-chip${event.guests.includes(name) ? ' is-guest' : ''}`}
@@ -1280,6 +1317,9 @@ function EventDetailCard({
             <span style={{ fontSize: 12, color: 'var(--gray-400)', padding: '6px 2px' }}>신청자가 없습니다</span>
           )}
         </div>
+        {groupServiceEnabled() && <ReturnVisitApplicants event={event} onRemove={canManageParticipants&&isParticipantRemoveMode ? async name=>{
+          if(await confirmDialog({message:msg('{name}님을 이 일정에서 제외할까요?',{name}),danger:true,confirmLabel:'제외'}))onRemoveParticipant(event.id,name)
+        }:undefined}/>}
       </div>
       )}
 

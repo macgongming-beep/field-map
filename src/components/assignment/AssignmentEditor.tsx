@@ -1,4 +1,7 @@
 import { teamServiceEnabled } from '../../config/teamService'
+import { territoryApplicants } from '../../features/groupService/model'
+import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
+import { fetchUpdatedCalendarEvent } from '../../hooks/calendarEventRefresh'
 // 인도자 배정 에디터 (호스트) — 화면1(팀짓기) ↔ 화면2(구역배분) + 배정 공유
 // 설계: docs/leader-assignment-redesign.md v3
 //
@@ -48,25 +51,41 @@ type Props = {
   informalGroups?: InformalGroup[]
   eventInformalAssignments?: EventInformalAssignment[]
   eventRestaurantAssignments?: EventRestaurantAssignment[]
-  onAssignInformalToUser?: (input: { eventId: number; userName: string; assetId: number; assignedBy: string }) => Promise<boolean>
-  onRemoveInformalAssignment?: (assignmentId: number) => Promise<void>
-  onAssignRestaurantToUser?: (input: { eventId: number; userName: string; buildingId: number; unitId?: number | null; assignedBy: string }) => Promise<boolean>
-  onRemoveRestaurantAssignment?: (assignmentId: number) => Promise<void>
+  onAssignInformalToUser?: (input: { eventId: number; userName: string; assetId: number; assignedBy: string; expectedRevision?:string }) => Promise<boolean>
+  onRemoveInformalAssignment?: (assignmentId: number,expectedRevision?:string) => Promise<void>
+  onAssignRestaurantToUser?: (input: { eventId: number; userName: string; buildingId: number; unitId?: number | null; assignedBy: string; expectedRevision?:string }) => Promise<boolean>
+  onRemoveRestaurantAssignment?: (assignmentId: number,expectedRevision?:string) => Promise<void>
   onClose: () => void
   onShare: (
     eventId: number,
     assignments: Array<{ userName: string; cardIds: number[]; teamKey?: string }>,
-    options: { expectedSharedAt: string | null; onConflict: (serverSharedAt: string | null) => void },
+    options: { expectedSharedAt: string | null; expectedRevision?: string; onConflict: (serverSharedAt: string | null) => void },
   ) => Promise<void> | void
 }
 
 export function AssignmentEditor(props: Props) {
-  return <FullBuildingGate><AssignmentEditorContent {...props} /></FullBuildingGate>
+  return <AssignmentEditorSnapshot key={props.event.id} {...props} />
+}
+
+function AssignmentEditorSnapshot(props: Props) {
+  const versioned=assignmentRevisionEnabled()
+  const [snapshot,setSnapshot]=useState<CalendarEvent|null>(null)
+  const [failed,setFailed]=useState(false)
+  useEffect(()=>{
+    if(!versioned)return
+    let active=true
+    void fetchUpdatedCalendarEvent(props.event.id).then(event=>{if(active)setSnapshot(event)}).catch(()=>{if(active)setFailed(true)})
+    return()=>{active=false}
+  },[props.event.id,versioned])
+  if(versioned&&!snapshot)return <div className="asg-editor"><button className="asg-editor-back" type="button" onClick={props.onClose}>{msg('뒤로')}</button><p role={failed?'alert':'status'}>{msg(failed?'일정을 불러오지 못했습니다.':'불러오는 중...')}</p></div>
+  return <FullBuildingGate><AssignmentEditorContent {...props} event={snapshot??props.event} /></FullBuildingGate>
 }
 
 function AssignmentEditorContent({ event, cards, allCards, buildings, visitHistories = [], cardBoundaries, currentVisitor, canEdit, informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onClose, onShare }: Props) {
   // 편집 시작 시점의 서버 공유시각 — 공유 때 충돌 감지에 사용 (P0-3)
   const [entrySharedAt] = useState<string | null>(event.assignmentSharedAt ?? null)
+  const [entryRevision] = useState(event.assignmentRevision)
+  const revisionRef=useRef(entryRevision)
   // 진입 시 draft 결정 (lazy 1회). 충돌이면 server로 시작하고 모달 띄움.
   const [{ initial, conflictPair }] = useState(() => {
     const entry = resolveDraftEntry(event, currentVisitor)
@@ -82,10 +101,17 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
     currentVisitor,
     initial,
   )
+  // A successful personal operation advances exactly one version. Do not adopt
+  // an arbitrary refreshed version: it may include another editor's changes.
+  const personalSaved=()=>{
+    if(!assignmentRevisionEnabled()||revisionRef.current==null)return
+    revisionRef.current=(BigInt(revisionRef.current)+1n).toString()
+    dispatch({type:'SET_BASE_REVISION',revision:revisionRef.current})
+  }
 
   const participants = useMemo(
-    () => Array.from(new Set([...event.applicants, ...event.assigned])),
-    [event.applicants, event.assigned],
+    () => territoryApplicants(event),
+    [event],
   )
 
   // 진입 시 참가자 sanitize (취소·거절자 제거) — 1회
@@ -173,7 +199,8 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
     try {
       await onShare(event.id, draftToAssignments(draft), {
         expectedSharedAt: entrySharedAt,
-        onConflict: () => { conflicted = true },
+        ...(assignmentRevisionEnabled()?{expectedRevision:revisionRef.current}:{}),
+        onConflict: () => { conflicted = true; setShareConflict(true) },
       })
       if (conflicted) {
         setShareConflict(true)  // 그 사이 남이 공유함 → 모달, draft는 유지
@@ -206,7 +233,7 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
           <h2>{msg('임시 저장본과 공유본이 다릅니다')}</h2>
           <p>{msg('다른 곳에서 배정이 공유되었어요. 무엇을 사용할까요?')}</p>
           <button onClick={() => { reload(conflict.server); setConflict(null) }} type="button">{msg('공유본 사용')}</button>
-          <button onClick={() => { reload(conflict.local); setConflict(null) }} type="button">{msg('내 임시 저장 이어서')}</button>
+          <button onClick={() => { reload({...conflict.local,...(entryRevision!=null?{baseRevision:entryRevision}:{})}); setConflict(null) }} type="button">{msg('내 임시 저장 이어서')}</button>
           <button className="danger" onClick={() => { clearLocalDraft(event.id, currentVisitor); reload(conflict.server); setConflict(null) }} type="button">{msg('임시 저장 삭제')}</button>
         </div>
       </div>
@@ -232,10 +259,18 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
           informalGroups={informalGroups}
           eventInformalAssignments={informalHere}
           eventRestaurantAssignments={restaurantHere}
-          onAssignInformalToUser={onAssignInformalToUser}
-          onRemoveInformalAssignment={onRemoveInformalAssignment}
-          onAssignRestaurantToUser={onAssignRestaurantToUser}
-          onRemoveRestaurantAssignment={onRemoveRestaurantAssignment}
+          onAssignInformalToUser={onAssignInformalToUser?async input=>{
+            const ok=await onAssignInformalToUser({...input,expectedRevision:revisionRef.current});if(ok)personalSaved();return ok
+          }:undefined}
+          onRemoveInformalAssignment={onRemoveInformalAssignment?async id=>{
+            await onRemoveInformalAssignment(id,revisionRef.current);personalSaved()
+          }:undefined}
+          onAssignRestaurantToUser={onAssignRestaurantToUser?async input=>{
+            const ok=await onAssignRestaurantToUser({...input,expectedRevision:revisionRef.current});if(ok)personalSaved();return ok
+          }:undefined}
+          onRemoveRestaurantAssignment={onRemoveRestaurantAssignment?async id=>{
+            await onRemoveRestaurantAssignment(id,revisionRef.current);personalSaved()
+          }:undefined}
           onBack={() => setScreen('teams')}
         />
       </div>
@@ -305,10 +340,9 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
       {shareConflict && (
         <div className="asg-confirm-backdrop">
           <div className="asg-confirm" onClick={(e) => e.stopPropagation()}>
-            <h2>{msg('다른 곳에서 먼저 공유됐어요')}</h2>
+            <h2>{msg(assignmentRevisionEnabled()?'배정 내용이 변경됐어요':'다른 곳에서 먼저 공유됐어요')}</h2>
             <p>
-              편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다.
-              덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.
+              {assignmentRevisionEnabled()?msg('신청자 또는 배정이 변경되어 저장하지 않았습니다. 다시 열어 최신 내용을 확인해 주세요.'):msg('편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다. 덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.')}
             </p>
             <button className="asg-confirm-primary" onClick={() => { setShareConflict(false); onClose() }} type="button">{msg('닫고 새로고침')}</button>
           </div>

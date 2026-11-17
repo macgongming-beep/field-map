@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import type { CalendarEvent, EventRestaurantAssignment } from '../../types'
 
 const state = vi.hoisted(() => ({
   result: { data: [] as Array<{ id: number }>, error: null as unknown },
@@ -23,6 +24,7 @@ vi.mock('../../lib/toast', () => ({ showToast: state.toast }))
 vi.mock('../../lib/authToken', () => ({ getAuthToken: () => '00000000-0000-4000-8000-000000000001' }))
 
 const { makeV2AssignmentMutations } = await import('./v2Assignments')
+afterEach(()=>vi.unstubAllEnvs())
 
 describe('비공식 그룹 쓰기 결과 계약', () => {
   beforeEach(() => {
@@ -361,5 +363,21 @@ describe('비공식 그룹 쓰기 결과 계약', () => {
     await mutations.toggleBuildingRestaurant(4, false)
     expect(refreshRestaurantBuildings.mock.calls).toEqual([[[3]], [[4]]])
     expect(fetchAll).not.toHaveBeenCalled()
+  })
+
+  test.each(['ok','conflict','missing','refresh-error'])('personal assignments use captured revisions without direct fallback: %s',async outcome=>{
+    vi.stubEnv('VITE_DEMO_MODE','true');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','true')
+    vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co')
+    const fetchAll=outcome==='refresh-error'?vi.fn().mockRejectedValue(Error('offline')):vi.fn()
+    const refreshAssignmentEvent=vi.fn()
+    state.rpc.mockResolvedValue(outcome==='missing'?{error:{code:'PGRST202'}}:{data:{ok:outcome!=='conflict',conflict:outcome==='conflict',revision:5}})
+    const mutations=makeV2AssignmentMutations({fetchAll,refreshAssignmentEvent,calendarEvents:[{id:1,assignmentRevision:'99'} as CalendarEvent],eventRestaurantAssignments:[{id:7,eventId:1} as EventRestaurantAssignment]})
+    expect(await mutations.assignRestaurantToUser({eventId:1,userName:'A',buildingId:2,assignedBy:'ignored',expectedRevision:'4'})).toBe(outcome==='ok'||outcome==='refresh-error')
+    expect(state.rpc).toHaveBeenCalledWith('mutate_personal_assignment_versioned_tx',expect.objectContaining({p_event_id:1,p_expected_revision:'4',p_kind:'restaurant',p_action:'add'}))
+    expect(state.select).not.toHaveBeenCalled()
+    if(outcome==='conflict'){
+      expect(refreshAssignmentEvent).toHaveBeenCalledWith(1);expect(fetchAll).not.toHaveBeenCalled()
+      await expect(mutations.removeRestaurantAssignment(7,'4')).rejects.toThrow()
+    }
   })
 })

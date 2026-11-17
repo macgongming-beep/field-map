@@ -24,7 +24,7 @@ export type GeoPoint = {
   lng: number
 }
 
-export type CalendarEvent = {
+export type CalendarEvent = import('./features/groupService/model').ServiceFields & {
   id: number
   date: string  // 'YYYY-MM-DD'
   time: string
@@ -39,6 +39,8 @@ export type CalendarEvent = {
   hasMeeting: boolean
   allowApplications: boolean
   applicants: string[]
+  /** Included in applicants/counts, but not in the default territory assignment pool. */
+  returnVisitApplicants?: string[]
   allowCartApplications?: boolean
   cartCapacity?: number | null
   cartApplicants?: CartApplicant[]
@@ -48,6 +50,7 @@ export type CalendarEvent = {
   cardAssignments: EventCardAssignment[]
   assignmentStatus?: 'draft' | 'confirmed' | 'shared'
   assignmentSharedAt?: string | null
+  assignmentRevision?: string
   assignmentTeamInformal?: Record<string, number[]> | null
   assignmentSharedBy?: string | null
   memo: string
