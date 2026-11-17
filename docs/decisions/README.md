@@ -22,6 +22,7 @@
 설정 대조: [0110 실제 운영 기능 설정으로 후보 ON/OFF 화면 검증](0110-production-settings-candidate-validation.md).
 화면 보완: [0111 좁은 PC 상세와 긴 제목 줄바꿈](0111-candidate-calendar-responsive-layout.md).
 운영 사전 대조: [0112 운영 DB 선행 함수·권한 읽기 전용 확인](0112-production-db-readonly-candidate-audit.md).
+운영 전환: [0113 준비 DB와 기능 OFF 호환 첫 배포](0113-production-group-service-compatibility-release.md).
 
 | 번호 | 상태 | 결정 |
 | --- | --- | --- |
