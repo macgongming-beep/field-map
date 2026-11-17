@@ -11286,6 +11286,40 @@ button:focus-visible {
     padding: 40px 48px;
   }
 
+  .desktop-content.calendar-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 430px);
+  }
+
+  .calendar-layout .page-header,
+  .calendar-layout .detail-header {
+    flex-wrap: wrap;
+  }
+
+  .calendar-layout .page-header-actions {
+    min-width: 0;
+    max-width: 100%;
+    flex-shrink: 1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .calendar-layout .page-header-actions > button {
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 1493px) {
+    .desktop-content.calendar-layout {
+      gap: 20px;
+      padding-inline: 24px;
+    }
+  }
+
+  @media (max-width: 1199px) {
+    .desktop-content.calendar-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
   /* ══════════════════════════════════════════
      공지 페이지
   ══════════════════════════════════════════ */
@@ -12987,8 +13021,9 @@ button:focus-visible {
     font-size: 22px;
     font-weight: 700;
     color: var(--ink, #1A1A18);
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
     line-height: 1.2;
+    overflow-wrap: anywhere;
   }
   .event-hero-leader {
     display: flex;

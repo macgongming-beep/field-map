@@ -396,7 +396,7 @@ export function AdminEventDetailSheet({
               </span>
             )}
           </div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+          <h1 className="event-detail-title" style={{ margin: 0, minWidth: 0, maxWidth: '100%', fontSize: 26, fontWeight: 700, color: 'var(--ink)', letterSpacing: 0, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
             {event.title}
           </h1>
           {leaders.length > 0 && (

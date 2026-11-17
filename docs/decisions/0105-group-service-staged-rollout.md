@@ -9,7 +9,7 @@
 
 최신 후보 보완은 [0109](0109-candidate-comment-notification-agreement.md)를 따른다. 준비 묶음은 댓글 제외 알림함 RPC까지 **19개**이며 새 앱은 기능 설정과 무관하게 `get_my_notification_feed`를 사용한다. `--require-compat-ready`는 원자적 참가자 제외뿐 아니라 알림함 RPC의 존재와 실행권한도 확인한다. 과거 18개 묶음 기록/해시를 첫 배포 근거로 사용하지 않는다.
 
-실제 운영 기능 설정을 읽어 적용한 ON/OFF 화면 검증은 [0110](0110-production-settings-candidate-validation.md)에 기록했다. 운영 설정 변경 없이 준비 DB + 새 기능 OFF 첫 배포를 거치는 동작을 검증했다. 좁은 PC 상세 패널 잘림/긴 제목 표시 보완은 남아 있다. 운영 DB 적용/첫 배포 관문을 생략하는 근거가 아니다.
+실제 운영 기능 설정을 읽어 적용한 ON/OFF 화면 검증은 [0110](0110-production-settings-candidate-validation.md)에 기록했다. 운영 설정 변경 없이 준비 DB + 새 기능 OFF 첫 배포를 거치는 동작을 검증했다. 발견한 좁은 PC 상세 패널 잘림/긴 제목은 [0111](0111-candidate-calendar-responsive-layout.md)에서 후보 보완·재검증했다. 운영 DB 적용/첫 배포 관문을 생략하는 근거가 아니다.
 
 ## 바뀐 계약
 

@@ -20,6 +20,7 @@
 이전 데모 시험 결과를 운영 후보의 결과로 재사용하지 않는다.
 후속 합의 반영: [0109 일반 댓글은 푸시만, 멘션은 알림함에도](0109-candidate-comment-notification-agreement.md).
 설정 대조: [0110 실제 운영 기능 설정으로 후보 ON/OFF 화면 검증](0110-production-settings-candidate-validation.md).
+화면 보완: [0111 좁은 PC 상세와 긴 제목 줄바꿈](0111-candidate-calendar-responsive-layout.md).
 
 | 번호 | 상태 | 결정 |
 | --- | --- | --- |

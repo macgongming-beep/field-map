@@ -8,6 +8,8 @@
 
 **판정:** ON/OFF 동작 검사는 통과했다. 다만 추가 스크린샷 검사에서 좁은 PC 화면의 상세 패널 잘림을 확인했으므로, 화면 전체가 문제없다거나 운영 전환 준비가 끝났다고 판정하지 않는다. 이번 변경은 검증 기록뿐이며 앱/SQL 코드를 바꾸지 않았다.
 
+후속: 위 화면 문제는 [0111](0111-candidate-calendar-responsive-layout.md)에서 후보 코드 보완과 ON/OFF 20개 화면 조합으로 재검증했다. 아래는 발견 당시 기록으로 보존한다.
+
 ## 설정 확인과 격리
 
 Vercel의 `chinese-territory-app` 운영 프로젝트에서 `env pull --environment=production`과 `env ls production`만 실행했다. CLI 작업 디렉터리는 별도의 로컬 reader이며 후보의 데모 프로젝트 연결을 바꾸지 않았다. 환경변수 추가/수정, 배포, main 병합, 운영 DB 접속은 하지 않았다.
