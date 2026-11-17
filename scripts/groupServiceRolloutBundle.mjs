@@ -2,6 +2,15 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 
+// Read-only first-deployment gate; strict installations intentionally fail it.
+export const compatibilityReadinessSql = `select json_build_object(
+  'manifestInstalled',to_regclass('private.group_service_release_manifest') is not null,
+  'rolloutInstalled',to_regclass('private.assignment_rollout') is not null,
+  'compatRemovalExists',to_regprocedure('public.remove_service_participant_compat_tx(uuid,integer,text,boolean,text)') is not null,
+  'anonCanRemove',coalesce(has_function_privilege('anon',to_regprocedure('public.remove_service_participant_compat_tx(uuid,integer,text,boolean,text)'),'execute'),false),
+  'authenticatedCanRemove',coalesce(has_function_privilege('authenticated',to_regprocedure('public.remove_service_participant_compat_tx(uuid,integer,text,boolean,text)'),'execute'),false)
+) readiness;`
+
 export const rolloutMigrations = [
   '20261116_1000_group_service.sql', '20261116_1010_service_event_conflict_response.sql',
   '20261116_1020_unassigned_service_templates.sql', '20261116_1030_preserve_cart_schedule_contract.sql',

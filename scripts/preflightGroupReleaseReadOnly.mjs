@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {readFileSync,writeFileSync} from 'node:fs'
 import {parseEnv} from 'node:util'
 import {spawnSync} from 'node:child_process'
+import {compatibilityReadinessSql} from './groupServiceRolloutBundle.mjs'
 
 // This audit has no apply mode and never logs in or calls application RPCs.
 const target=process.argv[2]
@@ -23,6 +24,11 @@ const read=query=>{
   return JSON.parse(r.stdout.trim())
 }
 const tables=['calendar_events','event_participants','event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments','service_sessions','comments','event_cart_applications']
+const compatibilityReadiness=read(compatibilityReadinessSql)
+if(process.argv.includes('--require-compat-ready')) {
+  assert.ok(Object.values(compatibilityReadiness).every(value=>value===true),
+    'First deployment blocked: prepare bundle and executable compatibility removal RPC required before main merge. Strict installations require the separate strict-stage audit.')
+}
 const list=values=>values.map(v=>`'${v}'`).join(',')
 const metadata=read(`select json_build_object(
  'readOnly',current_setting('transaction_read_only'),
@@ -34,7 +40,7 @@ const metadata=read(`select json_build_object(
    from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','private') and p.proname in (
     'save_service_events_tx','get_group_service_context','read_group_event_comments','get_event_meeting_access','check_service_application_overlap',
     'save_event_assignments_versioned_tx','manage_event_participant_versioned_tx','mutate_personal_assignment_versioned_tx',
-    'assign_team_service_bulk_tx','assign_scoped_cards_bulk_tx','assign_cards_bulk_tx','remove_team_event_participant_tx',
+    'assign_team_service_bulk_tx','assign_scoped_cards_bulk_tx','assign_cards_bulk_tx','remove_team_event_participant_tx','remove_service_participant_compat_tx',
     'rename_user_name_references','purge_user_name_references','merge_duplicate_buildings_tx',
     'rename_user_name_references_before_assignment_guard','purge_user_name_references_before_assignment_guard','merge_duplicate_buildings_before_assignment_guard') order by 1)x),
  'notification',(select json_build_object('bodyHash',md5(p.prosrc),'cartRecipients',position('event_cart_applications' in p.prosrc)>0,'commentLink',position('&comment=' in p.prosrc)>0) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='notify_on_comment'),
@@ -47,6 +53,6 @@ assert.equal(metadata.readOnly,'on')
 const present=tables.filter(t=>metadata.tables.includes(t))
 const counts=read(`select json_object_agg(name,n) from (${present.map(t=>`select '${t}' name,count(*) n from public.${t}`).join(' union all ')})c;`)
 const indexes=read(`select coalesce(json_agg(x),'[]') from (select tablename,indexname,indexdef from pg_indexes where schemaname='public' and tablename in ('comments','service_sessions','event_card_assignments') order by tablename,indexname)x;`)
-const report={target,project,checkedAt:new Date().toISOString(),metadata,counts,indexes,note:'Read-only catalog and aggregate counts only. No login, application RPC, writes, migration, deployment or notification. Not a load/performance measurement.'}
+const report={target,project,checkedAt:new Date().toISOString(),compatibilityReadiness,metadata,counts,indexes,note:'Read-only catalog and aggregate counts only. No login, application RPC, writes, migration, deployment or notification. Not a load/performance measurement.'}
 writeFileSync(`scratch/group-release-${target}-readonly.json`,JSON.stringify(report,null,2),{mode:0o600})
 console.log(JSON.stringify(report))
