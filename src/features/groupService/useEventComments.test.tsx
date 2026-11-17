@@ -2,7 +2,7 @@ import {act,cleanup,renderHook,waitFor} from '@testing-library/react'
 import {afterEach,beforeEach,expect,test,vi} from 'vitest'
 import {useEventComments} from './useEventComments'
 const mocks=vi.hoisted(()=>({page:vi.fn(),rows:vi.fn(),watch:vi.fn(),stop:vi.fn(),ready:()=>{},change:(_id:number)=>{}}))
-vi.mock('./commentApi',()=>({COMMENT_PAGE_SIZE:20,readCommentPage:mocks.page,readCommentRows:mocks.rows,watchEventComments:mocks.watch}))
+vi.mock('./commentApi',()=>({COMMENT_PAGE_SIZE:20,readCommentPage:mocks.page,readCommentRows:mocks.rows,watchEventComments:mocks.watch,isCommentSessionError:(e:{code?:string;message?:string})=>e?.code==='42501'&&e.message==='COMMENT_SESSION_REQUIRED'}))
 const row=(id:number,content=`C${id}`)=>({id,target_type:'calendar_event' as const,target_id:1,author_id:1,author_name:'A',content,mention_ids:[],mention_names:[],created_at:'2026-11-18',deleted_at:null})
 beforeEach(()=>{
   vi.clearAllMocks();Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true})
@@ -62,4 +62,27 @@ test('reconnect resets the older cursor so a burst of missed comments stays reac
   await act(()=>result.current.more())
   expect(mocks.page.mock.calls.at(-1)?.[1]).toBe(81)
   expect(result.current.rows.some(r=>r.id===80)).toBe(true)
+})
+test('reconnection while an older page is loading queues exactly one fresh sync',async()=>{
+  const {result}=renderHook(()=>useEventComments(1,true));act(()=>mocks.ready());await waitFor(()=>expect(result.current.rows).toHaveLength(20))
+  let finish!:(rows:unknown[])=>void
+  mocks.page.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve})).mockResolvedValue([row(99)])
+  let reading!:Promise<void>;act(()=>{reading=result.current.more()})
+  act(()=>{mocks.ready();mocks.ready()});expect(mocks.page).toHaveBeenCalledTimes(2)
+  await act(async()=>{finish([row(1)]);await reading})
+  await waitFor(()=>expect(result.current.rows.at(-1)?.id).toBe(99))
+  expect(mocks.page).toHaveBeenCalledTimes(3)
+})
+test('expired session during ID refresh retains cached comments and asks for login, not deletion',async()=>{
+  const {result}=renderHook(()=>useEventComments(1,true));act(()=>mocks.ready());await waitFor(()=>expect(result.current.rows).toHaveLength(20))
+  mocks.rows.mockRejectedValue({code:'42501',message:'COMMENT_SESSION_REQUIRED'})
+  act(()=>mocks.change(40));await waitFor(()=>expect(result.current.error).toBe('session'))
+  expect(result.current.rows).toHaveLength(20);expect(mocks.stop).toHaveBeenCalledOnce()
+})
+test('expired initial session is an error; a valid missing notification gets an unavailable notice',async()=>{
+  mocks.page.mockRejectedValueOnce({code:'42501',message:'COMMENT_SESSION_REQUIRED'})
+  const {result}=renderHook(()=>useEventComments(1,true,9));act(()=>mocks.ready())
+  await waitFor(()=>expect(result.current.error).toBe('session'));expect(result.current.focusMissing).toBe(false)
+  mocks.page.mockResolvedValue([]);act(()=>result.current.retry());act(()=>mocks.ready())
+  await waitFor(()=>expect(result.current.focusMissing).toBe(true));expect(result.current.error).toBeNull()
 })

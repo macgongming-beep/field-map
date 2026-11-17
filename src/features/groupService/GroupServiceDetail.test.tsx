@@ -8,6 +8,7 @@ import {setCurrentLang} from '../../i18n'
 import {visibleServiceEventCount} from './model'
 const mocks=vi.hoisted(()=>({context:vi.fn()}))
 vi.mock('./api',()=>({readGroupServiceContext:mocks.context,readMeetingAccess:vi.fn()}))
+vi.mock('./GroupEventComments',()=>({GroupEventComments:({eventId,draft,onDraftChange}:{eventId:number;draft?:string;onDraftChange?:(value:string)=>void})=><textarea aria-label={`Comment draft ${eventId}`} value={draft??''} onChange={e=>onDraftChange?.(e.target.value)}/>}))
 const events=['dongtan','singal','cheoin','dongbaek'].map((code,i)=>({id:i+1,date:'2026-11-18',time:'14:30',endTime:'16:30',groupServiceScope:true,serviceKind:'group',targetGroups:[code],title:'Group',leader:'',leaders:[],applicants:[`Member${i}`],assigned:[],returnVisitApplicants:i===0?['Return']:[],cardAssignments:[],allowApplications:true,place:'',memo:'',meetingMode:'none',editVersion:'1',guests:[],card:'',type:'주택',hasMeeting:false} as CalendarEvent))
 beforeEach(()=>{setCurrentLang('ko');mocks.context.mockResolvedValue({ownGroup:'dongtan',events:events.map((e,i)=>({id:e.id,groupCode:e.targetGroups![0],count:1,canManage:i===0,canRead:i===0}))})})
 afterEach(()=>{cleanup();vi.clearAllMocks();setCurrentLang('ko')})
@@ -88,4 +89,31 @@ test('new group schedule expands four independent children per time with separat
   expect(rows).toHaveLength(16)
   expect(new Set(rows.map(r=>r.payload.series_id)).size).toBe(8)
   expect(rows.every(r=>r.payload.group_service_scope&&r.payload.target_groups.length===1)).toBe(true)
+})
+test('repeated notification returns to its group without reloading context; manual selection survives count refresh',async()=>{
+  const props={event:events[0],events,language:'ko' as const,currentVisitor:'User',currentUserId:1}
+  const entry={eventId:2,commentId:10,requestKey:'first'}
+  const {rerender}=render(<GroupServiceDetail {...props} commentEntry={entry}/> )
+  await waitFor(()=>expect(screen.getByRole('tab',{name:'신갈 1'}).getAttribute('aria-selected')).toBe('true'))
+  fireEvent.click(screen.getByRole('tab',{name:'동탄 1'}))
+  fireEvent(document,new Event('visibilitychange'))
+  await waitFor(()=>expect(mocks.context).toHaveBeenCalledTimes(2))
+  expect(screen.getByRole('tab',{name:'동탄 1'}).getAttribute('aria-selected')).toBe('true')
+  rerender(<GroupServiceDetail {...props} commentEntry={{...entry,requestKey:'second'}}/> )
+  expect(screen.getByRole('tab',{name:'신갈 1'}).getAttribute('aria-selected')).toBe('true')
+  expect(mocks.context).toHaveBeenCalledTimes(2)
+})
+test('same-event foreground refresh keeps mounted comments; switching accounts discards drafts',async()=>{
+  const props={event:events[0],events,language:'ko' as const,currentVisitor:'User',currentUserId:1}
+  const {rerender}=render(<GroupServiceDetail {...props}/> )
+  const composer=await screen.findByLabelText('Comment draft 1')
+  fireEvent.change(composer,{target:{value:'private draft'}})
+  fireEvent(document,new Event('visibilitychange'))
+  await waitFor(()=>expect(mocks.context).toHaveBeenCalledTimes(2))
+  expect(screen.getByLabelText('Comment draft 1')).toBe(composer)
+  expect((composer as HTMLTextAreaElement).value).toBe('private draft')
+  rerender(<GroupServiceDetail {...props} currentUserId={2}/> )
+  expect((await screen.findByLabelText('Comment draft 1') as HTMLTextAreaElement).value).toBe('')
+  rerender(<GroupServiceDetail {...props}/> )
+  expect((await screen.findByLabelText('Comment draft 1') as HTMLTextAreaElement).value).toBe('')
 })

@@ -225,7 +225,7 @@ export function AdminMobileCalendar({
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const entryId = Number(searchParams.get('openEvent'))
-  const [commentEntry,setCommentEntry]=useState<{eventId:number;commentId:number}|undefined>(undefined)
+  const [commentEntry,setCommentEntry]=useState<{eventId:number;commentId:number;requestKey:string}|undefined>(undefined)
   const today = useMemo(() => new Date(), [])
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth() + 1)
@@ -263,7 +263,7 @@ export function AdminMobileCalendar({
     const targetIdRaw = openChatId ?? openEventId
     const targetId = Number(targetIdRaw)
     if (!Number.isFinite(targetId)) return
-    const entryKey=`${targetId}:${searchParams.get('comment')??''}`
+    const entryKey=`${targetId}:${searchParams.get('comment')??''}:${location.key}`
     if (detailOnly && handledDetailEntry.current === entryKey) return
     const targetEvent = events.find((e) => e.id === targetId)
     if (!targetEvent) return
@@ -289,7 +289,7 @@ export function AdminMobileCalendar({
       detailReturnsThroughHistoryRef.current = returnTo !== null
       setDetailEventId(targetEvent.id)
       const commentId=Number(searchParams.get('comment'))
-      setCommentEntry(Number.isSafeInteger(commentId)&&commentId>0?{eventId:targetEvent.id,commentId}:undefined)
+      setCommentEntry(Number.isSafeInteger(commentId)&&commentId>0?{eventId:targetEvent.id,commentId,requestKey:entryKey}:undefined)
     }
 
     // Keep the home entry while editing so full-series demand remains explicit.
@@ -301,7 +301,7 @@ export function AdminMobileCalendar({
     next.delete('comment')
     setSearchParams(next, { replace: true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, events, detailOnly])
+  }, [searchParams, events, detailOnly,location.key])
 
   useEffect(() => {
     if (detailOnly && detailEventId === null && assignEventId === null && editingEventId === null && !scopeAction) {

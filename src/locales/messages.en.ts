@@ -5,6 +5,7 @@
 
 import { groupServiceEn } from './groupService'
 export const messagesEn: Record<string, string> = {
+  "삭제되었거나 찾을 수 없는 댓글입니다.": "This comment was deleted or could not be found.",
   "댓글을 불러오지 못했습니다.": "Could not load comments.",
   "이전 댓글 보기": "Earlier comments",
   ...groupServiceEn,

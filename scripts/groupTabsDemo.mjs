@@ -4,6 +4,8 @@ import {parseEnv} from 'node:util'
 import {spawnSync} from 'node:child_process'
 import {randomUUID} from 'node:crypto'
 import {resolve} from 'node:path'
+import {createHash} from 'node:crypto'
+import {expectedCommentNotificationPatch} from './commentNotificationPatch.mjs'
 process.umask(0o077)
 const project='itjlykpjmlcvanqpmkmc'
 const config=parseEnv(readFileSync(process.env.DEMO_ENV_FILE,'utf8'))
@@ -17,12 +19,35 @@ function run(command,args,input){const r=spawnSync(command,args,{env,input,encod
 const sql=q=>run('psql',['-X','-At','-v','ON_ERROR_STOP=1'],q)
 const quote=s=>`'${s.replaceAll("'","''")}'`
 const mode=process.argv[2]
-assert.ok(['apply','apply-integrity','apply-signals','apply-review','apply-followup','apply-merge-review','apply-staff-closing','apply-comments','review-smoke','fixture','smoke'].includes(mode))
+assert.ok(['apply','apply-integrity','apply-signals','apply-review','apply-followup','apply-merge-review','apply-staff-closing','apply-comments','apply-comment-review','audit-comments','review-smoke','fixture','smoke'].includes(mode))
+if(mode==='audit-comments'||mode==='apply-comment-review'){
+  const before=readFileSync('backups/group-tabs-demo-1794881397831/rollback.sql','utf8').replace(/\nnotify pgrst,'reload schema';\s*$/,'').trim()
+  const installed=sql("select pg_get_functiondef('public.notify_on_comment()'::regprocedure)")
+  const expected=expectedCommentNotificationPatch(before,readFileSync('supabase/migrations/20261117_1400_group_event_comments.sql','utf8'))
+  assert.equal(installed,expected,'Installed notification changed beyond the exact link patch')
+  assert.ok(before.includes('union all select ca.user_id from public.event_cart_applications ca'),'Backup does not include cart recipients')
+  const report={project,exactLinkPatchOnly:true,cartRecipientsPreserved:true,beforeSha256:createHash('sha256').update(before).digest('hex'),afterSha256:createHash('sha256').update(installed).digest('hex')}
+  if(sql("select to_regprocedure('public.read_group_event_comments(integer,bigint,bigint[])') is not null")==='t'){
+    const access=JSON.parse(sql(`select json_build_object('definer',p.prosecdef,'anon',has_function_privilege('anon',p.oid,'execute'),'authenticated',has_function_privilege('authenticated',p.oid,'execute'),
+      'publicExecute',exists(select 1 from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner)))a where grantee=0 and privilege_type='EXECUTE'),
+      'checksSession',position('COMMENT_SESSION_REQUIRED' in pg_get_functiondef(p.oid))>0)
+      from pg_proc p where p.oid='public.read_group_event_comments(integer,bigint,bigint[])'::regprocedure;`))
+    assert.deepEqual(access,{definer:true,anon:true,authenticated:true,publicExecute:false,checksSession:true});report.readRpcAccess=access
+  }
+  writeFileSync('scratch/group-comment-notification-audit.json',JSON.stringify(report,null,2))
+  console.log(JSON.stringify(report));if(mode==='audit-comments')process.exit()
+}
 const tables=['event_participants','event_card_assignments','event_card_assignment_cards','event_informal_assignments','event_restaurant_assignments']
-if(mode==='apply'||mode==='apply-integrity'||mode==='apply-signals'||mode==='apply-review'||mode==='apply-followup'||mode==='apply-merge-review'||mode==='apply-staff-closing'||mode==='apply-comments'){
+if(mode==='apply'||mode==='apply-integrity'||mode==='apply-signals'||mode==='apply-review'||mode==='apply-followup'||mode==='apply-merge-review'||mode==='apply-staff-closing'||mode==='apply-comments'||mode==='apply-comment-review'){
   assert.equal(sql("select count(*) from information_schema.columns where table_name='calendar_events' and column_name='group_service_scope'"),mode==='apply'?'0':'1')
   const dir=resolve('backups',`group-tabs-demo-${Date.now()}`);mkdirSync(dir,{recursive:true})
   run('pg_dump',['--format=custom','--no-owner','--schema=public','--schema=private','--file',resolve(dir,'before.dump')]);run('pg_restore',['--list',resolve(dir,'before.dump')])
+  if(mode==='apply-comment-review'){
+    assert.equal(sql("select to_regprocedure('public.read_group_event_comments(integer,bigint,bigint[])') is null"),'t')
+    writeFileSync(resolve(dir,'rollback.sql'),"drop function public.read_group_event_comments(integer,bigint,bigint[]);\nnotify pgrst,'reload schema';\n")
+    run('psql',['-X','-v','ON_ERROR_STOP=1','--single-transaction','-f','supabase/migrations/20261117_1500_group_comment_authenticated_reads.sql'])
+    console.log(JSON.stringify({project,backup:dir,commentReviewApplied:true}));process.exit()
+  }
   if(mode==='apply-comments'){
     const before=sql("select pg_get_functiondef('public.notify_on_comment()'::regprocedure)")
     // Keep the additive privacy policy on rollback so existing group comments never become public.

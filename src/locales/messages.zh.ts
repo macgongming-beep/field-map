@@ -5,6 +5,7 @@
 
 import { groupServiceZh } from './groupService'
 export const messagesZh: Record<string, string> = {
+  "삭제되었거나 찾을 수 없는 댓글입니다.": "这条评论已删除或无法找到。",
   "댓글을 불러오지 못했습니다.": "无法加载评论。",
   "이전 댓글 보기": "查看之前的评论",
   ...groupServiceZh,

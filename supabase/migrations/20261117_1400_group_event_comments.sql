@@ -33,10 +33,11 @@ revoke all on function private.signal_group_comment() from public,anon,authentic
 create trigger group_comment_changed after insert or update or delete on public.comments for each row execute function private.signal_group_comment();
 
 -- Keep the installed recipient/preferences/push logic; add an exact group/comment destination only.
-do $$ declare definition text; needle text; begin
+do $$ declare definition text; needle text; matches integer; begin
   definition:=pg_get_functiondef('public.notify_on_comment()'::regprocedure);
+  select count(*) into matches from regexp_matches(definition,'v_body[[:space:]]*:=[[:space:]]*new\.author_name','g');
   needle:=substring(definition from 'v_body[[:space:]]*:=[[:space:]]*new\.author_name');
-  if needle is null or position('&comment=' in definition)>0 then raise exception 'Unexpected comment notification implementation';end if;
+  if matches<>1 or needle is null or position('&comment=' in definition)>0 then raise exception 'Unexpected comment notification implementation';end if;
   execute replace(definition,needle,$link$  if new.target_type='calendar_event' and exists(select 1 from public.calendar_events where id=new.target_id and group_service_scope) then
     v_link:=v_link||'&comment='||new.id::text;
   end if;

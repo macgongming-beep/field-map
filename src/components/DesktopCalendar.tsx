@@ -186,7 +186,7 @@ export function DesktopCalendar({
   const [isExportOpen, setIsExportOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [assignEventId, setAssignEventId] = useState<number | null>(null)
-  const [commentEntry,setCommentEntry]=useState<{eventId:number;commentId:number}|undefined>(undefined)
+  const [commentEntry,setCommentEntry]=useState<{eventId:number;commentId:number;requestKey:string}|undefined>(undefined)
 
   // openChat=<eventId> 쿼리 처리: 해당 일정 날짜로 이동 + 채팅방 열기
   useEffect(() => {
@@ -201,7 +201,7 @@ export function DesktopCalendar({
     setSelectedDay(d.getDate())
     setSelectedEventId(targetEvent.id)
     const commentId=Number(searchParams.get('comment'))
-    setCommentEntry(Number.isSafeInteger(commentId)&&commentId>0?{eventId:targetEvent.id,commentId}:undefined)
+    setCommentEntry(Number.isSafeInteger(commentId)&&commentId>0?{eventId:targetEvent.id,commentId,requestKey:crypto.randomUUID()}:undefined)
     if (!chatDisabled()) setChatEvent(targetEvent)
 
     // 다음 tick에 스크롤

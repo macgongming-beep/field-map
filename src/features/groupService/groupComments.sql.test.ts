@@ -62,3 +62,11 @@ test('signals contain identifiers only, cover edits/deletions and cannot be writ
   await db.exec('reset role')
   expect((await db.query("select has_function_privilege('anon','private.signal_group_comment()','execute') allowed")).rows[0]).toEqual({allowed:false})
 })
+test('notification patch refuses two matching assignments even when whitespace differs',async()=>{
+  await db.exec(`create or replace function public.notify_on_comment() returns trigger language plpgsql as $$declare v_body text;begin v_body:=new.author_name;v_body := new.author_name;return new;end $$;`)
+  const patch=source.slice(source.indexOf('do $$ declare definition'))
+  await expect(db.exec(patch)).rejects.toThrow('Unexpected comment notification implementation')
+  // Restore the ordinary implementation for independent reruns.
+  await db.exec(readFileSync('supabase/migrations/20260826_2500_comment_notify_participants.sql','utf8'))
+  await db.exec(patch)
+})

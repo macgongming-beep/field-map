@@ -267,11 +267,12 @@ export function CommentSection({
       </div>
 
       <div className="comment-list">
-        {demandEvent&&feed.error&&<div role="alert">{msg('댓글을 불러오지 못했습니다.')} <button type="button" onClick={feed.retry}>{msg('다시 시도')}</button></div>}
+        {demandEvent&&feed.error&&<div role="alert">{feed.error==='session'?msg('로그인 세션을 확인할 수 없습니다. 앱에서 다시 로그인해 주세요.'):msg('댓글을 불러오지 못했습니다.')} <button type="button" onClick={feed.retry}>{msg('다시 시도')}</button></div>}
+        {demandEvent&&!feed.error&&feed.focusMissing&&<p role="status">{msg('삭제되었거나 찾을 수 없는 댓글입니다.')}</p>}
         {demandEvent&&feed.hasMore&&<button type="button" disabled={loading} onClick={()=>void feed.more()}>{msg('이전 댓글 보기')}</button>}
         {loading && comments.length === 0 ? (
           <div className="comment-empty">{t(lang, 'comment.loading')}</div>
-        ) : comments.length === 0 && !(demandEvent&&feed.error) ? (
+        ) : comments.length === 0 && !(demandEvent&&(feed.error||feed.focusMissing)) ? (
           <div className="comment-empty">{t(lang, 'comment.empty')}</div>
         ) : (
           comments.map((comment) => (
@@ -349,7 +350,7 @@ export function CommentSection({
             ))}
           </div>
         )}
-        <button disabled={saving||!draft.trim()} onClick={submitComment} type="button">{t(lang, 'comment.submit')}</button>
+        <button disabled={saving||!draft.trim()||(demandEvent&&feed.error==='session')} onClick={submitComment} type="button">{t(lang, 'comment.submit')}</button>
       </div>
     </section>
   )
