@@ -89,3 +89,16 @@ Chromium 390px, 인도자·실제 관리자 모두 위 5개 시나리오를 통�
 실패 시 기존 오류 안내는 보이고 pageerror는 0건이다. 정상 수동 새로고침은 두 역할
 모두 19건, 소켓 재연결과 focus 복귀를 묶은 구간은 20건이었다. 초안 JSON은 유지됐다.
 원본: `scratch/draft-recovery-after-local-final.json`.
+
+## 데모 배포 후 확인
+
+- 앱 커밋: `76f73e3`. 기능 브랜치만 push, main 병합 없음.
+- 데모 배포: `dpl_EWEUcL3eWptmjpjXCdKti5VDtuWn`.
+- 주소: https://chinese-territory-app-demo.vercel.app
+- WebKit 390px에서 인도자·실제 관리자 각각 5개 시나리오 모두 통과했다.
+  초안 보존, 편집 화면 유지, 실패 안내, 미처리 오류 0건을 확인했다.
+- 정상 수동 새로고침은 두 역할 모두 19건, 재연결·focus 합친 구간은 각각 21건이었다.
+  로컬 Chromium과 엔진/접속 환경이 다르므로 20건과의 차이를 앱 변경 효과로 해석하지 않는다.
+- 원본: `scratch/draft-recovery-deployed-webkit.json`.
+- 배정 공유나 서버 배정 변경은 하지 않았다. 시험 브라우저 context를 모두 닫았다.
+  실제 아이폰 PWA의 OS 종료/복귀 확인은 별도이며, 운영 앱·DB·환경변수는 변경하지 않았다.
