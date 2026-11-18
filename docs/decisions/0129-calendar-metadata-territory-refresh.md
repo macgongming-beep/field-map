@@ -60,6 +60,7 @@ useCalendarRealtime을 JSDOM에서 실행한다. 메모 수정은 푸시 알림�
 20.2% 감소한다는 뜻이 아니다. 배정 변경/복귀/첫 로딩의 요청은 그대로다.
 
 원본: `scratch/calendar-metadata-measurement.json` (역할별 결과만 포함, 토큰 없음).
+리뷰용 사본: [측정 결과](../measurements/0129-calendar-metadata-demo.json).
 재현:
 
 ```sh
@@ -93,3 +94,19 @@ node scripts/measureCalendarMetadataDemo.mjs --confirm-demo
 
 운영 설정·DB·배포는 변경하지 않는다. 운영 적용은 별도 리뷰와 사용자 결정 후 진행한다.
 기능을 끄면 기존 재확인 방식으로 돌아간다. DB 마이그레이션이나 권한 확대는 없다.
+
+## 데모 배포와 화면 확인
+
+- 앱 커밋 `704561e`.
+- 데모 프로젝트 `chinese-territory-app-demo`에만 prebuilt 배포했다.
+  `dpl_DddQEon3WJ421gyA5PtFQUbz6qmL`, READY.
+- 기본 주소: https://chinese-territory-app-demo.vercel.app
+- 새 배포 직접 주소: https://chinese-territory-app-demo-spvnuouon-gms-projects-3b3e1c8b.vercel.app
+- 새 배포 주소에서 실제 봉사자 계정으로 Chrome PC 홈 → 집단 상세 → 나의 봉사를 확인했다.
+  소속 집단 탭, 본인 신청 상태, 공유된 팀, 내 카드 1개가 표시됐다. 신청·취소·배정 쓰기는 하지 않았다.
+- 기본 주소의 기존 Chrome 프로필은 업데이트 버튼 적용/새 창에서도 과거
+  `index-CrhCwOb1.js`를 읽고 시작 로고에 머물렀다. 서버의 기본 주소 HTML은 새
+  `index-Be18Y6Yn.js`를 제공하고 새 배포 주소는 정상이다. 이전 파일/업데이트 경로 문제의
+  정확한 원인은 이번 작업에서 해결하지 못했다. 캐시·로그인 자료를 강제로 삭제하지 않았다.
+  따라서 기본 주소의 기존 프로필 업데이트 통과나 iPhone PWA 전환 통과로 기록하지 않는다.
+- 운영 프로젝트/DB/main/환경변수에는 쓰기나 배포를 하지 않았다.
