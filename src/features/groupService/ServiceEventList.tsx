@@ -21,7 +21,7 @@ export function ServiceEventList({events,language,onOpen,groupName,statusById,gl
           <span className="gs-event-time">{e.time}{e.endTime&&<span className="gs-event-end">–{e.endTime}</span>}</span>
           <span className="gs-event-text">
             <strong lang={chineseTitle?'zh-Hans':undefined}>{title}</strong>
-            <span>{scoped?groupLabel(block.flatMap(b=>b.targetGroups ?? []),language,globalSettings.user_groups,globalSettings.service_group_directory):<>{e.leader}{e.meetingMode==='virtual'?` · ${msg('화상 모임')}`:e.place?` · ${e.place}`:''}</>}</span>
+            <span>{scoped?groupLabel(block.flatMap(b=>b.targetGroups ?? []),language,globalSettings.user_groups,globalSettings.service_group_directory):<>{e.leader}{e.meetingMode==='virtual'?` · ${msg('线上')}`:e.meetingMode==='in_person'?` · ${msg('现场')}${e.place?` · ${e.place}`:''}`:e.place?` · ${e.place}`:''}</>}</span>
             {statuses.includes('lead')?<span>{msg('인도')}</span>:statuses.includes('join')?<span>{msg('신청 완료')}</span>:null}
           </span><span aria-hidden="true">›</span>
         </button>

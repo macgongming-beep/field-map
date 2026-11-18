@@ -240,10 +240,10 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
           setLeaders(prev=>prev.includes(name)?prev.filter(n=>n!==name):[...prev,name])
         }}/>{name}</label>)}</div>
       </fieldset>}
-      <label>{msg('봉사 모임')}<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="none">{msg('없음')}</option><option value="in_person">{msg('현장 모임')}</option><option value="virtual">{msg('화상 모임')}</option></select></label>
+      <label>{msg('봉사 모임')}<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="none">{msg('없음')}</option><option value="in_person">{msg('现场')}</option><option value="virtual">{msg('线上')}</option></select></label>
       <label>{msg('봉사 장소')}<input value={place} onChange={e=>setPlace(e.target.value)} /></label>
       <label>{msg('지도 링크')}<input type="url" value={mapLink} onChange={e=>setMapLink(e.target.value)} /></label>
-      {mode==='virtual' && <fieldset className="gs-access" disabled={accessLoading || accessError}><legend>{msg('화상 모임')}</legend>{accessLoading?<p role="status">{msg('불러오는 중...')}</p>:null}
+      {mode==='virtual' && <fieldset className="gs-access" disabled={accessLoading || accessError}><legend>{msg('线上')}</legend>{accessLoading?<p role="status">{msg('불러오는 중...')}</p>:null}
         <label>{msg('참여 링크 (선택)')}<input type="url" value={access.joinUrl} onChange={e=>setAccess({...access,joinUrl:e.target.value})} maxLength={2048}/></label>
         <label>{msg('회의 번호 (선택)')}<input value={access.meetingNumber} onChange={e=>setAccess({...access,meetingNumber:e.target.value})} maxLength={100}/></label>
         <label>{msg('비밀번호 (선택)')}<input value={access.passcode} autoComplete="off" onChange={e=>setAccess({...access,passcode:e.target.value})} maxLength={100}/></label>

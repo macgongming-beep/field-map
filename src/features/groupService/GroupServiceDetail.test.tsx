@@ -130,7 +130,7 @@ test.each([true,false])('schedule actions live at the top, target selected group
   fireEvent.pointerDown(document.body)
   expect(screen.queryByRole('menu')).toBeNull()
 })
-test('shared assignments stay visible without collapse while meeting info stays collapsed and foreign results stay hidden',async()=>{
+test('shared assignments and populated meeting info start visible while foreign results stay hidden',async()=>{
   const assigned=events.map(e=>({...e,place:'Meeting place',assignmentStatus:'draft' as const,cardAssignments:[{id:e.id,eventId:e.id,userName:e.applicants[0],assignedCardId:1,assignedBy:'Admin',assignedAt:'',memo:''}]}))
   const props={event:assigned[0],events:assigned,language:'ko' as const,currentVisitor:'User',renderAssignments:(e:CalendarEvent)=><div>{`Team ${e.id}`}</div>}
   const {rerender}=render(<GroupServiceDetail {...props}/> )
@@ -142,7 +142,7 @@ test('shared assignments stay visible without collapse while meeting info stays 
   expect(result.tagName).toBe('SECTION')
   expect(result.querySelector('summary')).toBeNull()
   expect(within(result).getByText('Team 1')).toBeTruthy()
-  expect(screen.getByText('모임 정보').closest('details')!.open).toBe(false)
+  expect(screen.getByText('모임 정보').closest('details')!.open).toBe(true)
   fireEvent.click(screen.getByText('배정 결과'))
   rerender(<GroupServiceDetail {...props} event={shared[0]} events={shared}/> )
   expect(screen.getByRole('region',{name:'배정 결과'})).toBe(result)
@@ -154,20 +154,21 @@ test('shared assignments stay visible without collapse while meeting info stays 
   expect(within(screen.getByRole('region',{name:'배정 결과'})).getByText('Team 1')).toBeTruthy()
 })
 test('empty meeting information is absent including whitespace and disappears on group switch',async()=>{
-  const rows=events.map((e,i)=>({...e,leader:'  ',place:i===1?'Meeting place':'\n',memo:' ',meetingMode:'in_person' as const}))
+  const rows=events.map((e,i)=>({...e,leader:'  ',place:i===1?'Meeting place':'\n',memo:' ',meetingMode:'none' as const}))
   render(<GroupServiceDetail event={rows[0]} events={rows} language="ko" currentVisitor="User"/> )
   await screen.findByRole('tab',{name:'동탄 1'})
   expect(screen.queryByText('모임 정보')).toBeNull()
   fireEvent.click(screen.getByRole('tab',{name:'신갈 1'}))
-  expect(screen.getByText('모임 정보').closest('details')!.open).toBe(false)
+  expect(screen.getByText('모임 정보').closest('details')!.open).toBe(true)
   fireEvent.click(screen.getByRole('tab',{name:'동탄 1'}))
   expect(screen.queryByText('모임 정보')).toBeNull()
 })
-test.each([{leader:'Leader'},{place:'Meeting place'},{memo:'Meeting note'},{meetingMode:'virtual'}])('meeting information remains available when populated: %j',async fields=>{
+test.each([{leader:'Leader'},{place:'Meeting place'},{memo:'Meeting note'},{meetingMode:'virtual'},{meetingMode:'in_person'}])('meeting information starts expanded when populated: %j',async fields=>{
   const rows=events.map(e=>({...e,...fields} as CalendarEvent))
   render(<GroupServiceDetail event={rows[0]} events={rows} language="ko" currentVisitor="User"/> )
   await screen.findByRole('tab',{name:'동탄 1'})
-  expect(screen.getByText('모임 정보')).toBeTruthy()
+  expect(screen.getByText('모임 정보').closest('details')!.open).toBe(true)
+  if(fields.meetingMode==='in_person')expect(screen.getByText('现场')).toBeTruthy()
 })
 test('new group schedule expands four independent children per time with separate weekly series',async()=>{
   const submit=vi.fn(async()=>true)

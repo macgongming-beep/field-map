@@ -134,6 +134,7 @@
 저장한 제목·집단명 표시: [0130 중국어 이름 보존과 PC 달력 밀도](0130-saved-service-labels-and-compact-calendar.md)
 집단 추가·이름 변경: [0131 고정 식별자로 사용자 관리와 일정 연결](0131-stable-service-group-directory.md)
 기존 일정에 새 집단 추가: [0132 신청·배정을 유지한 시간대 확장](0132-add-groups-from-existing-service-event.md)
+모임 정보와 운영 전환: [0133 기본 펼침·线上/现场 표시와 집단 관리 배포](0133-expanded-meeting-info-production-release.md)
 
 ```markdown
 # 제목

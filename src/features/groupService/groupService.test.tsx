@@ -205,9 +205,27 @@ test('meeting join action shares the compact heading and retains its accessible 
   render(<MeetingAccessPanel eventId={1} version="1"/>)
   const link=await screen.findByRole('link',{name:'화상 모임 참여'})
   expect(link.textContent).toBe('참여 ↗')
-  expect(link.closest('.gs-meeting-heading')?.querySelector('h3')?.textContent).toBe('화상 모임')
+  expect(link.closest('.gs-meeting-heading')?.querySelector('h3')?.textContent).toBe('线上')
   expect(link.getAttribute('href')).toBe('https://example.com')
   expect(screen.getByRole('button',{name:'비밀번호 복사'})).toBeTruthy()
+})
+test.each(['ko','zh','en'] as const)('meeting labels keep canonical saved modes in %s',async(language)=>{
+  setCurrentLang(language)
+  const a=make(1),submit=vi.fn(async()=>false)
+  render(<ServiceEventEditor language={language} date={a.date} event={a} events={[a]} users={users} onClose={vi.fn()} onSubmit={submit}/>)
+  const onsite=screen.getByRole('option',{name:language==='en'?'In person':'现场'}) as HTMLOptionElement
+  const online=screen.getByRole('option',{name:language==='en'?'Online':'线上'}) as HTMLOptionElement
+  expect(onsite.value).toBe('in_person');expect(online.value).toBe('virtual')
+  const form=screen.getByRole('dialog').querySelector('form')!
+  fireEvent.change(onsite.parentElement!,{target:{value:'in_person'}})
+  fireEvent.submit(form)
+  await waitFor(()=>expect(submit).toHaveBeenCalledTimes(1))
+  expect(submit.mock.calls[0][0].servicePlan.rows[0].payload.meeting_mode).toBe('in_person')
+  await waitFor(()=>expect(form.querySelector('fieldset')!.disabled).toBe(false))
+  fireEvent.change(online.parentElement!,{target:{value:'virtual'}})
+  fireEvent.submit(form)
+  await waitFor(()=>expect(submit).toHaveBeenCalledTimes(2))
+  expect(submit.mock.calls[1][0].servicePlan.rows[0].payload).toMatchObject({meeting_mode:'virtual',access:{joinUrl:'',meetingNumber:'',passcode:''}})
 })
 test('empty meeting details render an intentional empty state, not a loading error',async()=>{
   mocks.read.mockResolvedValue({joinUrl:'',meetingNumber:'',passcode:'',version:'1'})

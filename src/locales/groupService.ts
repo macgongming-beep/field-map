@@ -1,4 +1,5 @@
 export const groupServiceZh: Record<string,string> = {
+  '线上':'线上','现场':'现场',
   '집단 추가':'添加小组',
   '추가할 집단에 종료 시간이 다른 일정이 있습니다. 해당 일정을 먼저 확인해 주세요.':'要添加的小组已有结束时间不同的安排，请先检查该安排。',
   '편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다. 덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.':'编辑期间，其他人分享了此安排的分配。未覆盖，请刷新查看最新内容。',
@@ -38,6 +39,7 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '线上':'Online','现场':'In person',
   '집단 추가':'Add groups',
   '추가할 집단에 종료 시간이 다른 일정이 있습니다. 해당 일정을 먼저 확인해 주세요.':'The group already has an event with a different end time. Check that event first.',
   '편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다. 덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.':'Someone shared this assignment while you were editing. Nothing was overwritten. Refresh to see the latest version.',

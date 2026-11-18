@@ -77,7 +77,7 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
   const savedTitle=(current??event).title
   const title=savedTitle.trim()?savedTitle:msg('집단 봉사')
   const chineseTitle=/\p{Script=Han}/u.test(title)&&!/\p{Script=Hangul}/u.test(title)
-  const hasMeetingInformation=Boolean(current&&(current.leader?.trim()||current.place?.trim()||current.memo?.trim()||current.meetingMode==='virtual'))
+  const hasMeetingInformation=Boolean(current&&(current.leader?.trim()||current.place?.trim()||current.memo?.trim()||current.meetingMode==='virtual'||current.meetingMode==='in_person'))
   const ownTeam=current?.cardAssignments.find(a=>a.userName===currentVisitor)?.teamKey
   const visibleAssignments=current?.cardAssignments.filter(a=>selectedMeta?.canManage || a.userName===currentVisitor || (ownTeam&&a.teamKey===ownTeam)) ?? []
   const groups=serviceGroupOptions(globalSettings,language)
@@ -124,7 +124,8 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
           </>:<p className="gs-private-roster">{msg('신청자 명단은 해당 집단에서 확인할 수 있습니다.')}</p>}
           {selectedMeta.canManage&&onAssignment&&<button className="gs-assignment-open" type="button" onClick={()=>onAssignment(current.id)}>{msg('팀 구성 · 구역 배정')} <span aria-hidden>›</span></button>}
           {current.assignmentStatus==='shared'&&visibleAssignments.length>0&&renderAssignments&&<section className="gs-assignment-results" aria-label={msg('배정 결과')} key={`assignments-${current.id}`}><h3>{msg('배정 결과')}</h3>{renderAssignments({...current,cardAssignments:visibleAssignments})}</section>}
-          {hasMeetingInformation&&<details className="gs-group-information" key={`info-${current.id}`}><summary>{msg('모임 정보')}</summary>
+          {hasMeetingInformation&&<details open className="gs-group-information" key={`info-${current.id}`}><summary>{msg('모임 정보')}</summary>
+            {current.meetingMode==='in_person'&&<h4>{msg('现场')}</h4>}
             {current.leader&&<p>{msg('인도자')} · {current.leader}</p>}{current.place&&<p>{current.place}</p>}
             {current.meetingMode==='virtual'&&<MeetingAccessPanel eventId={current.id} version={current.editVersion}/>}
             {current.memo&&<p className="gs-group-memo">{current.memo}</p>}
