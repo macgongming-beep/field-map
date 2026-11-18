@@ -305,6 +305,34 @@ test('editor promotion waits for complete cards and buildings without unmounting
   expect(buildingReads()).toHaveLength(count)
 })
 
+test.each(['manual', 'foreground', 'realtime'] as const)('%s full refresh fallback retains readiness while pending, failed and recovered', async source => {
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, undefined, 'tester', 'calendar'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  act(() => result.current.fullBuildingReader!.request())
+  await waitFor(() => expect(result.current.fullBuildingReader!.ready).toBe(true))
+  const previous = result.current.buildings
+  const refresh = () => {
+    result.current.territoryRealtime.checkpoint.baseline = null
+    return source === 'manual' ? result.current.refetchAll()
+      : result.current.refetchSlices(['buildings', 'cards', 'visits'], { triggeredBy: source === 'foreground' ? 'foreground' : 'realtime:buildings' })
+  }
+  let finish!: (value: { data: RawBuilding[]; error: unknown }) => void
+  state.buildingResponse = new Promise(resolve => { finish = resolve })
+  let pending!: Promise<unknown>
+  act(() => { pending = refresh().catch(error => error) })
+  await waitFor(() => expect(state.buildingResponse).toBeNull())
+  expect(result.current.fullBuildingReader!.ready).toBe(true)
+  expect(result.current.buildings).toBe(previous)
+  await act(async () => { finish({ data: [], error: new Error('offline') }); await pending })
+  expect(result.current.fullBuildingReader!.ready).toBe(true)
+  expect(result.current.buildings).toBe(previous)
+  expect(result.current.error).toBeNull()
+  state.rows = [raw(3)]
+  await act(async () => { await refresh() })
+  expect(result.current.fullBuildingReader!.ready).toBe(true)
+  expect(result.current.buildings.map(building => building.id)).toEqual([3])
+})
+
 test('late calendar names cannot replace a map snapshot or its coordinates', async () => {
   const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
     useStore(true, 'admin', undefined, undefined, 'tester', mode), { initialProps: { mode: 'calendar' as BuildingDemand } })

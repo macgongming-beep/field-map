@@ -124,6 +124,7 @@
 나의 봉사 개인 배정: [0120 중복 읽기 제거와 역할별 전후 검증](0120-my-service-personal-read-reuse.md)
 봉사자 앱 첫 진입: [0121 조회 범위를 유지한 대기 순서 개선과 사용량 비교](0121-recipient-initial-read-order.md)
 팀 구성·구역 배정 진입: [0122 전체 화면 로딩 유지와 나의 봉사 이동 점검](0122-assignment-editor-stable-loading.md)
+배정 편집 중 새로고침·재연결: [0123 초안 보존 검증과 실패 처리 보완](0123-assignment-draft-refresh-recovery.md)
 
 ```markdown
 # 제목

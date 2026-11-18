@@ -58,6 +58,8 @@ export function PullToRefresh({ onRefresh }: { onRefresh: () => Promise<void> | 
         setRefreshing(true)
         try {
           await onRefresh()
+        } catch {
+          // The store reports the read failure and retains the usable snapshot.
         } finally {
           setRefreshing(false)
         }
