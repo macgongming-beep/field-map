@@ -1,8 +1,9 @@
 import type { CalendarEvent } from '../../types'
 import type { AppLanguage } from '../../i18n'
 import { msg } from '../../lib/msg'
-import { eventBlocks, groupLabel, serviceGroupOptions, serviceGroups } from './model'
+import { eventBlocks, groupLabel, serviceGroupOptions, serviceGroups, serviceMeetingMode } from './model'
 import './groupService.css'
+import {MeetingModeBadge} from './MeetingModeBadge'
 
 export function ServiceEventList({events,language,onOpen,groupName,statusById,globalSettings={}}: {events:CalendarEvent[];language:AppLanguage;onOpen:(id:number)=>void;groupName?:string;statusById?:Record<number,'lead'|'join'|'avail'>;globalSettings?:Record<string,string>}) {
   const own=globalSettings.service_group_directory!=null
@@ -20,8 +21,8 @@ export function ServiceEventList({events,language,onOpen,groupName,statusById,gl
         return <button type="button" key={e.id} title={`${e.time}${e.endTime?`–${e.endTime}`:''} · ${title} · ${e.leader}`} onClick={click=>{click.stopPropagation();onOpen(e.id)}}>
           <span className="gs-event-time">{e.time}{e.endTime&&<span className="gs-event-end">–{e.endTime}</span>}</span>
           <span className="gs-event-text">
-            <strong lang={chineseTitle?'zh-Hans':undefined}>{title}</strong>
-            <span>{scoped?groupLabel(block.flatMap(b=>b.targetGroups ?? []),language,globalSettings.user_groups,globalSettings.service_group_directory):<>{e.leader}{e.meetingMode==='virtual'?` · ${msg('线上')}`:e.meetingMode==='in_person'?` · ${msg('现场')}${e.place?` · ${e.place}`:''}`:e.place?` · ${e.place}`:''}</>}</span>
+            <span className="gs-event-title-line"><strong lang={chineseTitle?'zh-Hans':undefined}>{title}</strong>{(!scoped||block.every(item=>serviceMeetingMode(item)===serviceMeetingMode(e)))&&<MeetingModeBadge event={e}/>}</span>
+            <span>{scoped?groupLabel(block.flatMap(b=>b.targetGroups ?? []),language,globalSettings.user_groups,globalSettings.service_group_directory):[e.leader,serviceMeetingMode(e)==='virtual'?'':e.place].filter(Boolean).join(' · ')}</span>
             {statuses.includes('lead')?<span>{msg('인도')}</span>:statuses.includes('join')?<span>{msg('신청 완료')}</span>:null}
           </span><span aria-hidden="true">›</span>
         </button>

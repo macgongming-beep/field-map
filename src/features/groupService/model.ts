@@ -4,6 +4,10 @@ import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
 import { parseUserGroups } from '../../utils/userGroups'
 import {GROUP_DIRECTORY_KEY,parseGroupDirectory,type ServiceGroup} from './directory'
 
+export function serviceMeetingMode(event: Pick<CalendarEvent,'meetingMode'|'hasMeeting'>) {
+  return event.meetingMode ?? (event.hasMeeting ? 'in_person' : 'none')
+}
+
 export function canArrangeService(role: Role, event: CalendarEvent, name: string) {
   return role==='admin'||role==='developer'||(role==='leader'&&(assignmentRevisionEnabled()||event.leaders.includes(name)))
 }

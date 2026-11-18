@@ -90,6 +90,14 @@
 /* Keep simplified and shared Han glyphs in the same native Chinese font. */
 .gs-event-text strong[lang=zh-Hans],.gs-tab-title h2[lang=zh-Hans] { font-family:'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; }
 .gs-event-text>span { font-size:13px; color:var(--muted,#666); font-weight:400; }
+.gs-event-title-line { display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; min-width:0; }
+.gs-event-title-line strong { color:var(--ink); }
+.gs-event-title-line .gs-meeting-badge { display:inline-flex; align-items:center; min-height:22px; padding:1px 6px; border:1px solid var(--line); border-radius:4px; background:var(--tint); color:var(--ink); font-size:11px; font-weight:500; line-height:1.4; white-space:nowrap; flex-shrink:0; }
+.gs-place-settings { margin-bottom:16px; }
+.gs-place-preset-row { display:grid; grid-template-columns:minmax(0,1fr) 32px; gap:6px; padding:10px 0; border-top:1px solid var(--line); }
+.gs-place-preset-row label { margin-bottom:0; }
+.gs-place-preset-row label:last-child { grid-column:1 / -1; }
+.gs-place-preset-row>button { align-self:end; width:32px; height:42px; border:0; background:transparent; color:var(--status-danger); font-size:22px; }
 .gs-repeat-scope { display:grid; gap:8px; padding:16px 0; border-top:1px solid var(--line); }
 .gs-repeat-scope p { margin:0 0 4px; font-size:14px; }
 .gs-repeat-scope button { min-height:44px; padding:10px 12px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); font:inherit; text-align:left; white-space:normal; }

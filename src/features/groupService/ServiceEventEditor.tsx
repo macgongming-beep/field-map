@@ -4,6 +4,7 @@ import type { CalendarEvent } from '../../types'
 import { t, type AppLanguage } from '../../i18n'
 import { addMinutesToTime, normalizeTimePresets, resolveTimePresets, saveTimePresets, TIME_PRESET_SETTING_KEY, type TimePreset } from '../../lib/timePresets'
 import { TimePresetEditor } from '../../components/admin/TimePresetEditor'
+import { normalizePlacePresets, resolvePlacePresets, savePlacePresets, PLACE_PRESET_SETTING_KEY, PLACE_PRESETS_MAX, type PlacePreset } from '../../lib/placePresets'
 import type { EventParticipantUser } from '../../utils/eventParticipantUsers'
 import type { CalendarEventInput } from '../../hooks/storeMutations/calendar'
 import { getOverlayRoot } from '../../lib/overlayRoot'
@@ -51,6 +52,8 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const [busy,setBusy] = useState(false)
   const [presetKey,setPresetKey] = useState<string|null>(null)
   const [presetDraft,setPresetDraft] = useState<TimePreset[]>([])
+  const [placeDraft,setPlaceDraft] = useState<PlacePreset[]>([])
+  const [savedPlaces,setSavedPlaces] = useState<{source:string|undefined;value:PlacePreset[]}|null>(null)
   const [presetSaving,setPresetSaving] = useState(false)
   const [presetError,setPresetError] = useState('')
   const [savedPresets,setSavedPresets] = useState<{source:string|undefined;value:TimePreset[]}|null>(null)
@@ -67,6 +70,9 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const primary=snapshot&&!leadersEdited ? snapshot.primaryLeaderUserId??null : firstMatches.length===1?firstMatches[0].id??null:null
   const presetSource=globalSettings[TIME_PRESET_SETTING_KEY]
   const timePresets=savedPresets&&savedPresets.source===presetSource?savedPresets.value:resolveTimePresets(presetSource)
+  const placeSource=globalSettings[PLACE_PRESET_SETTING_KEY]
+  const placePresets=savedPlaces&&savedPlaces.source===placeSource?savedPlaces.value:resolvePlacePresets(placeSource)
+  const presetSaveLabel=presetKey==='places'?msg('장소 설정 저장'):msg('시간 설정 저장')
   const locked=busy||presetSaving
   const groupChoices=snapshot?.groupServiceScope?availableGroups.filter(g=>snapshot.targetGroups?.includes(g.code)):availableGroups
   const addGroupChoices=snapshot?.groupServiceScope?availableGroups.filter(g=>g.active&&!snapshot.targetGroups?.includes(g.code)
@@ -78,6 +84,21 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   }
   const savePresets=async()=>{
     if(presetSaving||!onUpsertGlobalSetting)return
+    if(presetKey==='places'){
+      if(placeDraft.some(p=>!p.name.trim()||(p.mapLink.trim()&&!/^https?:\/\/\S+$/i.test(p.mapLink.trim())))){
+        setPresetError(msg('장소 이름과 지도 링크를 확인해 주세요.'));return
+      }
+      const normalized=normalizePlacePresets(placeDraft)
+      setPresetSaving(true);setPresetError('')
+      try{
+        if(!await onUpsertGlobalSetting(PLACE_PRESET_SETTING_KEY,JSON.stringify(normalized)))throw new Error('Preset save failed')
+        setSavedPlaces({source:placeSource,value:normalized})
+        try{savePlacePresets(normalized)}catch{/* Keep the successful server save if local storage is unavailable. */}
+        setPresetKey(null)
+      }catch{setPresetError(msg('장소 설정을 저장하지 못했습니다. 다시 시도해 주세요.'))}
+      finally{setPresetSaving(false)}
+      return
+    }
     if(presetDraft.some(p=>!p.label.trim()||!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.time)||!Number.isFinite(p.durationMinutes)||p.durationMinutes<15||p.durationMinutes>480)){
       setPresetError(msg('시간 설정의 이름, 시작 시간, 소요시간을 확인해 주세요.'));return
     }
@@ -256,6 +277,25 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
         }}/>{name}</label>)}</div>
       </fieldset>
       <label>{msg('봉사 모임')}<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="none">{msg('없음')}</option><option value="in_person">{msg('现场')}</option><option value="virtual">{msg('线上')}</option></select></label>
+      <div className="gs-preset-heading">
+        <label htmlFor="gs-place-preset">{msg('자주 쓰는 장소')}</label>
+        {onUpsertGlobalSetting&&<button type="button" title={msg('장소 설정')} aria-label={msg('장소 설정')} aria-expanded={presetKey==='places'} aria-controls="gs-place-settings" onClick={()=>{
+          if(presetKey==='places'){setPresetKey(null);return}
+          setPlaceDraft(placePresets.map(p=>({...p})));setPresetError('');setPresetKey('places')
+        }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg></button>}
+      </div>
+      <label><select id="gs-place-preset" value={placePresets.findIndex(p=>p.name===place&&p.mapLink===mapLink)} onChange={e=>{
+        const preset=placePresets[Number(e.target.value)];if(preset){setPlace(preset.name);setMapLink(preset.mapLink)}
+      }}><option value={-1}>{msg('직접 입력')}</option>{placePresets.map((p,i)=>p.name.trim()&&<option key={i} value={i}>{p.name}</option>)}</select></label>
+      {presetKey==='places'&&<div id="gs-place-settings" className="gs-place-settings">
+        {placeDraft.map((p,i)=><div className="gs-place-preset-row" key={i}>
+          <label>{t(language,'calendar.location')}<input maxLength={30} value={p.name} onChange={e=>setPlaceDraft(prev=>prev.map((v,j)=>j===i?{...v,name:e.target.value}:v))}/></label>
+          <button type="button" title={t(language,'common.delete')} aria-label={t(language,'common.delete')} onClick={()=>setPlaceDraft(prev=>prev.filter((_,j)=>j!==i))}>×</button>
+          <label>{t(language,'calendar.mapLink')}<input type="url" value={p.mapLink} onChange={e=>setPlaceDraft(prev=>prev.map((v,j)=>j===i?{...v,mapLink:e.target.value}:v))}/></label>
+        </div>)}
+        <button type="button" className="gs-slot-add" title={t(language,'common.add')} aria-label={t(language,'common.add')} disabled={placeDraft.length>=PLACE_PRESETS_MAX} onClick={()=>setPlaceDraft(prev=>[...prev,{name:'',mapLink:''}])}>+</button>
+        {presetError&&<p role="alert" className="gs-error">{presetError}</p>}
+      </div>}
       <label>{msg('봉사 장소')}<input value={place} onChange={e=>setPlace(e.target.value)} /></label>
       <label>{msg('지도 링크')}<input type="url" value={mapLink} onChange={e=>setMapLink(e.target.value)} /></label>
       {mode==='virtual' && <fieldset className="gs-access" disabled={accessLoading || accessError}><legend>{msg('线上')}</legend>{accessLoading?<p role="status">{msg('불러오는 중...')}</p>:null}
@@ -271,7 +311,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
         <button type="button" disabled={locked} onClick={()=>void save('single')}>{msg('이 일정만 수정')}</button>
         <button type="button" disabled={locked} onClick={()=>void save('following')}>{msg('이후 반복 일정도 수정')}</button>
         <button type="button" disabled={locked} onClick={()=>setScopePrompt(false)}>{msg('돌아가기')}</button>
-      </div>:<footer><button type="button" disabled={locked} onClick={()=>{if(presetKey!==null)setPresetKey(null);else onClose()}}>{msg('취소')}</button><button type="submit" formNoValidate={presetKey!==null} disabled={locked||(presetKey===null&&(accessLoading||accessError))}>{msg(locked?'저장 중...':presetKey!==null?'시간 설정 저장':'저장')}</button></footer>}
+      </div>:<footer><button type="button" disabled={locked} onClick={()=>{if(presetKey!==null)setPresetKey(null);else onClose()}}>{msg('취소')}</button><button type="submit" formNoValidate={presetKey!==null} disabled={locked||(presetKey===null&&(accessLoading||accessError))}>{locked?msg('저장 중...'):presetKey!==null?presetSaveLabel:msg('저장')}</button></footer>}
     </form></section></div>
   return getOverlayRoot() ? createPortal(content,getOverlayRoot()!) : content
 }

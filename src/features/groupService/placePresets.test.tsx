@@ -1,0 +1,60 @@
+import {afterEach,expect,test,vi} from 'vitest'
+import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
+import {ServiceEventEditor} from './ServiceEventEditor'
+import {PLACE_PRESET_SETTING_KEY,PLACE_PRESET_STORAGE_KEY} from '../../lib/placePresets'
+vi.mock('./api',()=>({readMeetingAccess:vi.fn(),readServiceSeriesTargets:vi.fn()}))
+const places=[{name:'王国聚会所',mapLink:'https://naver.me/meeting'},{name:'第二地点',mapLink:''}]
+const props={language:'ko' as const,date:'2026-11-25',events:[],users:[],onClose:vi.fn(),onSubmit:vi.fn()}
+afterEach(()=>{cleanup();localStorage.removeItem(PLACE_PRESET_STORAGE_KEY);vi.clearAllMocks()})
+test('server favorites override local cache and fill place and map without changing meeting mode',()=>{
+  localStorage.setItem(PLACE_PRESET_STORAGE_KEY,JSON.stringify([{name:'Local',mapLink:''}]))
+  render(<ServiceEventEditor {...props} globalSettings={{[PLACE_PRESET_SETTING_KEY]:JSON.stringify(places)}}/>)
+  expect(screen.queryByRole('option',{name:'Local'})).toBeNull()
+  fireEvent.change(screen.getByLabelText('자주 쓰는 장소'),{target:{value:'0'}})
+  expect((screen.getByLabelText('봉사 장소') as HTMLInputElement).value).toBe(places[0].name)
+  expect((screen.getByLabelText('지도 링크') as HTMLInputElement).value).toBe(places[0].mapLink)
+  expect((screen.getByLabelText('봉사 모임') as HTMLSelectElement).value).toBe('none')
+  expect(screen.queryByRole('button',{name:'장소 설정'})).toBeNull()
+})
+test('missing shared setting uses existing local favorites; empty shared list does not resurrect them',()=>{
+  localStorage.setItem(PLACE_PRESET_STORAGE_KEY,JSON.stringify(places))
+  const {rerender}=render(<ServiceEventEditor {...props}/>)
+  expect(screen.getByRole('option',{name:places[0].name})).toBeTruthy()
+  rerender(<ServiceEventEditor {...props} globalSettings={{[PLACE_PRESET_SETTING_KEY]:'[]'}}/>)
+  expect(screen.queryByRole('option',{name:places[0].name})).toBeNull()
+})
+test('editing favorites supports add, rename, delete, cancel and successful shared save without saving the event',async()=>{
+  const save=vi.fn(async()=>true)
+  render(<ServiceEventEditor {...props} globalSettings={{[PLACE_PRESET_SETTING_KEY]:JSON.stringify(places)}} onUpsertGlobalSetting={save}/>)
+  fireEvent.click(screen.getByRole('button',{name:'장소 설정'}))
+  fireEvent.click(screen.getAllByRole('button',{name:'삭제'})[0])
+  fireEvent.click(screen.getByRole('button',{name:'추가',exact:true}))
+  fireEvent.change(screen.getAllByLabelText('장소')[1],{target:{value:'新增地点'}})
+  fireEvent.click(screen.getByRole('button',{name:'취소'}))
+  expect(save).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button',{name:'장소 설정'}))
+  fireEvent.change(screen.getAllByLabelText('장소')[0],{target:{value:'改名地点'}})
+  fireEvent.click(screen.getAllByRole('button',{name:'삭제'})[1])
+  fireEvent.click(screen.getByRole('button',{name:'추가',exact:true}))
+  fireEvent.change(screen.getAllByLabelText('장소')[1],{target:{value:'新增地点'}})
+  fireEvent.click(screen.getByRole('button',{name:'장소 설정 저장'}))
+  const expected=[{...places[0],name:'改名地点'},{name:'新增地点',mapLink:''}]
+  await waitFor(()=>expect(save).toHaveBeenCalledWith(PLACE_PRESET_SETTING_KEY,JSON.stringify(expected)))
+  await waitFor(()=>expect(screen.getByRole('option',{name:'改名地点'})).toBeTruthy())
+  expect(screen.getByRole('option',{name:'新增地点'})).toBeTruthy()
+  expect(JSON.parse(localStorage.getItem(PLACE_PRESET_STORAGE_KEY)!)).toEqual(expected)
+  expect(props.onSubmit).not.toHaveBeenCalled()
+})
+test('failed save preserves old shared list, local cache and editable draft',async()=>{
+  localStorage.setItem(PLACE_PRESET_STORAGE_KEY,JSON.stringify(places))
+  const save=vi.fn(async()=>false)
+  render(<ServiceEventEditor {...props} globalSettings={{[PLACE_PRESET_SETTING_KEY]:JSON.stringify(places)}} onUpsertGlobalSetting={save}/>)
+  fireEvent.click(screen.getByRole('button',{name:'장소 설정'}))
+  fireEvent.change(screen.getAllByLabelText('장소')[0],{target:{value:'Draft'}})
+  fireEvent.click(screen.getByRole('button',{name:'장소 설정 저장'}))
+  expect(await screen.findByRole('alert')).toHaveProperty('textContent','장소 설정을 저장하지 못했습니다. 다시 시도해 주세요.')
+  expect((screen.getAllByLabelText('장소')[0] as HTMLInputElement).value).toBe('Draft')
+  expect(screen.getByRole('option',{name:places[0].name})).toBeTruthy()
+  expect(JSON.parse(localStorage.getItem(PLACE_PRESET_STORAGE_KEY)!)).toEqual(places)
+  expect(props.onSubmit).not.toHaveBeenCalled()
+})

@@ -12,6 +12,7 @@ import type {EventParticipantUser} from '../../utils/eventParticipantUsers'
 import {confirmDialog} from '../../lib/confirm'
 import './groupService.css'
 import {GroupEventComments} from './GroupEventComments'
+import {MeetingModeBadge} from './MeetingModeBadge'
 import type {MentionUser} from '../../components/CommentSection'
 import type {Role} from '../../types'
 
@@ -96,7 +97,7 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
   return <section className={`gs-tab-detail${mobile?' gs-tab-mobile':''}`} aria-label={msg('집단 봉사')}>
     {(mobile||onClose)&&<header>{onClose&&<button type="button" aria-label={msg('뒤로')} onClick={onClose}>‹</button>}<div><strong>{msg('일정')}</strong><span>{dateLabel}</span></div>{scheduleActions}</header>}
     <div className="gs-tab-body">
-      <div className="gs-tab-title"><div><span>{event.time}{event.endTime?`–${event.endTime}`:''}</span><h2 lang={chineseTitle?'zh-Hans':undefined}>{title}</h2></div><div className="gs-title-tools">{context&&<span>{msg('신청 {n}건',{n:context.events.reduce((n,e)=>n+e.count,0)})}</span>}{!mobile&&!onClose&&scheduleActions}</div></div>
+      <div className="gs-tab-title"><div><span>{event.time}{event.endTime?`–${event.endTime}`:''}</span><div className="gs-event-title-line"><h2 lang={chineseTitle?'zh-Hans':undefined}>{title}</h2>{current&&<MeetingModeBadge event={current}/>}</div></div><div className="gs-title-tools">{context&&<span>{msg('신청 {n}건',{n:context.events.reduce((n,e)=>n+e.count,0)})}</span>}{!mobile&&!onClose&&scheduleActions}</div></div>
       {!context&&!failed&&<p role="status">{msg('불러오는 중...')}</p>}
       {failed&&<div role="alert"><p>{msg('신청자를 불러오지 못했습니다.')}</p><button type="button" onClick={()=>setRetry(n=>n+1)}>{msg('다시 시도')}</button></div>}
       {context&&<>

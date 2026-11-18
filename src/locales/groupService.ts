@@ -1,4 +1,7 @@
 export const groupServiceZh: Record<string,string> = {
+  '자주 쓰는 장소':'常用地点','장소 설정':'地点设置','장소 설정 저장':'保存地点设置',
+  '장소 이름과 지도 링크를 확인해 주세요.':'请检查地点名称和地图链接。',
+  '장소 설정을 저장하지 못했습니다. 다시 시도해 주세요.':'无法保存地点设置，请重试。',
   '반복 일정 수정 범위':'修改重复安排的范围',
   '이 일정만 수정할까요, 이후 반복 일정도 수정할까요?':'只修改这次安排，还是也修改之后的重复安排？',
   '이 일정만 수정':'只修改这次安排','이후 반복 일정도 수정':'也修改之后的重复安排',
@@ -43,6 +46,9 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '자주 쓰는 장소':'Saved places','장소 설정':'Place settings','장소 설정 저장':'Save place settings',
+  '장소 이름과 지도 링크를 확인해 주세요.':'Check the place names and map links.',
+  '장소 설정을 저장하지 못했습니다. 다시 시도해 주세요.':'Could not save place settings. Please try again.',
   '반복 일정 수정 범위':'Recurring event edit scope',
   '이 일정만 수정할까요, 이후 반복 일정도 수정할까요?':'Edit only this occurrence, or this and following occurrences?',
   '이 일정만 수정':'Only this occurrence','이후 반복 일정도 수정':'This and following occurrences',

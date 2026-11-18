@@ -138,6 +138,7 @@
 반복 수정과 기본 집단: [0134 이후 일정 수정 범위와 내 집단 우선 탭](0134-repeat-edit-scope-and-own-group.md)
 탭 위치 후속 결정: [0135 순서는 공통으로 고정하고 내 집단만 선택](0135-fixed-group-tab-order.md)
 생성/메뉴 후속: [0136 반복 생성 인도자 선택과 PC 메뉴 가시성](0136-repeat-create-leaders-and-visible-pc-menu.md)
+장소/모임 표시: [0137 장소 즐겨찾기 복구와 제목 옆 모임 표시](0137-place-favorites-and-meeting-badges.md)
 
 ```markdown
 # 제목

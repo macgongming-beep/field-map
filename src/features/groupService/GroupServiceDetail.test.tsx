@@ -168,7 +168,7 @@ test.each([{leader:'Leader'},{place:'Meeting place'},{memo:'Meeting note'},{meet
   render(<GroupServiceDetail event={rows[0]} events={rows} language="ko" currentVisitor="User"/> )
   await screen.findByRole('tab',{name:'동탄 1'})
   expect(screen.getByText('모임 정보').closest('details')!.open).toBe(true)
-  if(fields.meetingMode==='in_person')expect(screen.getByText('现场')).toBeTruthy()
+  if(fields.meetingMode==='in_person')expect(within(screen.getByText('모임 정보').closest('details')!).getByRole('heading',{name:'现场'})).toBeTruthy()
 })
 test('new group schedule expands four independent children per time with separate weekly series',async()=>{
   const submit=vi.fn(async()=>true)
