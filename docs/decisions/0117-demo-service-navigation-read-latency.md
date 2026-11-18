@@ -1,7 +1,7 @@
 # 일정 상세·나의 봉사 조회 대기 축소
 
 - 결정일: 2026-11-18
-- 상태: 데모 검증 중. 운영 변경 금지.
+- 상태: 데모 적용. 운영 변경 금지.
 - 기반: `bdd2ae5` 화면 수정이 반영된 데모.
 
 ## 범위와 계약
@@ -46,7 +46,7 @@
 - 기존 편집기 준비/실패 재시도, 늦은 응답 무시, 신청자·공유 배정·수정 X 복귀 시험 유지.
 - 이름 조회 실패 후 재시도에서도 기존 카드 합계 보존 및 준비 전 화면 차단.
 - 최적화를 되돌린 변이에서 새 시험 3개가 실패함을 확인하고 복원했다.
-- 전체 2,546개 시험(262개 파일) 통과. 데모 빌드 통과.
+- 전체 2,546개 시험(262개 파일), lint, 데모 빌드 통과.
 
 ## 전후 결과
 
@@ -75,3 +75,14 @@
 - 원본: `scratch/speed-{before,after}-frame.json`,
   `scratch/speed-{before,after}-native-frame.json`; 재현 도구:
   `scratch/benchmark-service-navigation.mjs` (데모 전용 호스트 제한, 일정/신청 저장 없음).
+
+## 데모 배포
+
+- 코드 `cbb9c19`, 전용 브랜치 `codex/nov18-mobile-service-fixes`.
+- 데모 프로젝트 `prj_txJm1ruq4OiRnZi3cjz9IXLkGKPG` 정적 배포만 실행했다.
+  배포 `dpl_CRYxStUSk34ikVq31spFXNmrBrMX`, 주소 `https://chinese-territory-app-demo.vercel.app`.
+- 배포 후 Mac WebKit에서 인도자·일반 성원 상세/나의 봉사 첫 진입과 재진입, 관리자
+  편집 열기/X 복귀 및 캘린더 이동 확인. 실패한 데이터 요청·브라우저 오류 없음.
+  실제 아이폰 확인은 별도로 필요하다.
+- Chromium PC에서도 상단 메뉴·편집 열기/X 복귀와 고정 배정 결과 표시 확인.
+- 운영 DB·환경변수 쓰기, main 병합·운영 배포는 하지 않았다.
