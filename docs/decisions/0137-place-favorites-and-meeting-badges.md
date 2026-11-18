@@ -1,7 +1,7 @@
 # 장소 즐겨찾기 복구와 작은 모임 표시
 
 - 결정일: 2026-11-19
-- 상태: 검증 중
+- 상태: 데모 적용 완료, 운영 배포 한도로 보류
 
 새 ServiceEventEditor는 시간 즐겨찾기만 연결하고 기존 장소 즐겨찾기를 누락했다.
 운영 app_settings를 읽기 전용으로 확인하여 calendar_place_presets에 3개가 남아 있음을 확인했다.
@@ -27,3 +27,12 @@
 전체 276개 파일 / 2,702개 시험, lint, TypeScript 포함 운영 설정 기반 데모 빌드 통과.
 서버 장소 설정 무시/모임 없음 표시 제거 변이를 시험이 잡는지 확인하고 원상 복원했다.
 데모 배포: `dpl_9wfuijbUzpt3XcYa744VXMSwN33r`.
+
+운영 후보/main: `9b6a9289c8b9938c78e4ea30180ec4d90b30b47f`.
+운영 프로젝트의 미리보기 `dpl_BNjxNx2xHMB5od1xeUfkqd5bq52o`는 같은 SHA로 READY지만
+target이 preview이므로 운영에 반영된 것으로 보지 않는다. 운영 별칭은 직전 `1c3a18b` 배포를 유지한다.
+해당 SHA를 운영 환경으로 다시 빌드하는 `vercel redeploy ... --target production`은
+2026-11-19 402 / api-deployments-free-per-day (100회 초과, 1일 후 재시도)로 거부되었다.
+한도를 우회하거나 요금제/환경변수/별칭을 변경하지 않았다. 운영 확인 대기는 종료했다.
+한도가 풀린 뒤 같은 후보를 production target으로 빌드하고 정확한 SHA/READY/환경변수 및 별칭을
+다시 확인해야 한다. preview 배포를 그대로 운영 별칭에 붙이지 않는다.
