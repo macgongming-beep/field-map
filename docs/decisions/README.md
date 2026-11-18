@@ -122,6 +122,7 @@
 나의 봉사 요청 수 정정: [0118 전환 구간 분리 재측정과 초기 로딩 실패 시험](0118-service-navigation-request-accounting.md)
 설정·캘린더 등 자주 쓰는 화면: [0119 순차 점검, 불필요한 설정 조회와 캘린더 직렬 대기 제거](0119-frequent-route-loading-audit.md)
 나의 봉사 개인 배정: [0120 중복 읽기 제거와 역할별 전후 검증](0120-my-service-personal-read-reuse.md)
+봉사자 앱 첫 진입: [0121 조회 범위를 유지한 대기 순서 개선과 사용량 비교](0121-recipient-initial-read-order.md)
 
 ```markdown
 # 제목

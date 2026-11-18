@@ -822,6 +822,33 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const baseline = slices.includes('visits')
           ? await fetchTerritoryClock().catch(() => null) : null
         const requested = new Set(slices)
+        // A bounded home calendar cannot authorize personal territory. On the
+        // first snapshot its independent discovery need not wait for that read.
+        const parallelInitial = import.meta.env.VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED === 'true'
+          && !loadedOnceRef.current && calendarScopeFeature && calendarScopeRef.current.startsWith('window:')
+          && (options?.triggeredBy === 'fetchAll' || options?.triggeredBy === 'initial:calendar-scope-retry')
+          && ['calendar', 'buildings', 'cards', 'visits'].every(slice => requested.has(slice as Slice))
+        if (parallelInitial) {
+          recipientReader.refresh(undefined)
+          const buildingsRead = fetchSlice('buildings')
+          const afterBuildings = new Set<Slice>(['cards', 'visits', 'visitHistories'])
+          const reads = [...requested].map(slice => slice === 'buildings' ? buildingsRead
+            : afterBuildings.has(slice) ? buildingsRead.then(() => fetchSlice(slice, false, false, options?.strictGroups))
+              : fetchSlice(slice, false, false, options?.strictGroups))
+          try {
+            await readSnapshotParts(reads)
+          } catch (error) {
+            // A retry must not race unfinished writes from this failed snapshot.
+            await Promise.allSettled(reads)
+            throw error
+          }
+          if (baseline) {
+            territoryCheckpoint.baseline = baseline
+            territoryCheckpoint.cards.clear()
+            territoryCheckpoint.applied.clear()
+          }
+          return
+        }
         // Reuse only this operation's complete calendar; stale state could retain revoked cards.
         let freshCalendar: CalendarEvent[] | undefined
         if (requested.has('calendar')) {
@@ -981,7 +1008,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       void promise.then(clear, clear)
     }
     return track(promise)
-  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader, scopedHistories, clearCalendarWindows, historyRecovery, historyCoverage, demandBuildings])
+  }, [fetchSlice, territoryCheckpoint, recoveryReads, recipientReader, scopedHistories, clearCalendarWindows, historyRecovery, historyCoverage, demandBuildings, calendarScopeFeature])
 
   // 기존 fetchAll: 모든 slice + auto_close 부수효과 유지 (100% 후방호환)
   const fetchAll = useCallback(async (recovery = false) => {

@@ -12,7 +12,7 @@ assert.ok(label&&/^[a-zA-Z0-9_-]+$/.test(label)&&['127.0.0.1','chinese-territory
 const delay=Number(process.env.REST_DELAY??120),repeats=Number(process.env.REPEATS??3)
 const journey=process.env.JOURNEY??'service'
 const verifyExtra=process.env.VERIFY_EXTRA==='true'
-assert.ok(['service','settings','calendar','zone'].includes(journey))
+assert.ok(['service','settings','calendar','zone','cold'].includes(journey))
 assert.ok(Number.isFinite(delay)&&delay>=0&&Number.isInteger(repeats)&&repeats>0)
 mkdirSync('scratch',{recursive:true})
 const browser=await (process.env.ENGINE==='webkit'?webkit:chromium).launch()
@@ -46,6 +46,14 @@ try{
    finished(req)
   })
   await page.addInitScript(()=>{
+   window.__coldReady=null
+   const observeHome=()=>{
+    const home=document.querySelector('.mobile-today-service-section,.gs-event-block>button')
+    if(home?.getClientRects().length&&!document.querySelector('.app-loading')){
+     requestAnimationFrame(()=>{window.__coldReady=Math.round(performance.now())})
+    }else requestAnimationFrame(observeHome)
+   }
+   requestAnimationFrame(observeHome)
    window.__mountTrace=[]
    new MutationObserver(records=>{
     for(const r of records)for(const [action,nodes] of [['add',r.addedNodes],['remove',r.removedNodes]])for(const n of nodes){
@@ -119,7 +127,24 @@ try{
    assert.equal(actualRole,role==='administrator'?'admin':role==='admin'?'developer':role)
    const nav=page.locator('.bottom-nav')
    const go=name=>nav.getByRole('button',{name,exact:true}).click()
-   if(journey==='settings'){
+   if(journey==='cold'){
+    const start=performance.now()
+    await page.reload({waitUntil:'domcontentloaded'})
+    await page.waitForFunction(()=>window.__coldReady!==null,undefined,{timeout:45000})
+    const readyMs=await page.evaluate(()=>window.__coldReady)
+    await settled()
+    const requests=reads.filter(r=>r.started>=start)
+    const row={role,actualRole,run,name:'reopen-home',readyMs,
+     dataReadyMs:Math.round(Math.max(0,...requests.map(r=>r.finished-start))),
+     requests:requests.length,bytes:requests.reduce((n,r)=>n+r.bytes,0),
+     resources:requests.map(r=>r.path),reads:requests,
+     homeText:await page.locator('main').innerText().catch(()=>null)}
+    results.push(row)
+    console.log(JSON.stringify({...row,reads:undefined,resources:undefined,homeText:undefined}))
+    const heading=page.locator('h3').filter({hasText:/\d+년 \d+월/})
+    await step('calendar-first',()=>go('캘린더'),()=>heading.waitFor(),'h3')
+    await step('home-return',()=>go('홈'),()=>page.locator('.gs-event-block>button').first().waitFor(),'.gs-event-block>button')
+   }else if(journey==='settings'){
     const settings=()=>page.locator('.mobile-settings-profile').waitFor()
     await step('settings-first',()=>go('설정'),settings,'.mobile-settings-profile')
     await step('profile',()=>page.locator('.mobile-settings-profile').click(),()=>page.locator('.mobile-profile-page').waitFor(),'.mobile-profile-page')

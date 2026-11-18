@@ -9,6 +9,7 @@ import { makeServiceSessionMutations } from './storeMutations/serviceSessions'
 import { useSettingsCalendarScope } from './useSettingsCalendarScope'
 
 const state = vi.hoisted(() => ({
+  recipientDetails: null as Promise<void> | null,
   creationAction: '' as '' | 'created' | 'existing',
   returnRows: [] as Record<string, unknown>[], returnLogs: [] as Record<string, unknown>[],
   failedTable: '', proof: vi.fn(),
@@ -33,7 +34,7 @@ vi.mock('../lib/recipientStore', async importOriginal => ({ ...await importOrigi
   resume: vi.fn(), dispose: vi.fn(), refresh: state.refresh,
   unchangedScope: state.unchanged,
   validateCards: (ids: number[]) => { if (state.allowed.some((id) => !ids.includes(id))) throw new Error('A requested card is unavailable') },
-  read: async () => ({ buildings: state.buildings, boundaries: state.allowed.map((card_id) => ({ card_id, points: [{ lat: 1, lng: 1 }, { lat: 2, lng: 1 }, { lat: 2, lng: 2 }] })) }),
+  read: async () => { await state.recipientDetails; return { buildings: state.buildings, boundaries: state.allowed.map((card_id) => ({ card_id, points: [{ lat: 1, lng: 1 }, { lat: 2, lng: 1 }, { lat: 2, lng: 2 }] })) } },
   get scoped() { return true }, allowsCard: (id: number) => state.allowed.includes(id),
   cardIds: () => [...state.allowed],
 }) }))
@@ -110,6 +111,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
 const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: 'test', type: '주택', lat: 1, lng: 1, warning: false, memo: null,
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
+  state.recipientDetails = null
   // Unrelated store fixtures use full cards; scoped-card tests opt in explicitly.
   vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'false')
   vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'false')
@@ -145,6 +147,103 @@ function enableScopedHistories() {
   vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'true')
   state.historyRows.push({ ...state.historyRows[0], id: 901, unit_id: 100, visitor_name: 'Another visitor' })
 }
+
+test('parallel initial home starts independent reads but gates cards and histories on fresh buildings', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  let releaseBuildings!: () => void
+  let releaseCalendar!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.recipientDetails = new Promise(resolve => { releaseBuildings = resolve })
+  state.calendarResponses.push(new Promise(resolve => { releaseCalendar = resolve }))
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(state.reads).toContain('app_settings'))
+  expect(state.refresh).toHaveBeenCalledExactlyOnceWith(undefined)
+  expect(state.reads).toContain('calendar_events')
+  expect(state.reads).toContain('return_visits')
+  expect(state.reads).not.toContain('cards')
+  expect(state.reads).not.toContain('visit_histories')
+  expect(result.current.loading).toBe(true)
+  await act(async () => { releaseBuildings() })
+  await waitFor(() => expect(state.reads).toContain('visit_histories'))
+  expect(result.current.buildings.map(b => b.id)).toEqual([10])
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([901])
+  expect(result.current.loading).toBe(true)
+  await act(async () => { releaseCalendar({ data: [], error: null }) })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  for (const table of ['visit_histories', 'service_sessions', 'app_settings', 'calendar_events']) {
+    expect(state.reads.filter(name => name === table)).toHaveLength(1)
+  }
+  expect(state.cardFilters).toHaveLength(1)
+  expect(state.summaries).toHaveBeenCalledTimes(1)
+})
+
+test.each(['false', undefined])('initial parallel requires explicit opt-in (%s)', async flag => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', flag)
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.calendarResponses.push(new Promise(resolve => { release = resolve }))
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(state.reads).toContain('calendar_events'))
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(state.reads).not.toContain('app_settings')
+  await act(async () => { release({ data: [], error: null }) })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+})
+
+test('parallel initial failure drains pending reads before reporting error and retrying', async () => {
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  state.failedTable = 'calendar_events'
+  let release!: () => void
+  state.recipientDetails = new Promise(resolve => { release = resolve })
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(result.current.calendarReadError).toBe(true))
+  expect(result.current.loading).toBe(true)
+  expect(result.current.error).toBeNull()
+  await act(async () => { release() })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).not.toBeNull()
+  state.failedTable = ''
+  state.reads = []
+  state.cardFilters = []
+  await act(async () => { await result.current.refetchAll() })
+  expect(result.current.error).toBeNull()
+  expect(result.current.buildings.map(b => b.id)).toEqual([10])
+  expect(state.cardFilters).toHaveLength(1)
+})
+
+test('parallel initial building failure does not publish cards or read histories', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  let reject!: (error: Error) => void
+  state.recipientDetails = new Promise((_, fail) => { reject = fail })
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(state.reads).toContain('app_settings'))
+  await act(async () => { reject(new Error('scope unavailable')) })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).not.toBeNull()
+  expect(result.current.cards).toEqual([])
+  expect(state.reads).not.toContain('visit_histories')
+  expect(state.summaries).not.toHaveBeenCalled()
+})
+
+test.each(['full', 'service:["Volunteer","2026-10-05",null]'])('parallel initial does not change complete-calendar reuse for %s', async scope => {
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.calendarResponses.push(new Promise(resolve => { release = resolve }))
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', scope))
+  await waitFor(() => expect(state.reads).toContain('calendar_events'))
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(state.reads).not.toContain('app_settings')
+  await act(async () => { release({ data: [], error: null }) })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.refresh).toHaveBeenCalledExactlyOnceWith([])
+})
 
 function enableHistoryRecovery() {
   enableScopedHistories()
