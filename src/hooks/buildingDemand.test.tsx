@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   rows: [] as RawBuilding[], changed: vi.fn(), summaries: vi.fn(), rpc: vi.fn(),
   buildingResponse: null as null | Promise<{ data: RawBuilding[]; error: unknown }>,
   historyResponse: null as null | Promise<{ data: unknown[]; error: unknown }>,
+  regionResponse: null as null | Promise<{ data: unknown[]; error: unknown }>,
   cardError: false,
 }))
 vi.mock('../lib/cardSummaries', () => ({ fetchCardSummaries: state.summaries }))
@@ -34,6 +35,10 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     query.then = async (resolve: (value: unknown) => void) => {
       if (writing) return resolve({ data: [{ id: 1 }], error: null })
       state.reads.push({ table, columns })
+      if (table === 'territory_regions' && state.regionResponse) {
+        const response = state.regionResponse; state.regionResponse = null
+        return resolve(await response)
+      }
       if (table === 'visit_histories' && state.historyResponse) {
         const response = state.historyResponse; state.historyResponse = null
         return resolve(await response)
@@ -72,7 +77,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup(); vi.unstubAllEnvs(); vi.clearAllMocks(); localStorage.clear()
-  state.reads = []; state.buildingResponse = null; state.historyResponse = null; state.cardError = false
+  state.reads = []; state.buildingResponse = null; state.historyResponse = null; state.regionResponse = null; state.cardError = false
 })
 
 test.each(['admin', 'leader'] as const)('%s calendar preserves all team restaurant names and server progress without full details', async role => {
@@ -113,6 +118,79 @@ test('home calendar zone home calendar reuse the richer status snapshot without 
   }
   expect(buildingReads().map(read => read.columns)).toEqual([CALENDAR_BUILDING_COLUMNS, ZONE_BUILDING_COLUMNS])
   expect(result.current.buildings.map(b => b.name)).toEqual(['Building 1', 'Building 2'])
+})
+
+test.each(['admin', 'leader'] as const)('%s home detail adds only names and retains complete card summaries', async role => {
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, role, undefined, undefined, 'tester', mode), { initialProps: { mode: 'home' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const cards = result.current.cards
+  state.reads = []; state.summaries.mockClear()
+  rerender({ mode: 'calendar' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(state.reads).toEqual([{ table: 'buildings', columns: CALENDAR_BUILDING_COLUMNS }])
+  expect(state.summaries).not.toHaveBeenCalled()
+  expect(result.current.cards).toBe(cards)
+  expect(result.current.cards.map(c => c.units)).toEqual([1, 1])
+  expect(result.current.fullBuildingReader!.ready).toBe(false)
+  rerender({ mode: 'full' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(state.reads.some(read => read.table === 'visit_histories')).toBe(true)
+  expect(state.reads.some(read => read.table === 'cards')).toBe(true)
+  expect(result.current.fullBuildingReader!.ready).toBe(true)
+  expect(result.current.buildings[0].units[0].memo).toBe('saved unit memo')
+})
+
+test('service promotion overlaps card reads but waits for buildings before totals and histories', async () => {
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, 'leader', undefined, undefined, 'tester', mode), { initialProps: { mode: 'calendar' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const cards = result.current.cards
+  const next = [raw(), raw(2, 2)]
+  next[0].units.push({ ...raw().units[0], id: 11, number: '102' })
+  let finish!: (value: { data: RawBuilding[]; error: null }) => void
+  state.buildingResponse = new Promise(resolve => { finish = resolve })
+  state.reads = []
+  rerender({ mode: 'full' })
+  await waitFor(() => expect(state.reads.some(read => read.table === 'cards')).toBe(true))
+  expect(result.current.buildingScopeReady).toBe(false)
+  expect(result.current.cards).toBe(cards)
+  expect(state.reads.some(read => read.table === 'visit_histories')).toBe(false)
+  await act(async () => { finish({ data: next, error: null }) })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(result.current.cards.map(c => c.units)).toEqual([2, 1])
+  expect(result.current.buildings[0]).toMatchObject({ lat: 37, lng: 127, memo: 'building private memo' })
+  expect(result.current.buildings[0].units[0].memo).toBe('saved unit memo')
+  expect(state.reads.some(read => read.table === 'visit_histories')).toBe(true)
+})
+
+test('card network read does not wait for region labels but publishes only after both complete', async () => {
+  let finish!: (value: { data: unknown[]; error: null }) => void
+  state.regionResponse = new Promise(resolve => { finish = resolve })
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, undefined, 'tester', 'home'))
+  await waitFor(() => expect(state.reads.some(read => read.table === 'cards')).toBe(true))
+  expect(result.current.loading).toBe(true)
+  expect(result.current.cards).toEqual([])
+  await act(async () => { finish({ data: [], error: null }) })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.cards).toHaveLength(2)
+})
+
+test('failed names-only navigation stays blocked and retries without erasing existing card totals', async () => {
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, 'leader', undefined, undefined, 'tester', mode), { initialProps: { mode: 'home' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const cards = result.current.cards
+  state.buildingResponse = Promise.resolve({ data: [], error: new Error('offline') })
+  rerender({ mode: 'calendar' })
+  await waitFor(() => expect(result.current.buildingReadError).toBe(true))
+  expect(result.current.buildingScopeReady).toBe(false)
+  expect(result.current.cards).toBe(cards)
+  await act(async () => { await result.current.retryBuildingRead() })
+  expect(result.current.buildingReadError).toBe(false)
+  expect(result.current.buildingScopeReady).toBe(true)
+  expect(result.current.buildings).toHaveLength(2)
+  expect(result.current.cards).toBe(cards)
 })
 
 test('calendar receives a new unit name and authoritative card totals after another device adds it', async () => {

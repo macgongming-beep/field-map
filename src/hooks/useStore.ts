@@ -304,7 +304,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   ]
 
   // 각 slice를 독립적으로 fetch. 페이로드 크기 누적 반환.
-  const fetchSlice = useCallback(async (slice: Slice, recovery = false, historiesRecovered = false, strictGroups = false): Promise<number> => {
+  const fetchSlice = useCallback(async (slice: Slice, recovery = false, historiesRecovered = false, strictGroups = false, buildingsReady?: Promise<unknown>): Promise<number> => {
     let approxBytes = 0
     // ⚠ 운영에서는 측정하지 않는다 — 숫자 하나 얻으려고 440KB 를 통째로
     //   문자열로 바꾸는 비용이 구형 기기에서 그대로 체감된다
@@ -392,19 +392,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const buildingGeneration = buildingModeGeneration.current
         // 지역 목록도 여기서 받는다 — 카드의 region 값을 해석하는 재료라 늘 함께 쓰인다.
         // 표가 아직 없거나 실패하면 lib/regions 의 기본값이 그대로 남는다 (화면이 비지 않는다).
-        const regionsRes = await supabase.from('territory_regions')
+        const regionsQuery = supabase.from('territory_regions')
           .select('id, name, city, sort_order, name_zh, name_en')
           .order('sort_order')
-        if (!regionsRes.error && regionsRes.data) {
-          setRegionsFromDatabase(regionsRes.data.map((r) => ({
-            id: r.id,
-            name: r.name,
-            city: r.city ?? '',
-            sortOrder: r.sort_order ?? 0,
-            nameZh: r.name_zh ?? '',
-            nameEn: r.name_en ?? '',
-          })))
-        }
 
         const scope = recipientCardScopeEnabled(role, Boolean(recipientReader)) ? recipientReader!.cardIds() : null
         const readCards = async (withLeaders: boolean) => {
@@ -439,11 +429,23 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           return withLeader
         })()
 
-        const cardsRes = await cardsQueryPromise
+        const [regionsRes, cardsRes] = await Promise.all([regionsQuery, cardsQueryPromise])
+        if (!regionsRes.error && regionsRes.data) {
+          setRegionsFromDatabase(regionsRes.data.map((r) => ({
+            id: r.id,
+            name: r.name,
+            city: r.city ?? '',
+            sortOrder: r.sort_order ?? 0,
+            nameZh: r.name_zh ?? '',
+            nameEn: r.name_en ?? '',
+          })))
+        }
         if (cardsRes.error) {
           throw new Error('Card data load failed', { cause: cardsRes.error })
         }
         measure(cardsRes.data)
+        // Network reads may overlap, but totals must use the completed building snapshot.
+        await buildingsReady
         // cards transform은 buildings 의존 — buildingsRef로 항상 최신 buildings 사용
         const transformedCards = (cardsRes.data as unknown as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
         if (recipientReader?.scoped || (demandBuildings && needsBuildingSummaries(buildingModeRef.current))) {
@@ -931,7 +933,14 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         }) : null
 
       // buildings와 cards가 둘 다 요청되면 buildings 먼저 fetch (의존성)
-      if (slices.includes('buildings') && (slices.includes('cards') || slices.includes('visits'))) {
+      if (options?.triggeredBy === 'navigation:building-demand' && slices.includes('buildings') && slices.includes('cards')) {
+        const buildingsRead = read('buildings')
+        const cardsRead = fetchSlice('cards', false, false, options?.strictGroups, buildingsRead)
+        const remaining = buildingsRead.then(() => readSnapshotParts(slices.filter(s => s !== 'buildings' && s !== 'cards').map(read)))
+          .then(bytes => bytes.reduce((a, b) => a + b, 0))
+        const bytesArr = await readSnapshotParts([buildingsRead, cardsRead, remaining])
+        totalBytes = bytesArr.reduce((a, b) => a + b, 0)
+      } else if (slices.includes('buildings') && (slices.includes('cards') || slices.includes('visits'))) {
         const buildingsBytes = await read('buildings')
         totalBytes += buildingsBytes
         const remaining = slices.filter((s) => s !== 'buildings')
@@ -1376,8 +1385,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       try {
         for (let attempt = 0; ; attempt++) {
           try {
-            // Capture the recovery clock before both buildings and histories.
-            await withLoadDeadline(fetchSlices(['buildings', 'cards', 'visits'], { triggeredBy: 'navigation:building-demand' }))
+            // Home and calendar both use authoritative card summaries. Adding names
+            // needs no new card totals or histories; richer consumers still read both.
+            const slices: Slice[] = acquiredBuildingMode.current === 'home' && buildingModeRef.current === 'calendar'
+              ? ['buildings'] : ['buildings', 'cards', 'visits']
+            await withLoadDeadline(fetchSlices(slices, { triggeredBy: 'navigation:building-demand' }))
             return
           } catch (failure) {
             if (!historyStoreActive.current) return
