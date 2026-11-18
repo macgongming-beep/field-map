@@ -1,5 +1,5 @@
 import {afterEach,beforeEach,expect,test,vi} from 'vitest'
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
+import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react'
 import {GroupServiceDetail} from './GroupServiceDetail'
 import {ServiceEventList} from './ServiceEventList'
 import {ServiceEventEditor} from './ServiceEventEditor'
@@ -51,12 +51,46 @@ test('leader can arrange every tab but only admin can edit; foreground refreshes
   fireEvent.click(screen.getByRole('button',{name:'팀 구성 · 구역 배정'}))
   expect(assign).toHaveBeenCalledWith(2)
   expect(screen.queryByRole('button',{name:'일정 수정'})).toBeNull()
+  expect(screen.queryByRole('button',{name:'더보기'})).toBeNull()
   mocks.context.mockResolvedValue({...context,events:context.events.map(e=>({...e,count:3,canEdit:true}))})
   fireEvent(document,new Event('visibilitychange'))
   await screen.findByRole('tab',{name:'신갈 3'})
-  expect(screen.getByRole('button',{name:'일정 수정'})).toBeTruthy()
+  fireEvent.click(screen.getByRole('button',{name:'더보기'}))
+  expect(screen.getByRole('menuitem',{name:'일정 수정'})).toBeTruthy()
 })
-test('shared assignments open automatically but meeting info stays collapsed and foreign results stay hidden',async()=>{
+test.each([true,false])('schedule actions live at the top, target selected group, and dismiss safely (mobile=%s)',async mobile=>{
+  mocks.context.mockResolvedValue({ownGroup:'dongtan',events:events.map(e=>({id:e.id,groupCode:e.targetGroups![0],count:1,canManage:true,canEdit:true,canRead:true}))})
+  const edit=vi.fn(),remove=vi.fn()
+  const {container}=render(<GroupServiceDetail event={events[0]} events={events} language="ko" currentVisitor="Admin" mobile={mobile} onClose={mobile?vi.fn():undefined} onEdit={edit} onDelete={remove}/>)
+  await screen.findByRole('tab',{name:'동탄 1'})
+  const top=container.querySelector(mobile?'.gs-tab-detail>header':'.gs-tab-title')! as HTMLElement
+  const more=within(top).getByRole('button',{name:'더보기'})
+  expect(container.querySelector('.gs-roster-heading .gs-schedule-actions')).toBeNull()
+  expect(screen.queryByRole('menuitem')).toBeNull()
+  fireEvent.click(more)
+  expect(document.activeElement).toBe(screen.getByRole('menuitem',{name:'일정 수정'}))
+  fireEvent.keyDown(document.activeElement!,{key:'ArrowDown'})
+  expect(document.activeElement).toBe(screen.getByRole('menuitem',{name:'일정 삭제'}))
+  fireEvent.keyDown(document.activeElement!,{key:'Escape'})
+  expect(screen.queryByRole('menu')).toBeNull()
+  expect(document.activeElement).toBe(more)
+  fireEvent.click(more)
+  // Safari can blur to no focused element on pointer-down before the menu click.
+  fireEvent.blur(screen.getByRole('menuitem',{name:'일정 수정'}),{relatedTarget:null})
+  fireEvent.click(screen.getByRole('menuitem',{name:'일정 수정'}))
+  expect(edit).toHaveBeenCalledWith(1)
+  expect(screen.queryByRole('menu')).toBeNull()
+  fireEvent.click(more)
+  fireEvent.click(screen.getByRole('tab',{name:'신갈 1'}))
+  expect(screen.queryByRole('menu')).toBeNull()
+  fireEvent.click(screen.getByRole('button',{name:'더보기'}))
+  fireEvent.click(screen.getByRole('menuitem',{name:'일정 삭제'}))
+  expect(remove).toHaveBeenCalledWith(2)
+  fireEvent.click(screen.getByRole('button',{name:'더보기'}))
+  fireEvent.pointerDown(document.body)
+  expect(screen.queryByRole('menu')).toBeNull()
+})
+test('shared assignments stay visible without collapse while meeting info stays collapsed and foreign results stay hidden',async()=>{
   const assigned=events.map(e=>({...e,place:'Meeting place',assignmentStatus:'draft' as const,cardAssignments:[{id:e.id,eventId:e.id,userName:e.applicants[0],assignedCardId:1,assignedBy:'Admin',assignedAt:'',memo:''}]}))
   const props={event:assigned[0],events:assigned,language:'ko' as const,currentVisitor:'User',renderAssignments:(e:CalendarEvent)=><div>{`Team ${e.id}`}</div>}
   const {rerender}=render(<GroupServiceDetail {...props}/> )
@@ -64,18 +98,20 @@ test('shared assignments open automatically but meeting info stays collapsed and
   expect(screen.queryByText('배정 결과')).toBeNull()
   const shared=assigned.map(e=>({...e,assignmentStatus:'shared' as const}))
   rerender(<GroupServiceDetail {...props} event={shared[0]} events={shared}/> )
-  const result=screen.getByText('배정 결과').closest('details')!
-  expect(result.open).toBe(true)
+  const result=screen.getByRole('region',{name:'배정 결과'})
+  expect(result.tagName).toBe('SECTION')
+  expect(result.querySelector('summary')).toBeNull()
+  expect(within(result).getByText('Team 1')).toBeTruthy()
   expect(screen.getByText('모임 정보').closest('details')!.open).toBe(false)
   fireEvent.click(screen.getByText('배정 결과'))
-  expect(result.open).toBe(false)
   rerender(<GroupServiceDetail {...props} event={shared[0]} events={shared}/> )
-  expect(result.open).toBe(false)
+  expect(screen.getByRole('region',{name:'배정 결과'})).toBe(result)
+  expect(within(result).getByText('Team 1')).toBeTruthy()
   fireEvent.click(screen.getByRole('tab',{name:'신갈 1'}))
   expect(screen.queryByText('배정 결과')).toBeNull()
   expect(screen.queryByText('Team 2')).toBeNull()
   fireEvent.click(screen.getByRole('tab',{name:'동탄 1'}))
-  expect(screen.getByText('배정 결과').closest('details')!.open).toBe(true)
+  expect(within(screen.getByRole('region',{name:'배정 결과'})).getByText('Team 1')).toBeTruthy()
 })
 test('empty meeting information is absent including whitespace and disappears on group switch',async()=>{
   const rows=events.map((e,i)=>({...e,leader:'  ',place:i===1?'Meeting place':'\n',memo:' ',meetingMode:'in_person' as const}))

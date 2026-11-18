@@ -1,4 +1,4 @@
-import {useEffect,useState,type ReactNode} from 'react'
+import {useEffect,useId,useRef,useState,type ReactNode} from 'react'
 import type {CalendarEvent} from '../../types'
 import {t,type AppLanguage} from '../../i18n'
 import {msg} from '../../lib/msg'
@@ -78,14 +78,16 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
   const visibleAssignments=current?.cardAssignments.filter(a=>selectedMeta?.canManage || a.userName===currentVisitor || (ownTeam&&a.teamKey===ownTeam)) ?? []
   const group=serviceGroups.find(g=>g.code===selectedMeta?.groupCode)
   const names=current?territoryApplicants(current):[]
+  const scheduleActions=current&&selectedMeta?.canEdit&&(onEdit||onDelete)
+    ?<GroupScheduleActions key={current.id} language={language} onEdit={onEdit?()=>onEdit(current.id):undefined} onDelete={onDelete?()=>onDelete(current.id):undefined}/>:null
   const remove=async(name:string)=>{
     if(current&&selectedMeta?.canManage&&await confirmDialog({message:msg('{name}님을 이 일정에서 제외할까요?',{name}),danger:true,confirmLabel:msg('제외')}))await onRemoveParticipant?.(current.id,name)
   }
   const dateLabel=new Intl.DateTimeFormat(language==='zh'?'zh-CN':language==='en'?'en-US':'ko-KR',{month:'long',day:'numeric',weekday:'short'}).format(new Date(`${event.date}T12:00:00`))
   return <section className={`gs-tab-detail${mobile?' gs-tab-mobile':''}`} aria-label={msg('집단 봉사')}>
-    {(mobile||onClose)&&<header>{onClose&&<button type="button" aria-label={msg('뒤로')} onClick={onClose}>‹</button>}<div><strong>{msg('일정')}</strong><span>{dateLabel}</span></div></header>}
+    {(mobile||onClose)&&<header>{onClose&&<button type="button" aria-label={msg('뒤로')} onClick={onClose}>‹</button>}<div><strong>{msg('일정')}</strong><span>{dateLabel}</span></div>{scheduleActions}</header>}
     <div className="gs-tab-body">
-      <div className="gs-tab-title"><div><span>{event.time}{event.endTime?`–${event.endTime}`:''}</span><h2>{msg('집단 봉사')}</h2></div>{context&&<span>{msg('신청 {n}건',{n:context.events.reduce((n,e)=>n+e.count,0)})}</span>}</div>
+      <div className="gs-tab-title"><div><span>{event.time}{event.endTime?`–${event.endTime}`:''}</span><h2>{msg('집단 봉사')}</h2></div><div className="gs-title-tools">{context&&<span>{msg('신청 {n}건',{n:context.events.reduce((n,e)=>n+e.count,0)})}</span>}{!mobile&&!onClose&&scheduleActions}</div></div>
       {!context&&!failed&&<p role="status">{msg('불러오는 중...')}</p>}
       {failed&&<div role="alert"><p>{msg('신청자를 불러오지 못했습니다.')}</p><button type="button" onClick={()=>setRetry(n=>n+1)}>{msg('다시 시도')}</button></div>}
       {context&&<>
@@ -107,10 +109,6 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
               {onAddParticipant&&<button type="button" aria-label={t(language,'calendar.addSelf')} title={t(language,'calendar.addSelf')} aria-expanded={addingGroup===current.id} onClick={()=>setAddingGroup(addingGroup===current.id?null:current.id)}>+</button>}
               {onRemoveParticipant&&<button type="button" aria-label={t(language,'calendar.removeShort')} title={t(language,'calendar.removeShort')} aria-pressed={removingGroup===current.id} onClick={()=>setRemovingGroup(removingGroup===current.id?null:current.id)}>−</button>}
             </div>}
-            {selectedMeta.canEdit&&<div className="gs-roster-tools">
-              {onEdit&&<button type="button" title={msg('일정 수정')} aria-label={msg('일정 수정')} onClick={()=>onEdit(current.id)}>✎</button>}
-              {onDelete&&<button type="button" title={msg('일정 삭제')} aria-label={msg('일정 삭제')} onClick={()=>onDelete(current.id)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>}
-            </div>}
           </div>
           {selectedMeta.canManage&&addingGroup===current.id&&onAddParticipant&&<ParticipantAddContent users={participantUsers} existingNames={current.applicants} onAdd={(name,role)=>onAddParticipant(current.id,name,role)} onAdded={()=>setAddingGroup(null)}/>}
           {selectedMeta.canRead?<>
@@ -119,7 +117,7 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
             <ReturnVisitApplicants event={current} onRemove={selectedMeta.canManage&&removingGroup===current.id?remove:undefined}/>
           </>:<p className="gs-private-roster">{msg('신청자 명단은 해당 집단에서 확인할 수 있습니다.')}</p>}
           {selectedMeta.canManage&&onAssignment&&<button className="gs-assignment-open" type="button" onClick={()=>onAssignment(current.id)}>{msg('팀 구성 · 구역 배정')} <span aria-hidden>›</span></button>}
-          {current.assignmentStatus==='shared'&&visibleAssignments.length>0&&renderAssignments&&<details open className="gs-group-information" key={`assignments-${current.id}`}><summary>{msg('배정 결과')}</summary>{renderAssignments({...current,cardAssignments:visibleAssignments})}</details>}
+          {current.assignmentStatus==='shared'&&visibleAssignments.length>0&&renderAssignments&&<section className="gs-assignment-results" aria-label={msg('배정 결과')} key={`assignments-${current.id}`}><h3>{msg('배정 결과')}</h3>{renderAssignments({...current,cardAssignments:visibleAssignments})}</section>}
           {hasMeetingInformation&&<details className="gs-group-information" key={`info-${current.id}`}><summary>{msg('모임 정보')}</summary>
             {current.leader&&<p>{msg('인도자')} · {current.leader}</p>}{current.place&&<p>{current.place}</p>}
             {current.meetingMode==='virtual'&&<MeetingAccessPanel eventId={current.id} version={current.editVersion}/>}
@@ -132,4 +130,35 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
       </>}
     </div>
   </section>
+}
+
+function GroupScheduleActions({language,onEdit,onDelete}:{language:AppLanguage;onEdit?:()=>void;onDelete?:()=>void}){
+  const [open,setOpen]=useState(false)
+  const root=useRef<HTMLDivElement>(null)
+  const trigger=useRef<HTMLButtonElement>(null)
+  const id=useId()
+  useEffect(()=>{
+    if(!open)return
+    root.current?.querySelector<HTMLButtonElement>('[role=menuitem]')?.focus()
+    const outside=(event:PointerEvent)=>{if(!root.current?.contains(event.target as Node))setOpen(false)}
+    document.addEventListener('pointerdown',outside)
+    return()=>document.removeEventListener('pointerdown',outside)
+  },[open])
+  return <div className="gs-schedule-actions" ref={root} onBlur={e=>{if(e.relatedTarget&&!e.currentTarget.contains(e.relatedTarget))setOpen(false)}} onKeyDown={e=>{
+    if(e.key==='Escape'){e.stopPropagation();setOpen(false);trigger.current?.focus()}
+    if(open&&['ArrowDown','ArrowUp','Home','End'].includes(e.key)){
+      e.preventDefault()
+      const items=Array.from(root.current?.querySelectorAll<HTMLButtonElement>('[role=menuitem]')??[])
+      const index=items.indexOf(document.activeElement as HTMLButtonElement)
+      items[e.key==='Home'?0:e.key==='End'?items.length-1:(index+(e.key==='ArrowUp'?-1:1)+items.length)%items.length]?.focus()
+    }
+  }}>
+    <button ref={trigger} type="button" className="gs-schedule-trigger" aria-label={t(language,'map.more')} title={t(language,'map.more')} aria-haspopup="menu" aria-expanded={open} aria-controls={open?id:undefined} onClick={()=>setOpen(value=>!value)}>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+    </button>
+    {open&&<div id={id} className="gs-schedule-menu" role="menu" aria-label={t(language,'map.more')}>
+      {onEdit&&<button type="button" role="menuitem" onClick={()=>{setOpen(false);onEdit()}}>{msg('일정 수정')}</button>}
+      {onDelete&&<button type="button" role="menuitem" className="danger" onClick={()=>{setOpen(false);onDelete()}}>{msg('일정 삭제')}</button>}
+    </div>}
+  </div>
 }
