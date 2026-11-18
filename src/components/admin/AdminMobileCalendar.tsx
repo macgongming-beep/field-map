@@ -561,7 +561,7 @@ export function AdminMobileCalendar({
             <CalendarEmptyIcon />
             <p>{t(language, 'calendar.noEvents')}</p>
           </div>
-        ) : groupServiceEnabled() ? <ServiceEventList language={language} events={selectedEvents} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{
+        ) : groupServiceEnabled() ? <ServiceEventList language={language} events={selectedEvents} globalSettings={globalSettings} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{
           detailReturnToRef.current=getCurrentAppPath(location); detailReturnsThroughHistoryRef.current=false; setCommentEntry(undefined); setDetailEventId(id)
         }}/> : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
@@ -642,6 +642,7 @@ export function AdminMobileCalendar({
 
       {/* ── 일정 상세 시트 ─────────────── */}
       {detailEvent && assignEventId === null && editingEventId === null && !scopeAction && groupServiceEnabled() && detailEvent.groupServiceScope && <GroupServiceDetail
+        globalSettings={globalSettings}
         key={`${detailEvent.date}:${detailEvent.time}:${detailEvent.endTime}`} mobile event={detailEvent} events={events} language={language} currentVisitor={currentVisitor}
         onClose={returnFromDetail} onApply={onApplyToEvent}
         currentUserId={currentUserId} role={role} mentionUsers={mentionUsers} commentEntry={commentEntry}

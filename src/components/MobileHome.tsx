@@ -916,6 +916,7 @@ export function MobileHome({
 
                 {role === 'admin' ? (
                   <AdminMobileHome
+                    globalSettings={globalSettings}
                     language={language}
                     
                     todayEvents={todayEvents}

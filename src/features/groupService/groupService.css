@@ -13,9 +13,10 @@
 .gs-schedule-menu button:hover,.gs-schedule-menu button:focus-visible { background:var(--tint); }
 .gs-tab-body { padding:20px 16px; overflow:auto; min-height:0; padding-bottom:max(24px,env(safe-area-inset-bottom)); }
 .gs-tab-title { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:20px; }
+.gs-tab-title>div:first-child { min-width:0; overflow-wrap:anywhere; }
 .gs-tab-title h2 { font-size:22px; margin:6px 0 0; }.gs-tab-title>span { font-size:12px; color:var(--muted); white-space:nowrap; }
 .gs-tab-title>div>span { font-size:17px; font-weight:600; }
-.gs-title-tools { display:flex; align-items:center; gap:8px; }
+.gs-title-tools { display:flex; align-items:center; gap:8px; flex-shrink:0; }
 .gs-tab-title>.gs-title-tools>span { font-size:12px; font-weight:400; color:var(--muted); white-space:nowrap; }
 .gs-group-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--line); margin-bottom:20px; }
 .gs-group-tabs button { min-width:0; min-height:44px; padding:10px 2px; color:var(--muted); background:none; border:0; border-bottom:2px solid transparent; border-radius:0; font-size:13px; font-weight:600; }
@@ -87,7 +88,7 @@
 .gs-event-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; overflow-wrap:anywhere; }
 .gs-event-text strong { font-size:15px; font-weight:600; }
 /* Keep simplified and shared Han glyphs in the same native Chinese font. */
-.gs-event-text strong[lang=zh-Hans] { font-family:'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; }
+.gs-event-text strong[lang=zh-Hans],.gs-tab-title h2[lang=zh-Hans] { font-family:'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; }
 .gs-event-text>span { font-size:13px; color:var(--muted,#666); font-weight:400; }
 .gs-meeting { padding:8px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); font-size:12px; }
 .gs-meeting .gs-meeting-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:32px; }
@@ -98,14 +99,11 @@
 .gs-meeting-detail>span { min-width:0; }
 .gs-meeting p { margin:4px 0; color:var(--muted); }
 .gs-meeting button { min-width:32px; min-height:32px; padding:4px; border:0; color:inherit; background:transparent; border-radius:6px; flex-shrink:0; }
-.day-events .gs-event-block { padding:4px 0; }.day-events .gs-event-block h3 { font-size:11px; }
-.day-events .gs-event-block>button { display:grid; grid-template-columns:minmax(0,1fr); gap:2px; min-height:22px; padding:3px 5px; border-left:2px solid var(--ink,#222); margin:2px 0; }
-.day-events .gs-event-time { width:auto; font-size:11px; }.day-events .gs-event-text strong { font-size:11px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.day-events .gs-event-text>span,.day-events .gs-event-block>button>span:last-child { display:none; }
-.day-events .gs-event-block[data-service-kind=group] .gs-event-text { display:none; }
-.day-events .gs-event-block[data-group-scope=true] { padding:2px 0; }
-.day-events .gs-event-block[data-group-scope=true] .gs-event-text { display:flex; }
-.day-events .gs-event-block[data-group-scope=true]>button { border-radius:0; }
+.day-events .gs-event-block { padding:0; border-bottom:0; }.day-events .gs-event-block h3 { font-size:11px; margin:2px 0; }
+.day-events .gs-event-block>button { display:grid; grid-template-columns:auto minmax(0,1fr); gap:5px; min-height:24px; padding:3px 5px; border-left:2px solid var(--ink,#222); margin:2px 0; border-radius:0; line-height:16px; }
+.day-events .gs-event-time { width:auto; font-size:11px; white-space:nowrap; }.day-events .gs-event-text strong { font-size:11px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.day-events .gs-event-end,.day-events .gs-event-text>span,.day-events .gs-event-block>button>span:last-child { display:none; }
+.day-events .gs-event-text { display:flex; gap:0; }
 .day-cell .gs-day-select { border:0; background:transparent; padding:0; min-height:24px; width:24px; color:inherit; font:inherit; }
 .gs-application-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:8px; margin:0 0 14px; }
 .gs-application-actions button { min-height:44px; min-width:0; padding:10px 8px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font:inherit; font-size:14px; font-weight:600; letter-spacing:0; overflow-wrap:anywhere; cursor:pointer; }

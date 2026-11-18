@@ -3,7 +3,7 @@ import { cleanup,fireEvent,render,screen,waitFor } from '@testing-library/react'
 import { ServiceEventEditor } from './ServiceEventEditor'
 import { ServiceEventList } from './ServiceEventList'
 import { MeetingAccessPanel } from './MeetingAccessPanel'
-import { eventBlocks,groupServiceEnabled } from './model'
+import { eventBlocks,groupLabel,groupServiceEnabled } from './model'
 import { willNotifyOnEventChange } from '../../utils/eventNotify'
 import type { CalendarEvent } from '../../types'
 import { setCurrentLang } from '../../i18n'
@@ -38,6 +38,25 @@ test('Chinese event titles have Chinese typography even in the Korean interface'
   ]} onOpen={vi.fn()}/> )
   expect(screen.getByText('传道').getAttribute('lang')).toBe('zh-Hans')
   expect(screen.getByText('봉사 모임').getAttribute('lang')).toBeNull()
+})
+test('configured group names retain their language and order cannot reassign codes',()=>{
+  const configured=JSON.stringify(['东柏','处仁','新葛','东滩'])
+  for(const language of ['ko','zh','en'] as const){
+    expect(groupLabel(['dongtan','singal','cheoin','dongbaek'],language,configured)).toBe('东滩 · 新葛 · 处仁 · 东柏')
+  }
+  expect(groupLabel(['dongtan'],'ko',JSON.stringify(['Unknown','东柏']))).toBe('동탄')
+  expect(groupLabel(['dongtan'],'zh','invalid')).toBe('东滩')
+})
+test('configured Chinese group choices still save canonical group codes',async()=>{
+  const submit=vi.fn(async()=>true)
+  render(<ServiceEventEditor language="ko" date="2026-11-25" events={[]} users={users} onClose={vi.fn()} onSubmit={submit} globalSettings={{user_groups:JSON.stringify(['东柏','处仁','新葛','东滩'])}}/>)
+  fireEvent.click(screen.getByRole('button',{name:'집단봉사'}))
+  for(const name of ['新葛','处仁','东柏'])fireEvent.click(screen.getByLabelText(name))
+  fireEvent.change(screen.getByLabelText('제목'),{target:{value:'小组传道'}})
+  fireEvent.click(screen.getByLabelText('Leader'))
+  fireEvent.click(screen.getByRole('button',{name:'저장'}))
+  await waitFor(()=>expect(submit).toHaveBeenCalledOnce())
+  expect(submit.mock.calls[0][0].servicePlan.rows[0].payload).toMatchObject({title:'小组传道',target_groups:['dongtan']})
 })
 test('adds a second independent time slot only when requested',async()=>{
   const submit=vi.fn(async()=>true)

@@ -757,7 +757,7 @@ export function DesktopCalendar({
                     </span>}
                   </div>
                   <div className="day-events">
-                    {groupServiceEnabled() ? <ServiceEventList events={dayEvents} language={language} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{if(day)setSelectedDay(day);setCommentEntry(undefined);setSelectedEventId(id);setShowCreateForm(false)}}/> : dayEvents.map((event) => (
+                    {groupServiceEnabled() ? <ServiceEventList events={dayEvents} language={language} globalSettings={globalSettings} groupName={participantUsers.find(u=>u.name===currentVisitor)?.groupName ?? undefined} onOpen={id=>{if(day)setSelectedDay(day);setCommentEntry(undefined);setSelectedEventId(id);setShowCreateForm(false)}}/> : dayEvents.map((event) => (
                       <small 
                         className={`event-pill ${eventTimeClass(event.time)}${event.hasMeeting ? ' has-meeting' : ''} ${selectedEventId === event.id ? 'active' : ''}`} 
                         key={event.id}
@@ -808,6 +808,7 @@ export function DesktopCalendar({
             <div className="detail-stack">
               {selectedEvents.map((event) => {
                 if(groupServiceEnabled() && event.groupServiceScope) return <GroupServiceDetail
+                  globalSettings={globalSettings}
                   key={`${event.date}:${event.time}:${event.endTime}`} event={event} events={events} language={language} currentVisitor={currentVisitor}
                   onApply={onApplyToEvent}
                   currentUserId={currentUserId} role={actualRole} mentionUsers={mentionUsers} commentEntry={commentEntry}

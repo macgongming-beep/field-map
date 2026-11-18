@@ -93,6 +93,7 @@ export function DesktopHome({
 
         {role === 'admin' ? (
           <AdminMobileHome
+            globalSettings={globalSettings}
             language={language}
             todayEvents={todayEvents}
             groupName={groupName}

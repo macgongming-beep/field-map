@@ -3,7 +3,7 @@ import type {CalendarEvent} from '../../types'
 import {t,type AppLanguage} from '../../i18n'
 import {msg} from '../../lib/msg'
 import {readGroupServiceContext,type GroupServiceContext} from './api'
-import {groupSlotEvents,serviceGroups,territoryApplicants} from './model'
+import {groupLabel,groupSlotEvents,serviceGroups,territoryApplicants} from './model'
 import {ServiceApplicationButtons,ReturnVisitApplicants} from './ServiceApplications'
 import {MeetingAccessPanel} from './MeetingAccessPanel'
 import {GROUP_PARTICIPANTS_CHANGED} from './participantChanges'
@@ -16,6 +16,7 @@ import type {MentionUser} from '../../components/CommentSection'
 import type {Role} from '../../types'
 
 type Props={event:CalendarEvent;events:CalendarEvent[];language:AppLanguage;currentVisitor:string;
+  globalSettings?:Record<string,string>;
   currentUserId?:number|null;role?:Role;mentionUsers?:MentionUser[];commentEntry?:{eventId:number;commentId:number;requestKey?:string};
   mobile?:boolean;onClose?:()=>void;onApply?:(id:number,activity?:'service'|'return_visit')=>unknown;
   onAssignment?:(id:number)=>void;onEdit?:(id:number)=>void;onDelete?:(id:number)=>void;
@@ -24,7 +25,7 @@ type Props={event:CalendarEvent;events:CalendarEvent[];language:AppLanguage;curr
   onRemoveParticipant?:(id:number,name:string)=>unknown;
   renderAssignments?:(event:CalendarEvent)=>ReactNode}
 
-export function GroupServiceDetail({event,events,language,currentVisitor,currentUserId,role,mentionUsers,commentEntry,mobile,onClose,onApply,onAssignment,onEdit,onDelete,renderAssignments,participantUsers=[],onAddParticipant,onRemoveParticipant}:Props){
+export function GroupServiceDetail({event,events,language,currentVisitor,currentUserId,role,mentionUsers,commentEntry,mobile,onClose,onApply,onAssignment,onEdit,onDelete,renderAssignments,participantUsers=[],onAddParticipant,onRemoveParticipant,globalSettings={}}:Props){
   const [response,setResponse]=useState<{key:string;scope:string;data:GroupServiceContext|null;failed:boolean}|null>(null)
   const [selected,setSelected]=useState<number|null>(null)
   const [retry,setRetry]=useState(0)
@@ -73,6 +74,9 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
   }
   const selectedMeta=context?.events.find(e=>e.id===selected)
   const current=siblings.find(e=>e.id===selected)
+  const savedTitle=(current??event).title
+  const title=savedTitle.trim()?savedTitle:msg('집단 봉사')
+  const chineseTitle=/\p{Script=Han}/u.test(title)&&!/\p{Script=Hangul}/u.test(title)
   const hasMeetingInformation=Boolean(current&&(current.leader?.trim()||current.place?.trim()||current.memo?.trim()||current.meetingMode==='virtual'))
   const ownTeam=current?.cardAssignments.find(a=>a.userName===currentVisitor)?.teamKey
   const visibleAssignments=current?.cardAssignments.filter(a=>selectedMeta?.canManage || a.userName===currentVisitor || (ownTeam&&a.teamKey===ownTeam)) ?? []
@@ -87,7 +91,7 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
   return <section className={`gs-tab-detail${mobile?' gs-tab-mobile':''}`} aria-label={msg('집단 봉사')}>
     {(mobile||onClose)&&<header>{onClose&&<button type="button" aria-label={msg('뒤로')} onClick={onClose}>‹</button>}<div><strong>{msg('일정')}</strong><span>{dateLabel}</span></div>{scheduleActions}</header>}
     <div className="gs-tab-body">
-      <div className="gs-tab-title"><div><span>{event.time}{event.endTime?`–${event.endTime}`:''}</span><h2>{msg('집단 봉사')}</h2></div><div className="gs-title-tools">{context&&<span>{msg('신청 {n}건',{n:context.events.reduce((n,e)=>n+e.count,0)})}</span>}{!mobile&&!onClose&&scheduleActions}</div></div>
+      <div className="gs-tab-title"><div><span>{event.time}{event.endTime?`–${event.endTime}`:''}</span><h2 lang={chineseTitle?'zh-Hans':undefined}>{title}</h2></div><div className="gs-title-tools">{context&&<span>{msg('신청 {n}건',{n:context.events.reduce((n,e)=>n+e.count,0)})}</span>}{!mobile&&!onClose&&scheduleActions}</div></div>
       {!context&&!failed&&<p role="status">{msg('불러오는 중...')}</p>}
       {failed&&<div role="alert"><p>{msg('신청자를 불러오지 못했습니다.')}</p><button type="button" onClick={()=>setRetry(n=>n+1)}>{msg('다시 시도')}</button></div>}
       {context&&<>
@@ -99,12 +103,12 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
             const i=buttons.indexOf(e.currentTarget)
             const next=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length
             buttons[next].click();buttons[next].focus()
-          }}>{g[language]} <span>{item.count}</span></button>})}
+          }}>{groupLabel([g.code],language,globalSettings.user_groups)} <span>{item.count}</span></button>})}
         </div>
         {current&&selectedMeta&&<div role="tabpanel" id={`gs-panel-${event.id}`} aria-labelledby={`gs-tab-${current.id}`}>
           <ServiceApplicationButtons key={`apply-${current.id}`} event={current} currentVisitor={currentVisitor}
             onApply={onApply?activity=>onApply(current.id,activity):undefined} onCancel={onApply?()=>onApply(current.id):undefined}/>
-          <div className="gs-roster-heading"><h3>{group?.[language]} · {msg('신청자')} {selectedMeta.count}</h3>
+          <div className="gs-roster-heading"><h3>{groupLabel(group?[group.code]:[],language,globalSettings.user_groups)} · {msg('신청자')} {selectedMeta.count}</h3>
             {selectedMeta.canManage&&<div className="gs-roster-tools">
               {onAddParticipant&&<button type="button" aria-label={t(language,'calendar.addSelf')} title={t(language,'calendar.addSelf')} aria-expanded={addingGroup===current.id} onClick={()=>setAddingGroup(addingGroup===current.id?null:current.id)}>+</button>}
               {onRemoveParticipant&&<button type="button" aria-label={t(language,'calendar.removeShort')} title={t(language,'calendar.removeShort')} aria-pressed={removingGroup===current.id} onClick={()=>setRemovingGroup(removingGroup===current.id?null:current.id)}>−</button>}

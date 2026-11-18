@@ -37,6 +37,7 @@ function UserIcon() {
 }
 
 type Props = {
+  globalSettings?: Record<string,string>
   groupName?: string
   language: AppLanguage
   todayEvents: CalendarEvent[]
@@ -54,6 +55,7 @@ import { ServiceSuggestionsSection } from '../ServiceSuggestionsSection'
 import { MeetingHome } from '../../features/meetingNotes/MeetingHome'
 
 export function AdminMobileHome({
+  globalSettings,
   groupName,
   language,
   todayEvents,
@@ -76,7 +78,7 @@ export function AdminMobileHome({
           <div className="mh-empty-line">
             <span>{t(language, 'home.noTodayServiceShort')}</span>
           </div>
-        ) : groupServiceEnabled() ? <ServiceEventList events={todayEvents} groupName={groupName} language={language} onOpen={onOpenEventDetail}/> : (
+        ) : groupServiceEnabled() ? <ServiceEventList events={todayEvents} groupName={groupName} language={language} globalSettings={globalSettings} onOpen={onOpenEventDetail}/> : (
           <div className="mh-today-list">
             {todayEvents.map((event) => {
               const tb = timeBlock(event.time || '', language)

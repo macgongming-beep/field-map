@@ -47,7 +47,7 @@ export function UserMobileHome({
           <div className="mh-empty-line">
             <span>{t(language, 'home.noTodayServiceShort')}</span>
           </div>
-        ) : groupServiceEnabled() ? <ServiceEventList events={myTodayEvents.map(x=>x.event)} statusById={Object.fromEntries(myTodayEvents.map(x=>[x.event.id,x.kind]))} groupName={groupName} language={language} onOpen={onOpenEventDetail}/> : (
+        ) : groupServiceEnabled() ? <ServiceEventList events={myTodayEvents.map(x=>x.event)} statusById={Object.fromEntries(myTodayEvents.map(x=>[x.event.id,x.kind]))} groupName={groupName} language={language} globalSettings={globalSettings} onOpen={onOpenEventDetail}/> : (
           <div className="mh-today-list">
             {myTodayEvents.map(({ event, kind }) => {
               const hour = Number(event.time.split(':')[0] ?? 0)
