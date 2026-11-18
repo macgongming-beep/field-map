@@ -294,7 +294,7 @@ components/CsvImportModal(props 7) · DuplicateBuildingMergeModal(5) · Territor
 | 백엔드 | Supabase (PostgreSQL + REST + RPC) |
 | 지도 | 네이버 지도 API |
 | 라우팅 | react-router-dom 7 |
-| 호스팅 | Vercel (GitHub `main` 브랜치 자동 배포) |
+| 호스팅 | Vercel (검증 후 명시적 배포, Git 자동 배포 꺼짐) |
 
 ```bash
 npm run dev        # 개발 서버 (Vite, --host 로 LAN 접근 가능)
@@ -313,7 +313,13 @@ VITE_NAVER_MAP_CLIENT_ID=...
 SUPABASE_SERVICE_ROLE_KEY=...   # 백업 스크립트용 (RLS 우회)
 ```
 
-배포 흐름: `git push origin main` → Vercel 자동 빌드 → 라이브.
+배포 흐름 (2026-11-19 변경): **push는 저장만 하며 앱을 배포하지 않는다.**
+운영·데모 프로젝트의 Git 자동 배포와 저장소 `git.deploymentEnabled`를 모두 껐다.
+문서만 바꾸면 배포하지 않는다. 앱 변경도 로컬 검증을 끝낸 묶음만 배포한다.
+데모 업로드는 `npm run deploy:demo -- --artifact <검증한 prebuilt 폴더> --publish` 한 경로만 쓴다.
+`--publish`를 빼면 읽기 전용 검사다. 운영은 사용자 승인 후 검증한 main 버전을 별도 배포한다.
+기존 수동 `vercel deploy`와 Git 자동 배포를 겹쳐 쓰지 않는다.
+상세 절차·복구: `docs/decisions/0138-explicit-deployment-policy.md`.
 
 ---
 
@@ -634,7 +640,7 @@ App.css          [모바일 공통] 0px~
 2. `git status --short` 로 다른 에이전트 변경사항 확인
 3. 파일 수정 전 **반드시 Read** 후 Edit
 4. 빌드 검증: `npm run build` (TS 에러 0 유지)
-5. 작업 단위마다 commit + push (Vercel 자동 배포)
+5. 작업 단위마다 commit + push (코드 보관/CI만, 자동 배포 없음). 배포는 0138의 단일 경로로 별도 실행
 6. **DB 스키마 변경** 시: `supabase/*.sql` 파일 추가 + 사용자가 SQL Editor 에서 실행
 7. **민감 작업** (PIN/RLS/마이그레이션): 사용자에게 백업 안내 후 진행
 8. **거대 파일 수정** 시 부분 Read (offset/limit 사용)

@@ -1,5 +1,29 @@
 # 백업 / 복원
 
+## 앱 배포 (2026-11-19)
+
+Git push는 운영·데모 어느 쪽에도 앱을 배포하지 않는다. 문서 변경은 배포 대상이 아니다.
+로컬 시험과 화면 확인을 끝낸 뒤 기존 빌드 절차로 데모 전용 prebuilt 폴더를 준비한다.
+이 도구는 빌드나 환경변수 변경을 하지 않으므로, 빌드의 DB 주소·푸시 키·설정 검증은 여전히 필요하다.
+
+```bash
+npm run test:deployment-policy
+npm run deploy:demo -- --artifact scratch/nov18-demo-release
+# 위 검사가 통과하고, 해당 빌드의 검증까지 마친 경우에만:
+npm run deploy:demo -- --artifact scratch/nov18-demo-release --publish
+```
+
+데모 프로젝트/팀 확인, 자동 배포 OFF 확인, 동일 결과물 중복 제외, 로컬 동시 업로드 잠금을 거친다.
+실제 업로드는 `--publish`가 있을 때만 1회 실행하고 자동 재시도하지 않는다.
+이 도구로 처음 올린 이후부터 원격 배포의 `demoArtifactSha`로 동일 결과물을 구분한다.
+문서 때문에 새 빌드를 만들거나 배포하지 않는다. 재빌드로 시각/서비스워커 등이 바뀐 결과물까지
+같다고 판정하는 도구는 아니다. 기존 scratch 업로드 명령을 이 경로와 병행하지 않는다.
+
+프로세스를 강제 종료해서 Git 공통 폴더의 `demo-release.lock`이 남았다면 실행 중인 업로드가
+없고 이전 요청의 성공/실패 상태를 확인한 뒤에만 빈 잠금 폴더를 제거한다.
+운영 배포는 이 도구로 할 수 없다. 사용자 승인과 운영 설정 검증을 따로 거친다.
+전체 결정과 복구 절차는 [0138](../docs/decisions/0138-explicit-deployment-policy.md)을 따른다.
+
 ## 권한 변경 검증
 
 GitHub CI는 비밀값 없이 `lint + unit test + build`만 실행한다. **CI가 초록이어도

@@ -37,5 +37,8 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Check deployment policy without publishing
+        run: npm run test:deployment-policy
+
       - name: Build
         run: npm run build
