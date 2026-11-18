@@ -179,6 +179,38 @@ test('parallel initial home starts independent reads but gates cards and histori
   expect(state.summaries).toHaveBeenCalledTimes(1)
 })
 
+test('manual full refresh after initial success waits for calendar before recipient discovery', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  const previousBuildings = result.current.buildings
+  state.refresh.mockClear()
+  state.reads = []
+  let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.calendarResponses.push(new Promise(resolve => { release = resolve }))
+  state.buildings = [{ ...building, id: 20, units: [{ ...building.units[0], id: 200, building_id: 20 }] }]
+  state.historyRows.push({ ...state.historyRows[0], id: 902, unit_id: 200 })
+  let refresh!: Promise<void>
+  act(() => { refresh = result.current.refetchAll() })
+  try {
+    await waitFor(() => expect(state.reads).toContain('calendar_events'))
+    expect(state.refresh).not.toHaveBeenCalled()
+    expect(state.reads).not.toContain('app_settings')
+    expect(state.reads).not.toContain('cards')
+    expect(state.reads).not.toContain('visit_histories')
+    expect(result.current.buildings).toBe(previousBuildings)
+  } finally {
+    await act(async () => { release({ data: [], error: null }); await refresh })
+  }
+  expect(state.refresh).toHaveBeenCalledExactlyOnceWith(undefined)
+  expect(result.current.buildings.map(b => b.id)).toEqual([20])
+  expect(result.current.visitHistories.map(h => h.id)).toEqual([902])
+  expect(result.current.error).toBeNull()
+})
+
 test.each(['false', undefined])('initial parallel requires explicit opt-in (%s)', async flag => {
   vi.stubEnv('VITE_DEMO_MODE', 'true')
   vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', flag)
