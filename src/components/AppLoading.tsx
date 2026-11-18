@@ -1,10 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { msg } from '../lib/msg'
 import { applyUpdate } from '../lib/pwa'
 
-export function AppLoading({ kind = 'data', failed = false }: {
+// Mount inside Suspense: resolving data alone does not mean the first screen has painted.
+export function AppScreenReady({ onReady }: { onReady: () => void }) {
+  useLayoutEffect(onReady, [onReady])
+  return null
+}
+
+export function AppLoading({ kind = 'data', failed = false, startup = false }: {
   kind?: 'data' | 'screen' | 'login'
   failed?: boolean
+  startup?: boolean
 }) {
   const [slow, setSlow] = useState(false)
   const [retrying, setRetrying] = useState(false)
@@ -29,7 +36,7 @@ export function AppLoading({ kind = 'data', failed = false }: {
   return (
     <div className="app-loading" role="status" aria-label={status}>
       <div className="app-loading-main">
-        <div className="app-loading-brand">
+        {startup && <div className="app-loading-brand">
           <svg className="app-loading-mark" aria-hidden="true" focusable="false" viewBox="0 0 1024 1024">
             <rect width="1024" height="1024" rx="230" fill="#111827"/>
             <g fill="none" stroke="#fff" strokeLinecap="round" strokeLinejoin="round">
@@ -39,8 +46,8 @@ export function AppLoading({ kind = 'data', failed = false }: {
               <circle cx="512" cy="488" r="48" fill="#fff" stroke="none"/>
             </g>
           </svg>
-        </div>
-        {failed && <div className="app-loading-status"><p>{status}</p></div>}
+        </div>}
+        {(!startup || failed) && <div className="app-loading-status"><p>{status}</p></div>}
         {(slow || failed) && (
           <div className="app-loading-recovery">
             {!failed && <p>{msg('평소보다 오래 걸리고 있습니다. 연결 상태를 확인해 주세요.')}</p>}

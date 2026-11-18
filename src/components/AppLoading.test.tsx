@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { AppLoading } from './AppLoading'
+import { AppLoading, AppScreenReady } from './AppLoading'
+import { lazy, StrictMode, Suspense } from 'react'
 import { setCurrentLang } from '../i18n'
 import { readFileSync } from 'node:fs'
 const apply = vi.hoisted(() => vi.fn())
@@ -37,7 +38,7 @@ test.each([['zh', '重新加载应用'], ['en', 'Reload app']] as const)('recove
 
 test('pre-JS shell and React share the same brand, layout and inline icon without asset requests', () => {
   const boot = new DOMParser().parseFromString(readFileSync('index.html', 'utf8'), 'text/html')
-  const { container } = render(<AppLoading />)
+  const { container } = render(<AppLoading startup />)
   expect(boot.head.querySelector('#app-loading-style')).not.toBeNull()
   for (const selector of ['.app-loading-main', '.app-loading-brand', '.app-loading-mark']) {
     expect(container.querySelector(selector)).not.toBeNull()
@@ -73,9 +74,31 @@ test('the recovery timer never delays leaving loading or reloads automatically',
 })
 
 test('failed load retains the brand and recovery action without a spinning progress indicator', () => {
-  const { container } = render(<AppLoading failed />)
+  const { container } = render(<AppLoading failed startup />)
   expect(container.querySelector('.app-loading-mark')).not.toBeNull()
   expect(container.querySelector('.app-loading-spinner')).toBeNull()
   expect(screen.getByRole('status').textContent).toContain('자료를 불러오지 못했습니다.')
   expect(screen.getByRole('button', { name: '앱 다시 불러오기' })).toBeTruthy()
+})
+
+test.each(['data', 'screen', 'login'] as const)('%s waits after startup have text but no logo or animation', kind => {
+  const { container } = render(<AppLoading kind={kind} />)
+  expect(container.querySelector('.app-loading-mark')).toBeNull()
+  expect(container.querySelector('svg')).toBeNull()
+  expect(screen.getByRole('status').textContent?.trim()).not.toBe('')
+})
+
+test('readiness waits for the lazy screen commit, not just its parent render', async () => {
+  let resolve!: (value: { default: () => React.ReactNode }) => void
+  const Screen = lazy(() => new Promise<{ default: () => React.ReactNode }>(r => { resolve = r }))
+  const ready = vi.fn()
+  render(<StrictMode><Suspense fallback={<AppLoading startup />}>
+    <Screen /><AppScreenReady onReady={ready} />
+  </Suspense></StrictMode>)
+  expect(document.querySelector('.app-loading-mark')).not.toBeNull()
+  expect(ready).not.toHaveBeenCalled()
+  await act(async () => resolve({ default: () => <div>ready screen</div> }))
+  expect(screen.getByText('ready screen')).toBeTruthy()
+  expect(ready).toHaveBeenCalled()
+  expect(document.querySelector('.app-loading')).toBeNull()
 })

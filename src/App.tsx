@@ -6,7 +6,7 @@ import { CalendarReadContext } from './hooks/CalendarReadContext'
 import { homeEventDetailId } from './lib/eventDetailNavigation'
 import { Toast } from './components/Toast'
 import { MeetingProvider } from './features/meetingNotes/MeetingProvider'
-import { AppLoading } from './components/AppLoading'
+import { AppLoading, AppScreenReady } from './components/AppLoading'
 import { AppUpdateNotice } from './components/AppUpdateNotice'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { MaintenanceNotice } from './components/MaintenanceNotice'
@@ -77,6 +77,9 @@ function isRole(value: unknown): value is Role {
 }
 
 function App() {
+  // Keep this above the keyed session so login, role changes and navigation cannot replay startup.
+  const [startup, setStartup] = useState(true)
+  const finishStartup = useCallback(() => setStartup(false), [])
   const auth = useAuth()
   const location = useLocation()
   const recipient = Boolean(auth.user) && recipientStoreEnabled(auth.user!.role, location.pathname,
@@ -84,10 +87,12 @@ function App() {
   // A rename/role change must not reuse a narrow session snapshot or its pending reads.
   const sessionIdentity = recentSessionsEnabled() ? JSON.stringify([auth.user?.name, auth.user?.role]) : ''
   return <AppSession key={`${auth.user?.id ?? 'guest'}:${recipient ? 'recipient' : 'full'}:${sessionIdentity}`}
-    auth={auth} recipientUser={recipient ? auth.user!.name : undefined} />
+    auth={auth} recipientUser={recipient ? auth.user!.name : undefined} startup={startup} onScreenReady={finishStartup} />
 }
 
-function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>; recipientUser?: string }) {
+function AppSession({ auth, recipientUser, startup, onScreenReady }: {
+  auth: ReturnType<typeof useAuth>; recipientUser?: string; startup: boolean; onScreenReady: () => void
+}) {
   const location = useLocation()
   const { user, login, signup, logout, changePin, updateMyProfile, loading: authLoading, allUsers, fetchMyLoginLogs } = auth
   const actualRole: Role = user?.role ?? 'user'
@@ -364,7 +369,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
         <ConfirmDialog />
         <Suspense
           fallback={
-            <AppLoading kind="login" />
+            <AppLoading kind="login" startup={startup} />
           }
         >
           <Login
@@ -374,6 +379,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
             loginRetryHintFor={auth.loginRetryHintFor}
             onSignup={signup}
           />
+          <AppScreenReady onReady={onScreenReady} />
         </Suspense>
       </>
     )
@@ -381,22 +387,23 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
 
   if (screen === 'loading') {
     return (
-      <AppLoading />
+      <AppLoading startup={startup} />
     )
   }
 
 
   if (error && !recipientPreview) {
     return (
-      <AppLoading failed />
+      <AppLoading failed startup={startup} />
     )
   }
 
   // 여기 오면 screen === 'app' 이라 user 가 있다. 타입이 그걸 모르므로 한 줄 둔다.
   if (!user) return null
 
-  if (recipientPreview) return <><Toast /><AppUpdateNotice /><Suspense fallback={<AppLoading kind="screen" />}>
+  if (recipientPreview) return <><Toast /><AppUpdateNotice /><Suspense fallback={<AppLoading kind="screen" startup={startup} />}>
     <RecipientPreview key={user.id} userName={user.name} />
+    <AppScreenReady onReady={onScreenReady} />
   </Suspense></>
 
   // Full consumers must never render historical statistics from a home window.
@@ -405,12 +412,12 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
   if (buildingScopeReady === false) {
     return buildingReadError
       ? <div role="alert">{msg('자료를 불러오지 못했습니다.')}<button type="button" onClick={() => { void retryBuildingRead().catch(() => {}) }}>{msg('다시 시도')}</button></div>
-      : <AppLoading />
+      : <AppLoading startup={startup} />
   }
   if (windowedCalendar && location.pathname !== '/calendar' && !homeCalendarDetail && !calendarScopeReady) {
     return calendarReadError
       ? <div role="alert">자료를 불러오지 못했습니다.<button type="button" onClick={() => { void retryCalendarRead().catch(() => {}) }}>다시 시도</button></div>
-      : <AppLoading />
+      : <AppLoading startup={startup} />
   }
 
   return (
@@ -427,7 +434,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
       {location.pathname !== '/map' && <PullToRefresh onRefresh={refetchAll} />}
       <Suspense
         fallback={
-          <AppLoading kind="screen" />
+          <AppLoading kind="screen" startup={startup} />
         }
       >
         <ScopedCardContext.Provider value={recipientCardScopeEnabled(actualRole, Boolean(recipientUser))}>
@@ -668,6 +675,7 @@ function AppSession({ auth, recipientUser }: { auth: ReturnType<typeof useAuth>;
         </FullBuildingContext.Provider>
         </BuildingDetailContext.Provider>
         </ScopedCardContext.Provider>
+        <AppScreenReady onReady={onScreenReady} />
       </Suspense>
       </MeetingProvider>
     </>

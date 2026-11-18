@@ -8,7 +8,7 @@ import { CalendarReadContext } from './hooks/CalendarReadContext'
 const state = vi.hoisted(() => ({
   ready: true, scope: '', sessionUser: undefined as string | undefined, role: '', mounts: 0,
   buildingReady: true, buildingError: false, buildingScope: undefined as string | undefined, retryBuilding: vi.fn(async () => {}),
-  auth: { user: { id: 1, name: 'Admin', role: 'admin' }, allUsers: [], loading: false },
+  auth: { user: { id: 1, name: 'Admin', role: 'admin' } as { id: number; name: string; role: string } | null, allUsers: [], loading: false },
 }))
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => state.auth }))
 vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string, _user: string, scope: string, sessionUser?: string, buildingScope?: string) => {
@@ -23,14 +23,19 @@ vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string,
 vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: () => {} }))
 vi.mock('./hooks/usePlaceDeletionRealtime', () => ({ usePlaceDeletionRealtime: () => {} }))
 vi.mock('./hooks/useUnitCreationRealtime', () => ({ useUnitCreationRealtime: () => {} }))
+vi.mock('./lib/pwa', () => ({ applyUpdate: vi.fn() }))
 vi.mock('./components/MobileHome', () => ({ MobileHome: () => <CalendarConsumer /> }))
+vi.mock('./components/Login', () => ({ Login: () => <div>login screen</div> }))
 vi.mock('./components/Toast', () => ({ Toast: () => null }))
 vi.mock('./components/ConfirmDialog', () => ({ ConfirmDialog: () => null }))
 vi.mock('./components/AppUpdateNotice', () => ({ AppUpdateNotice: () => null }))
 vi.mock('./components/MaintenanceNotice', () => ({ MaintenanceNotice: () => null }))
 vi.mock('./components/PwaInstall', () => ({ PwaInstallBanner: () => null }))
 vi.mock('./components/PullToRefresh', () => ({ PullToRefresh: () => null }))
-vi.mock('./components/AppLoading', () => ({ AppLoading: () => <div>app loading</div> }))
+vi.mock('./components/AppLoading', async importOriginal => ({
+  ...await importOriginal<typeof import('./components/AppLoading')>(),
+  AppLoading: ({ startup }: { startup?: boolean }) => <div data-startup={String(Boolean(startup))}>app loading</div>,
+}))
 vi.mock('./features/meetingNotes/MeetingProvider', () => ({ MeetingProvider: ({ children }: { children: ReactNode }) => children }))
 
 function CalendarConsumer() {
@@ -47,6 +52,7 @@ beforeEach(() => {
   state.buildingReady = true; state.buildingError = false; state.retryBuilding.mockClear()
   state.mounts = 0
   state.auth.user = { id: 1, name: 'Admin', role: 'admin' }
+  state.auth.loading = false
   window.localStorage.clear()
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
 })
@@ -81,11 +87,11 @@ test('recent session identity changes replace the store, while navigation retain
   const view = render(<MemoryRouter initialEntries={['/settings']}><App /></MemoryRouter>)
   await screen.findByText('window context')
   const initial = state.mounts
-  state.auth.user = { ...state.auth.user, name: 'Renamed' }
+  state.auth.user = { ...state.auth.user!, name: 'Renamed' }
   view.rerender(<MemoryRouter initialEntries={['/settings']}><App /></MemoryRouter>)
   expect(state.sessionUser).toBe('Renamed')
   expect(state.mounts).toBe(initial + 1)
-  state.auth.user = { ...state.auth.user, role: 'developer' }
+  state.auth.user = { ...state.auth.user!, role: 'developer' }
   view.rerender(<MemoryRouter initialEntries={['/settings']}><App /></MemoryRouter>)
   expect(state.role).toBe('developer')
   expect(state.mounts).toBe(initial + 2)
@@ -93,6 +99,44 @@ test('recent session identity changes replace the store, while navigation retain
   expect(state.mounts).toBe(initial + 2)
 })
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+
+test('startup lasts through auth and data gates but never replays on navigation or session replacement', async () => {
+  state.auth.loading = true
+  state.buildingReady = false
+  const view = render(<MemoryRouter><App /></MemoryRouter>)
+  expect(screen.getByText('app loading').getAttribute('data-startup')).toBe('true')
+  state.auth.loading = false
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  expect(screen.getByText('app loading').getAttribute('data-startup')).toBe('true')
+  state.buildingReady = true
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  await screen.findByText('detail mounted')
+  state.buildingReady = false
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  expect(screen.getByText('app loading').getAttribute('data-startup')).toBe('false')
+  state.auth.user = { id: 2, name: 'Other', role: 'leader' }
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  expect(screen.getByText('app loading').getAttribute('data-startup')).toBe('false')
+})
+
+test('showing login finishes startup before signing in or logging out again', async () => {
+  state.auth.user = null
+  const view = render(<MemoryRouter><App /></MemoryRouter>)
+  await screen.findByText('login screen')
+  state.auth.user = { id: 1, name: 'Admin', role: 'admin' }
+  state.buildingReady = false
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  expect(screen.getByText('app loading').getAttribute('data-startup')).toBe('false')
+  state.buildingReady = true
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  await screen.findByText('detail mounted')
+  state.auth.user = null
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  await screen.findByText('login screen')
+  state.auth.loading = true
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  expect(screen.getByText('app loading').getAttribute('data-startup')).toBe('false')
+})
 
 test.each([
   ['false', 'true', true], ['true', undefined, true], ['true', 'false', false], ['false', undefined, false],

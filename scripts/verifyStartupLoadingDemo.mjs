@@ -16,6 +16,17 @@ try {
   for (const [width, height, zoom, motion] of [[390, 844, 1, 'no-preference'], [320, 568, 1.5, 'reduce'], [1365, 900, 1, 'no-preference']]) {
     const context = await browser.newContext({ viewport: { width, height }, reducedMotion: motion, serviceWorkers: 'block' })
     const page = await context.newPage(), errors = [], assetReads = []
+    await context.addInitScript(() => {
+      window.__startupFrames = []
+      const sample = () => {
+        const visible = selector => [...document.querySelectorAll(selector)].some(el => el.getClientRects().length)
+        const usable = visible('#login-id,.bottom-nav,.desktop-sidebar-nav')
+        const logo = visible('.app-loading-mark')
+        window.__startupFrames.push({ logo, usable, at: performance.now() })
+        if (!usable) requestAnimationFrame(sample)
+      }
+      requestAnimationFrame(sample)
+    })
     let releaseBoot, releaseLogin, failReads = false, ready = false
     const bootGate = new Promise(resolve => { releaseBoot = resolve })
     const loginGate = new Promise(resolve => { releaseLogin = resolve })
@@ -86,6 +97,16 @@ try {
       await page.screenshot({ path: `scratch/startup-${label}-${width}-slow.png` })
       releaseLogin()
       await page.locator('#login-id').waitFor()
+      assert.equal(await page.locator('.app-loading-mark').count(), 0)
+      // Once login has appeared, no later wait in this document may replay the logo.
+      await page.evaluate(() => {
+        window.__replayedLogos = 0
+        new MutationObserver(records => {
+          for (const record of records) for (const node of record.addedNodes) {
+            if (node instanceof Element && (node.matches('.app-loading-mark') || node.querySelector('.app-loading-mark'))) window.__replayedLogos++
+          }
+        }).observe(document.querySelector('#root'), { subtree: true, childList: true })
+      })
       failReads = true
       await page.locator('#login-id').fill(actor.name)
       await page.locator('#pin').fill('0000')
@@ -95,9 +116,20 @@ try {
       await page.getByRole('button', { name: '앱 다시 불러오기', exact: true }).waitFor()
       await fits()
       await page.screenshot({ path: `scratch/startup-${label}-${width}-error.png` })
+      assert.equal(await page.locator('.app-loading-mark').count(), 0, 'Post-login error must not replay startup')
+      assert.equal(await page.evaluate(() => window.__replayedLogos), 0, 'No logo during sign-in/data waiting')
+      failReads = false
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.locator(width < 980 ? '.bottom-nav' : '.desktop-sidebar-nav').first().waitFor({ timeout: 45000 })
+      assert.equal(await page.locator('.app-loading-mark').count(), 0)
+      const frames = await page.evaluate(() => window.__startupFrames)
+      const firstLogo = frames.findIndex(frame => frame.logo)
+      assert.ok(firstLogo >= 0, 'Restored session has a startup logo')
+      assert.ok(frames.slice(firstLogo).every(frame => frame.logo || frame.usable), 'No painted gap between startup logo and first usable screen')
+      await page.screenshot({ path: `scratch/startup-${label}-${width}-home.png` })
       assert.deepEqual(errors, [])
       ready = true
-      results.push({ width, height, zoom, motion, before, after, errors, passed: true })
+      results.push({ width, height, zoom, motion, before, after, errors, startupFrames: frames.length, paintedGaps: 0, postLoginLogoReplays: 0, passed: true })
       console.log(JSON.stringify(results.at(-1)))
     } finally {
       if (!ready) results.push({ width, height, errors, passed: false })

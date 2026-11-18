@@ -127,6 +127,7 @@
 배정 편집 중 새로고침·재연결: [0123 초안 보존 검증과 실패 처리 보완](0123-assignment-draft-refresh-recovery.md)
 첫 로딩 화면: [0124 부트·React 표시 통일과 사용량 확인](0124-startup-loading-presentation.md)
 일정 메뉴 표현: [0125 회중·집단 메뉴 통일과 시간 설정 아이콘](0125-schedule-action-labels-and-icon.md)
+로고 표시 범위: [0126 최초 실행에만 로고 표시](0126-startup-logo-once.md)
 
 ```markdown
 # 제목
