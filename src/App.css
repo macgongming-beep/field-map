@@ -13250,7 +13250,7 @@ button:focus-visible {
     min-width: 130px;
     padding: 4px;
   }
-  .event-dots-item {
+  .event-dots-dropdown .event-dots-item {
     width: 100%;
     text-align: left;
     padding: 8px 10px;

@@ -39,11 +39,17 @@ test('pre-JS shell and React share the same brand, layout and inline icon withou
   const boot = new DOMParser().parseFromString(readFileSync('index.html', 'utf8'), 'text/html')
   const { container } = render(<AppLoading />)
   expect(boot.head.querySelector('#app-loading-style')).not.toBeNull()
-  for (const selector of ['.app-loading-main', '.app-loading-brand', '.app-loading-status']) {
+  for (const selector of ['.app-loading-main', '.app-loading-brand', '.app-loading-mark']) {
     expect(container.querySelector(selector)).not.toBeNull()
     expect(boot.querySelector(selector)).not.toBeNull()
   }
-  expect(container.querySelector('.app-loading-brand')?.textContent).toBe(boot.querySelector('.app-loading-brand')?.textContent?.trim())
+  expect(container.querySelector('.app-loading')?.textContent?.trim()).toBe('')
+  expect(boot.querySelector('.app-loading')?.textContent?.trim()).toBe('')
+  expect(screen.getByRole('status', { name: '데이터 불러오는 중...' })).toBeTruthy()
+  expect(boot.querySelector('.app-loading')?.getAttribute('aria-label')).toBe('데이터 불러오는 중...')
+  expect(container.querySelector('.app-loading-spinner')).toBeNull()
+  expect(boot.querySelector('.app-loading-spinner')).toBeNull()
+  expect(boot.head.querySelector('#app-loading-style')?.textContent).not.toMatch(/animation|@keyframes/)
   const shapes = (root: ParentNode) => Array.from(root.querySelectorAll('.app-loading-mark *'), element => ({
     tag: element.tagName, attributes: Object.fromEntries(Array.from(element.attributes, attr => [attr.name, attr.value])),
   }))
@@ -68,7 +74,7 @@ test('the recovery timer never delays leaving loading or reloads automatically',
 
 test('failed load retains the brand and recovery action without a spinning progress indicator', () => {
   const { container } = render(<AppLoading failed />)
-  expect(screen.getByText('Field Map')).toBeTruthy()
+  expect(container.querySelector('.app-loading-mark')).not.toBeNull()
   expect(container.querySelector('.app-loading-spinner')).toBeNull()
   expect(screen.getByRole('status').textContent).toContain('자료를 불러오지 못했습니다.')
   expect(screen.getByRole('button', { name: '앱 다시 불러오기' })).toBeTruthy()

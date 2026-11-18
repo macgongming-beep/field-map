@@ -15,4 +15,8 @@ describe('calendar responsive layout contracts', () => {
     expect(css).toMatch(/\.event-hero-title\s*\{[^}]*overflow-wrap:\s*anywhere/)
     expect(mobile).toMatch(/<h1 className="event-detail-title"[^>]*fontSize: 26[^>]*overflowWrap: 'anywhere'/)
   })
+
+  it('gives dropdown items priority over the white detail header button style', () => {
+    expect(css).toMatch(/\.event-dots-dropdown \.event-dots-item\s*\{[^}]*padding:\s*8px 10px[^}]*color:\s*var\(--gray-700\)/)
+  })
 })

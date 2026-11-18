@@ -30,17 +30,13 @@
       body{margin:0}
       .app-loading{display:flex;align-items:center;justify-content:center;min-height:calc(100svh / var(--app-zoom,1));box-sizing:border-box;padding:24px;background:#f8f8f7;color:#787671;font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;letter-spacing:0}
       .app-loading-main{display:flex;flex-direction:column;align-items:center;gap:24px;width:100%;max-width:360px;min-width:0}
-      .app-loading-brand{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;max-width:100%;color:#1a1a1a;text-align:center}
-      .app-loading-mark{display:block;width:48px;height:48px;flex:none}
-      .app-loading-brand strong{font-size:24px;font-weight:700;line-height:1.25}
+      .app-loading-brand{display:flex;align-items:center;justify-content:center;max-width:100%}
+      .app-loading-mark{display:block;width:64px;height:64px;flex:none}
       .app-loading-status{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:44px}
       .app-loading-status p{margin:0;font-size:14px;font-weight:500;line-height:1.6;text-align:center;overflow-wrap:anywhere}
-      .app-loading-spinner{box-sizing:border-box;width:16px;height:16px;flex:none;border:2px solid #e5e3df;border-top-color:#37352f;border-radius:50%;animation:fm-start-spin .8s linear infinite}
       .app-loading-recovery{width:100%;max-width:320px;box-sizing:border-box;text-align:center;font-size:14px;line-height:1.6}
       .app-loading-recovery p{margin:0 0 16px;overflow-wrap:anywhere}
       .app-loading-recovery [role=alert]{margin:16px 0 0}
-      @keyframes fm-start-spin{to{transform:rotate(360deg)}}
-      @media(prefers-reduced-motion:reduce){.app-loading-spinner{animation:none}}
     </style>
   </head>
   <body>
@@ -48,7 +44,7 @@
          은 React 가 뜬 뒤에야 나오므로 그 앞을 못 덮는다. 그래서 여기 직접 둔다.
          React 가 뜨면 이 안이 통째로 갈리므로 따로 지울 필요가 없다. -->
     <div id="root">
-      <div class="app-loading" role="status">
+      <div class="app-loading" role="status" aria-label="데이터 불러오는 중...">
         <div class="app-loading-main">
           <div class="app-loading-brand">
             <svg class="app-loading-mark" aria-hidden="true" focusable="false" viewBox="0 0 1024 1024">
@@ -60,9 +56,7 @@
                 <circle cx="512" cy="488" r="48" fill="#fff" stroke="none"/>
               </g>
             </svg>
-            <strong>Field Map</strong>
           </div>
-          <div class="app-loading-status"><span class="app-loading-spinner" aria-hidden="true"></span><p>데이터 불러오는 중...</p></div>
         </div>
       </div>
     </div>

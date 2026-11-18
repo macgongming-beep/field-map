@@ -22,8 +22,12 @@ export function AppLoading({ kind = 'data', failed = false }: {
     finally { setRetrying(false) }
   }
 
+  const status = failed ? msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.')
+    : kind === 'data' ? msg('데이터 불러오는 중...')
+      : kind === 'login' ? msg('로그인 화면 불러오는 중...') : msg('화면 구성 불러오는 중...')
+
   return (
-    <div className="app-loading" role="status">
+    <div className="app-loading" role="status" aria-label={status}>
       <div className="app-loading-main">
         <div className="app-loading-brand">
           <svg className="app-loading-mark" aria-hidden="true" focusable="false" viewBox="0 0 1024 1024">
@@ -35,14 +39,8 @@ export function AppLoading({ kind = 'data', failed = false }: {
               <circle cx="512" cy="488" r="48" fill="#fff" stroke="none"/>
             </g>
           </svg>
-          <strong>Field Map</strong>
         </div>
-        <div className="app-loading-status">
-          {!failed && <span className="app-loading-spinner" aria-hidden="true" />}
-          <p>{failed ? msg('자료를 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.')
-            : kind === 'data' ? msg('데이터 불러오는 중...')
-              : kind === 'login' ? msg('로그인 화면 불러오는 중...') : msg('화면 구성 불러오는 중...')}</p>
-        </div>
+        {failed && <div className="app-loading-status"><p>{status}</p></div>}
         {(slow || failed) && (
           <div className="app-loading-recovery">
             {!failed && <p>{msg('평소보다 오래 걸리고 있습니다. 연결 상태를 확인해 주세요.')}</p>}
