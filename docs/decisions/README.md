@@ -129,6 +129,7 @@
 일정 메뉴 표현: [0125 회중·집단 메뉴 통일과 시간 설정 아이콘](0125-schedule-action-labels-and-icon.md)
 로고 표시 범위: [0126 최초 실행에만 로고 표시](0126-startup-logo-once.md)
 시작 중 로고 교체 제거: [0127 최초 로고 요소 유지](0127-persistent-startup-logo.md)
+11월 18일 운영 전환: [0128 검증한 화면·속도 개선 배포](0128-nov18-evening-production-update.md)
 
 ```markdown
 # 제목
