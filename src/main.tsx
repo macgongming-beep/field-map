@@ -10,6 +10,7 @@ import { initSentry } from './lib/sentry'
 import './lib/pwa' // Service Worker 등록 (사이드 이펙트만)
 import { applyUpdate } from './lib/pwa'
 import { msg } from './lib/msg'
+import { AppScreenReady } from './components/AppLoading'
 
 const ServiceScopePreview = import.meta.env.VITE_DEMO_MODE === 'true'
   ? lazy(() => import('./components/assignment/ServiceScopePreview')) : null
@@ -38,7 +39,7 @@ document.addEventListener('touchmove', (event) => {
 
 import { Sentry } from './lib/sentry'
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById('app-content')!).render(
   <StrictMode>
     <Sentry.ErrorBoundary
       fallback={({ error }) => {
@@ -68,6 +69,7 @@ createRoot(document.getElementById('root')!).render(
               fontFamily: 'Pretendard Variable, Pretendard, -apple-system, BlinkMacSystemFont, sans-serif',
             }}
           >
+            <AppScreenReady />
             <h2 style={{
               margin: '0 0 8px', fontSize: 20, fontWeight: 700,
               color: 'var(--ink, #1A1A18)', letterSpacing: '-0.01em',
@@ -101,8 +103,8 @@ createRoot(document.getElementById('root')!).render(
     >
       <BrowserRouter>
         <Routes>
-          {ServiceScopePreview && <Route path="/preview/service-scope" element={<Suspense fallback={<p>Loading...</p>}><ServiceScopePreview /></Suspense>} />}
-          <Route path="/shared/territory-report/:shareToken" element={<SharedTerritoryReport />} />
+          {ServiceScopePreview && <Route path="/preview/service-scope" element={<><AppScreenReady /><Suspense fallback={<p>Loading...</p>}><ServiceScopePreview /></Suspense></>} />}
+          <Route path="/shared/territory-report/:shareToken" element={<><SharedTerritoryReport /><AppScreenReady /></>} />
           <Route path="*" element={<App />} />
         </Routes>
         <Analytics />

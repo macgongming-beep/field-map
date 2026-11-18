@@ -1,10 +1,15 @@
 import { useEffect, useLayoutEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { msg } from '../lib/msg'
 import { applyUpdate } from '../lib/pwa'
+import { dismissStartupShell, getStartupShell } from '../lib/startupShell'
 
 // Mount inside Suspense: resolving data alone does not mean the first screen has painted.
-export function AppScreenReady({ onReady }: { onReady: () => void }) {
-  useLayoutEffect(onReady, [onReady])
+export function AppScreenReady({ onReady }: { onReady?: () => void }) {
+  useLayoutEffect(() => {
+    dismissStartupShell()
+    onReady?.()
+  }, [onReady])
   return null
 }
 
@@ -33,6 +38,29 @@ export function AppLoading({ kind = 'data', failed = false, startup = false }: {
     : kind === 'data' ? msg('데이터 불러오는 중...')
       : kind === 'login' ? msg('로그인 화면 불러오는 중...') : msg('화면 구성 불러오는 중...')
 
+  const shell = startup ? getStartupShell() : null
+  const statusSlot = shell?.querySelector('#app-startup-status')
+  useLayoutEffect(() => {
+    shell?.setAttribute('aria-label', status)
+  }, [shell, status])
+
+  const details = <>
+    {(!startup || failed) && <div className="app-loading-status"><p>{status}</p></div>}
+    {(slow || failed) && (
+      <div className="app-loading-recovery">
+        {!failed && <p>{msg('평소보다 오래 걸리고 있습니다. 연결 상태를 확인해 주세요.')}</p>}
+        <button className="ds-btn ds-btn-primary" type="button" disabled={retrying} onClick={() => void retry()}>
+          {retrying ? msg('다시 불러오는 중...') : msg('앱 다시 불러오기')}
+        </button>
+        {retryFailed && <p role="alert">{msg('업데이트를 적용하지 못했습니다. 잠시 후 다시 눌러 주세요.')}</p>}
+      </div>
+    )}
+  </>
+
+  // Keep the pre-JS SVG connected across auth/session/Suspense replacement.
+  // This slot stays under #root, so recovery controls inherit the user's text size.
+  if (statusSlot) return createPortal(details, statusSlot)
+
   return (
     <div className="app-loading" role="status" aria-label={status}>
       <div className="app-loading-main">
@@ -47,16 +75,7 @@ export function AppLoading({ kind = 'data', failed = false, startup = false }: {
             </g>
           </svg>
         </div>}
-        {(!startup || failed) && <div className="app-loading-status"><p>{status}</p></div>}
-        {(slow || failed) && (
-          <div className="app-loading-recovery">
-            {!failed && <p>{msg('평소보다 오래 걸리고 있습니다. 연결 상태를 확인해 주세요.')}</p>}
-            <button className="ds-btn ds-btn-primary" type="button" disabled={retrying} onClick={() => void retry()}>
-              {retrying ? msg('다시 불러오는 중...') : msg('앱 다시 불러오기')}
-            </button>
-            {retryFailed && <p role="alert">{msg('업데이트를 적용하지 못했습니다. 잠시 후 다시 눌러 주세요.')}</p>}
-          </div>
-        )}
+        {details}
       </div>
     </div>
   )

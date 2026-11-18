@@ -411,12 +411,12 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
   const homeCalendarDetail = !isDesktop && homeEventDetailId(location.pathname, location.search) !== null
   if (buildingScopeReady === false) {
     return buildingReadError
-      ? <div role="alert">{msg('자료를 불러오지 못했습니다.')}<button type="button" onClick={() => { void retryBuildingRead().catch(() => {}) }}>{msg('다시 시도')}</button></div>
+      ? <div role="alert"><AppScreenReady onReady={onScreenReady} />{msg('자료를 불러오지 못했습니다.')}<button type="button" onClick={() => { void retryBuildingRead().catch(() => {}) }}>{msg('다시 시도')}</button></div>
       : <AppLoading startup={startup} />
   }
   if (windowedCalendar && location.pathname !== '/calendar' && !homeCalendarDetail && !calendarScopeReady) {
     return calendarReadError
-      ? <div role="alert">자료를 불러오지 못했습니다.<button type="button" onClick={() => { void retryCalendarRead().catch(() => {}) }}>다시 시도</button></div>
+      ? <div role="alert"><AppScreenReady onReady={onScreenReady} />자료를 불러오지 못했습니다.<button type="button" onClick={() => { void retryCalendarRead().catch(() => {}) }}>다시 시도</button></div>
       : <AppLoading startup={startup} />
   }
 

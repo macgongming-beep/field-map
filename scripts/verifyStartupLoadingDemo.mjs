@@ -14,10 +14,19 @@ const browser = await (process.env.ENGINE === 'webkit' ? webkit : chromium).laun
 const results = []
 try {
   for (const [width, height, zoom, motion] of [[390, 844, 1, 'no-preference'], [320, 568, 1.5, 'reduce'], [1365, 900, 1, 'no-preference']]) {
+    if (process.env.WIDTHS && !process.env.WIDTHS.split(',').includes(String(width))) continue
     const context = await browser.newContext({ viewport: { width, height }, reducedMotion: motion, serviceWorkers: 'block' })
     const page = await context.newPage(), errors = [], assetReads = []
     await context.addInitScript(() => {
       window.__startupFrames = []
+      window.__startupLogos = new Set()
+      new MutationObserver(records => {
+        for (const record of records) for (const node of record.addedNodes) {
+          if (!(node instanceof Element)) continue
+          if (node.matches('.app-loading-mark')) window.__startupLogos.add(node)
+          for (const logo of node.querySelectorAll('.app-loading-mark')) window.__startupLogos.add(logo)
+        }
+      }).observe(document, { childList: true, subtree: true })
       const sample = () => {
         const visible = selector => [...document.querySelectorAll(selector)].some(el => el.getClientRects().length)
         const usable = visible('#login-id,.bottom-nav,.desktop-sidebar-nav')
@@ -88,6 +97,8 @@ try {
         document.querySelector('#root').style.zoom = String(value)
       }, zoom)
       await fits()
+      const scaledLogo = await page.locator('.app-loading-mark').boundingBox()
+      assert.ok(Math.abs(scaledLogo.width - 64) < 1 && Math.abs(scaledLogo.height - 64) < 1, 'Text zoom must not resize the startup logo')
       assert.equal(await page.locator('.app-loading-spinner').count(), 0)
       assert.equal(await page.locator('.app-loading').innerText(), '')
       assert.equal(await page.locator('.app-loading-mark').evaluate(el => getComputedStyle(el).animationName), 'none')
@@ -123,13 +134,16 @@ try {
       await page.locator(width < 980 ? '.bottom-nav' : '.desktop-sidebar-nav').first().waitFor({ timeout: 45000 })
       assert.equal(await page.locator('.app-loading-mark').count(), 0)
       const frames = await page.evaluate(() => window.__startupFrames)
+      const logoElements = await page.evaluate(() => window.__startupLogos.size)
+      console.log(JSON.stringify({ width, logoElements }))
+      assert.equal(logoElements, 1, 'Retain the original logo element through all startup stages')
       const firstLogo = frames.findIndex(frame => frame.logo)
       assert.ok(firstLogo >= 0, 'Restored session has a startup logo')
       assert.ok(frames.slice(firstLogo).every(frame => frame.logo || frame.usable), 'No painted gap between startup logo and first usable screen')
       await page.screenshot({ path: `scratch/startup-${label}-${width}-home.png` })
       assert.deepEqual(errors, [])
       ready = true
-      results.push({ width, height, zoom, motion, before, after, errors, startupFrames: frames.length, paintedGaps: 0, postLoginLogoReplays: 0, passed: true })
+      results.push({ width, height, zoom, motion, before, after, errors, logoElements, startupFrames: frames.length, paintedGaps: 0, postLoginLogoReplays: 0, passed: true })
       console.log(JSON.stringify(results.at(-1)))
     } finally {
       if (!ready) results.push({ width, height, errors, passed: false })
