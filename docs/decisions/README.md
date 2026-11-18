@@ -132,6 +132,7 @@
 11월 18일 운영 전환: [0128 검증한 화면·속도 개선 배포](0128-nov18-evening-production-update.md)
 일정 표시 변경의 구역 조회: [0129 데모 메타정보 갱신 분리와 실제 통신 전후 비교](0129-calendar-metadata-territory-refresh.md)
 저장한 제목·집단명 표시: [0130 중국어 이름 보존과 PC 달력 밀도](0130-saved-service-labels-and-compact-calendar.md)
+집단 추가·이름 변경: [0131 고정 식별자로 사용자 관리와 일정 연결](0131-stable-service-group-directory.md)
 
 ```markdown
 # 제목

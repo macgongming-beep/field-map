@@ -18,8 +18,8 @@
 .gs-tab-title>div>span { font-size:17px; font-weight:600; }
 .gs-title-tools { display:flex; align-items:center; gap:8px; flex-shrink:0; }
 .gs-tab-title>.gs-title-tools>span { font-size:12px; font-weight:400; color:var(--muted); white-space:nowrap; }
-.gs-group-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid var(--line); margin-bottom:20px; }
-.gs-group-tabs button { min-width:0; min-height:44px; padding:10px 2px; color:var(--muted); background:none; border:0; border-bottom:2px solid transparent; border-radius:0; font-size:13px; font-weight:600; }
+.gs-group-tabs { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(72px,1fr); overflow-x:auto; border-bottom:1px solid var(--line); margin-bottom:20px; }
+.gs-group-tabs button { min-width:0; min-height:44px; padding:10px 2px; color:var(--muted); background:none; border:0; border-bottom:2px solid transparent; border-radius:0; font-size:13px; font-weight:600; overflow-wrap:anywhere; }
 .gs-group-tabs button[aria-selected=true] { color:var(--ink); border-bottom-color:var(--ink); }
 .gs-group-tabs button span { font-size:11px; font-weight:400; }
 .gs-roster-heading { display:flex; justify-content:space-between; align-items:center; margin-top:24px; gap:8px; }
@@ -54,7 +54,7 @@
 .gs-editor input[type=checkbox] { accent-color:var(--ink,#222); width:18px; height:18px; flex-shrink:0; }
 .gs-editor .gs-groups { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; margin-bottom:12px; }
 .gs-groups legend,.gs-access legend { padding:0 0 8px; font-size:12px; font-weight:700; color:var(--muted); }
-.gs-editor .gs-groups label { position:relative; justify-content:center; gap:5px; margin:0; min-height:40px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font-size:13px; cursor:pointer; }
+.gs-editor .gs-groups label { position:relative; justify-content:center; gap:5px; margin:0; min-height:40px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); font-size:13px; cursor:pointer; overflow-wrap:anywhere; }
 .gs-groups input,.gs-leaders input { position:absolute; opacity:0; width:1px!important; height:1px!important; }
 .gs-groups label:has(input:checked),.gs-leaders label:has(input:checked) { background:var(--ink); border-color:var(--ink); color:#fff; }
 .gs-groups label:has(input:focus-visible),.gs-leaders label:has(input:focus-visible) { outline:2px solid var(--muted); outline-offset:2px; }

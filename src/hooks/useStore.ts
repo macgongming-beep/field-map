@@ -4,6 +4,7 @@ import { fetchBuildingSignalProof, fetchChangedBuildings, fetchTerritoryClock, t
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { calendarTerritoryRefreshEnabled, onlyCalendarPresentationChanged } from './calendarTerritoryRefresh'
+import {GROUP_DIRECTORY_CHANGED,parseGroupDirectory,directorySettings,mergeDirectorySettings} from '../features/groupService/directory'
 import { parseServiceCalendarScope, serviceCalendarReadReuseEnabled } from './serviceCalendarScope'
 import { calendarCachedScreenEnabled, calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
 import { readCalendarParticipants } from './calendarParticipants'
@@ -249,6 +250,16 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const [restaurantRequests, setRestaurantRequests] = useState<RestaurantRequest[]>([])
   const [globalSettings, setGlobalSettings] = useState<Record<string, string>>({})
   const globalSettingsRef = useRef<Record<string, string>>({})
+  useEffect(()=>{
+    const changed=(event:Event)=>{
+      const directory=parseGroupDirectory((event as CustomEvent<string>).detail)
+      if(!directory)return
+      const next=mergeDirectorySettings(globalSettingsRef.current,{...globalSettingsRef.current,...directorySettings(directory)})
+      globalSettingsRef.current=next;setGlobalSettings(next)
+    }
+    window.addEventListener(GROUP_DIRECTORY_CHANGED,changed)
+    return()=>window.removeEventListener(GROUP_DIRECTORY_CHANGED,changed)
+  },[])
   const [loading, setLoading] = useState(true)
   /**
    * 이번 로그인에서 fetchAll 을 시작했는가.
@@ -787,7 +798,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       case 'system': {
         const settingsRes = await supabase.from('app_settings').select('*')
         measure(settingsRes.data)
-        const nextGlobalSettings = settingsRes.error ? {} : Object.fromEntries((settingsRes.data as { key: string; value: string }[]).map((r) => [r.key, r.value]))
+        const nextGlobalSettings = mergeDirectorySettings(globalSettingsRef.current,settingsRes.error ? {} : Object.fromEntries((settingsRes.data as { key: string; value: string }[]).map((r) => [r.key, r.value])))
         applyCongregationSettings(nextGlobalSettings)
         globalSettingsRef.current = nextGlobalSettings
         setGlobalSettings(nextGlobalSettings)

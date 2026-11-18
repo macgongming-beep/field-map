@@ -2,6 +2,7 @@ import type { AppLanguage } from '../../i18n'
 import type { CalendarEvent, Role } from '../../types'
 import { assignmentRevisionEnabled } from '../../config/assignmentRevision'
 import { parseUserGroups } from '../../utils/userGroups'
+import {GROUP_DIRECTORY_KEY,parseGroupDirectory,type ServiceGroup} from './directory'
 
 export function canArrangeService(role: Role, event: CalendarEvent, name: string) {
   return role==='admin'||role==='developer'||(role==='leader'&&(assignmentRevisionEnabled()||event.leaders.includes(name)))
@@ -24,7 +25,11 @@ export const serviceGroups = [
   { code: 'cheoin', ko: '처인', zh: '处仁', en: 'Cheoin' },
   { code: 'dongbaek', ko: '동백', zh: '东柏', en: 'Dongbaek' },
 ] as const
-export type GroupCode = typeof serviceGroups[number]['code']
+export type GroupCode = string
+export function serviceGroupOptions(settings:Record<string,string>,language:AppLanguage):ServiceGroup[]{
+  if(settings[GROUP_DIRECTORY_KEY]!=null)return parseGroupDirectory(settings[GROUP_DIRECTORY_KEY])?.groups??[]
+  return serviceGroups.map(g=>({code:g.code,name:groupLabel([g.code],language,settings.user_groups),active:true}))
+}
 export function territoryApplicants(event: CalendarEvent) {
   const returns = new Set(event.returnVisitApplicants ?? [])
   return Array.from(new Set([...event.applicants,...event.assigned])).filter(name=>!returns.has(name))
@@ -49,15 +54,20 @@ export type ServicePayload = {
 export type ServiceRow = { id?: number; version?: string; payload: ServicePayload }
 export type ServicePlan = { rows: ServiceRow[]; requestId: string; notify: boolean }
 export const emptyAccess: MeetingAccess = { joinUrl: '', meetingNumber: '', passcode: '' }
-export function groupLabel(codes: readonly string[], language: AppLanguage, configuredGroups?: string) {
+export function groupLabel(codes: readonly string[], language: AppLanguage, configuredGroups?: string, directory?: string) {
+  if(directory!=null){
+    const groups=parseGroupDirectory(directory)?.groups??[]
+    return [...new Set(codes)].map(code=>groups.find(g=>g.code===code)?.name??code).join(' · ')
+  }
   const names = parseUserGroups(configuredGroups)
   // Match known aliases, never array positions: labels must not change group identity.
   return serviceGroups.filter(g => codes.includes(g.code)).map(g =>
     names.find(name => [g.ko, g.zh, g.en].some(alias => alias === name)) ?? g[language],
   ).join(' · ')
 }
-export function eventBlocks(events: CalendarEvent[], groupName?: string) {
-  const own = serviceGroups.find(g => g.zh === groupName || g.ko === groupName || g.code === groupName)?.code
+export function eventBlocks(events: CalendarEvent[], groupName?: string, directory?: string) {
+  const own = directory!=null ? parseGroupDirectory(directory)?.groups.find(g=>g.name===groupName)?.code
+    : serviceGroups.find(g => g.zh === groupName || g.ko === groupName || g.code === groupName)?.code
   const blocks = new Map<string, CalendarEvent[]>()
   for (const e of [...events].sort((a,b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id-b.id)) {
     const key = e.groupServiceScope ? `groups:${e.date}:${e.time}:${e.endTime ?? ''}` : e.serviceKind === 'group' && e.targetGroups?.length

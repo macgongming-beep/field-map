@@ -508,6 +508,8 @@ export const messagesEn: Record<string, string> = {
   "지정할 집단을 선택해 주세요": "Please choose a group",
   "집단 값이 반영되지 않았습니다. DB 권한(grant select … group_name)을 확인해 주세요.": "The group value did not apply. Check the DB grant for group_name.",
   "집단 목록 저장에 실패했습니다.": "Could not save the group list.",
+  "집단 목록을 불러오지 못했습니다.": "Could not load the group list.",
+  "집단 목록이 변경되었습니다. 다시 열어 확인해 주세요.": "The group list has changed. Reopen it and try again.",
   "집단 이름 변경에 실패했습니다.": "Could not rename the group.",
   "집단 지정에 실패했습니다.": "Could not assign the group.",
   "집단이 저장되지 않았습니다. supabase/applied/add_app_users_group.sql 의 grant 구문을 실행해 주세요.": "The group was not saved. Run the grant statements in supabase/applied/add_app_users_group.sql.",

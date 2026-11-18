@@ -21,6 +21,22 @@ test('scoped list preserves the home group saved title and configured Chinese na
   expect(screen.queryByText('집단 봉사')).toBeNull()
   fireEvent.click(screen.getByRole('button'));expect(open).toHaveBeenCalledWith(2)
 })
+test('new and retired groups retain tabs, own-group selection, and exact assignment targets',async()=>{
+  const custom=events.map((e,i)=>({...e,targetGroups:[`custom-${i}`],title:`Title ${i}`}))
+  custom.push({...custom[0],id:5,targetGroups:['custom-4'],title:'Fifth'})
+  const groups=custom.map((e,i)=>({code:e.targetGroups![0],name:`改名组${i}`,active:i!==1}))
+  const globalSettings={service_group_directory:JSON.stringify({revision:'3',groups})}
+  mocks.context.mockResolvedValue({ownGroup:'custom-4',events:custom.map(e=>({id:e.id,groupCode:e.targetGroups![0],count:1,canManage:true,canRead:true,canEdit:false}))})
+  const assignment=vi.fn()
+  const {rerender}=render(<GroupServiceDetail event={custom[0]} events={custom} language="ko" currentVisitor="User" globalSettings={globalSettings} onAssignment={assignment}/>)
+  expect((await screen.findByRole('tab',{name:'改名组4 1'})).getAttribute('aria-selected')).toBe('true')
+  fireEvent.click(screen.getByRole('button',{name:'팀 구성 · 구역 배정'}));expect(assignment).toHaveBeenLastCalledWith(5)
+  fireEvent.click(screen.getByRole('tab',{name:'改名组1 1'}))
+  fireEvent.click(screen.getByRole('button',{name:'팀 구성 · 구역 배정'}));expect(assignment).toHaveBeenLastCalledWith(2)
+  groups[1].name='再次改名'
+  rerender(<GroupServiceDetail event={custom[0]} events={custom} language="ko" currentVisitor="User" globalSettings={{service_group_directory:JSON.stringify({revision:'4',groups})}} onAssignment={assignment}/>)
+  expect(screen.getByRole('tab',{name:'再次改名 1'}).getAttribute('aria-selected')).toBe('true')
+})
 test('selected tab shows its saved title without changing application target or roster permission',async()=>{
   const titled=events.map((e,i)=>({...e,title:i===0?'小组传道':i===1?'新葛晚间传道':'   '}))
   const apply=vi.fn()

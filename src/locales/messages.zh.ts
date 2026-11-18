@@ -508,6 +508,8 @@ export const messagesZh: Record<string, string> = {
   "지정할 집단을 선택해 주세요": "请选择要指定的小组",
   "집단 값이 반영되지 않았습니다. DB 권한(grant select … group_name)을 확인해 주세요.": "小组值未生效，请确认数据库权限（grant select … group_name）。",
   "집단 목록 저장에 실패했습니다.": "保存小组列表失败。",
+  "집단 목록을 불러오지 못했습니다.": "无法加载小组列表。",
+  "집단 목록이 변경되었습니다. 다시 열어 확인해 주세요.": "小组列表已更改，请重新打开后确认。",
   "집단 이름 변경에 실패했습니다.": "修改小组名称失败。",
   "집단 지정에 실패했습니다.": "指定小组失败。",
   "집단이 저장되지 않았습니다. supabase/applied/add_app_users_group.sql 의 grant 구문을 실행해 주세요.": "小组未保存，请执行 supabase/applied/add_app_users_group.sql 中的 grant 语句。",

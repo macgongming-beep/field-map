@@ -625,6 +625,10 @@ App.css          [모바일 공통] 0px~
 `assertAssignmentInventory`를 환경/전환 단계에 맞춰 확인한다.
 감독자 연결 표는 권한 판정에 다시 쓰지 않는다.
 
+집단 목록 연동은 [0131](docs/decisions/0131-stable-service-group-directory.md)을 따른다(데모만 적용).
+설치 후 `user_groups`/`service_group_directory` 직접 저장 금지. `manage_service_group_tx`로 목록과 소속을
+원자적으로 갱신한다. `service_groups.code`는 이름을 바꿔도 유지하고, 집단 삭제는 비활성화로 이력을 보존한다.
+
 1. **이 파일을 먼저 읽기**
 2. `git status --short` 로 다른 에이전트 변경사항 확인
 3. 파일 수정 전 **반드시 Read** 후 Edit

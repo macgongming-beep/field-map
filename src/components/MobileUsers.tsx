@@ -16,6 +16,8 @@ import { roleLabels } from '../types'
 import { AppHeader } from './AppHeader'
 import { msg } from '../lib/msg'
 import { CART_APPLICATIONS_ENABLED } from '../config/features'
+import {GROUP_DIRECTORY_KEY,parseGroupDirectory,type GroupDirectory} from '../features/groupService/directory'
+import {manageServiceGroup} from '../features/groupService/api'
 
 type UserFilter = 'all' | 'admin' | 'leader' | 'user'
 
@@ -81,6 +83,10 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
   const [loginLogsExpanded, setLoginLogsExpanded] = useState(false)
   // 집단(처인/신갈/동백/동탄 …) — app_settings.user_groups 에서 로드, 앱에서 편집 가능
   const [groups, setGroups] = useState<string[]>(DEFAULT_USER_GROUPS)
+  const [groupDirectory,setGroupDirectory]=useState<GroupDirectory|null>(null)
+  const [groupsReady,setGroupsReady]=useState(false)
+  const [groupsBusy,setGroupsBusy]=useState(false)
+  const [groupsReload,setGroupsReload]=useState(0)
   const [groupFilter, setGroupFilter] = useState<string>('all')
   const [groupEditOpen, setGroupEditOpen] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
@@ -101,21 +107,46 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
   // 집단 목록 로드 (서버 공유 — 관리자가 바꾸면 모두에게 반영)
   useEffect(() => {
     if (!isAdminLike) return
-    void supabase.from('app_settings').select('value').eq('key', USER_GROUPS_SETTING_KEY).maybeSingle()
-      .then(({ data }) => setGroups(parseUserGroups(data?.value)))
-  }, [isAdminLike])
+    let active=true
+    setGroupsReady(false)
+    void supabase.from('app_settings').select('key,value').in('key',[USER_GROUPS_SETTING_KEY,GROUP_DIRECTORY_KEY])
+      .then(({ data,error }) => {
+        if(!active)return
+        const raw=data?.find(s=>s.key===GROUP_DIRECTORY_KEY)?.value
+        const directory=parseGroupDirectory(raw)
+        if(error||(raw!=null&&!directory)){showToast(msg('집단 목록을 불러오지 못했습니다.'),'error');return}
+        setGroupDirectory(directory)
+        setGroups(directory?directory.groups.filter(g=>g.active).map(g=>g.name):parseUserGroups(data?.find(s=>s.key===USER_GROUPS_SETTING_KEY)?.value))
+        setGroupsReady(true)
+      })
+    return()=>{active=false}
+  }, [isAdminLike,groupsReload])
+
+  const changeDirectory=async(action:'add'|'rename'|'archive',from:string|null,name:string|null)=>{
+    if(!groupsReady||groupsBusy||!groupDirectory)return false
+    setGroupsBusy(true)
+    try{
+      const code=from?groupDirectory.groups.find(g=>g.active&&g.name===from)?.code:null
+      if(from&&!code)throw new Error(msg('집단 목록 저장에 실패했습니다.'))
+      const next=await manageServiceGroup(action,code??null,name,groupDirectory.revision)
+      setGroupDirectory(next);setGroups(next.groups.filter(g=>g.active).map(g=>g.name))
+      return true
+    }catch(error){showToast(error instanceof Error?error.message:msg('집단 목록 저장에 실패했습니다.'),'error');setGroupsReload(n=>n+1);return false}
+    finally{setGroupsBusy(false)}
+  }
 
   // 집단 이름 변경 — 목록과 소속 사용자의 group_name 을 함께 갱신
   const commitGroupRename = async () => {
+    if(!groupsReady||groupsBusy)return
     const from = editingGroup
     const to = editingGroupName.trim()
     if (!from) return
     if (!to || to === from) { setEditingGroup(null); setEditingGroupName(''); return }
     if (groups.includes(to)) { showToast(msg('같은 이름의 집단이 이미 있습니다.'), 'error'); return }
 
-    const ok = await renameUserGroup(from, to)
+    const ok = groupDirectory ? await changeDirectory('rename',from,to) : await renameUserGroup(from, to)
     if (!ok) return
-    await saveGroups(groups.map((g) => (g === from ? to : g)))
+    if(!groupDirectory && !await saveGroups(groups.map((g) => (g === from ? to : g))))return
     if (groupFilter === from) setGroupFilter(to)
     setEditingGroup(null)
     setEditingGroupName('')
@@ -123,10 +154,17 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
   }
 
   const saveGroups = async (next: string[]) => {
+    if(!groupsReady||groupsBusy)return false
+    if(groupDirectory){
+      const added=next.filter(n=>!groups.includes(n)),removed=groups.filter(n=>!next.includes(n))
+      if(added.length===1&&!removed.length)return changeDirectory('add',null,added[0].trim())
+      if(removed.length===1&&!added.length)return changeDirectory('archive',removed[0],null)
+      return false
+    }
     const serialized = serializeUserGroups(next)
-    setGroups(parseUserGroups(serialized))
     const { error } = await supabase.from('app_settings').upsert({ key: USER_GROUPS_SETTING_KEY, value: serialized }, { onConflict: 'key' })
-    if (error) showToast(msg('집단 목록 저장에 실패했습니다.'), 'error')
+    if (error){showToast(msg('집단 목록 저장에 실패했습니다.'), 'error');return false}
+    setGroups(parseUserGroups(serialized));return true
   }
 
   const users = useMemo(() => {
@@ -555,6 +593,8 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
                   <input
                     aria-label={`${g} 이름 변경`}
                     value={editingGroupName}
+                    maxLength={12}
+                    disabled={groupsBusy}
                     autoFocus
                     onChange={(e) => setEditingGroupName(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') void commitGroupRename() }}
@@ -562,6 +602,7 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
                   />
                   <button
                     onClick={() => void commitGroupRename()}
+                    disabled={!groupsReady||groupsBusy}
                     style={{ minHeight: 0, padding: '6px 10px', borderRadius: 999, border: 'none', background: 'var(--ink)', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
                     type="button"
                   >{msg('저장')}</button>
@@ -575,6 +616,7 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
                 <span key={g} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999, border: '1px solid var(--line)', background: 'var(--surface)', fontSize: 13 }}>
                   <button
                     aria-label={`${g} 이름 변경`}
+                    disabled={!groupsReady||groupsBusy}
                     title={msg('이름 변경')}
                     onClick={() => { setEditingGroup(g); setEditingGroupName(g) }}
                     style={{ minHeight: 0, border: 'none', background: 'transparent', color: 'var(--ink)', cursor: 'pointer', padding: 0, fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -588,6 +630,7 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
                   </button>
                   <button
                     aria-label={`${g} 삭제`}
+                    disabled={!groupsReady||groupsBusy}
                     onClick={async () => {
                       if (await confirmDialog({ message: msg('\'{g}\' 집단을 목록에서 삭제할까요?', { g: g }), danger: true, confirmLabel: msg('삭제') })) {
                         void saveGroups(groups.filter((x) => x !== g))
@@ -605,12 +648,14 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
               aria-label={msg('새 집단 이름')}
               placeholder={msg('새 집단 이름')}
               value={newGroupName}
+              maxLength={12}
+              disabled={groupsBusy}
               onChange={(e) => setNewGroupName(e.target.value)}
               style={{ flex: 1, minWidth: 0, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8, fontSize: 13, background: 'var(--surface)', color: 'var(--ink)' }}
             />
             <button
-              disabled={!newGroupName.trim()}
-              onClick={() => { void saveGroups([...groups, newGroupName]); setNewGroupName('') }}
+              disabled={!newGroupName.trim()||!groupsReady||groupsBusy}
+              onClick={async () => { if(await saveGroups([...groups, newGroupName.trim()]))setNewGroupName('') }}
               type="button"
               style={{ minHeight: 0, padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
             >{msg('추가')}</button>

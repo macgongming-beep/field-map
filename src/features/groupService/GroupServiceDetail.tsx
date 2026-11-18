@@ -3,7 +3,7 @@ import type {CalendarEvent} from '../../types'
 import {t,type AppLanguage} from '../../i18n'
 import {msg} from '../../lib/msg'
 import {readGroupServiceContext,type GroupServiceContext} from './api'
-import {groupLabel,groupSlotEvents,serviceGroups,territoryApplicants} from './model'
+import {groupLabel,groupSlotEvents,serviceGroupOptions,territoryApplicants} from './model'
 import {ServiceApplicationButtons,ReturnVisitApplicants} from './ServiceApplications'
 import {MeetingAccessPanel} from './MeetingAccessPanel'
 import {GROUP_PARTICIPANTS_CHANGED} from './participantChanges'
@@ -80,7 +80,9 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
   const hasMeetingInformation=Boolean(current&&(current.leader?.trim()||current.place?.trim()||current.memo?.trim()||current.meetingMode==='virtual'))
   const ownTeam=current?.cardAssignments.find(a=>a.userName===currentVisitor)?.teamKey
   const visibleAssignments=current?.cardAssignments.filter(a=>selectedMeta?.canManage || a.userName===currentVisitor || (ownTeam&&a.teamKey===ownTeam)) ?? []
-  const group=serviceGroups.find(g=>g.code===selectedMeta?.groupCode)
+  const groups=serviceGroupOptions(globalSettings,language)
+  // Existing schedules remain visible even if their group is retired or settings are stale.
+  const tabGroups=[...groups,...(context?.events??[]).filter(e=>!groups.some(g=>g.code===e.groupCode)).map(e=>({code:e.groupCode,name:e.groupCode,active:false}))]
   const names=current?territoryApplicants(current):[]
   const scheduleActions=current&&selectedMeta?.canEdit&&(onEdit||onDelete)
     ?<GroupScheduleActions key={current.id} language={language} onEdit={onEdit?()=>onEdit(current.id):undefined} onDelete={onDelete?()=>onDelete(current.id):undefined}/>:null
@@ -96,19 +98,19 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
       {failed&&<div role="alert"><p>{msg('신청자를 불러오지 못했습니다.')}</p><button type="button" onClick={()=>setRetry(n=>n+1)}>{msg('다시 시도')}</button></div>}
       {context&&<>
         <div className="gs-group-tabs" role="tablist" aria-label={msg('집단')}>
-          {serviceGroups.map(g=>{const item=context.events.find(e=>e.groupCode===g.code);return item&&<button type="button" role="tab" id={`gs-tab-${item.id}`} aria-controls={`gs-panel-${event.id}`} aria-selected={selected===item.id} tabIndex={selected===item.id?0:-1} key={g.code} onClick={()=>setSelected(item.id)} onKeyDown={e=>{
+          {tabGroups.map(g=>{const item=context.events.find(e=>e.groupCode===g.code);return item&&<button type="button" role="tab" id={`gs-tab-${item.id}`} aria-controls={`gs-panel-${event.id}`} aria-selected={selected===item.id} tabIndex={selected===item.id?0:-1} key={g.code} onClick={()=>setSelected(item.id)} onKeyDown={e=>{
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return
             e.preventDefault()
             const buttons=Array.from(e.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role=tab]'))
             const i=buttons.indexOf(e.currentTarget)
             const next=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length
             buttons[next].click();buttons[next].focus()
-          }}>{groupLabel([g.code],language,globalSettings.user_groups)} <span>{item.count}</span></button>})}
+          }}>{g.name} <span>{item.count}</span></button>})}
         </div>
         {current&&selectedMeta&&<div role="tabpanel" id={`gs-panel-${event.id}`} aria-labelledby={`gs-tab-${current.id}`}>
           <ServiceApplicationButtons key={`apply-${current.id}`} event={current} currentVisitor={currentVisitor}
             onApply={onApply?activity=>onApply(current.id,activity):undefined} onCancel={onApply?()=>onApply(current.id):undefined}/>
-          <div className="gs-roster-heading"><h3>{groupLabel(group?[group.code]:[],language,globalSettings.user_groups)} · {msg('신청자')} {selectedMeta.count}</h3>
+          <div className="gs-roster-heading"><h3>{groupLabel([selectedMeta.groupCode],language,globalSettings.user_groups,globalSettings.service_group_directory)} · {msg('신청자')} {selectedMeta.count}</h3>
             {selectedMeta.canManage&&<div className="gs-roster-tools">
               {onAddParticipant&&<button type="button" aria-label={t(language,'calendar.addSelf')} title={t(language,'calendar.addSelf')} aria-expanded={addingGroup===current.id} onClick={()=>setAddingGroup(addingGroup===current.id?null:current.id)}>+</button>}
               {onRemoveParticipant&&<button type="button" aria-label={t(language,'calendar.removeShort')} title={t(language,'calendar.removeShort')} aria-pressed={removingGroup===current.id} onClick={()=>setRemovingGroup(removingGroup===current.id?null:current.id)}>−</button>}

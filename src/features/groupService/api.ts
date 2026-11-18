@@ -3,6 +3,19 @@ import { getAuthToken } from '../../lib/authToken'
 import { confirmDialog } from '../../lib/confirm'
 import { msg } from '../../lib/msg'
 import type { MeetingAccess, ServicePlan } from './model'
+import {GROUP_DIRECTORY_CHANGED,parseGroupDirectory,type GroupDirectory} from './directory'
+
+export async function manageServiceGroup(action:'add'|'rename'|'archive',code:string|null,name:string|null,revision:string):Promise<GroupDirectory>{
+  const token=getAuthToken()
+  if(!token)throw new Error(msg('다시 로그인해 주세요.'))
+  const {data,error}=await supabase.rpc('manage_service_group_tx',{p_token:token,p_action:action,p_code:code,p_name:name,p_expected_revision:revision})
+  if(error)throw new Error(error.code==='PT409'?msg('집단 목록이 변경되었습니다. 다시 열어 확인해 주세요.'):msg('집단 목록 저장에 실패했습니다.'))
+  const directory=parseGroupDirectory(data)
+  if(!directory||token!==getAuthToken())throw new Error(msg('집단 목록 저장에 실패했습니다.'))
+  window.dispatchEvent(new CustomEvent(GROUP_DIRECTORY_CHANGED,{detail:JSON.stringify(directory)}))
+  window.dispatchEvent(new Event('app-users-changed'))
+  return directory
+}
 
 export type GroupServiceContext = {
   ownGroup: string | null
