@@ -1,6 +1,6 @@
 # 모임 정보 기본 펼침과 집단 관리 운영 전환
 
-- 상태: 사용자 운영 적용 승인, 배포 전 검증 완료
+- 상태: 운영 적용 완료
 - 결정일: 2026-11-18
 - 선행: [0130](0130-saved-service-labels-and-compact-calendar.md), [0131](0131-stable-service-group-directory.md), [0132](0132-add-groups-from-existing-service-event.md)
 
@@ -57,4 +57,20 @@ DB 설치와 앱 업데이트 사이 구버전 관리자의 집단 목록 저장
 
 ## 적용 기록
 
-운영 DB/앱 변경 결과와 배포 식별자는 실제 적용 후 별도 기록한다.
+2026-11-18 23:48 KST에 운영 DB 설치를 완료했다. 백업은
+`backups/nov18-service-directory-release/before.dump`이며 목록 검사를 통과했다.
+롤백 리허설 전후 자료가 같았고, 실제 설치 뒤 위 5개 업무 표와 6개 기존 함수 해시도 같았다.
+处仁/新葛/东柏/东滩의 기존 code와 설정 순서를 보존했다. 소속 미지정 6명도 그대로다.
+운영 배정 definer 12개와 기존 compatibility 단계가 유지됐다. 전환 단계를 바꾸지 않았다.
+
+DB 준비 뒤 main을 `9291548`에서 `1ddd76d4c32ef45c7a4c1dc055f9396447b1c6b9`로 fast-forward했다.
+배포 `dpl_HH2e2HVW5W4W3XRrsXGXfMM5W3ky`가 READY이고 해당 SHA가 운영 별칭에 연결된 것을 확인했다.
+
+- 운영: https://chinese-territory-app.vercel.app
+- 배포: https://chinese-territory-6mhede5ij-gms-projects-3b3e1c8b.vercel.app
+- 실제 운영 프로젝트의 환경변수 전체 서명이 전후 동일했다. 메타정보 최적화는 계속 OFF다.
+- 운영 HTML과 참조 JS `/assets/index-DP5RIiEB.js`는 모두 HTTP 200이었다.
+- Chrome 운영 홈이 열리고 새 버전 안내가 나타났다. 다른 앱 창의 작성 내용을 보호하려고 업데이트 버튼은 누르지 않았다.
+- 운영 일정/신청/배정을 시험 데이터로 수정하지 않았다. 새 앱 적용 후 실제 휴대폰 상세 확인은 사용자에게 요청한다.
+
+이 적용 기록은 문서만 후속 커밋하며 main 재배포를 만들지 않는다.

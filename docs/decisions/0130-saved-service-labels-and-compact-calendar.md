@@ -1,6 +1,6 @@
 # Saved service titles, configured group names, and compact PC calendar
 
-- Status: demo only; production unchanged
+- Status: production applied through [0133](0133-expanded-meeting-info-production-release.md); original demo verification below is retained
 - Date: 2026-11-18
 - Previous work: 0129 remains enabled in the demo artifact.
 
