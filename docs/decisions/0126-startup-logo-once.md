@@ -63,3 +63,9 @@ territory_sync_clock의 시각 응답 33→34B 차이이며 추가 조회가 아
 
 기능 브랜치와 데모만 대상. main, 운영 배포/환경변수/DB는 변경하지 않는다.
 데모 로그인/자동 세션 처리 외 일정·신청·배정 쓰기는 검증 도구에서 차단한다.
+
+데모 배포: `bb672fd`, `dpl_CRuEdymUhS7184o3c3KT6TaCD8c4`.
+배포 후 WebKit 390/320/1365px에서 같은 검사를 다시 통과했다.
+각 자동 로그인 구간의 프레임 샘플은 52/224/82개이고 중간 빈 화면 샘플은 모두 0개,
+로그인 후 로고 재삽입도 모두 0회, pageerror 0건이다.
+원본: scratch/startup-startup-once-deployed-webkit-ui.json.
