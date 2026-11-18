@@ -58,6 +58,26 @@ function HomeDetail({ events = [event] }: { events?: CalendarEvent[] }) {
 }
 
 describe('모바일 일정 상세 뒤로가기', () => {
+  it.each(['admin', 'developer', 'leader', 'user'] as const)('congregation schedule actions retain admin-only access: %s', role => {
+    vi.stubEnv('VITE_GROUP_SERVICE_ENABLED', 'true')
+    vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED', 'true')
+    render(<MemoryRouter initialEntries={['/?openEvent=17']}>
+      <AdminMobileCalendar detailOnly language="ko" currentVisitor="인도자" role={role}
+        events={[{ ...event, serviceKind: 'congregation' }]} onUpdateEvent={vi.fn()} onDeleteEvent={vi.fn()} />
+    </MemoryRouter>)
+    const more = screen.queryByRole('button', { name: '더보기' })
+    if (role === 'admin' || role === 'developer') {
+      expect(more).not.toBeNull()
+      fireEvent.click(more!)
+      expect(screen.getByRole('button', { name: '일정 수정' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: '일정 삭제' })).toBeTruthy()
+    } else {
+      expect(more).toBeNull()
+      expect(screen.queryByRole('button', { name: '일정 수정' })).toBeNull()
+      expect(screen.queryByRole('button', { name: '일정 삭제' })).toBeNull()
+    }
+  })
+
   it.each([[false, 'button'], [true, 'button'], [false, 'gesture'], [true, 'gesture']] as const)('closing edit returns to the same detail (new editor: %s, %s)', async (modern, close) => {
     vi.stubEnv('VITE_GROUP_SERVICE_ENABLED', String(modern))
     vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED', String(modern))
@@ -67,7 +87,7 @@ describe('모바일 일정 상세 뒤로가기', () => {
         events={[selected]} onUpdateEvent={vi.fn()} />
     </MemoryRouter>)
     fireEvent.click(screen.getByRole('button', { name: '더보기' }))
-    fireEvent.click(screen.getByRole('button', { name: '편집' }))
+    fireEvent.click(screen.getByRole('button', { name: '일정 수정' }))
     expect(screen.queryByText('comment area')).toBeNull()
     if (close === 'gesture') act(() => window.history.back())
     else fireEvent.click(screen.getByRole('button', { name: modern ? '닫기' : '✕', exact: true }))
@@ -100,7 +120,7 @@ describe('모바일 일정 상세 뒤로가기', () => {
     </MemoryRouter>
     const view = render(page(false, true))
     fireEvent.click(screen.getByRole('button', { name: '더보기' }))
-    fireEvent.click(screen.getByRole('button', { name: '편집' }))
+    fireEvent.click(screen.getByRole('button', { name: '일정 수정' }))
     await waitFor(() => expect(select).toHaveBeenLastCalledWith('', true))
     expect(screen.queryByText('comment area')).toBeNull()
     view.rerender(page(true, false))

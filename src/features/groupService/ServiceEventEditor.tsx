@@ -158,7 +158,14 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     } catch { setError(msg('일정을 저장하지 못했습니다.')) } finally { setBusy(false) }
   }
   const timeInputs = (s:{time:string;end:string},update:(s:{time:string;end:string})=>void,key:string) => <div key={key}>
-    <div className="gs-preset-heading"><label htmlFor={`gs-preset-${key}`}>{msg('자주 쓰는 시간')}</label>{onUpsertGlobalSetting&&<button type="button" title={msg('시간 설정')} aria-label={msg('시간 설정')} aria-expanded={presetKey===key} aria-controls={`gs-preset-settings-${key}`} onClick={()=>togglePresets(key)}>⚙</button>}</div>
+    <div className="gs-preset-heading">
+      <label htmlFor={`gs-preset-${key}`}>{msg('자주 쓰는 시간')}</label>
+      {onUpsertGlobalSetting&&<button type="button" title={msg('시간 설정')} aria-label={msg('시간 설정')} aria-expanded={presetKey===key} aria-controls={`gs-preset-settings-${key}`} onClick={()=>togglePresets(key)}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/>
+        </svg>
+      </button>}
+    </div>
     <label className="gs-preset-select"><select id={`gs-preset-${key}`} value={timePresets.findIndex(p=>p.time===s.time&&addMinutesToTime(p.time,p.durationMinutes)===s.end)} onChange={e=>{
       const preset=timePresets[Number(e.target.value)]
       if(!preset)return

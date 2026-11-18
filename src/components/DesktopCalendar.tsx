@@ -1131,8 +1131,8 @@ function EventDetailCard({
               <>
                 <div onClick={() => setDotsOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 30 }} />
                 <div className="event-dots-dropdown">
-                  <button className="event-dots-item" type="button" onClick={() => { setDotsOpen(false); onEdit() }}>수정</button>
-                  {canManage && <button className="event-dots-item danger" type="button" onClick={() => { setDotsOpen(false); onDelete() }}>삭제</button>}
+                  <button className="event-dots-item" type="button" onClick={() => { setDotsOpen(false); onEdit() }}>{msg('일정 수정')}</button>
+                  {canManage && <button className="event-dots-item danger" type="button" onClick={() => { setDotsOpen(false); onDelete() }}>{msg('일정 삭제')}</button>}
                 </div>
               </>
             )}

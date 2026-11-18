@@ -62,7 +62,7 @@
 .gs-times { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
 .gs-preset-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:32px; }
 .gs-editor .gs-preset-heading label { margin:0; }
-.gs-preset-heading button { width:32px; height:32px; padding:0; border:0; background:transparent; color:var(--muted); font-size:20px; cursor:pointer; }
+.gs-preset-heading button { display:grid; place-items:center; width:32px; height:32px; padding:0; border:0; background:transparent; color:var(--muted); cursor:pointer; }
 .gs-preset-settings { margin-bottom:12px; }
 .gs-editor .gs-preset-settings label { flex-direction:row; margin:0; font-weight:400; }
 .gs-editor .gs-preset-settings input { min-height:0; height:30px; font-weight:400!important; }

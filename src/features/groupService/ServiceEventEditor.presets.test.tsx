@@ -10,6 +10,22 @@ const panel=()=>within(document.querySelector('.gs-preset-settings') as HTMLElem
 beforeEach(()=>{setCurrentLang('ko');localStorage.removeItem(TIME_PRESET_STORAGE_KEY);vi.clearAllMocks()})
 afterEach(()=>{cleanup();localStorage.removeItem(TIME_PRESET_STORAGE_KEY)})
 
+test('time preset action uses the app outline edit icon and keeps its accessible toggle',()=>{
+  render(<ServiceEventEditor {...props} onUpsertGlobalSetting={vi.fn()}/>)
+  const button=screen.getByRole('button',{name:'시간 설정'})
+  expect(button.textContent).toBe('')
+  expect(button.title).toBe('시간 설정')
+  expect(button.querySelector('svg')?.getAttribute('stroke')).toBe('currentColor')
+  expect(button.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
+  expect(button.querySelectorAll('path')).toHaveLength(2)
+  expect(button.getAttribute('aria-expanded')).toBe('false')
+  fireEvent.click(button)
+  expect(button.getAttribute('aria-expanded')).toBe('true')
+  expect(document.getElementById(button.getAttribute('aria-controls')!)).not.toBeNull()
+  fireEvent.click(button)
+  expect(button.getAttribute('aria-expanded')).toBe('false')
+})
+
 test('edits, adds and deletes presets locally, then saves once without changing schedule fields',async()=>{
   const save=vi.fn(async()=>true)
   render(<ServiceEventEditor {...props} onUpsertGlobalSetting={save}/>)

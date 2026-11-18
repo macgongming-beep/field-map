@@ -342,7 +342,7 @@ export function AdminEventDetailSheet({
                         fontSize: 13, color: 'var(--text)',
                         cursor: 'pointer', borderRadius: 6,
                       }}
-                    >{t(language, 'common.edit')}</button>
+                    >{msg('일정 수정')}</button>
                   )}
                   {canDeleteEvent && onDelete && (
                     <button
@@ -355,7 +355,7 @@ export function AdminEventDetailSheet({
                         fontSize: 13, color: 'var(--status-danger)',
                         cursor: 'pointer', borderRadius: 6,
                       }}
-                    >{t(language, 'common.delete')}</button>
+                    >{msg('일정 삭제')}</button>
                   )}
                 </div>
               </>
