@@ -130,6 +130,7 @@
 로고 표시 범위: [0126 최초 실행에만 로고 표시](0126-startup-logo-once.md)
 시작 중 로고 교체 제거: [0127 최초 로고 요소 유지](0127-persistent-startup-logo.md)
 11월 18일 운영 전환: [0128 검증한 화면·속도 개선 배포](0128-nov18-evening-production-update.md)
+일정 표시 변경의 구역 조회: [0129 데모 메타정보 갱신 분리와 실제 통신 전후 비교](0129-calendar-metadata-territory-refresh.md)
 
 ```markdown
 # 제목

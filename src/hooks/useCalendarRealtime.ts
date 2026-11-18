@@ -14,11 +14,12 @@ import { CART_APPLICATIONS_ENABLED } from '../config/features'
 import { calendarNavigationReuseEnabled } from './calendarNavigationCache'
 import { groupServiceEnabled } from '../features/groupService/model'
 import { notifyGroupParticipantsChanged } from '../features/groupService/participantChanges'
+import { calendarTerritoryRefreshEnabled } from './calendarTerritoryRefresh'
 
 type ParticipantSignal = { new?: { event_id?: unknown }; old?: { event_id?: unknown } }
 
 export function useCalendarRealtime(
-  onChange: () => void,
+  onChange: (updatedEventIds?: number[]) => void,
   options?: { enabled?: boolean; debounceMs?: number; invalidate?: () => void;
     onParticipants?: (eventIds: number[] | null) => void },
 ) {
@@ -36,6 +37,8 @@ export function useCalendarRealtime(
 
     let pending: ReturnType<typeof setTimeout> | null = null
     let broad = false
+    let needsTerritory = false
+    const calendarUpdates = new Set<number>()
     let unknownParticipant = false
     const participantIds = new Set<number>()
     const groupChanges = new Set<number>()
@@ -45,19 +48,30 @@ export function useCalendarRealtime(
       pending = setTimeout(() => {
         pending = null
         const all = broad
+        const updates = !needsTerritory && calendarUpdates.size ? [...calendarUpdates] : undefined
         const ids = unknownParticipant ? null : [...participantIds]
         broad = false
+        needsTerritory = false
+        calendarUpdates.clear()
         unknownParticipant = false
         participantIds.clear()
         if (groupChanges.size) {
           notifyGroupParticipantsChanged([...groupChanges])
           groupChanges.clear()
         }
-        if (all) cbRef.current()
+        if (all) cbRef.current(updates)
         else optionsRef.current?.onParticipants?.(ids)
       }, debounceMs)
     }
-    const trigger = () => { broad = true; schedule() }
+    const trigger = () => { broad = true; needsTerritory = true; schedule() }
+    const calendarChanged = (payload: { eventType?: string; new?: { id?: unknown } }) => {
+      const id = payload?.new?.id
+      if (!calendarTerritoryRefreshEnabled() || payload?.eventType !== 'UPDATE'
+        || typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) { trigger(); return }
+      broad = true
+      calendarUpdates.add(id)
+      schedule()
+    }
     const participants = (payload: { new?: { event_id?: unknown }; old?: { event_id?: unknown } }) => {
       const ids = [payload?.new?.event_id, payload?.old?.event_id]
         .filter((id): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0)
@@ -70,7 +84,7 @@ export function useCalendarRealtime(
 
     let channel = supabase
       .channel(`calendar_sync:${Date.now()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, trigger)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_events' }, calendarChanged)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_card_assignments' }, trigger)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_card_assignment_cards' }, trigger)
     if (calendarNavigationReuseEnabled()) {

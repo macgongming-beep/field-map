@@ -243,8 +243,8 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
 
   // Phase 2: 캘린더/배정 Realtime → calendar slice만 refetch
   // (useUserChats가 이 책임을 갖고 있었으나 전체 fetchAll 호출하던 증폭점 제거)
-  useCalendarRealtime(() => {
-    void refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' }).catch(error => {
+  useCalendarRealtime(updatedEventIds => {
+    void refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar', updatedEventIds }).catch(error => {
       if (!(error instanceof SupersededReadError)) Sentry.captureException(error)
       console.warn('[calendar realtime] sync failed:', error)
     })

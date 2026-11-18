@@ -1,0 +1,356 @@
+{
+  "project": "demo",
+  "results": [
+    {
+      "role": "user",
+      "pair": 0,
+      "enabled": false,
+      "phase": "congregation",
+      "requests": 17,
+      "bytes": 11076,
+      "readMs": 1092,
+      "byEndpoint": {
+        "calendar_events": 2,
+        "event_card_assignments": 2,
+        "event_card_assignment_cards": 2,
+        "service_sessions": 1,
+        "card_assignments": 1,
+        "event_restaurant_assignments": 1,
+        "get_recipient_return_visit_card_ids": 1,
+        "territory_sync_clock": 1,
+        "territory_change_signals": 1,
+        "buildings": 1,
+        "card_boundaries": 1,
+        "territory_regions": 1,
+        "cards": 1,
+        "get_card_summaries": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 0,
+      "enabled": false,
+      "phase": "group",
+      "requests": 17,
+      "bytes": 11106,
+      "readMs": 852,
+      "byEndpoint": {
+        "calendar_events": 2,
+        "event_card_assignment_cards": 2,
+        "event_card_assignments": 2,
+        "event_restaurant_assignments": 1,
+        "service_sessions": 1,
+        "card_assignments": 1,
+        "get_recipient_return_visit_card_ids": 1,
+        "territory_sync_clock": 1,
+        "territory_change_signals": 1,
+        "buildings": 1,
+        "card_boundaries": 1,
+        "territory_regions": 1,
+        "cards": 1,
+        "get_card_summaries": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 0,
+      "enabled": true,
+      "phase": "congregation",
+      "requests": 3,
+      "bytes": 8858,
+      "readMs": 145,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignments": 1,
+        "event_card_assignment_cards": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 0,
+      "enabled": true,
+      "phase": "group",
+      "requests": 3,
+      "bytes": 8857,
+      "readMs": 222,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignments": 1,
+        "event_card_assignment_cards": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 1,
+      "enabled": false,
+      "phase": "congregation",
+      "requests": 17,
+      "bytes": 11105,
+      "readMs": 762,
+      "byEndpoint": {
+        "calendar_events": 2,
+        "event_card_assignments": 2,
+        "event_card_assignment_cards": 2,
+        "event_restaurant_assignments": 1,
+        "service_sessions": 1,
+        "card_assignments": 1,
+        "get_recipient_return_visit_card_ids": 1,
+        "territory_sync_clock": 1,
+        "territory_change_signals": 1,
+        "buildings": 1,
+        "card_boundaries": 1,
+        "territory_regions": 1,
+        "cards": 1,
+        "get_card_summaries": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 1,
+      "enabled": false,
+      "phase": "group",
+      "requests": 17,
+      "bytes": 11106,
+      "readMs": 913,
+      "byEndpoint": {
+        "calendar_events": 2,
+        "event_card_assignments": 2,
+        "event_card_assignment_cards": 2,
+        "event_restaurant_assignments": 1,
+        "card_assignments": 1,
+        "get_recipient_return_visit_card_ids": 1,
+        "service_sessions": 1,
+        "territory_sync_clock": 1,
+        "territory_change_signals": 1,
+        "buildings": 1,
+        "card_boundaries": 1,
+        "territory_regions": 1,
+        "cards": 1,
+        "get_card_summaries": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 1,
+      "enabled": true,
+      "phase": "congregation",
+      "requests": 3,
+      "bytes": 8858,
+      "readMs": 189,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignments": 1,
+        "event_card_assignment_cards": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 1,
+      "enabled": true,
+      "phase": "group",
+      "requests": 3,
+      "bytes": 8857,
+      "readMs": 180,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignment_cards": 1,
+        "event_card_assignments": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 2,
+      "enabled": false,
+      "phase": "congregation",
+      "requests": 17,
+      "bytes": 11105,
+      "readMs": 1041,
+      "byEndpoint": {
+        "calendar_events": 2,
+        "event_card_assignments": 2,
+        "event_card_assignment_cards": 2,
+        "card_assignments": 1,
+        "get_recipient_return_visit_card_ids": 1,
+        "service_sessions": 1,
+        "event_restaurant_assignments": 1,
+        "territory_sync_clock": 1,
+        "territory_change_signals": 1,
+        "buildings": 1,
+        "card_boundaries": 1,
+        "territory_regions": 1,
+        "cards": 1,
+        "get_card_summaries": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 2,
+      "enabled": false,
+      "phase": "group",
+      "requests": 17,
+      "bytes": 11106,
+      "readMs": 1045,
+      "byEndpoint": {
+        "calendar_events": 2,
+        "event_card_assignments": 2,
+        "event_card_assignment_cards": 2,
+        "card_assignments": 1,
+        "service_sessions": 1,
+        "event_restaurant_assignments": 1,
+        "get_recipient_return_visit_card_ids": 1,
+        "territory_sync_clock": 1,
+        "territory_change_signals": 1,
+        "buildings": 1,
+        "card_boundaries": 1,
+        "cards": 1,
+        "territory_regions": 1,
+        "get_card_summaries": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 2,
+      "enabled": true,
+      "phase": "congregation",
+      "requests": 3,
+      "bytes": 8858,
+      "readMs": 224,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignments": 1,
+        "event_card_assignment_cards": 1
+      }
+    },
+    {
+      "role": "user",
+      "pair": 2,
+      "enabled": true,
+      "phase": "group",
+      "requests": 3,
+      "bytes": 8857,
+      "readMs": 244,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignment_cards": 1,
+        "event_card_assignments": 1
+      }
+    },
+    {
+      "role": "leader",
+      "pair": 0,
+      "enabled": false,
+      "phase": "congregation",
+      "requests": 3,
+      "bytes": 9680,
+      "readMs": 871,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignment_cards": 1,
+        "event_card_assignments": 1
+      }
+    },
+    {
+      "role": "leader",
+      "pair": 0,
+      "enabled": false,
+      "phase": "group",
+      "requests": 3,
+      "bytes": 9683,
+      "readMs": 332,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignment_cards": 1,
+        "event_card_assignments": 1
+      }
+    },
+    {
+      "role": "leader",
+      "pair": 0,
+      "enabled": true,
+      "phase": "congregation",
+      "requests": 3,
+      "bytes": 9682,
+      "readMs": 176,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignment_cards": 1,
+        "event_card_assignments": 1
+      }
+    },
+    {
+      "role": "leader",
+      "pair": 0,
+      "enabled": true,
+      "phase": "group",
+      "requests": 3,
+      "bytes": 9681,
+      "readMs": 365,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignments": 1,
+        "event_card_assignment_cards": 1
+      }
+    },
+    {
+      "role": "admin",
+      "pair": 0,
+      "enabled": false,
+      "phase": "congregation",
+      "requests": 3,
+      "bytes": 9682,
+      "readMs": 165,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignment_cards": 1,
+        "event_card_assignments": 1
+      }
+    },
+    {
+      "role": "admin",
+      "pair": 0,
+      "enabled": false,
+      "phase": "group",
+      "requests": 3,
+      "bytes": 9683,
+      "readMs": 211,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignment_cards": 1,
+        "event_card_assignments": 1
+      }
+    },
+    {
+      "role": "admin",
+      "pair": 0,
+      "enabled": true,
+      "phase": "congregation",
+      "requests": 3,
+      "bytes": 9682,
+      "readMs": 373,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignment_cards": 1,
+        "event_card_assignments": 1
+      }
+    },
+    {
+      "role": "admin",
+      "pair": 0,
+      "enabled": true,
+      "phase": "group",
+      "requests": 3,
+      "bytes": 9681,
+      "readMs": 138,
+      "byEndpoint": {
+        "calendar_events": 1,
+        "event_card_assignments": 1,
+        "event_card_assignment_cards": 1
+      }
+    }
+  ],
+  "limitations": [
+    "Actual REST/WebSocket under JSDOM; not whole-app browser/physical phone timing.",
+    "Counts observer HTTP reads and uncompressed response bytes, not billed egress, WebSocket or asset bytes.",
+    "OFF/ON same candidate, production boolean flags. Metadata writes only; no real assignment changes."
+  ]
+}

@@ -142,6 +142,73 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllEnvs(); localStorage.clear() })
 
+const metadataEvent = { id: 7, event_date: '2026-11-18', time: '14:30', title: 'Before',
+  assignment_revision: 1, event_participants: [{ user_name: 'Volunteer', role: '신청' }] }
+const calendarResponse = (rows: Record<string, unknown>[]) => Promise.resolve({ data: rows, error: null })
+
+test.each(['true', 'false', undefined])('metadata-only update refreshes calendar and retains territory only with opt-in %s', async flag => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_METADATA_REFRESH_ENABLED', flag)
+  state.calendarResponses.push(calendarResponse([metadataEvent]))
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const before = result.current.buildings
+  state.reads = []; state.refresh.mockClear()
+  state.calendarResponses.push(calendarResponse([{ ...metadataEvent, title: 'After', edit_version: 2 }]))
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar', updatedEventIds: [7] }) })
+  expect(result.current.calendarEvents[0].title).toBe('After')
+  expect(result.current.buildings).toEqual(before)
+  if (flag === 'true') {
+    expect(result.current.buildings).toBe(before)
+    expect(state.refresh).not.toHaveBeenCalled()
+    expect(state.unchanged).not.toHaveBeenCalled()
+    expect(state.reads).toEqual(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards'])
+  } else {
+    expect(state.refresh).toHaveBeenCalledOnce()
+    expect(state.reads).toContain('visit_histories')
+  }
+})
+
+test.each([
+  { label: 'assignment revision', rows: [{ ...metadataEvent, assignment_revision: 2 }], ids: [7], trigger: 'realtime:calendar' },
+  { label: 'leader permissions', rows: [{ ...metadataEvent, leader_name: 'Other' }], ids: [7], trigger: 'realtime:calendar' },
+  { label: 'group permissions', rows: [{ ...metadataEvent, target_groups: ['singal'] }], ids: [7], trigger: 'realtime:calendar' },
+  { label: 'removed/moved event', rows: [], ids: [7], trigger: 'realtime:calendar' },
+  { label: 'unknown event', rows: [metadataEvent], ids: [999], trigger: 'realtime:calendar' },
+  { label: 'mixed assignment signal', rows: [metadataEvent], ids: undefined, trigger: 'realtime:calendar' },
+  { label: 'manual refresh', rows: [metadataEvent], ids: [7], trigger: 'fetchAll' },
+  { label: 'foreground', rows: [metadataEvent], ids: [7], trigger: 'foreground' },
+])('calendar optimization preserves fresh scope and revoked card removal: $label', async ({ rows, ids, trigger }) => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_METADATA_REFRESH_ENABLED', 'true')
+  state.calendarResponses.push(calendarResponse([metadataEvent]))
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.reads = []; state.refresh.mockClear()
+  state.allowed = [2]; state.buildings = [{ ...building, id: 20, card_id: 2, units: [] }]
+  state.calendarResponses.push(calendarResponse(rows))
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: trigger, updatedEventIds: ids }) })
+  expect(state.refresh).toHaveBeenCalledOnce()
+  expect(result.current.buildings.map(b => b.id)).toEqual([20])
+  expect(result.current.visitHistories).toEqual([])
+})
+
+test('failed scope recovery must be repaired before a later metadata update can reuse it', async () => {
+  vi.stubEnv('VITE_CALENDAR_METADATA_REFRESH_ENABLED', 'true')
+  state.calendarResponses.push(calendarResponse([metadataEvent]))
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const revised = { ...metadataEvent, assignment_revision: 2 }
+  state.calendarResponses.push(calendarResponse([revised]))
+  state.refresh.mockImplementationOnce(() => { throw new Error('scope unavailable') })
+  await act(async () => { await expect(result.current.refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar' })).rejects.toThrow('scope unavailable') })
+  state.refresh.mockClear()
+  state.calendarResponses.push(calendarResponse([{ ...revised, title: 'After' }]))
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'realtime:calendar', updatedEventIds: [7] }) })
+  expect(state.refresh).toHaveBeenCalledOnce()
+  expect(result.current.calendarEvents[0].title).toBe('After')
+})
+
 function enableScopedHistories() {
   vi.stubEnv('VITE_DEMO_MODE', 'true')
   vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'true')

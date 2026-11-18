@@ -3,6 +3,7 @@ import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchBuildingSignalProof, fetchChangedBuildings, fetchTerritoryClock, type TerritorySignal } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
+import { calendarTerritoryRefreshEnabled, onlyCalendarPresentationChanged } from './calendarTerritoryRefresh'
 import { parseServiceCalendarScope, serviceCalendarReadReuseEnabled } from './serviceCalendarScope'
 import { calendarCachedScreenEnabled, calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
 import { readCalendarParticipants } from './calendarParticipants'
@@ -799,9 +800,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // Slice 의존성: cards transform이 buildings 의존 → buildings 먼저 완료해야 함.
   const recoveryReads = useRef(new Map<Slice, { promise: Promise<number>; delta: boolean; historiesRecovered?: boolean }>()).current
   const recipientQueue = useRef<Promise<void>>(Promise.resolve())
+  const recipientTerritoryReady = useRef(false)
   const fetchSlices = useCallback((
     slices: Slice[],
-    options?: { triggeredBy?: string; strictGroups?: boolean },
+    options?: { triggeredBy?: string; strictGroups?: boolean; updatedEventIds?: number[] },
   ): Promise<void> => {
     // Navigation can reuse recently read months; writes/recovery/manual refresh
     // invalidate every month, including those not currently visible.
@@ -819,6 +821,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     }
     if (recipientReader) {
       const work = async () => {
+        const refreshTerritory = slices.some((slice) => ['calendar', 'resources', 'returnVisits', 'buildings', 'cards', 'cardBoundaries'].includes(slice))
+        const canKeepTerritory = calendarTerritoryRefreshEnabled() && recipientTerritoryReady.current && loadedOnceRef.current
+          && recipientReader.scoped && slices.length === 1 && slices[0] === 'calendar'
+          && options?.triggeredBy === 'realtime:calendar'
+        if (refreshTerritory) recipientTerritoryReady.current = false
         const baseline = slices.includes('visits')
           ? await fetchTerritoryClock().catch(() => null) : null
         const requested = new Set(slices)
@@ -847,16 +854,21 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
             territoryCheckpoint.cards.clear()
             territoryCheckpoint.applied.clear()
           }
+          recipientTerritoryReady.current = true
           return
         }
         // Reuse only this operation's complete calendar; stale state could retain revoked cards.
         let freshCalendar: CalendarEvent[] | undefined
         if (requested.has('calendar')) {
+          const previous = calendarEventsRef.current
           await fetchSlice('calendar')
           freshCalendar = recipientCalendarRef.current
           requested.delete('calendar')
+          if (canKeepTerritory && onlyCalendarPresentationChanged(previous, calendarEventsRef.current, options?.updatedEventIds)) {
+            recipientTerritoryReady.current = true
+            return
+          }
         }
-        const refreshTerritory = slices.some((slice) => ['calendar', 'resources', 'returnVisits', 'buildings', 'cards', 'cardBoundaries'].includes(slice))
         // Reassignment can add/remove units even when no visit was written.
         if (scopedHistories && refreshTerritory && !requested.has('visits')) requested.add('visitHistories')
         if (refreshTerritory) for (const slice of ['buildings', 'cards', 'cardBoundaries'] as const) requested.add(slice)
@@ -877,6 +889,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
               const reuseHistories = completeBefore && !historyReadsPending.current && !historySyncsPending.current
                 && historyCoverage.canReuse(historyScope(buildingsRef.current))
               await Promise.all([...requested].map((slice) => fetchSlice(slice, false, reuseHistories, options?.strictGroups)))
+              recipientTerritoryReady.current = true
               return
             }
           } catch {
@@ -896,6 +909,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           territoryCheckpoint.cards.clear()
           territoryCheckpoint.applied.clear()
         }
+        if (refreshTerritory) recipientTerritoryReady.current = true
       }
       const next = recipientQueue.current.catch(() => {}).then(work)
       recipientQueue.current = next

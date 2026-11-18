@@ -2,7 +2,8 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { useCalendarRealtime } from './useCalendarRealtime'
 
-const state = vi.hoisted(() => ({ callbacks: new Map<string, (payload?: unknown) => void>(), remove: vi.fn() }))
+const state = vi.hoisted(() => ({ callbacks: new Map<string, (payload?: unknown) => void>(), remove: vi.fn(), recovery: () => {} }))
+vi.mock('../lib/realtimeRecovery', () => ({ subscribeWithRecovery: (_channel: unknown, recover: () => void) => { state.recovery = recover } }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   channel: () => {
     const channel = {
@@ -37,6 +38,44 @@ test.each(['true','false'])('production group roster signal stays targeted with 
     expect(changed).toHaveBeenCalledOnce()
     expect(changed.mock.calls[0][0].detail).toEqual([7, 8])
   } finally { window.removeEventListener('group-participants-changed', changed) }
+})
+
+test('calendar update IDs are batched, but assignment changes and reconnect never prove metadata-only', async () => {
+  vi.stubEnv('VITE_CALENDAR_METADATA_REFRESH_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
+  vi.useFakeTimers()
+  const onChange = vi.fn()
+  renderHook(() => useCalendarRealtime(onChange))
+  const update = (id: number) => state.callbacks.get('calendar_events')!({ eventType: 'UPDATE', new: { id } })
+  update(7); update(7); update(8)
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  expect(onChange).toHaveBeenLastCalledWith([7, 8])
+  for (const table of ['event_card_assignments', 'event_card_assignment_cards', 'event_restaurant_assignments']) {
+    update(7); state.callbacks.get(table)!(); update(8)
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+    expect(onChange).toHaveBeenLastCalledWith(undefined)
+  }
+  for (const payload of [undefined, { eventType: 'DELETE', old: { id: 7 } }, { eventType: 'INSERT', new: { id: 7 } }, { eventType: 'UPDATE', new: { id: '7' } }]) {
+    update(7); state.callbacks.get('calendar_events')!(payload)
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+    expect(onChange).toHaveBeenLastCalledWith(undefined)
+  }
+  act(() => state.recovery())
+  expect(onChange).toHaveBeenLastCalledWith()
+  update(7)
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+  expect(onChange).toHaveBeenLastCalledWith([7])
+})
+
+test.each(['false', undefined])('metadata optimization is opt-in, independent of demo: %s', flag => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_CALENDAR_METADATA_REFRESH_ENABLED', flag)
+  vi.useFakeTimers()
+  const onChange = vi.fn()
+  renderHook(() => useCalendarRealtime(onChange))
+  state.callbacks.get('calendar_events')!({ eventType: 'UPDATE', new: { id: 7 } })
+  act(() => vi.advanceTimersByTime(2000))
+  expect(onChange).toHaveBeenCalledExactlyOnceWith(undefined)
 })
 
 test.each([true, false])('restaurant assignment invalidation follows navigation reuse flag=%s', async enabled => {
