@@ -32,6 +32,13 @@ test('groups visually by day and canonical targets without dropping ungrouped or
   expect(eventBlocks(events,'处仁')[0].map(e=>e.id)).toEqual([3])
   const open=vi.fn(),parent=vi.fn();render(<div onClick={parent}><ServiceEventList events={events} language="ko" onOpen={open}/></div>);fireEvent.click(screen.getAllByRole('button')[1]);expect(open).toHaveBeenCalledWith(2);expect(parent).not.toHaveBeenCalled()
 })
+test('Chinese event titles have Chinese typography even in the Korean interface',()=>{
+  render(<ServiceEventList language="ko" events={[
+    {...make(1),title:'传道'}, {...make(2),title:'봉사 모임'},
+  ]} onOpen={vi.fn()}/> )
+  expect(screen.getByText('传道').getAttribute('lang')).toBe('zh-Hans')
+  expect(screen.getByText('봉사 모임').getAttribute('lang')).toBeNull()
+})
 test('adds a second independent time slot only when requested',async()=>{
   const submit=vi.fn(async()=>true)
   render(<ServiceEventEditor language="ko" date="2026-11-25" events={[]} users={users} onClose={vi.fn()} onSubmit={submit}/>)

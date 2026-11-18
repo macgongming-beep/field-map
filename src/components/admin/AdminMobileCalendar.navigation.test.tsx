@@ -58,6 +58,24 @@ function HomeDetail({ events = [event] }: { events?: CalendarEvent[] }) {
 }
 
 describe('모바일 일정 상세 뒤로가기', () => {
+  it.each([[false, 'button'], [true, 'button'], [false, 'gesture'], [true, 'gesture']] as const)('closing edit returns to the same detail (new editor: %s, %s)', async (modern, close) => {
+    vi.stubEnv('VITE_GROUP_SERVICE_ENABLED', String(modern))
+    vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED', String(modern))
+    const selected: CalendarEvent = modern ? { ...event, serviceKind: 'congregation', meetingMode: 'none', editVersion: '1' } : event
+    render(<MemoryRouter initialEntries={['/?openEvent=17']}>
+      <AdminMobileCalendar detailOnly language="ko" currentVisitor="관리자" role="admin"
+        events={[selected]} onUpdateEvent={vi.fn()} />
+    </MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: '더보기' }))
+    fireEvent.click(screen.getByRole('button', { name: '편집' }))
+    expect(screen.queryByText('comment area')).toBeNull()
+    if (close === 'gesture') act(() => window.history.back())
+    else fireEvent.click(screen.getByRole('button', { name: modern ? '닫기' : '✕', exact: true }))
+    await screen.findByText('comment area')
+    expect(screen.getByText('传道')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '더보기' })).toBeTruthy()
+  })
+
   it('home detail applies to the selected event and reflects fresh participant props', () => {
     const apply = vi.fn()
     const detail = (applicants: string[]) => <MemoryRouter initialEntries={['/?openEvent=17']}>

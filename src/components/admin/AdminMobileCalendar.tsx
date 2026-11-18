@@ -641,7 +641,7 @@ export function AdminMobileCalendar({
       )}
 
       {/* ── 일정 상세 시트 ─────────────── */}
-      {detailEvent && assignEventId === null && groupServiceEnabled() && detailEvent.groupServiceScope && <GroupServiceDetail
+      {detailEvent && assignEventId === null && editingEventId === null && !scopeAction && groupServiceEnabled() && detailEvent.groupServiceScope && <GroupServiceDetail
         key={`${detailEvent.date}:${detailEvent.time}:${detailEvent.endTime}`} mobile event={detailEvent} events={events} language={language} currentVisitor={currentVisitor}
         onClose={returnFromDetail} onApply={onApplyToEvent}
         currentUserId={currentUserId} role={role} mentionUsers={mentionUsers} commentEntry={commentEntry}
@@ -654,9 +654,9 @@ export function AdminMobileCalendar({
           if(target.seriesId&&onDeleteEventSeries){setScopeAction({kind:'delete',event:target});closeDetail()}
           else if(await confirmDialog({message:t(language,'calendar.deleteConfirm'),danger:true,confirmLabel:msg('삭제')})){onDeleteEvent(id);closeDetail()}
         }:undefined}
-        onEdit={onUpdateEvent?id=>{setEditingEventId(id);closeDetail()}:undefined}/>
+        onEdit={onUpdateEvent?id=>{setDetailEventId(id);setEditingEventId(id)}:undefined}/>
       }
-      {detailEvent && assignEventId === null && !(groupServiceEnabled() && detailEvent.groupServiceScope) && (
+      {detailEvent && assignEventId === null && editingEventId === null && !scopeAction && !(groupServiceEnabled() && detailEvent.groupServiceScope) && (
         <AdminEventDetailSheet
             buildings={buildings}
             informalAssets={informalAssets}
@@ -691,7 +691,6 @@ export function AdminMobileCalendar({
             onUpdateEvent
               ? () => {
                   setEditingEventId(detailEvent.id)
-                  closeDetail()
                 }
               : undefined
           }
@@ -1079,6 +1078,9 @@ function EventAddSheet({ language,
   onClose: () => void
   onSubmit: (input: EventSheetInput) => void
 ; language: AppLanguage }) {
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => pushBackHandler(() => closeRef.current()), [])
   const [date, setDate] = useState(editingEvent?.date ?? defaultDate)
   const [time, setTime] = useState(editingEvent?.time ?? '')
   const [endTime, setEndTime] = useState(editingEvent?.endTime ?? '')

@@ -13,10 +13,12 @@ export function ServiceEventList({events,language,onOpen,groupName,statusById}: 
       {!scoped&&block[0].serviceKind==='group'&&<h3>{groupLabel(block[0].targetGroups ?? [],language)}</h3>}
       {rows.map(e=>{
         const statuses=(scoped?block:[e]).map(item=>statusById?.[item.id])
+        const title=scoped?msg('집단 봉사'):e.title
+        const chineseTitle=/\p{Script=Han}/u.test(title)&&!/\p{Script=Hangul}/u.test(title)
         return <button type="button" key={e.id} title={`${e.time} · ${e.title} · ${e.leader}`} onClick={click=>{click.stopPropagation();onOpen(e.id)}}>
           <span className="gs-event-time">{e.time}{e.endTime?`–${e.endTime}`:''}</span>
           <span className="gs-event-text">
-            <strong>{scoped?msg('집단 봉사'):e.title}</strong>
+            <strong lang={chineseTitle?'zh-Hans':undefined}>{title}</strong>
             <span>{scoped?groupLabel(block.flatMap(b=>b.targetGroups ?? []),language):<>{e.leader}{e.meetingMode==='virtual'?` · ${msg('화상 모임')}`:e.place?` · ${e.place}`:''}</>}</span>
             {statuses.includes('lead')?<span>{msg('인도')}</span>:statuses.includes('join')?<span>{msg('신청 완료')}</span>:null}
           </span><span aria-hidden="true">›</span>

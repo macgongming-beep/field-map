@@ -213,6 +213,13 @@ test.each([['false', undefined, false], ['true', undefined, true], ['false', 'tr
     vi.stubEnv('VITE_DEMO_MODE', demo); vi.stubEnv('VITE_CALENDAR_ZONE_BUILDING_DEMAND_ENABLED', flag)
     for (const role of ['admin', 'leader'] as const) {
       for (const desktop of [false, true]) expect(buildingDemandForRoute(role, '/calendar', '?openEvent=9', desktop)).toBe(enabled ? 'calendar' : 'full')
+      for (const path of ['/', '/home']) {
+        expect(buildingDemandForRoute(role, path, '?openEvent=9', false)).toBe(enabled ? 'calendar' : 'full')
+        expect(buildingDemandForRoute(role, path, '?openEvent=9', true)).toBe('full')
+        for (const search of ['?openEvent=bad', '?openEvent=0', '?openChat=9']) {
+          expect(buildingDemandForRoute(role, path, search, false)).toBe('full')
+        }
+      }
       expect(buildingDemandForRoute(role, '/zone', '?level=cards&region=R&dong=D&scope=mine', false)).toBe(enabled ? 'zone' : 'full')
       expect(buildingDemandForRoute(role, '/zone', '?tab=informal', false)).toBe(enabled ? 'zone' : 'full')
       for (const search of ['?tab=restaurant', '?view=map', '?unknown=1']) expect(buildingDemandForRoute(role, '/zone', search, false)).toBe('full')

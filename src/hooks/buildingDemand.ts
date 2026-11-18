@@ -1,5 +1,6 @@
 import { createContext } from 'react'
 import type { Role } from '../types'
+import { homeEventDetailId } from '../lib/eventDetailNavigation'
 import { toBuilding, type RawBuilding, type RawUnit } from './storeTransforms'
 
 export type BuildingDemand = 'home' | 'calendar' | 'zone' | 'map' | 'full'
@@ -18,10 +19,10 @@ export function buildingDemandEnabled(role: Role) {
 
 export function buildingDemandForRoute(role: Role, pathname: string, search: string, desktop: boolean): BuildingDemand | undefined {
   if (!buildingDemandEnabled(role)) return undefined
-  // Home detail/legacy deep links can open assignment editors. Unknown consumers stay full.
+  // Unknown consumers stay full. Assignment editors independently request full data.
   if ((pathname === '/' || pathname === '/home') && !search) return 'home'
   if (calendarZoneBuildingDemandEnabled()) {
-    if (pathname === '/calendar') return 'calendar'
+    if (pathname === '/calendar' || (!desktop && homeEventDetailId(pathname, search) !== null)) return 'calendar'
     // Unknown/deep-link query modes remain full. Restaurant editors need complete data.
     const params = new URLSearchParams(search)
     if (!desktop && pathname === '/zone'

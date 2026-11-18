@@ -80,9 +80,6 @@ export function DesktopHome({
   }, [todayEvents, currentVisitor])
 
   const leaderCards = useMemo(() => cards.filter((c) => c.assignedLeader === currentVisitor), [cards, currentVisitor])
-  const inProgressCards = useMemo(() => cards.filter((c) => c.status === '진행중'), [cards])
-  const totalUnits = useMemo(() => cards.reduce((sum, card) => sum + card.units, 0), [cards])
-  const completedUnits = useMemo(() => cards.reduce((sum, card) => sum + card.completed, 0), [cards])
 
   return (
     <section className="la-page">
@@ -99,12 +96,6 @@ export function DesktopHome({
             language={language}
             todayEvents={todayEvents}
             groupName={groupName}
-            cards={cards}
-            totalUnits={totalUnits}
-            completedUnits={completedUnits}
-            inProgressCount={inProgressCards.length}
-            unassignedCount={cards.filter((c) => c.status === '미배정').length}
-                        onOpenZone={() => navigate('/zone')}
             onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`, {
               state: eventDetailNavigationState(location),
             })}

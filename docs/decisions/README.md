@@ -116,6 +116,8 @@
 
 모바일 지도 중국어 세대 필터: [0092 표시 집계 일치와 원본 저장 보존](0092-demo-map-chinese-unit-filter.md)
 
+모바일 일정 닫기·홈 정리·중국어 제목과 조회 점검: [0115 데모 수정 및 남은 속도 과제](0115-demo-mobile-edit-home-and-loading.md)
+
 ```markdown
 # 제목
 

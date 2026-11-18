@@ -1,9 +1,9 @@
 // 관리자 모바일 홈 — design_handoff_admin_redesign 01 화면
-// 구조: 공지 → 오늘의 봉사 → 운영 현황
+// 구조: 오늘의 봉사 → 봉사 모임 정리 → 대화 방법 제안
 //
 // 헤더는 상위(MobileHome.tsx)의 AppHeader 가 그림.
 
-import type { CalendarEvent, TerritoryCard } from '../../types'
+import type { CalendarEvent } from '../../types'
 import type { AppLanguage } from '../../i18n'
 import { t, formatPeriod } from '../../i18n'
 import { groupServiceEnabled, visibleServiceEventCount } from '../../features/groupService/model'
@@ -40,12 +40,6 @@ type Props = {
   groupName?: string
   language: AppLanguage
   todayEvents: CalendarEvent[]
-  cards: TerritoryCard[]
-  totalUnits: number
-  completedUnits: number
-  inProgressCount: number
-  unassignedCount: number
-  onOpenZone: () => void
   onOpenEventDetail: (eventId: number) => void
 }
 
@@ -63,17 +57,8 @@ export function AdminMobileHome({
   groupName,
   language,
   todayEvents,
-  cards,
-  totalUnits,
-  completedUnits,
-  inProgressCount,
-  unassignedCount,
-  onOpenZone,
   onOpenEventDetail,
 }: Props) {
-
-  const completedPct = totalUnits > 0 ? (completedUnits / totalUnits) * 100 : 0
-  const completedPctText = completedPct >= 10 ? completedPct.toFixed(1) : completedPct.toFixed(2)
 
   return (
     <div className="mh-page">
@@ -140,42 +125,6 @@ export function AdminMobileHome({
 
       <MeetingHome language={language} position="after_service" />
       <ServiceSuggestionsSection language={language} />
-
-      {/* ── 운영 현황 ────────────────────── */}
-      <section className="mobile-home-section">
-        <div className="mh-sec-head">
-          <h2>{t(language, 'home.operationStatus')}</h2>
-          <button type="button" onClick={onOpenZone} className="mh-all">
-            {t(language, 'home.viewAllBtn')} <ChevR size={14} color="currentColor" />
-          </button>
-        </div>
-        <div className="mh-card-grid" style={{ marginTop: 0 }}>
-          <StatTile num={cards.length} sub={t(language, 'home.totalCards')} />
-          <StatTile num={inProgressCount} sub={t(language, 'home.inProgress')} />
-          <StatTile num={unassignedCount} sub={t(language, 'zone.unassigned')} danger />
-          <StatTile num={completedPctText} unit="%" sub={`${t(language, 'home.completedUnits')} ${completedUnits} / ${totalUnits}`} />
-        </div>
-      </section>
-    </div>
-  )
-}
-
-function StatTile({ num, unit, sub, danger }: { num: number | string; unit?: string; sub: string; danger?: boolean }) {
-  return (
-    <div className="mh-card-tile" style={{ padding: '16px 14px', alignItems: 'center', textAlign: 'center', background: 'var(--surface)' }}>
-      <div
-        style={{
-          fontSize: 26,
-          fontWeight: 700,
-          color: danger ? 'var(--status-danger)' : 'var(--ink)',
-          letterSpacing: '-0.02em',
-          fontVariantNumeric: 'tabular-nums',
-        }}
-      >
-        {num}
-        {unit && <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)' }}>{unit}</span>}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500, marginTop: 4 }}>{sub}</div>
     </div>
   )
 }
