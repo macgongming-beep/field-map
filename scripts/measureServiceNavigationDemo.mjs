@@ -12,7 +12,7 @@ assert.ok(label&&/^[a-zA-Z0-9_-]+$/.test(label)&&['127.0.0.1','chinese-territory
 const delay=Number(process.env.REST_DELAY??120),repeats=Number(process.env.REPEATS??3)
 const journey=process.env.JOURNEY??'service'
 const verifyExtra=process.env.VERIFY_EXTRA==='true'
-assert.ok(['service','settings','calendar','zone','cold'].includes(journey))
+assert.ok(['service','settings','calendar','zone','cold','assignment'].includes(journey))
 assert.ok(Number.isFinite(delay)&&delay>=0&&Number.isInteger(repeats)&&repeats>0)
 mkdirSync('scratch',{recursive:true})
 const browser=await (process.env.ENGINE==='webkit'?webkit:chromium).launch()
@@ -23,7 +23,7 @@ try{
   // Public demo seed account; the legacy "admin" label uses TEST_LOGIN (developer).
   const actor=role==='administrator'?{name:'관리자'}:role==='admin'?null:fixture.actors.find(a=>a.role===role)
   assert.ok(role==='admin'||actor,'Missing demo actor for this role')
-  const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'})
+  const context=await browser.newContext({viewport:{width:Number(process.env.WIDTH??390),height:844},serviceWorkers:'block'})
   const page=await context.newPage(),reads=[],errors=[]
   let actualRole=null
   const starts=new WeakMap(),pending=new Set(),completedHeads=new WeakSet()
@@ -46,6 +46,19 @@ try{
    finished(req)
   })
   await page.addInitScript(()=>{
+   window.__assignmentFrames=[]
+   document.addEventListener('click',event=>{
+    if(!event.target.closest?.('.gs-assignment-open'))return
+    const started=performance.now()
+    window.__assignmentFrames=[]
+    const sample=()=>{
+     const row={ms:Math.round(performance.now()-started),editor:Boolean(document.querySelector('.asg-editor')),path:location.pathname+location.search}
+     const last=window.__assignmentFrames.at(-1)
+     if(!last||last.editor!==row.editor||last.path!==row.path)window.__assignmentFrames.push(row)
+     if(!document.querySelector('.asg-editor-footer')&&performance.now()-started<30000)requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
+   },true)
    window.__coldReady=null
    const observeHome=()=>{
     const home=document.querySelector('.mobile-today-service-section,.gs-event-block>button')
@@ -115,6 +128,7 @@ try{
    const trace=await page.evaluate(start=>window.__mountTrace.filter(r=>r.at>=start),wallStart)
    const dataReadyMs=Math.round(Math.max(0,...requests.map(r=>r.finished-start)))
    const row={role,actualRole,run,name,readyMs,dataReadyMs,requests:requests.length,bytes:requests.reduce((n,r)=>n+r.bytes,0),resources:requests.map(r=>r.path),trace,reads:requests}
+   if(journey==='assignment')row.frames=await page.evaluate(()=>window.__assignmentFrames)
    results.push(row);console.log(JSON.stringify({role,actualRole,run,name,readyMs,dataReadyMs,requests:row.requests,bytes:row.bytes}))
   }
   try{
@@ -125,9 +139,29 @@ try{
    await page.locator('.gs-event-block>button').first().waitFor({timeout:60000})
    await settled()
    assert.equal(actualRole,role==='administrator'?'admin':role==='admin'?'developer':role)
-   const nav=page.locator('.bottom-nav')
+   const nav=page.locator(Number(process.env.WIDTH??390)<980?'.bottom-nav':'.desktop-sidebar-nav')
    const go=name=>nav.getByRole('button',{name,exact:true}).click()
-   if(journey==='cold'){
+   if(journey==='assignment'){
+    await page.locator('.gs-event-block>button').first().click()
+    await page.locator('.gs-assignment-open').waitFor()
+    await settled()
+    for(const phase of ['first','repeat']){
+     const originalUrl=page.url()
+     await step('assignment-'+phase,()=>page.locator('.gs-assignment-open').click(),()=>page.locator('.asg-editor-footer').waitFor({timeout:45000}),'.asg-editor-footer')
+     assert.equal(page.url(),originalUrl,'Editor entry must not navigate away')
+     if(process.env.EXPECT_STABLE_EDITOR==='true')assert.ok(results.at(-1).frames.every(f=>f.editor),'Editor shell must remain visible during loading')
+     await page.screenshot({path:`scratch/speed-${label}-${role}-assignment-${phase}.png`,fullPage:true})
+     if(await page.locator('.asg-team-open').count()){
+      await page.locator('.asg-team-open').first().click()
+      await page.locator('.asg-zone').waitFor()
+      await page.locator('.asg-editor-back').click()
+      await page.locator('.asg-editor-footer').waitFor()
+     }
+     await page.locator('.asg-editor-back').click()
+     await page.locator('.gs-assignment-open').waitFor()
+     await settled()
+    }
+   }else if(journey==='cold'){
     const start=performance.now()
     await page.reload({waitUntil:'domcontentloaded'})
     await page.waitForFunction(()=>window.__coldReady!==null,undefined,{timeout:45000})

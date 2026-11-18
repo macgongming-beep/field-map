@@ -17,7 +17,10 @@ try {
     const actor = role === 'admin' ? { name: '관리자' } : fixture.actors.find(a => a.role === role)
     assert.ok(actor)
     const context = await browser.newContext({ viewport: { width, height: 844 }, serviceWorkers: 'block' })
-    const page = await context.newPage(), errors = [], reads = []
+    const page = await context.newPage(), errors = [], reads = [], navigations = []
+    page.on('framenavigated', frame => {
+      if (frame === page.mainFrame()) navigations.push(new URL(frame.url()).pathname + new URL(frame.url()).search)
+    })
     const checks = []
     await context.route('**/*', route => {
       const req = route.request(), url = new URL(req.url())
@@ -87,6 +90,7 @@ try {
         const map = page.locator('.assigned-service-map-button').first()
         if (await map.count()) {
           const from = reads.length
+          const navigationStart = navigations.length
           await map.click()
           await page.waitForURL('**/map?assignmentMap=*')
           await settle()
@@ -98,6 +102,10 @@ try {
           await page.goBack()
           await content.waitFor()
           await settle()
+          const routeChanges = navigations.slice(navigationStart)
+          assert.ok(routeChanges.length >= 2)
+          assert.ok(routeChanges.every(path => path.startsWith('/map?assignmentMap=') || path === '/territory'), 'Map round trip must not pass through home or calendar')
+          checks.push({ name: 'direct map round trip', routes: routeChanges, requests: reads.length - from })
           checks.push('return to personal service')
         } else checks.push('no assigned map link for this actor')
         await nav.getByRole('button', { name: '홈', exact: true }).click()

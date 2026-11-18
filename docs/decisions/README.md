@@ -123,6 +123,7 @@
 설정·캘린더 등 자주 쓰는 화면: [0119 순차 점검, 불필요한 설정 조회와 캘린더 직렬 대기 제거](0119-frequent-route-loading-audit.md)
 나의 봉사 개인 배정: [0120 중복 읽기 제거와 역할별 전후 검증](0120-my-service-personal-read-reuse.md)
 봉사자 앱 첫 진입: [0121 조회 범위를 유지한 대기 순서 개선과 사용량 비교](0121-recipient-initial-read-order.md)
+팀 구성·구역 배정 진입: [0122 전체 화면 로딩 유지와 나의 봉사 이동 점검](0122-assignment-editor-stable-loading.md)
 
 ```markdown
 # 제목

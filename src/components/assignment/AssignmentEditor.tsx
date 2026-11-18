@@ -8,7 +8,7 @@ import { fetchUpdatedCalendarEvent } from '../../hooks/calendarEventRefresh'
 // 진입: 일정상세에서 풀스크린. draft 단일 reducer 사용.
 // 공유: 일정상세로 돌아가기 전 [배정 공유] 한 번 → 서버 bulk 저장.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { Building, CalendarEvent, CardBoundary, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, InformalGroup, TerritoryCard, VisitHistory } from '../../types'
 import type { AssignmentDraft } from '../../hooks/assignmentDraft'
 import {
@@ -24,7 +24,7 @@ import { pushBackHandler } from '../../lib/backStack'
 import { msg } from '../../lib/msg'
 import { assignmentSelectionIssues } from '../../utils/assignmentSelectionIssues'
 import { AssignmentSelectionIssues } from './AssignmentSelectionIssues'
-import { FullBuildingGate } from '../FullBuildingGate'
+import { FullBuildingContext } from '../../hooks/buildingDemand'
 
 // "5/29 (금) 10:00 · 봉사 모임" 형식
 function formatEventDateTime(event: CalendarEvent): string {
@@ -71,14 +71,37 @@ function AssignmentEditorSnapshot(props: Props) {
   const versioned=assignmentRevisionEnabled()
   const [snapshot,setSnapshot]=useState<CalendarEvent|null>(null)
   const [failed,setFailed]=useState(false)
+  const [attempt,setAttempt]=useState(0)
+  const buildings=useContext(FullBuildingContext)
+  const request=buildings?.request
+  // Independent reads start together, but neither partial snapshot can open the editor.
+  useEffect(()=>{request?.()},[request])
   useEffect(()=>{
     if(!versioned)return
     let active=true
     void fetchUpdatedCalendarEvent(props.event.id).then(event=>{if(active)setSnapshot(event)}).catch(()=>{if(active)setFailed(true)})
     return()=>{active=false}
-  },[props.event.id,versioned])
-  if(versioned&&!snapshot)return <div className="asg-editor"><button className="asg-editor-back" type="button" onClick={props.onClose}>{msg('뒤로')}</button><p role={failed?'alert':'status'}>{msg(failed?'일정을 불러오지 못했습니다.':'불러오는 중...')}</p></div>
-  return <FullBuildingGate><AssignmentEditorContent {...props} event={snapshot??props.event} /></FullBuildingGate>
+  },[props.event.id,versioned,attempt])
+  if((versioned&&!snapshot)||(buildings&&!buildings.ready)) {
+    const eventFailed=versioned&&failed
+    const buildingFailed=Boolean(buildings&&!buildings.ready&&buildings.error)
+    return <div className="asg-editor">
+      <header className="asg-editor-head"><div className="asg-editor-head-left">
+        <button className="asg-editor-back" type="button" onClick={props.onClose} aria-label={msg('뒤로')}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div className="asg-editor-titles"><strong>{msg('봉사 배정')}</strong><span>{formatEventDateTime(props.event)}</span></div>
+      </div></header>
+      <div className="asg-editor-loading" role={eventFailed||buildingFailed?'alert':'status'}>
+        <p>{msg(eventFailed?'일정을 불러오지 못했습니다.':buildingFailed?'자료를 불러오지 못했습니다.':'불러오는 중...')}</p>
+        {(eventFailed||buildingFailed)&&<button type="button" onClick={()=>{
+          if(eventFailed){setFailed(false);setAttempt(value=>value+1)}
+          if(buildingFailed)void buildings?.retry().catch(()=>{})
+        }}>{msg('다시 시도')}</button>}
+      </div>
+    </div>
+  }
+  return <AssignmentEditorContent {...props} event={snapshot??props.event} />
 }
 
 function AssignmentEditorContent({ event, cards, allCards, buildings, visitHistories = [], cardBoundaries, currentVisitor, canEdit, informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onClose, onShare }: Props) {
