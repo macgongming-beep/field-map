@@ -118,7 +118,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const save = async (scope?:'single'|'following') => {
     if (locked || presetKey!==null || accessLoading || accessError) return
     setError('')
-    if (!title.trim() || (!repeatEnd && ((!snapshot&&kind!=='group'&&!primary)||(leadersEdited&&leaders.length>0&&!primary))) || (kind==='group' && (groups.length<1 || groups.length>(snapshot&&!snapshot.groupServiceScope?2:20) || groups.some(code=>!availableGroups.some(g=>g.code===code))))) {
+    if (!title.trim() || (!repeatEnd&&!snapshot&&kind!=='group'&&!primary) || (leadersEdited&&leaders.length>0&&!primary) || (kind==='group' && (groups.length<1 || groups.length>(snapshot&&!snapshot.groupServiceScope?2:20) || groups.some(code=>!availableGroups.some(g=>g.code===code))))) {
       setError(msg('제목, 대상 집단, 인도자를 확인해 주세요.')); return
     }
     if(additionalGroups.some(code=>!addGroupChoices.some(g=>g.code===code))){setError(msg('집단 목록이 변경되었습니다. 다시 열어 확인해 주세요.'));return}
@@ -160,7 +160,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
         const key=`${i}:${group ?? 'congregation'}`
         if(!groupSeriesRef.current.has(key))groupSeriesRef.current.set(key,crypto.randomUUID())
         return {payload:{...base,event_date:d,time:s.time,end_time:s.end,target_groups:group?[group]:[],
-          ...(repeatEnd?{series_id:groupSeriesRef.current.get(key),leader_name:'',primary_leader_user_id:null}:{})}}
+          ...(repeatEnd?{series_id:groupSeriesRef.current.get(key)}:{})}}
       })))
     }
     if(rows.length>200){setError(msg('한 번에 200개 이하의 일정을 등록해 주세요.'));return}
@@ -247,14 +247,14 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
         setSlots(prev=>[...prev,{time,end:addMinutesToTime(time,120)}])
       }}>+</button>}
       {snapshot && kind==='group' && companions.map(e=><div key={e.id}><label className="gs-check"><input type="checkbox" disabled={presetKey!==null} checked={selected.includes(e.id)} onChange={()=>setSelected(prev=>prev.includes(e.id)?prev.filter(id=>id!==e.id):[...prev,e.id])}/>{msg('함께 수정')} · {e.time}–{e.endTime} · {e.title}</label>{selected.includes(e.id) && timeInputs(companionTimes[e.id],v=>setCompanionTimes(prev=>({...prev,[e.id]:v})),`c${e.id}`)}</div>)}
-      {!snapshot && <label>{msg('반복 종료일 (선택)')}<input type="date" min={day} value={repeatEnd} onChange={e=>{setRepeatEnd(e.target.value);setLeadersEdited(true);setLeaders([])}} /></label>}
-      {!repeatEnd && <fieldset className="gs-conductors"><legend>{t(language,'calendar.leader')}</legend>
+      {!snapshot && <label>{msg('반복 종료일 (선택)')}<input type="date" min={day} value={repeatEnd} onChange={e=>setRepeatEnd(e.target.value)} /></label>}
+      <fieldset className="gs-conductors"><legend>{t(language,'calendar.leader')}</legend>
         {leaders.length>0&&<p className="gs-selected-leaders">{leaders.join(' · ')}</p>}
         <div className="gs-leaders">{Array.from(new Set([...available.map(u=>u.name),...leaders])).map(name=><label className="gs-check" key={name}><input type="checkbox" checked={leaders.includes(name)} onChange={()=>{
           setLeadersEdited(true)
           setLeaders(prev=>prev.includes(name)?prev.filter(n=>n!==name):[...prev,name])
         }}/>{name}</label>)}</div>
-      </fieldset>}
+      </fieldset>
       <label>{msg('봉사 모임')}<select value={mode} onChange={e=>setMode(e.target.value as typeof mode)}><option value="none">{msg('없음')}</option><option value="in_person">{msg('现场')}</option><option value="virtual">{msg('线上')}</option></select></label>
       <label>{msg('봉사 장소')}<input value={place} onChange={e=>setPlace(e.target.value)} /></label>
       <label>{msg('지도 링크')}<input type="url" value={mapLink} onChange={e=>setMapLink(e.target.value)} /></label>

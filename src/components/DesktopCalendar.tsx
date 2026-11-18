@@ -1123,8 +1123,8 @@ function EventDetailCard({
         </div>
         {canEdit && (
           <div className="event-dots-menu-wrap">
-            <button className="event-dots-btn" type="button" onClick={() => setDotsOpen((v) => !v)} aria-label="더보기">
-              <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <button className="event-dots-btn" type="button" onClick={() => setDotsOpen((v) => !v)} aria-label={t(language,'map.more')} title={t(language,'map.more')} aria-haspopup="menu" aria-expanded={dotsOpen}>
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
               </svg>
             </button>

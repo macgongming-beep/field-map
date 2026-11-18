@@ -13225,12 +13225,12 @@ button:focus-visible {
     flex-shrink: 0;
   }
   .event-dots-btn {
-    width: 30px;
-    height: 30px;
-    min-height: 30px !important;
+    width: 40px;
+    height: 40px;
+    min-height: 40px !important;
     border: none !important;
     background: transparent !important;
-    color: var(--gray-400) !important;
+    color: var(--ink) !important;
     border-radius: 8px !important;
     display: grid;
     place-items: center;

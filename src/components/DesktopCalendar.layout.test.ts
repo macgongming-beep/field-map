@@ -19,4 +19,8 @@ describe('calendar responsive layout contracts', () => {
   it('gives dropdown items priority over the white detail header button style', () => {
     expect(css).toMatch(/\.event-dots-dropdown \.event-dots-item\s*\{[^}]*padding:\s*8px 10px[^}]*color:\s*var\(--gray-700\)/)
   })
+
+  it('keeps the schedule menu trigger legible and easy to target', () => {
+    expect(css).toMatch(/\.event-dots-btn\s*\{[^}]*width:\s*40px[^}]*height:\s*40px[^}]*color:\s*var\(--ink\)/)
+  })
 })

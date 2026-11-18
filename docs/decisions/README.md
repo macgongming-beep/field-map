@@ -137,6 +137,7 @@
 모임 정보와 운영 전환: [0133 기본 펼침·线上/现场 표시와 집단 관리 배포](0133-expanded-meeting-info-production-release.md)
 반복 수정과 기본 집단: [0134 이후 일정 수정 범위와 내 집단 우선 탭](0134-repeat-edit-scope-and-own-group.md)
 탭 위치 후속 결정: [0135 순서는 공통으로 고정하고 내 집단만 선택](0135-fixed-group-tab-order.md)
+생성/메뉴 후속: [0136 반복 생성 인도자 선택과 PC 메뉴 가시성](0136-repeat-create-leaders-and-visible-pc-menu.md)
 
 ```markdown
 # 제목
