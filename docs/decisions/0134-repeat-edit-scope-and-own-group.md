@@ -1,6 +1,6 @@
 # 반복 일정 수정 범위 복구와 내 집단 우선 표시
 
-- 상태: 사용자 데모·운영 적용 승인, 검증 후 순차 전환
+- 상태: 데모·운영 적용 완료
 - 결정일: 2026-11-19
 - 선행: 0132 기존 일정 집단 추가, 0133 집단 목록 운영 전환
 
@@ -75,4 +75,10 @@
 전체 274개 파일 / 2,688개 시험, lint, TypeScript 포함 운영 설정 기반 데모 빌드가 통과했다.
 최종 데모: `dpl_Gdr5Bk7ANJ6Rha49C53k5fQknuW2`, https://chinese-territory-app-demo.vercel.app.
 데모 실제 DB 설치/검증 기록은 `backups/service-series-demo`에 보관했다.
-운영 적용 결과는 완료 후 기록한다.
+운영 앱은 `c0b8ec90bbc4c4f9eb9c6740cb914f1ffa1ac519`로 배포했다.
+배포 `dpl_EEy6uRetb118Y1YRyxduhtvpq1Mt`의 READY 상태와 운영 별칭 연결을 확인했다.
+운영 환경변수 해시는 전환 전과 동일하고, 실제 배정 함수 감사는 12개/compatibility로 통과했다.
+운영 DB 설치 전후 기존 업무 자료 해시는 동일했다. 백업은
+`backups/service-series-production/before.dump`, 배포 확인은 같은 폴더의 `deployment.json`에 보관한다.
+운영 홈페이지와 연결된 `/assets/index-C5yiQWm3.js`는 모두 HTTP 200이다.
+실제 휴대폰에서 새 버전을 적용하는 최종 사용 확인은 별도로 남긴다.
