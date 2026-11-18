@@ -95,3 +95,16 @@ scope 파서는 조회/캐시/재사용 조건이 다르게 해석하지 않도�
 
 운영 DB/환경변수/main/운영 배포는 변경하지 않는다.
 운영 적용은 이 작은 변경과 실제 역할별 결과를 다시 리뷰한 뒤 별도로 결정한다.
+
+## 데모 배포 후 확인
+
+- 앱 커밋: `605fa23`.
+- 데모 배포: `dpl_8NFvwCc43WTzXpUSFNniqBWx8BbA`.
+- 주소: https://chinese-territory-app-demo.vercel.app
+- 배포된 앱을 Mac WebKit으로 검사해 user/leader/실제 admin × 모바일/PC 6조합이 통과했다.
+  봉사자 배정 지도 이동에서 일정·식당 배정의 추가 조회가 없고, 화면 복귀도 유지됐다.
+- 배포 후 추가 지연 없는 1회 점검에서 나의 봉사 첫 진입은 user 19건, leader 14건,
+  두 역할의 재진입은 각각 0건이었다. 전후 성능 비교는 위의 동일 조건 3회 결과를 사용한다.
+- 기록: `scratch/myservice-live-webkit-ui.json`, `scratch/speed-myservice-live-webkit.json`.
+- Mac WebKit 검사는 실제 아이폰 검사를 대신하지 않는다. 이번 변경의 아이폰 확인은 남아 있다.
+- 운영 DB·설정·브랜치·배포는 변경하지 않았다. 이 배포 기록만 추가하는 커밋은 앱 재배포 대상이 아니다.
