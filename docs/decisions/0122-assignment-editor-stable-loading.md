@@ -81,3 +81,20 @@ PC는 수정 후 기능 검사이며 전후 성능 비교는 아니다.
 운영 앱·DB·환경변수·main은 변경하지 않는다. 기능 브랜치의 데모 배포만 진행한다.
 실제 아이폰에서 새 데모를 받은 뒤 일정 상세→팀 구성·구역 배정→뒤로 흐름의
 체감 확인은 별도로 필요하다.
+
+## 데모 배포 후 확인
+
+- 앱 커밋: `815482e`, 기능 브랜치만 push. main 병합 없음.
+- 데모 배포: `dpl_94L3CS16KcHL4YzLw7eyQD9HMjVY`.
+- 주소: https://chinese-territory-app-demo.vercel.app
+- 데모 프로젝트 식별자와 데모 DB 주소를 확인한 prebuilt 배포이며 운영 설정 변경 없음.
+- WebKit 390px에서 인도자·실제 관리자 첫 진입/재진입 4회 모두 전체 화면 유지,
+  URL 변경 없음, 첫 진입 9건·재진입 3건으로 같았다. 최초 준비 시간은 831/685ms,
+  재진입 415/415ms였다(REST 120ms 지연 포함, 로컬 Chromium과 직접 비교하지 않음).
+- WebKit의 나의 봉사/구역 관리 역할별 6조합 모두 통과. 봉사자 지도 왕복은
+  `/map?assignmentMap=198`→`/territory`, 모바일 3건·PC 2건, 오류 0건이었다.
+- 로컬 전후 6조합의 전체 결과도 deepEqual로 같음을 확인했다.
+- 시험 중 배정 저장·공유·참가자 변경은 하지 않았다. 데모 로그인 및 기존 세션 정리만
+  발생할 수 있다. 브라우저 검증은 실제 아이폰의 설치된 PWA 검증을 대신하지 않는다.
+- 원본: `speed-assignment-live-webkit.json`,
+  `myservice-myservice-assignment-live-webkit-ui.json`(로컬 scratch).
