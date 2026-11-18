@@ -119,6 +119,7 @@
 모바일 일정 닫기·홈 정리·중국어 제목과 조회 점검: [0115 데모 수정 및 남은 속도 과제](0115-demo-mobile-edit-home-and-loading.md)
 집단 상세 배정 결과 고정·일정 메뉴 위치: [0116 고정 결과와 헤더 메뉴](0116-group-detail-fixed-results-and-header-actions.md)
 일정 상세·나의 봉사 속도: [0117 데모 조회 대기 축소 및 전후 측정](0117-demo-service-navigation-read-latency.md)
+나의 봉사 요청 수 정정: [0118 전환 구간 분리 재측정과 초기 로딩 실패 시험](0118-service-navigation-request-accounting.md)
 
 ```markdown
 # 제목

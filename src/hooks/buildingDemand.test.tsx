@@ -193,6 +193,29 @@ test('failed names-only navigation stays blocked and retries without erasing exi
   expect(result.current.cards).toBe(cards)
 })
 
+test('failed initial home read cannot promote detail until a complete retry succeeds', async () => {
+  state.cardError = true
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, 'leader', undefined, undefined, 'tester', mode), { initialProps: { mode: 'home' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeTruthy()
+  expect(result.current.cards).toEqual([])
+  state.reads = []
+  await act(async () => { rerender({ mode: 'calendar' }) })
+  expect(result.current.error).toBeTruthy()
+  expect(result.current.buildingScopeReady).toBe(false)
+  expect(state.reads).toEqual([])
+
+  state.cardError = false
+  await act(async () => { await result.current.refetchAll() })
+  expect(result.current.error).toBeNull()
+  expect(result.current.buildingScopeReady).toBe(true)
+  expect(result.current.cards.map(card => card.units)).toEqual([1, 1])
+  expect(buildingReads()).toEqual([{ table: 'buildings', columns: CALENDAR_BUILDING_COLUMNS }])
+  expect(state.reads.some(read => read.table === 'cards')).toBe(true)
+  expect(state.reads.some(read => read.table === 'service_sessions')).toBe(true)
+})
+
 test('calendar receives a new unit name and authoritative card totals after another device adds it', async () => {
   const { result } = renderHook(() => useStore(true, 'admin', undefined, undefined, 'tester', 'calendar'))
   await waitFor(() => expect(result.current.loading).toBe(false))
