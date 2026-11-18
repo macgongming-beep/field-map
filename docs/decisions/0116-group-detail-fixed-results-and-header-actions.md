@@ -1,7 +1,7 @@
 # 집단 상세 배정 결과 고정 및 일정 메뉴 위치
 
 - 결정일: 2026-11-18
-- 상태: 데모 검증 중. 운영 변경 금지.
+- 상태: 데모 적용. 운영 변경 금지.
 - 관련 기능: 집단 봉사 상세
 
 ## 결정
@@ -30,8 +30,13 @@
   확인했다. 정상 코드로 복원했다.
 - 화면 및 네트워크 기록: `scratch/nov18-actions-local-*-navigation.json`,
   `scratch/nov18-actions-local-*-schedule-menu.png`, `scratch/nov18-actions-local-*-assignments.png`.
-- 전체 자동 시험 2,541개(262개 파일) 통과. 데모 설정 빌드 통과.
+- 전체 자동 시험 2,541개(262개 파일), lint, 데모 설정 빌드 통과.
 
 ## 운영 상태
 
 전용 수정 브랜치와 데모 정적 배포만 사용한다. 운영 DB·환경변수·배포와 main은 변경하지 않는다.
+
+- 데모 코드 `bdd2ae5`, 배포 `dpl_7cKAjqcbuBgkccKSbpLF2Tp967KR`.
+- `https://chinese-territory-app-demo.vercel.app`에서 WebKit 모바일과 Chromium PC의 메뉴·편집 취소 복귀를 재확인했다.
+  물리적 아이폰 확인을 대신하지 않는다. 브라우저 오류 및 실패한 데이터 요청 없음.
+- 운영 배포를 읽기 전용으로 조회해 기존 `dpl_7EhxvJXFWS7RWpxSAaxV1KfMgLUY`가 그대로임을 확인했다.
