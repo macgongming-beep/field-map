@@ -61,3 +61,8 @@ REST 120ms 지연, 세 역할 각 1회 검사. 직전 0126의 같은 설정/도�
 ## 운영 상태
 
 기능 브랜치/데모만 대상이며 운영 앱, 환경변수, DB, main은 변경하지 않는다.
+
+데모 배포: `e03f65b` / `dpl_6AkB7FxhEUT79j1UnEszaTPzUVLE`.
+배포 후 WebKit 390px 재검사에서 로고 요소 1개, 74개 프레임 샘플 중 공백 0,
+로그인 후 로고 재등장 0, pageerror 0을 확인했다. 12초 복구/실패 안내도 통과했다.
+원본: scratch/startup-persistent-logo-deployed-ui.json. 실제 아이폰 재확인은 별도다.
