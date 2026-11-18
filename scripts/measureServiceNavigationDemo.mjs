@@ -69,9 +69,10 @@ try{
    try{
     if(completedHeads.has(req))return
     const u=new URL(req.url());if(!u.pathname.startsWith('/rest/v1/'))return
-    const response=await req.response(),body=await response.body()
+    const response=await req.response()
+    const body=[204,205].includes(response.status())?Buffer.alloc(0):await response.body()
     reads.push({path:u.pathname.slice(9),query:u.search,started:starts.get(req),bytes:body.length,status:response.status()})
-   }catch{errors.push('Could not measure response body')}finally{finished(req)}
+   }catch(error){errors.push(`Could not measure ${req.method()} ${new URL(req.url()).pathname}: ${error.message}`)}finally{finished(req)}
   })
   // Include intercepted/delayed requests and body reads; networkidle alone misses these.
   async function settled(){
