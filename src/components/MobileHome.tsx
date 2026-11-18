@@ -752,7 +752,7 @@ export function MobileHome({
   // 내 소속 집단 (사용자 관리에서 지정) — 설정 프로필 카드에 표시
   const myGroupName = allUsers.find((item) => item.id === currentUser.id)?.groupName ?? null
   const adminAttention = useAdminAttentionCounts({
-    enabled: role === 'admin' || role === 'developer',
+    enabled: (role === 'admin' || role === 'developer') && location.pathname === '/settings',
     users: allUsers,
     returnVisits,
     refreshKey: location.pathname,

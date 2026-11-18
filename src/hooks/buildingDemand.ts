@@ -1,6 +1,7 @@
 import { createContext } from 'react'
 import type { Role } from '../types'
 import { homeEventDetailId } from '../lib/eventDetailNavigation'
+import { isPersonalSettingsRoute } from '../utils/personalSettingsRoute'
 import { toBuilding, type RawBuilding, type RawUnit } from './storeTransforms'
 
 export type BuildingDemand = 'home' | 'calendar' | 'zone' | 'map' | 'full'
@@ -21,6 +22,9 @@ export function buildingDemandForRoute(role: Role, pathname: string, search: str
   if (!buildingDemandEnabled(role)) return undefined
   // Unknown consumers stay full. Assignment editors independently request full data.
   if ((pathname === '/' || pathname === '/home') && !search) return 'home'
+  // Personal settings consume no building details. The store retains any richer snapshot.
+  // Unknown query modes and administrative editors remain full consumers.
+  if (!search && isPersonalSettingsRoute(pathname, search)) return 'home'
   if (calendarZoneBuildingDemandEnabled()) {
     if (pathname === '/calendar' || (!desktop && homeEventDetailId(pathname, search) !== null)) return 'calendar'
     // Unknown/deep-link query modes remain full. Restaurant editors need complete data.

@@ -31,9 +31,12 @@ export function calendarReadScope(path: string, search: string, month: string, f
   const recent = new Date(now)
   recent.setDate(recent.getDate() - 14)
   const start = toLocalDateString(recent)
-  if (path === '/calendar' && /^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
-    const [year, selectedMonth] = month.split('-').map(Number)
-    return `window:${month}-01:${toLocalDateString(new Date(year, selectedMonth, 0))}`
+  // The calendar opens at this month. Start its read before the building gate
+  // allows the calendar component to mount and publish its month selection.
+  const calendarMonth = month || toLocalDateString(now).slice(0, 7)
+  if (path === '/calendar' && /^\d{4}-(0[1-9]|1[0-2])$/.test(calendarMonth)) {
+    const [year, selectedMonth] = calendarMonth.split('-').map(Number)
+    return `window:${calendarMonth}-01:${toLocalDateString(new Date(year, selectedMonth, 0))}`
   }
   const end = toLocalDateString(new Date(now.getFullYear(), now.getMonth() + 2, 0))
   return `window:${start}:${end}`

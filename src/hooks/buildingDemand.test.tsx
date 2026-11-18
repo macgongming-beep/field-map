@@ -120,6 +120,43 @@ test('home calendar zone home calendar reuse the richer status snapshot without 
   expect(result.current.buildings.map(b => b.name)).toEqual(['Building 1', 'Building 2'])
 })
 
+test.each(['admin', 'leader'] as const)('%s personal settings do not promote buildings; map and service still do', async role => {
+  const paths = ['/settings', '/profile', '/privacy', '/notification-settings', '/location-permission-settings',
+    '/settings/profile', '/settings/notification', '/settings/location-permission']
+  for (const desktop of [false, true]) {
+    for (const path of paths) expect(buildingDemandForRoute(role, path, '', desktop)).toBe('home')
+    for (const path of ['/settings/meeting-notes', '/settings/users', '/settings/unknown']) {
+      expect(buildingDemandForRoute(role, path, '', desktop)).toBe('full')
+    }
+    for (const search of ['?openEvent=9', '?openChat=9', '?unknown=1']) {
+      expect(buildingDemandForRoute(role, '/settings', search, desktop)).toBe('full')
+    }
+  }
+  const { result, rerender } = renderHook(({ path }) =>
+    useStore(true, role, undefined, undefined, 'tester', buildingDemandForRoute(role, path, '', false)),
+  { initialProps: { path: '/' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const cards = result.current.cards
+  state.reads = []
+  for (const path of paths) await act(async () => { rerender({ path }) })
+  expect(state.reads).toEqual([])
+  expect(result.current.cards).toBe(cards)
+  expect(result.current.fullBuildingReader!.ready).toBe(false)
+
+  rerender({ path: '/map' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(buildingReads().map(read => read.columns)).toEqual([MAP_BUILDING_COLUMNS])
+  const buildings = result.current.buildings
+  state.reads = []
+  await act(async () => { rerender({ path: '/settings' }) })
+  expect(state.reads).toEqual([])
+  expect(result.current.buildings).toBe(buildings)
+  rerender({ path: '/territory' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(result.current.fullBuildingReader!.ready).toBe(true)
+  expect(result.current.buildings[0].units[0].memo).toBe('saved unit memo')
+})
+
 test.each(['admin', 'leader'] as const)('%s home detail adds only names and retains complete card summaries', async role => {
   const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
     useStore(true, role, undefined, undefined, 'tester', mode), { initialProps: { mode: 'home' as BuildingDemand } })

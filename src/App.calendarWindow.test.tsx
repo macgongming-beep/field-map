@@ -121,6 +121,18 @@ test('production home detail keeps its editor mounted while complete history loa
   expect(screen.getByText('editor mounted')).toBeTruthy()
 })
 
+test('calendar requests its initial month even while buildings block the calendar component', () => {
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  state.buildingReady = false
+  render(<MemoryRouter initialEntries={['/calendar']}><App /></MemoryRouter>)
+  const now = new Date(), pad = (n: number) => String(n).padStart(2, '0')
+  const month = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  expect(state.scope).toBe(`window:${month}-01:${month}-${lastDay}`)
+  expect(screen.queryByText('detail mounted')).toBeNull()
+  expect(screen.getByText('app loading')).toBeTruthy()
+})
+
 test.each([['false', 'true', true], ['true', 'false', false]] as const)(
   'full consumers loading gate follows demo=%s flag=%s', async (demo, flag, enabled) => {
     vi.stubEnv('VITE_DEMO_MODE', demo)

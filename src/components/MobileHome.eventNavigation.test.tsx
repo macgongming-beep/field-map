@@ -1,12 +1,13 @@
 import type { ComponentProps } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
 import { MobileHome } from './MobileHome'
 import { CalendarReadContext } from '../hooks/CalendarReadContext'
 
 vi.mock('./AppHeader', () => ({ AppHeader: () => null }))
-vi.mock('../hooks/useAdminAttentionCounts', () => ({ useAdminAttentionCounts: () => ({}) }))
+const attention = vi.hoisted(() => vi.fn(() => ({})))
+vi.mock('../hooks/useAdminAttentionCounts', () => ({ useAdminAttentionCounts: attention }))
 vi.mock('../lib/pwa', () => ({ isUpdateAvailable: () => false, onUpdateAvailable: () => () => {}, checkForUpdate: vi.fn(), applyUpdate: vi.fn(), isPWAInstalled: () => false, isMobile: () => true, isIOS: () => false, isAndroid: () => false }))
 vi.mock('./UserMobileHome', () => ({ UserMobileHome: ({ onOpenEventDetail }: { onOpenEventDetail: (id: number) => void }) =>
   <button onClick={() => onOpenEventDetail(17)}>open home event</button> }))
@@ -20,7 +21,20 @@ function Location() {
   return <output>{location.pathname}{location.search}</output>
 }
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); attention.mockClear() })
+
+test.each(['admin', 'developer', 'leader', 'user'] as const)('%s reads management badges only on the settings screen', role => {
+  const props = { language: 'ko', actualRole: role, viewMode: role, currentVisitor: 'Me', currentUser: { id: 1, name: 'Me', role }, allUsers: [],
+    cards: [], buildings: [], calendarEvents: [], serviceSessions: [], visitHistories: [], cardBoundaries: [],
+    notices: [], territoryRegions: [], returnVisits: [] } as unknown as ComponentProps<typeof MobileHome>
+  const view = render(<MemoryRouter><MobileHome {...props} /></MemoryRouter>)
+  expect(attention).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }))
+  fireEvent.click(screen.getByRole('button', { name: '설정', exact: true }))
+  expect(attention).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: role === 'admin' || role === 'developer' }))
+  fireEvent.click(screen.getByRole('button', { name: '홈', exact: true }))
+  expect(attention).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }))
+  view.unmount()
+})
 
 test.each((['user', 'leader', 'admin'] as const).flatMap(role => [
   { role, demo: 'true', flag: undefined, enabled: true },

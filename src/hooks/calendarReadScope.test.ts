@@ -79,6 +79,19 @@ test('month bounds handle leap years and year rollover', () => {
   expect(calendarReadScope('/calendar', '', '2028-02', false, 'true', now)).toBe('window:2028-02-01:2028-02-29')
   expect(calendarReadScope('/', '', '', false, 'true', new Date('2026-12-23T12:00:00'))).toBe('window:2026-12-09:2027-01-31')
 })
+
+test('first calendar entry requests this month before the calendar mounts, without changing home or deep links', () => {
+  expect(calendarReadScope('/calendar', '', '', false, 'true', now)).toBe('window:2026-10-01:2026-10-31')
+  expect(calendarReadScope('/calendar', '', '', false, 'true', new Date('2028-02-20T12:00:00'))).toBe('window:2028-02-01:2028-02-29')
+  expect(calendarReadScope('/calendar', '', '', false, 'true', new Date('2026-12-20T12:00:00'))).toBe('window:2026-12-01:2026-12-31')
+  expect(calendarReadScope('/calendar', '', '2026-08', false, 'true', now)).toBe('window:2026-08-01:2026-08-31')
+  expect(calendarReadScope('/', '', '', false, 'true', now)).toBe('window:2026-10-09:2026-11-30')
+  for (const search of ['?openEvent=7&comment=9', '?openChat=7']) {
+    expect(calendarReadScope('/calendar', search, '', false, 'true', now)).toBe('full')
+  }
+  expect(calendarReadScope('/calendar', '', '', true, 'true', now)).toBe('full')
+  expect(calendarReadScope('/calendar', '', '', false, 'false', now)).toBe('full')
+})
 test('bounded read rejects future rows outside the requested month', async () => {
   state.query.mockResolvedValue({ data: [{ ...event, event_date: '2027-08-08' }], error: null })
   await expect(readScopedCalendar('window:2026-08-01:2026-08-31')).rejects.toThrow('Invalid scoped')
