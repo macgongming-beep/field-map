@@ -125,6 +125,7 @@
 봉사자 앱 첫 진입: [0121 조회 범위를 유지한 대기 순서 개선과 사용량 비교](0121-recipient-initial-read-order.md)
 팀 구성·구역 배정 진입: [0122 전체 화면 로딩 유지와 나의 봉사 이동 점검](0122-assignment-editor-stable-loading.md)
 배정 편집 중 새로고침·재연결: [0123 초안 보존 검증과 실패 처리 보완](0123-assignment-draft-refresh-recovery.md)
+첫 로딩 화면: [0124 부트·React 표시 통일과 사용량 확인](0124-startup-loading-presentation.md)
 
 ```markdown
 # 제목

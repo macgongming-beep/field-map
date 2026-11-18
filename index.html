@@ -25,17 +25,46 @@
     <meta property="og:image" content="__FIELD_MAP_URL__icons/icon-512.png" />
     <meta property="og:image:width" content="512" />
     <meta property="og:image:height" content="512" />
+    <!-- Shared by the pre-JS shell and AppLoading; no extra stylesheet request. -->
+    <style id="app-loading-style">
+      body{margin:0}
+      .app-loading{display:flex;align-items:center;justify-content:center;min-height:calc(100svh / var(--app-zoom,1));box-sizing:border-box;padding:24px;background:#f8f8f7;color:#787671;font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;letter-spacing:0}
+      .app-loading-main{display:flex;flex-direction:column;align-items:center;gap:24px;width:100%;max-width:360px;min-width:0}
+      .app-loading-brand{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;max-width:100%;color:#1a1a1a;text-align:center}
+      .app-loading-mark{display:block;width:48px;height:48px;flex:none}
+      .app-loading-brand strong{font-size:24px;font-weight:700;line-height:1.25}
+      .app-loading-status{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:44px}
+      .app-loading-status p{margin:0;font-size:14px;font-weight:500;line-height:1.6;text-align:center;overflow-wrap:anywhere}
+      .app-loading-spinner{box-sizing:border-box;width:16px;height:16px;flex:none;border:2px solid #e5e3df;border-top-color:#37352f;border-radius:50%;animation:fm-start-spin .8s linear infinite}
+      .app-loading-recovery{width:100%;max-width:320px;box-sizing:border-box;text-align:center;font-size:14px;line-height:1.6}
+      .app-loading-recovery p{margin:0 0 16px;overflow-wrap:anywhere}
+      .app-loading-recovery [role=alert]{margin:16px 0 0}
+      @keyframes fm-start-spin{to{transform:rotate(360deg)}}
+      @media(prefers-reduced-motion:reduce){.app-loading-spinner{animation:none}}
+    </style>
   </head>
   <body>
     <!-- 앱을 껐다 켤 때 JS 를 받는 동안 화면이 하얗다. React 안의 '불러오는 중'
          은 React 가 뜬 뒤에야 나오므로 그 앞을 못 덮는다. 그래서 여기 직접 둔다.
          React 가 뜨면 이 안이 통째로 갈리므로 따로 지울 필요가 없다. -->
     <div id="root">
-      <div style="display:grid;place-items:center;height:100svh;gap:14px;font-family:Pretendard,-apple-system,system-ui,sans-serif">
-        <div style="width:38px;height:38px;border:3px solid #e5e7eb;border-top-color:#2563eb;border-radius:50%;animation:fm-spin .8s linear infinite"></div>
-        <p style="margin:0;color:#6b7280;font-size:14px;font-weight:600">필드맵 여는 중…</p>
+      <div class="app-loading" role="status">
+        <div class="app-loading-main">
+          <div class="app-loading-brand">
+            <svg class="app-loading-mark" aria-hidden="true" focusable="false" viewBox="0 0 1024 1024">
+              <rect width="1024" height="1024" rx="230" fill="#111827"/>
+              <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M246 314l176-74 180 74 176-74v420l-176 74-180-74-176 74V314z" stroke-width="54"/>
+                <path d="M422 240v420M602 314v420" stroke-width="42" opacity=".72"/>
+                <path d="M512 350c-79 0-143 62-143 139 0 106 143 239 143 239s143-133 143-239c0-77-64-139-143-139z" fill="#111827" stroke-width="46"/>
+                <circle cx="512" cy="488" r="48" fill="#fff" stroke="none"/>
+              </g>
+            </svg>
+            <strong>Field Map</strong>
+          </div>
+          <div class="app-loading-status"><span class="app-loading-spinner" aria-hidden="true"></span><p>데이터 불러오는 중...</p></div>
+        </div>
       </div>
-      <style>@keyframes fm-spin{to{transform:rotate(360deg)}}</style>
     </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

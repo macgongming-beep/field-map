@@ -21793,25 +21793,6 @@ button:focus-visible {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* ── App loading spinner ──────────────────────────────────── */
-.app-loading {
-  display: grid;
-  place-items: center;
-  height: calc(100svh / var(--app-zoom, 1));
-  gap: 16px;
-  color: var(--ink-500);
-  font-weight: 700;
-}
-
-.app-loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #dfe5df;
-  border-top-color: var(--accent-700);
-  border-radius: var(--r-pill);
-  animation: spinner-rotate 0.7s linear infinite;
-}
-
 @keyframes spinner-rotate {
   to {
     transform: rotate(360deg);
@@ -33015,13 +32996,6 @@ button > svg {
     display: none;
   }
 }
-.app-loading-recovery {
-  max-width: 360px;
-  padding: 0 20px;
-  text-align: center;
-  line-height: 1.6;
-}
-
 .app-update-notice {
   position: fixed;
   top: 12px;
