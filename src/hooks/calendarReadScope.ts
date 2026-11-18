@@ -5,6 +5,7 @@ import { toLocalDateString } from '../utils/dateUtils'
 import type { Role } from '../types'
 import { isReturnVisitDetailPath } from '../utils/returnVisitDetailPath'
 import { returnDetailRetentionEnabled } from '../lib/returnDetailRetention'
+import { parseServiceCalendarScope } from './serviceCalendarScope'
 import { mergeEventCardAssignments, toCalendarEvent, toEventCardAssignment, type RawCalendarEvent, type RawEventCardAssignment, type RawEventCardAssignmentCard } from './storeTransforms'
 
 export function calendarWindowEnabled(flag = import.meta.env.VITE_CALENDAR_WINDOW_ENABLED, demo = import.meta.env.VITE_DEMO_MODE): boolean {
@@ -86,11 +87,9 @@ async function hydrateCalendarAssignments(events: RawCalendarEvent[]) {
 }
 
 async function readServiceCalendar(scope: string) {
-  const parsed: unknown = JSON.parse(scope.slice('service:'.length))
-  if (!Array.isArray(parsed) || parsed.length !== 3) throw new Error('Invalid service calendar scope')
-  const [userName, today, target] = parsed as unknown[]
-  if (typeof userName !== 'string' || !userName || typeof today !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(today)
-    || (target !== null && (typeof target !== 'number' || !Number.isSafeInteger(target) || target <= 0))) throw new Error('Invalid service calendar scope')
+  const parsed = parseServiceCalendarScope(scope)
+  if (!parsed) throw new Error('Invalid service calendar scope')
+  const { user: userName, date: today, target } = parsed
   const [todayRows, mine, restaurants] = await Promise.all([
     pages<{ id: number; event_date: string }>((from, to) => supabase.from('calendar_events')
       .select('id,event_date').eq('event_date', today).order('id').range(from, to)),

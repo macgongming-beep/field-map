@@ -1,4 +1,4 @@
-import { beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { calendarReadScope, readScopedCalendar } from './calendarReadScope'
 
 const state = vi.hoisted(() => ({ calls: [] as { table: string; columns: string; filters: [string, unknown][]; from: number }[], query: vi.fn() }))
@@ -22,6 +22,7 @@ const events = [
   { id: 4, event_date: '2027-05-01', time: '17:00', title: 'Other restaurant assignment' },
   { id: 5, event_date: '2025-01-01', time: '18:30', title: 'Explicit old target' },
 ]
+afterEach(() => vi.unstubAllEnvs())
 beforeEach(() => {
   state.calls = []
   state.query.mockReset().mockImplementation(async ({ table, columns, filters }) => {
@@ -147,4 +148,39 @@ test('personal indexes page beyond 1000 and event IDs are read in batches of 100
   expect(await readScopedCalendar(scope)).toHaveLength(1001)
   expect(state.calls.filter(call => call.columns === 'event_id,user_name').map(call => call.from)).toEqual([0, 1000])
   expect(state.calls.filter(call => call.table === 'calendar_events' && call.columns !== 'id,event_date')).toHaveLength(11)
+})
+
+test.each(['user', 'leader'] as const)('%s read reuse preserves the shared list/map scope and every personal team', async role => {
+  vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'true')
+  const list = calendarReadScope('/territory', '?assignmentEvent=5', '', false, 'true', now, role, 'Me')
+  expect(list).toBe('service:["Me","2026-10-23",5]')
+  expect(calendarReadScope('/map', '?assignmentMap=5', '', false, 'true', now, role, 'Me')).toBe(list)
+  const rows = await readScopedCalendar(list)
+  expect(rows.map(row => row.id)).toEqual([5, 1, 3, 4, 2])
+  expect(rows.find(row => row.id === 1)?.cardAssignments).toEqual(expect.arrayContaining([
+    expect.objectContaining({ userName: 'Me', assignedCardId: 10 }),
+    expect.objectContaining({ userName: 'Other', assignedCardIds: [21], teamKey: 'other' }),
+  ]))
+  expect(state.calls).toHaveLength(6)
+  expect(state.calls.some(call => call.table === 'event_restaurant_assignments')).toBe(true)
+})
+
+test('read reuse never narrows admin, developer, statistics or invalid deep links', () => {
+  vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'true')
+  for (const role of ['admin', 'developer'] as const) {
+    expect(calendarReadScope('/territory', '', '', false, 'true', now, role, 'Me')).toBe('full')
+  }
+  for (const path of ['/stats', '/service-log']) {
+    expect(calendarReadScope(path, '', '', false, 'true', now, 'user', 'Me')).toBe('full')
+  }
+  for (const search of ['?openEvent=7', '?assignmentEvent=nope']) {
+    expect(calendarReadScope('/territory', search, '', false, 'true', now, 'user', 'Me')).toBe('full')
+  }
+  vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'false')
+  expect(calendarReadScope('/territory', '', '', false, 'true', now, 'user', 'Me')).toBe(scope)
+})
+
+test.each(['service:["Me","2026-10-23",null,"bad"]', 'service:["Me","2026-10-23",null,"overview"]'])('unsupported service modes fail closed: %s', async invalid => {
+  await expect(readScopedCalendar(invalid)).rejects.toThrow('Invalid service calendar scope')
+  expect(state.calls).toEqual([])
 })

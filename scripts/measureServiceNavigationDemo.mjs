@@ -19,11 +19,13 @@ const browser=await (process.env.ENGINE==='webkit'?webkit:chromium).launch()
 const results=[]
 try{
  for(const role of (process.env.ROLES??'leader,user,admin').split(','))for(let run=0;run<repeats;run++){
-  assert.ok(['leader','user','admin'].includes(role))
-  const actor=role==='admin'?null:fixture.actors.find(a=>a.role===role)
+  assert.ok(['leader','user','admin','administrator'].includes(role))
+  // Public demo seed account; the legacy "admin" label uses TEST_LOGIN (developer).
+  const actor=role==='administrator'?{name:'관리자'}:role==='admin'?null:fixture.actors.find(a=>a.role===role)
   assert.ok(role==='admin'||actor,'Missing demo actor for this role')
   const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'})
   const page=await context.newPage(),reads=[],errors=[]
+  let actualRole=null
   const starts=new WeakMap(),pending=new Set(),completedHeads=new WeakSet()
   let lastActivity=performance.now()
   page.on('request',req=>{
@@ -35,7 +37,7 @@ try{
    const req=response.request(),u=new URL(req.url())
    if(req.method()!=='HEAD'||!u.pathname.startsWith('/rest/v1/'))return
    completedHeads.add(req)
-   reads.push({path:u.pathname.slice(9),query:u.search,started:starts.get(req),bytes:0,status:response.status(),method:'HEAD'})
+   reads.push({path:u.pathname.slice(9),query:u.search,started:starts.get(req),finished:performance.now(),bytes:0,status:response.status(),method:'HEAD'})
    finished(req)
   })
   page.on('requestfailed',req=>{
@@ -71,7 +73,8 @@ try{
     const u=new URL(req.url());if(!u.pathname.startsWith('/rest/v1/'))return
     const response=await req.response()
     const body=[204,205].includes(response.status())?Buffer.alloc(0):await response.body()
-    reads.push({path:u.pathname.slice(9),query:u.search,started:starts.get(req),bytes:body.length,status:response.status()})
+    if(u.pathname==='/rest/v1/rpc/auth_login'&&response.ok())actualRole=JSON.parse(body.toString())[0]?.role
+    reads.push({path:u.pathname.slice(9),query:u.search,started:starts.get(req),finished:performance.now(),bytes:body.length,status:response.status()})
    }catch(error){errors.push(`Could not measure ${req.method()} ${new URL(req.url()).pathname}: ${error.message}`)}finally{finished(req)}
   })
   // Include intercepted/delayed requests and body reads; networkidle alone misses these.
@@ -102,8 +105,9 @@ try{
    await settled()
    const requests=reads.filter(r=>r.started>=start)
    const trace=await page.evaluate(start=>window.__mountTrace.filter(r=>r.at>=start),wallStart)
-   const row={role,run,name,readyMs,requests:requests.length,bytes:requests.reduce((n,r)=>n+r.bytes,0),resources:requests.map(r=>r.path),trace,reads:requests}
-   results.push(row);console.log(JSON.stringify({role,run,name,readyMs,requests:row.requests,bytes:row.bytes}))
+   const dataReadyMs=Math.round(Math.max(0,...requests.map(r=>r.finished-start)))
+   const row={role,actualRole,run,name,readyMs,dataReadyMs,requests:requests.length,bytes:requests.reduce((n,r)=>n+r.bytes,0),resources:requests.map(r=>r.path),trace,reads:requests}
+   results.push(row);console.log(JSON.stringify({role,actualRole,run,name,readyMs,dataReadyMs,requests:row.requests,bytes:row.bytes}))
   }
   try{
    await page.goto(base)
@@ -111,6 +115,8 @@ try{
    await page.locator('#pin').fill(actor?'0000':config.TEST_LOGIN_PIN)
    await page.locator('.login-form button[type=submit]').click()
    await page.locator('.gs-event-block>button').first().waitFor({timeout:60000})
+   await settled()
+   assert.equal(actualRole,role==='administrator'?'admin':role==='admin'?'developer':role)
    const nav=page.locator('.bottom-nav')
    const go=name=>nav.getByRole('button',{name,exact:true}).click()
    if(journey==='settings'){
@@ -162,7 +168,7 @@ try{
    await page.getByRole('button',{name:'뒤로',exact:true}).click()
    await step('detail-repeat',()=>page.locator('.gs-event-block>button').first().click(),detailReady)
    await page.getByRole('button',{name:'뒤로',exact:true}).click()
-   if(role!=='admin'){
+   if(role!=='admin'&&role!=='administrator'){
     const service=()=>nav.getByRole('button',{name:/나의\s*봉사/}).click()
     const serviceReady=()=>page.locator('.mobile-today-service-section').waitFor({timeout:45000})
     await step('service-first',service,serviceReady)

@@ -121,6 +121,7 @@
 일정 상세·나의 봉사 속도: [0117 데모 조회 대기 축소 및 전후 측정](0117-demo-service-navigation-read-latency.md)
 나의 봉사 요청 수 정정: [0118 전환 구간 분리 재측정과 초기 로딩 실패 시험](0118-service-navigation-request-accounting.md)
 설정·캘린더 등 자주 쓰는 화면: [0119 순차 점검, 불필요한 설정 조회와 캘린더 직렬 대기 제거](0119-frequent-route-loading-audit.md)
+나의 봉사 개인 배정: [0120 중복 읽기 제거와 역할별 전후 검증](0120-my-service-personal-read-reuse.md)
 
 ```markdown
 # 제목

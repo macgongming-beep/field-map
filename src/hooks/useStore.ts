@@ -3,6 +3,7 @@ import { teamInformalAssignments } from '../utils/teamInformalAssignments'
 import { fetchBuildingSignalProof, fetchChangedBuildings, fetchTerritoryClock, type TerritorySignal } from './territorySync'
 import { CALENDAR_EVENT_COLUMNS, fetchUpdatedCalendarEvent } from './calendarEventRefresh'
 import { calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
+import { parseServiceCalendarScope, serviceCalendarReadReuseEnabled } from './serviceCalendarScope'
 import { calendarCachedScreenEnabled, calendarNavigationReuseEnabled, readCalendarNavigationCache, type CalendarSnapshot } from './calendarNavigationCache'
 import { readCalendarParticipants } from './calendarParticipants'
 import { assertUnassignedCalendarEvent, calendarApplicationRefreshEnabled } from './calendarApplicationRefresh'
@@ -584,9 +585,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
             calendarWindows.current.set(scope, { events, at: Date.now() })
             if (calendarWindows.current.size > 6) calendarWindows.current.delete(calendarWindows.current.keys().next().value!)
           }
-          // A visible date window is not an authorization snapshot. Recipient scope
-          // must independently resolve all of the user's assigned events.
-          recipientCalendarRef.current = undefined
+          // Only this fresh service read covers every personal assignment (past/future),
+          // including linked cards. A month window or cached screen cannot prove scope.
+          const personalScope = parseServiceCalendarScope(scope)
+          recipientCalendarRef.current = serviceCalendarReadReuseEnabled() && recipientUser && personalScope?.user === recipientUser
+            ? events : undefined
           calendarSnapshotComplete.current = false
           setLoadedCalendarScope(scope)
           setCalendarReadError(false)

@@ -750,6 +750,56 @@ test.each([false, true])('assigned-map navigation recipient request reuse=%s wit
   }
 })
 
+test.each(['service:["Volunteer","2026-10-30",null]', 'service:["Volunteer","2026-10-30",7]'])('fresh personal calendar %s is reused for territory scope, not reread', async scope => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'true')
+  state.calendarResponses.push(
+    Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30' }], error: null }),
+    Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30', time: '10:00', title: 'Shared' }], error: null }),
+  )
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', scope))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  expect(state.refresh).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: 7 })]))
+  state.refresh.mockClear()
+  // A later cancellation must publish a new empty scope, not retain the old event.
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'mutation:calendar' }) })
+  expect(state.refresh).toHaveBeenCalledWith([])
+  expect(result.current.calendarEvents).toEqual([])
+})
+
+test.each(['window:2026-10-01:2026-10-31', 'service:["Someone else","2026-10-30",null]'])('incomplete or foreign scope %s cannot replace recipient assignment discovery', async scope => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', scope))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.refresh).toHaveBeenCalledWith(undefined)
+})
+
+test('disabled personal read reuse retains independent recipient discovery', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'false')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'service:["Volunteer","2026-10-30",null]'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.refresh).toHaveBeenCalledWith(undefined)
+})
+
+test('failed fresh personal assignments never replace existing scope with partial or empty data', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'service:["Volunteer","2026-10-30",null]'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const buildings = result.current.buildings
+  state.refresh.mockClear()
+  state.failedTable = 'event_card_assignments'
+  await act(async () => {
+    await expect(result.current.refetchSlices(['calendar'], { triggeredBy: 'mutation:calendar' })).rejects.toThrow()
+  })
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(result.current.buildings).toBe(buildings)
+  expect(result.current.calendarReadError).toBe(true)
+})
+
 test('queued refresh invalidation cannot be repopulated by an older recipient calendar read', async () => {
   enableScopedHistories()
   vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', 'true')
