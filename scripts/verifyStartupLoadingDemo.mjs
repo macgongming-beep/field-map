@@ -68,6 +68,8 @@ try {
       }
       await page.getByText('로그인 화면 불러오는 중...', { exact: true }).waitFor()
       const after = await page.locator('.app-loading-brand').boundingBox()
+      await page.screenshot({ path: `scratch/startup-${label}-${width}-transition.png` })
+      console.log(JSON.stringify({ width, before, after, recoveryVisible: await page.locator('.app-loading-recovery').count() }))
       assert.ok(Math.abs(before.x - after.x) <= 1 && Math.abs(before.y - after.y) <= 1, 'Boot to React brand must not jump')
       assert.deepEqual(assetReads.filter(path => !path.includes('favicon')), [], 'No new loading image/font request')
       await page.evaluate(value => {
