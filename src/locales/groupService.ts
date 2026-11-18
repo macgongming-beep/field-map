@@ -1,4 +1,8 @@
 export const groupServiceZh: Record<string,string> = {
+  '반복 일정 수정 범위':'修改重复安排的范围',
+  '이 일정만 수정할까요, 이후 반복 일정도 수정할까요?':'只修改这次安排，还是也修改之后的重复安排？',
+  '이 일정만 수정':'只修改这次安排','이후 반복 일정도 수정':'也修改之后的重复安排',
+  '이후 반복 일정을 불러오지 못했습니다. 다시 시도해 주세요.':'无法加载之后的重复安排，请重试。',
   '线上':'线上','现场':'现场',
   '집단 추가':'添加小组',
   '추가할 집단에 종료 시간이 다른 일정이 있습니다. 해당 일정을 먼저 확인해 주세요.':'要添加的小组已有结束时间不同的安排，请先检查该安排。',
@@ -39,6 +43,10 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '반복 일정 수정 범위':'Recurring event edit scope',
+  '이 일정만 수정할까요, 이후 반복 일정도 수정할까요?':'Edit only this occurrence, or this and following occurrences?',
+  '이 일정만 수정':'Only this occurrence','이후 반복 일정도 수정':'This and following occurrences',
+  '이후 반복 일정을 불러오지 못했습니다. 다시 시도해 주세요.':'Could not load following occurrences. Please retry.',
   '线上':'Online','现场':'In person',
   '집단 추가':'Add groups',
   '추가할 집단에 종료 시간이 다른 일정이 있습니다. 해당 일정을 먼저 확인해 주세요.':'The group already has an event with a different end time. Check that event first.',

@@ -8,13 +8,13 @@ import { willNotifyOnEventChange } from '../../utils/eventNotify'
 import type { CalendarEvent } from '../../types'
 import { setCurrentLang } from '../../i18n'
 
-const mocks=vi.hoisted(()=>({read:vi.fn(),token:vi.fn(()=> 'session'),confirm:vi.fn(async()=>true)}))
-vi.mock('./api',()=>({readMeetingAccess:mocks.read}))
+const mocks=vi.hoisted(()=>({read:vi.fn(),series:vi.fn(),token:vi.fn(()=> 'session'),confirm:vi.fn(async()=>true)}))
+vi.mock('./api',()=>({readMeetingAccess:mocks.read,readServiceSeriesTargets:mocks.series}))
 vi.mock('../../lib/authToken',()=>({getAuthToken:mocks.token}))
 vi.mock('../../lib/confirm',()=>({confirmDialog:mocks.confirm}))
 const make=(id:number,time='14:30',groups=['dongtan','singal']):CalendarEvent=>({id,date:'2026-11-25',time,endTime:time==='14:30'?'16:30':'19:00',title:'Service',leader:'Leader',leaders:['Leader'],serviceKind:'group',targetGroups:groups,meetingMode:'none',editVersion:'1',primaryLeaderUserId:2,place:'',memo:'',allowApplications:true,hasMeeting:false,applicants:[],assigned:[],guests:[],cardAssignments:[],card:'',type:'주택'} as CalendarEvent)
 const users=[{id:2,name:'Leader',role:'leader',isActive:true,approvalStatus:'approved' as const},{id:3,name:'Member',role:'user',isActive:true,approvalStatus:'approved' as const}]
-beforeEach(()=>{vi.stubEnv('VITE_DEMO_MODE','true');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','true');vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co');setCurrentLang('ko');mocks.read.mockReset();mocks.token.mockReturnValue('session')})
+beforeEach(()=>{vi.stubEnv('VITE_DEMO_MODE','true');vi.stubEnv('VITE_GROUP_SERVICE_ENABLED','true');vi.stubEnv('VITE_SUPABASE_URL','https://itjlykpjmlcvanqpmkmc.supabase.co');setCurrentLang('ko');mocks.read.mockReset();mocks.series.mockReset();mocks.token.mockReturnValue('session')})
 afterEach(()=>{cleanup();vi.unstubAllEnvs();setCurrentLang('ko')})
 test('feature requires revision opt-in outside demo, explicit false disables it',()=>{
   expect(groupServiceEnabled()).toBe(true)
@@ -152,6 +152,42 @@ test('failed save keeps form and uses same request ID on retry',async()=>{
   await waitFor(()=>expect((screen.getByRole('button',{name:'저장'}) as HTMLButtonElement).disabled).toBe(false))
   fireEvent.click(screen.getByRole('button',{name:'저장'}));await waitFor(()=>expect(submit).toHaveBeenCalledTimes(2))
   expect(submit.mock.calls[0][0].servicePlan.requestId).toBe(submit.mock.calls[1][0].servicePlan.requestId);expect(close).not.toHaveBeenCalled()
+})
+test.each(['group','congregation'] as const)('recurring %s edits ask scope before saving; single does not read other dates',async(serviceKind)=>{
+  const a={...make(1),serviceKind,seriesId:'series'},submit=vi.fn(async()=>true)
+  render(<ServiceEventEditor language="ko" date={a.date} event={a} events={[a]} users={users} onClose={vi.fn()} onSubmit={submit}/>)
+  fireEvent.click(screen.getByRole('button',{name:'저장'}))
+  expect(screen.getByRole('group',{name:'반복 일정 수정 범위'})).toBeTruthy()
+  expect(submit).not.toHaveBeenCalled();expect(mocks.series).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button',{name:'이 일정만 수정'}))
+  await waitFor(()=>expect(submit).toHaveBeenCalledOnce())
+  expect(submit.mock.calls[0][0].servicePlan.rows.map(r=>r.id)).toEqual([1])
+  expect(mocks.series).not.toHaveBeenCalled()
+})
+test('following edit loads beyond the visible month once and retries identical rows and request ID',async()=>{
+  const a={...make(1),seriesId:'series'},submit=vi.fn(async()=>false)
+  const payload={event_date:a.date,time:a.time,end_time:a.endTime,title:a.title,place:'',leader_name:'Leader',memo:'',meeting_map_url:'',allow_applications:true,service_kind:'group',target_groups:a.targetGroups,primary_leader_user_id:2,meeting_mode:'none',access:{joinUrl:'',meetingNumber:'',passcode:''},group_service_scope:false}
+  mocks.series.mockResolvedValue([{rootId:1,id:1,version:'1',payload},{rootId:1,id:100,version:'6',payload:{...payload,event_date:'2026-12-02',leader_name:'Replacement',primary_leader_user_id:4}}])
+  render(<ServiceEventEditor language="ko" date={a.date} event={a} events={[a]} users={users} onClose={vi.fn()} onSubmit={submit}/>)
+  fireEvent.change(screen.getByLabelText('제목'),{target:{value:'New title'}})
+  fireEvent.click(screen.getByRole('button',{name:'저장'}));fireEvent.click(screen.getByRole('button',{name:'이후 반복 일정도 수정'}))
+  await waitFor(()=>expect(submit).toHaveBeenCalledTimes(1))
+  expect(mocks.series).toHaveBeenCalledWith([{id:1,version:'1'}])
+  expect(submit.mock.calls[0][0].servicePlan.rows.map(r=>[r.id,r.version,r.payload.title,r.payload.leader_name])).toEqual([[1,'1','New title','Leader'],[100,'6','New title','Replacement']])
+  await waitFor(()=>expect((screen.getByRole('button',{name:'이후 반복 일정도 수정'}) as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(screen.getByRole('button',{name:'이후 반복 일정도 수정'}))
+  await waitFor(()=>expect(submit).toHaveBeenCalledTimes(2))
+  expect(mocks.series).toHaveBeenCalledOnce()
+  expect(submit.mock.calls[0][0].servicePlan).toEqual(submit.mock.calls[1][0].servicePlan)
+})
+test('failed future read never silently saves only the current occurrence',async()=>{
+  mocks.series.mockRejectedValue(Error('Cannot read series'))
+  const a={...make(1),seriesId:'series'},submit=vi.fn(),close=vi.fn()
+  render(<ServiceEventEditor language="ko" date={a.date} event={a} events={[a]} users={users} onClose={close} onSubmit={submit}/>)
+  fireEvent.click(screen.getByRole('button',{name:'저장'}));fireEvent.click(screen.getByRole('button',{name:'이후 반복 일정도 수정'}))
+  expect((await screen.findByRole('alert')).textContent).toContain('Cannot read series')
+  expect(submit).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button',{name:'돌아가기'}));expect(screen.getByRole('button',{name:'저장'})).toBeTruthy()
 })
 test('selection order determines primary without separate primary or co-leader controls',async()=>{
   const a=make(1),submit=vi.fn(async()=>true)

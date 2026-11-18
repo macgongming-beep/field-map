@@ -10,8 +10,9 @@ import { getOverlayRoot } from '../../lib/overlayRoot'
 import { pushBackHandler } from '../../lib/backStack'
 import { confirmDialog } from '../../lib/confirm'
 import { msg } from '../../lib/msg'
-import { readMeetingAccess } from './api'
-import { serviceEventChanged } from './notify'
+import { readMeetingAccess,readServiceSeriesTargets } from './api'
+import {expandSeriesEdit,type SeriesEditTarget} from './seriesEdit'
+import { serviceEventChanged,servicePayloadChanged } from './notify'
 import { emptyAccess, groupLabel, sameServiceDay, serviceGroupOptions, type GroupCode, type MeetingAccess, type ServicePayload, type ServiceRow } from './model'
 import './groupService.css'
 
@@ -54,6 +55,8 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const [presetError,setPresetError] = useState('')
   const [savedPresets,setSavedPresets] = useState<{source:string|undefined;value:TimePreset[]}|null>(null)
   const [error,setError] = useState('')
+  const [scopePrompt,setScopePrompt] = useState(false)
+  const seriesPlanRef=useRef<{body:string;rows:ServiceRow[];targets:SeriesEditTarget[]}|null>(null)
   const requestRef = useRef<{ body: string; id: string } | null>(null)
   const originalAccess = useRef<MeetingAccess>(emptyAccess)
   const seriesRef = useRef([crypto.randomUUID(),crypto.randomUUID()])
@@ -112,7 +115,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     if (next==='group' && !snapshot && groups.length===0) setGroups(availableGroups.filter(g=>g.active).map(g=>g.code))
     if (next==='congregation') { setGroups([]); setSelected([]) }
   }
-  const save = async () => {
+  const save = async (scope?:'single'|'following') => {
     if (locked || presetKey!==null || accessLoading || accessError) return
     setError('')
     if (!title.trim() || (!repeatEnd && ((!snapshot&&kind!=='group'&&!primary)||(leadersEdited&&leaders.length>0&&!primary))) || (kind==='group' && (groups.length<1 || groups.length>(snapshot&&!snapshot.groupServiceScope?2:20) || groups.some(code=>!availableGroups.some(g=>g.code===code))))) {
@@ -124,6 +127,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     if (mode==='virtual' && access.joinUrl && !/^https:\/\/\S+$/.test(access.joinUrl)) {
       setError(msg('화상 모임 링크 또는 회의 번호를 확인해 주세요.')); return
     }
+    if(snapshot&&!scope&&(snapshot.seriesId||companions.some(e=>selected.includes(e.id)&&e.seriesId))){setScopePrompt(true);return}
     const dates=[day]
     if (!snapshot && repeatEnd) {
       if (repeatEnd<day) { setError(msg('반복 종료일을 시작일 이후로 정해 주세요.')); return }
@@ -161,8 +165,20 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     }
     if(rows.length>200){setError(msg('한 번에 200개 이하의 일정을 등록해 주세요.'));return}
     setBusy(true)
+    try {
+    if(scope==='following'){
+      const body=JSON.stringify(rows)
+      if(seriesPlanRef.current?.body!==body){
+        const targets=await readServiceSeriesTargets(rows.filter(r=>r.id!=null).map(r=>({id:r.id!,version:r.version})))
+        seriesPlanRef.current={body,rows:expandSeriesEdit(rows,targets),targets}
+      }
+      rows=seriesPlanRef.current.rows
+    }
     const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'})
-    const needsNotice=!!snapshot && rows.some(row=>{
+    const needsNotice=scope==='following'?rows.some(row=>{
+      const before=seriesPlanRef.current?.targets.find(t=>t.id===row.id)
+      return before&&row.payload.event_date>=today&&servicePayloadChanged(before.payload,row.payload)
+    }):!!snapshot && rows.some(row=>{
       const before=row.id===snapshot.id?snapshot:companions.find(e=>e.id===row.id)
       const accessChanged=row.id===snapshot.id
         ? JSON.stringify(originalAccess.current)!==JSON.stringify(row.payload.access)
@@ -173,11 +189,10 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     // Preserve the idempotency key after an uncertain network response.
     const body=JSON.stringify(rows)
     if (requestRef.current?.body!==body) requestRef.current={body,id:crypto.randomUUID()}
-    try {
       const result=await onSubmit({date:day,time:base.time,endTime:base.end_time,title:base.title,place,leader:base.leader_name,memo,hasMeeting:mode!=='none',allowApplications:allow,
         servicePlan:{rows,requestId:requestRef.current.id,notify}})
       if (result!==false) onClose()
-    } catch { setError(msg('일정을 저장하지 못했습니다.')) } finally { setBusy(false) }
+    } catch (cause) { setError(cause instanceof Error&&cause.message==='Too many events'?msg('한 번에 200개 이하의 일정을 등록해 주세요.'):cause instanceof Error?cause.message:msg('일정을 저장하지 못했습니다.')) } finally { setBusy(false) }
   }
   const timeInputs = (s:{time:string;end:string},update:(s:{time:string;end:string})=>void,key:string) => <div key={key}>
     <div className="gs-preset-heading">
@@ -251,7 +266,12 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
       <label>{msg('메모')}<textarea value={memo} onChange={e=>setMemo(e.target.value)} rows={3}/></label>
       <label className="gs-check"><input type="checkbox" checked={allow} onChange={e=>setAllow(e.target.checked)}/>{msg('봉사 신청 받기')}</label>
     </fieldset>{error && <p role="alert" className="gs-error">{error}</p>}
-      <footer><button type="button" disabled={locked} onClick={()=>{if(presetKey!==null)setPresetKey(null);else onClose()}}>{msg('취소')}</button><button type="submit" formNoValidate={presetKey!==null} disabled={locked||(presetKey===null&&(accessLoading||accessError))}>{msg(locked?'저장 중...':presetKey!==null?'시간 설정 저장':'저장')}</button></footer>
+      {scopePrompt?<div className="gs-repeat-scope" role="group" aria-label={msg('반복 일정 수정 범위')}>
+        <p>{msg('이 일정만 수정할까요, 이후 반복 일정도 수정할까요?')}</p>
+        <button type="button" disabled={locked} onClick={()=>void save('single')}>{msg('이 일정만 수정')}</button>
+        <button type="button" disabled={locked} onClick={()=>void save('following')}>{msg('이후 반복 일정도 수정')}</button>
+        <button type="button" disabled={locked} onClick={()=>setScopePrompt(false)}>{msg('돌아가기')}</button>
+      </div>:<footer><button type="button" disabled={locked} onClick={()=>{if(presetKey!==null)setPresetKey(null);else onClose()}}>{msg('취소')}</button><button type="submit" formNoValidate={presetKey!==null} disabled={locked||(presetKey===null&&(accessLoading||accessError))}>{msg(locked?'저장 중...':presetKey!==null?'시간 설정 저장':'저장')}</button></footer>}
     </form></section></div>
   return getOverlayRoot() ? createPortal(content,getOverlayRoot()!) : content
 }

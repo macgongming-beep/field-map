@@ -54,6 +54,9 @@ export type ServicePayload = {
 export type ServiceRow = { id?: number; version?: string; payload: ServicePayload }
 export type ServicePlan = { rows: ServiceRow[]; requestId: string; notify: boolean }
 export const emptyAccess: MeetingAccess = { joinUrl: '', meetingNumber: '', passcode: '' }
+export function sameMeetingAccess(a:MeetingAccess,b:MeetingAccess){
+  return a.joinUrl===b.joinUrl&&a.meetingNumber===b.meetingNumber&&a.passcode===b.passcode
+}
 export function groupLabel(codes: readonly string[], language: AppLanguage, configuredGroups?: string, directory?: string) {
   if(directory!=null){
     const groups=parseGroupDirectory(directory)?.groups??[]

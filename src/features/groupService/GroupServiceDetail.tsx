@@ -28,6 +28,7 @@ type Props={event:CalendarEvent;events:CalendarEvent[];language:AppLanguage;curr
 export function GroupServiceDetail({event,events,language,currentVisitor,currentUserId,role,mentionUsers,commentEntry,mobile,onClose,onApply,onAssignment,onEdit,onDelete,renderAssignments,participantUsers=[],onAddParticipant,onRemoveParticipant,globalSettings={}}:Props){
   const [response,setResponse]=useState<{key:string;scope:string;data:GroupServiceContext|null;failed:boolean}|null>(null)
   const [selected,setSelected]=useState<number|null>(null)
+  const selectionScope=useRef<string|null>(null)
   const [retry,setRetry]=useState(0)
   const [addingGroup,setAddingGroup]=useState<number|null>(null)
   const [removingGroup,setRemovingGroup]=useState<number|null>(null)
@@ -64,7 +65,9 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
     void readGroupServiceContext(event.id).then(value=>{
       if(!active)return
       setResponse({key:requestKey,scope,data:value,failed:false})
-      setSelected(previous=>value.events.some(e=>e.id===previous)?previous:
+      const keepSelection=selectionScope.current===scope
+      selectionScope.current=scope
+      setSelected(previous=>keepSelection&&value.events.some(e=>e.id===previous)?previous:
         value.events.find(e=>e.groupCode===value.ownGroup)?.id ?? event.id)
     }).catch(()=>{if(active)setResponse({key:requestKey,scope,data:null,failed:true})})
     return()=>{active=false}
@@ -83,6 +86,7 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
   const groups=serviceGroupOptions(globalSettings,language)
   // Existing schedules remain visible even if their group is retired or settings are stale.
   const tabGroups=[...groups,...(context?.events??[]).filter(e=>!groups.some(g=>g.code===e.groupCode)).map(e=>({code:e.groupCode,name:e.groupCode,active:false}))]
+    .sort((a,b)=>Number(b.code===context?.ownGroup)-Number(a.code===context?.ownGroup))
   const names=current?territoryApplicants(current):[]
   const scheduleActions=current&&selectedMeta?.canEdit&&(onEdit||onDelete)
     ?<GroupScheduleActions key={current.id} language={language} onEdit={onEdit?()=>onEdit(current.id):undefined} onDelete={onDelete?()=>onDelete(current.id):undefined}/>:null

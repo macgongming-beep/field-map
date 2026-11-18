@@ -90,6 +90,10 @@
 /* Keep simplified and shared Han glyphs in the same native Chinese font. */
 .gs-event-text strong[lang=zh-Hans],.gs-tab-title h2[lang=zh-Hans] { font-family:'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif; }
 .gs-event-text>span { font-size:13px; color:var(--muted,#666); font-weight:400; }
+.gs-repeat-scope { display:grid; gap:8px; padding:16px 0; border-top:1px solid var(--line); }
+.gs-repeat-scope p { margin:0 0 4px; font-size:14px; }
+.gs-repeat-scope button { min-height:44px; padding:10px 12px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--ink); font:inherit; text-align:left; white-space:normal; }
+.gs-repeat-scope button:disabled { opacity:.5; }
 .gs-meeting { padding:8px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); font-size:12px; }
 .gs-meeting .gs-meeting-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:32px; }
 .gs-meeting h3 { margin:0; font-size:13px; font-weight:600; }

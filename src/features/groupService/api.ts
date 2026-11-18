@@ -4,6 +4,17 @@ import { confirmDialog } from '../../lib/confirm'
 import { msg } from '../../lib/msg'
 import type { MeetingAccess, ServicePlan } from './model'
 import {GROUP_DIRECTORY_CHANGED,parseGroupDirectory,type GroupDirectory} from './directory'
+import type {SeriesEditTarget} from './seriesEdit'
+
+export async function readServiceSeriesTargets(roots:Array<{id:number;version?:string}>):Promise<SeriesEditTarget[]>{
+  const token=getAuthToken()
+  if(!token)throw new Error(msg('다시 로그인해 주세요.'))
+  const {data,error}=await supabase.rpc('read_service_series_edit_targets',{p_token:token,p_roots:roots})
+  if(token!==getAuthToken())throw new Error(msg('다시 로그인해 주세요.'))
+  if(error)throw new Error(error.code==='PT409'?msg('일정이 변경되었습니다. 다시 열어 확인해 주세요.'):msg('이후 반복 일정을 불러오지 못했습니다. 다시 시도해 주세요.'))
+  if(!Array.isArray(data)||!data.length||data.length>200||data.some(r=>!Number.isInteger(r.id)||!Number.isInteger(r.rootId)||typeof r.version!=='string'||!r.payload))throw new Error(msg('이후 반복 일정을 불러오지 못했습니다. 다시 시도해 주세요.'))
+  return data
+}
 
 export async function manageServiceGroup(action:'add'|'rename'|'archive',code:string|null,name:string|null,revision:string):Promise<GroupDirectory>{
   const token=getAuthToken()

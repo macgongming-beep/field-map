@@ -13,7 +13,9 @@ let source=readFileSync('supabase/migrations/20261116_1000_group_service.sql','u
   +readFileSync('supabase/migrations/20261116_1200_group_service_tabs.sql','utf8')
   +readFileSync('supabase/migrations/20261116_1210_group_service_scope_integrity.sql','utf8')
   +readFileSync('supabase/migrations/20261116_1220_group_participant_signals.sql','utf8')
+  +readFileSync('supabase/migrations/20261119_0010_service_series_edit_targets.sql','utf8')
 if(process.env.GROUP_SERVICE_MUTATION==='signal')source=source.replace('where id=v_id and group_service_scope','where false')
+if(process.env.GROUP_SERVICE_MUTATION==='series-admin')source=source.replace("and role in('admin','developer')",'')
 if(process.env.GROUP_SERVICE_MUTATION==='scope')source=source.replace('case when e.group_service_scope then','case when false then')
 if(process.env.GROUP_SERVICE_MUTATION==='roster')source=source.replace('using (public.can_read_group_service_row(event_id,user_name))','using (true)')
 if(process.env.GROUP_SERVICE_MUTATION==='version')source=source.replace("if r->>'version' is null or (r->>'version')::bigint<>e.edit_version then",'if false then')
@@ -61,6 +63,26 @@ async function save(rows:unknown[],actor=1,id=crypto.randomUUID()) {
 }
 async function version(id:number) {return String((await db.query<{edit_version:number}>('select edit_version from calendar_events where id=$1',[id])).rows[0].edit_version)}
 async function session(id:number|null) {await db.query("select set_config('request.headers',$1,false)",[JSON.stringify(id?{'x-session-token':token(id)}:{})])}
+test('series edit reads all following dates and private access only for an approved admin, preserving past and other series',async()=>{
+  const series=crypto.randomUUID(),other=crypto.randomUUID()
+  const {ids}=await save(['2099-11-18','2099-11-25','2099-12-02'].map(event_date=>({payload:{...payload(),event_date,series_id:series}})))
+  const {ids:[evening]}=await save([{payload:{...payload('17:00','19:00'),series_id:other}}])
+  const roots=JSON.stringify([{id:ids[1],version:await version(ids[1])}])
+  await db.exec('set role anon')
+  for(const actor of [2,3,99])await expect(db.query('select read_service_series_edit_targets($1,$2)',[token(actor),roots])).rejects.toThrow('Administrator')
+  const read=(await db.query<{r:Array<{id:number;version:string;payload:ReturnType<typeof payload>}>}>('select read_service_series_edit_targets($1,$2) r',[token(1),roots])).rows[0].r
+  expect(read.map(r=>r.id)).toEqual(ids.slice(1))
+  expect(read[1].payload.access.passcode).toBe('secret')
+  expect(read[1].version).toBe('1')
+  await db.exec('reset role')
+  await db.query("update calendar_events set memo='other admin' where id=$1",[ids[2]])
+  await expect(save(read.map(r=>({...r,payload:{...r.payload,title:'Must not overwrite'}})))).rejects.toThrow('reload')
+  expect((await db.query('select title from calendar_events where id=$1',[ids[1]])).rows[0].title).toBe('Test')
+  expect(await version(ids[0])).toBe('1');expect(await version(evening)).toBe('1')
+  await expect(db.query('select read_service_series_edit_targets($1,$2)',[token(1),JSON.stringify([{id:ids[1],version:'0'}])])).rejects.toThrow('changed')
+  await db.exec("update app_users set is_active=false where id=1")
+  await expect(db.query('select read_service_series_edit_targets($1,$2)',[token(1),roots])).rejects.toThrow('Administrator')
+})
 test('private roster signals publish IDs only for scoped events and cannot be forged',async()=>{
   const {ids:[scoped]}=await save([{payload:{...payload(),group_service_scope:true,target_groups:['dongtan']}}])
   const {ids:[legacy]}=await save([{payload:payload('17:00','19:00')}])
