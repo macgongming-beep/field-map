@@ -82,3 +82,16 @@ DEMO_MODE를 따라 켜지지 않는다. 이번 데모 빌드에만 명시적으
 이번에는 로그인 병렬화, 배정 쿼리 통합, 변경 시각 확인 합치기, 캐시/알림 재사용을
 포함하지 않았다. 1.2초 목표 달성으로 표시하지 않는다.
 운영 main/DB/환경변수/배포는 변경하지 않는다. 데모 확인과 리뷰 뒤 별도 결정한다.
+
+## 데모 배포 후 확인
+
+- 앱 커밋 `4c58b51`, 배포 `dpl_EGNYKJiWRRZ8CeA4YuHn9V9DHzNy`.
+- 주소: https://chinese-territory-app-demo.vercel.app
+- Mac WebKit의 PC/모바일 × 세 역할 6조합이 모두 통과했고, 로컬 Chromium 결과와
+  표시 내용/검사 결과가 동일했다. `scratch/myservice-cold-live-webkit-ui.json`.
+- 배포 후 봉사자 앱 재실행은 39건, 캘린더 이동 17건, 홈 복귀 3건이었다.
+  요청 기록에서 개인 배정 확인과 설정 조회가 bounded 일정 응답 완료 전에 시작함을 확인했다.
+- 추가 지연 없는 WebKit 1회 첫 화면 1,253ms는 배포 확인용이며 위 전후 비교에 섞지 않는다.
+  기록: `scratch/speed-cold-live-webkit.json`.
+- 실제 iPhone/PWA 복귀 속도와 운영 규모 동시 접속 부하는 아직 측정하지 않았다.
+- 운영은 변경하지 않았다. 이 배포 기록 추가 커밋은 앱 재배포가 필요 없다.
