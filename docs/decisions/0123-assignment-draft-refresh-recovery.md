@@ -54,9 +54,10 @@ useStore.fetchAll이 이미 실패 안내를 하고 기존 화면을 보존하�
 - buildingDemand 3개: 수동·foreground·realtime 전체 읽기 fallback의 대기·실패·복구 동안
   full 준비 상태와 기존 건물 참조 유지, 성공 후 실제 새 건물 반영.
   baseline을 비워 전체 읽기 경로를 시험한다. 델타 경로는 기존 시험과 브라우저 복귀로 확인한다.
-- AssignmentEditor 3개: 가정상 ready 하락 후 저장 초안 복원, 새 revision 충돌 선택 전
-  다시 닫아도 로컬 보존, 편집 중 새 event prop을 받아도 예전 기준 revision으로 공유를
-  시도하고 충돌 시 초안/화면을 유지.
+- 최초 AssignmentEditor 3개: 가정상 ready 하락 후 저장 초안 복원, 새 revision 충돌 선택 전
+  다시 닫아도 로컬 보존, 공유 충돌 시 초안/화면 유지.
+  마지막 시험의 부모 event prop 갱신만으로 내부 revision 추종 방지를 검증했다고
+  한 설명은 아래 후속 리뷰에서 정정한다.
 - 변이: 건물 읽기 시작 때 준비 상태를 초기화하면 새 store 시험 3개가 실패한다.
   실제 실패는 추가 promotion으로 건물 참조가 바뀌는 검사에서 발생했다.
 - 변이: 공유 충돌 시 로컬 초안을 삭제하면 새 편집기 시험 1개가 실패한다.
@@ -102,3 +103,27 @@ Chromium 390px, 인도자·실제 관리자 모두 위 5개 시나리오를 통�
 - 원본: `scratch/draft-recovery-deployed-webkit.json`.
 - 배정 공유나 서버 배정 변경은 하지 않았다. 시험 브라우저 context를 모두 닫았다.
   실제 아이폰 PWA의 OS 종료/복귀 확인은 별도이며, 운영 앱·DB·환경변수는 변경하지 않았다.
+
+## 후속 리뷰와 시험 보강
+
+사용자가 전달한 Claude 리뷰는 `76f73e3`를 승인했다. 리뷰어가 별도 작업본에서
+82개 시험 통과를 보고했고, catch 제거 시 미처리 오류로 실행이 실패하며,
+충돌 복원 시 baseRevision 갱신을 없애면 재진입 시험이 실패함을 확인했다.
+
+지적은 타당하다. 이전 `background event refresh never advances the edit base`는
+부모 event prop만 바꿨다. `AssignmentEditorSnapshot`이 최초 조회 snapshot을 고정하므로
+그 새 event는 Content까지 도달하지 않았다. 따라서 이 시험이 Content 내부
+revisionRef의 prop 추종 방지를 독립적으로 검증한다고 설명하면 안 된다.
+같은 시험의 공유 충돌 후 초안 보존 검사는 유효하므로 별도 시험으로 유지했다.
+
+새 시험은 snapshot 고정 경계를 직접 관찰한다. 부모 신청자를 A에서 B로 바꾼 뒤,
+Content가 TeamBuildScreen에 전달하는 신청자가 계속 A인지 확인한다. 편집 본문의
+DOM 유지, 조회 1회, 로컬 초안 보존도 확인한다. 이는 내부 revisionRef만의 방어를
+검증하는 시험이 아니라 부모 갱신이 편집 snapshot을 교체하지 않는 구조의 시험이다.
+
+실제로 `event={snapshot??props.event}`를 `event={props.event}`로 바꾸면 새 시험이
+신청자 B를 감지해 실패했다. 동일 파일의 재진입 충돌 시험도 함께 실패했다.
+이 변이는 원복했으며 앱 코드 차이는 0이다. 이번 후속은 시험·문서만 변경하고
+데모 재배포·DB 접근·운영 변경은 하지 않는다.
+원복 후 관련 83개(9파일), lint, TypeScript 검사 통과. 전체 시험과 브라우저 검사는
+이번 시험·문서 보강에서는 다시 실행하지 않았다.

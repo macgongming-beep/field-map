@@ -13,6 +13,7 @@ const read = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks/calendarEventRefresh', () => ({ fetchUpdatedCalendarEvent: read }))
 vi.mock('./TeamBuildScreen', () => ({ TeamBuildScreen: (p: ComponentProps<typeof TeamBuildScreen>) => <>
   <output data-testid="teams">{p.teams.map(team => team.name).join(',')}</output>
+  <output data-testid="participants">{p.participants.join(',')}</output>
   <button onClick={() => p.dispatch({ type: 'RENAME_TEAM', teamId: p.teams[0].id, name: 'Local draft' })}>edit local</button>
 </> }))
 vi.mock('./ZoneAssignScreen', () => ({ ZoneAssignScreen: () => null }))
@@ -68,11 +69,27 @@ test('reopen against a newer version preserves local storage until an explicit c
   expect(p.onShare).not.toHaveBeenCalled()
 })
 
-test('background event refresh never advances the edit base; a save conflict keeps the draft', async () => {
+test('parent refresh cannot replace the pinned participant snapshot while editing', async () => {
+  const p = props(), rendered = render(<AssignmentEditor {...p} />), draft = await edit()
+  const participants = screen.getByTestId('participants')
+  expect(participants).toHaveTextContent(/^A$/)
+  await act(async () => {
+    rendered.rerender(<AssignmentEditor {...p} event={{ ...event, applicants: ['B'], assignmentRevision: '5' }} />)
+  })
+  // This observes what Content forwards to its child, not just its initial revision ref.
+  expect(screen.getByTestId('participants')).toBe(participants)
+  expect(participants).toHaveTextContent(/^A$/)
+  expect(read).toHaveBeenCalledExactlyOnceWith(71)
+  expect(screen.getByTestId('teams')).toHaveTextContent('Local draft')
+  expect(loadLocalDraft(71, 'Leader')).toEqual(draft)
+  expect(p.onShare).not.toHaveBeenCalled()
+})
+
+test('a save conflict keeps the draft and editor open', async () => {
   const p = props()
   p.onShare.mockImplementation(async (_id, _assignments, options) => { options.onConflict(null) })
-  const rendered = render(<AssignmentEditor {...p} />), draft = await edit()
-  await act(async () => { rendered.rerender(<AssignmentEditor {...p} event={{ ...event, assignmentRevision: '5' }} />) })
+  render(<AssignmentEditor {...p} />)
+  const draft = await edit()
   expect(screen.getByTestId('teams')).toHaveTextContent('Local draft')
   fireEvent.click(screen.getByRole('button', { name: '배정 공유', exact: true }))
   await screen.findByText('배정 내용이 변경됐어요')
