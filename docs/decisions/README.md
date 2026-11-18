@@ -133,6 +133,7 @@
 일정 표시 변경의 구역 조회: [0129 데모 메타정보 갱신 분리와 실제 통신 전후 비교](0129-calendar-metadata-territory-refresh.md)
 저장한 제목·집단명 표시: [0130 중국어 이름 보존과 PC 달력 밀도](0130-saved-service-labels-and-compact-calendar.md)
 집단 추가·이름 변경: [0131 고정 식별자로 사용자 관리와 일정 연결](0131-stable-service-group-directory.md)
+기존 일정에 새 집단 추가: [0132 신청·배정을 유지한 시간대 확장](0132-add-groups-from-existing-service-event.md)
 
 ```markdown
 # 제목

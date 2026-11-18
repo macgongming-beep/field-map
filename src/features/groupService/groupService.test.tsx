@@ -70,6 +70,58 @@ test('five active groups produce five independent events and retired groups cann
   await waitFor(()=>expect(submit).toHaveBeenCalledOnce())
   expect(submit.mock.calls[0][0].servicePlan.rows.map(r=>r.payload.target_groups)).toEqual(groups.slice(0,5).map(g=>[g.code]))
 })
+test.each([false,true])('editing adds a new independent group without replacing existing targets (second slot: %s)',async(secondSlot)=>{
+  const a={...make(1,'14:30',['dongtan']),groupServiceScope:true}
+  const evening={...make(2,'17:00',['dongtan']),groupServiceScope:true}
+  const other={...make(3,'14:30',['singal']),groupServiceScope:true}
+  const groups=[{code:'dongtan',name:'东滩',active:true},{code:'singal',name:'新葛',active:true},{code:'new-code',name:'新增小组',active:true}]
+  const submit=vi.fn(async()=>true),close=vi.fn()
+  const props={language:'ko' as const,date:a.date,event:a,events:[a,evening,other],users,onClose:close,onSubmit:submit,globalSettings:{service_group_directory:JSON.stringify({revision:'2',groups})}}
+  const {rerender}=render(<ServiceEventEditor {...props}/>)
+  expect((screen.getByLabelText('东滩') as HTMLInputElement).disabled).toBe(true)
+  expect(screen.queryByLabelText('新葛')).toBeNull()
+  expect((screen.getByLabelText('新增小组') as HTMLInputElement).disabled).toBe(false)
+  fireEvent.click(screen.getByLabelText('新增小组'))
+  if(secondSlot)fireEvent.click(screen.getByLabelText(/함께 수정/))
+  rerender(<ServiceEventEditor {...props} event={{...a,editVersion:'8'}} events={[{...a,editVersion:'8'},evening,other]}/>)
+  fireEvent.click(screen.getByRole('button',{name:'저장'}))
+  await waitFor(()=>expect(submit).toHaveBeenCalledOnce())
+  const rows=submit.mock.calls[0][0].servicePlan.rows
+  expect(rows.filter(r=>r.id).map(r=>[r.id,r.version,r.payload.target_groups])).toEqual(secondSlot?[[1,'1',['dongtan']],[2,'1',['dongtan']]]:[[1,'1',['dongtan']]])
+  expect(rows.filter(r=>!r.id).map(r=>[r.payload.event_date,r.payload.time,r.payload.end_time,r.payload.target_groups])).toEqual(
+    secondSlot?[[a.date,'14:30','16:30',['new-code']],[a.date,'17:00','19:00',['new-code']]]:[[a.date,'14:30','16:30',['new-code']]])
+  expect(rows.some(r=>r.id===other.id)).toBe(false)
+  expect(rows.filter(r=>!r.id).every(r=>!r.payload.series_id&&r.payload.group_service_scope)).toBe(true)
+})
+test.each(['19:00','18:00'])('adding a group preserves its existing companion event (end: %s)',async(endTime)=>{
+  const a={...make(1,'14:30',['dongtan']),groupServiceScope:true}
+  const b={...make(2,'17:00',['dongtan']),groupServiceScope:true}
+  const existing={...make(3,'17:00',['new-code']),groupServiceScope:true,endTime,title:'Keep this title'}
+  const groups=[{code:'dongtan',name:'东滩',active:true},{code:'new-code',name:'新增小组',active:true}]
+  const submit=vi.fn(async()=>true)
+  render(<ServiceEventEditor language="ko" date={a.date} event={a} events={[a,b,existing]} users={users} onClose={vi.fn()} onSubmit={submit} globalSettings={{service_group_directory:JSON.stringify({revision:'2',groups})}}/>)
+  fireEvent.click(screen.getByLabelText('新增小组'));fireEvent.click(screen.getByLabelText(/함께 수정/))
+  fireEvent.click(screen.getByRole('button',{name:'저장'}))
+  if(endTime==='18:00'){
+    expect((await screen.findByRole('alert')).textContent).toContain('종료 시간이 다른 일정')
+    expect(submit).not.toHaveBeenCalled()
+  }else{
+    await waitFor(()=>expect(submit).toHaveBeenCalledOnce())
+    expect(submit.mock.calls[0][0].servicePlan.rows.map(r=>[r.id,r.payload.time,r.payload.target_groups])).toEqual([[1,'14:30',['dongtan']],[2,'17:00',['dongtan']],[undefined,'14:30',['new-code']]])
+  }
+})
+test('failed group extension keeps the selection and reuses the request ID without adding another group',async()=>{
+  const a={...make(1,'14:30',['dongtan']),groupServiceScope:true},submit=vi.fn(async()=>false),close=vi.fn()
+  render(<ServiceEventEditor language="ko" date={a.date} event={a} events={[a]} users={users} onClose={close} onSubmit={submit}/>)
+  fireEvent.click(screen.getByLabelText('신갈'))
+  fireEvent.click(screen.getByRole('button',{name:'저장'}));await waitFor(()=>expect(submit).toHaveBeenCalledTimes(1))
+  await waitFor(()=>expect((screen.getByRole('button',{name:'저장'}) as HTMLButtonElement).disabled).toBe(false))
+  expect((screen.getByLabelText('신갈') as HTMLInputElement).checked).toBe(true)
+  fireEvent.click(screen.getByRole('button',{name:'저장'}));await waitFor(()=>expect(submit).toHaveBeenCalledTimes(2))
+  expect(submit.mock.calls[0][0].servicePlan).toEqual(submit.mock.calls[1][0].servicePlan)
+  expect(submit.mock.calls[0][0].servicePlan.rows).toHaveLength(2)
+  expect(close).not.toHaveBeenCalled()
+})
 test('adds a second independent time slot only when requested',async()=>{
   const submit=vi.fn(async()=>true)
   render(<ServiceEventEditor language="ko" date="2026-11-25" events={[]} users={users} onClose={vi.fn()} onSubmit={submit}/>)

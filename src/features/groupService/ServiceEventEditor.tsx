@@ -26,10 +26,12 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const availableGroups=serviceGroupOptions(globalSettings,language).filter(g=>g.active||event?.targetGroups?.includes(g.code))
   // Freeze the edit snapshot: background refresh must not silently advance versions.
   const [snapshot] = useState(() => event ?? null)
+  const [existingGroupEvents] = useState(() => events.filter(e=>e.groupServiceScope))
   const [companions] = useState(() => event ? events.filter(e => e.id!==event.id && sameServiceDay(event,e)) : [])
   const [selected, setSelected] = useState<number[]>([])
   const [kind,setKind] = useState<'group'|'congregation'>(event?.serviceKind ?? 'congregation')
   const [groups,setGroups] = useState<GroupCode[]>(event?.targetGroups ?? [])
+  const [additionalGroups,setAdditionalGroups] = useState<GroupCode[]>([])
   const [day,setDay] = useState(event?.date ?? date)
   const [repeatEnd,setRepeatEnd] = useState('')
   const [title,setTitle] = useState(event?.title ?? '')
@@ -63,6 +65,9 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
   const presetSource=globalSettings[TIME_PRESET_SETTING_KEY]
   const timePresets=savedPresets&&savedPresets.source===presetSource?savedPresets.value:resolveTimePresets(presetSource)
   const locked=busy||presetSaving
+  const groupChoices=snapshot?.groupServiceScope?availableGroups.filter(g=>snapshot.targetGroups?.includes(g.code)):availableGroups
+  const addGroupChoices=snapshot?.groupServiceScope?availableGroups.filter(g=>g.active&&!snapshot.targetGroups?.includes(g.code)
+    && !existingGroupEvents.some(e=>e.date===snapshot.date&&e.time===snapshot.time&&e.targetGroups?.includes(g.code))):[]
   useEffect(() => pushBackHandler(() => { if (!locked) onClose(); return true }),[locked,onClose])
   const togglePresets=(key:string)=>{
     if(presetKey===key){setPresetKey(null);return}
@@ -113,6 +118,7 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     if (!title.trim() || (!repeatEnd && ((!snapshot&&kind!=='group'&&!primary)||(leadersEdited&&leaders.length>0&&!primary))) || (kind==='group' && (groups.length<1 || groups.length>(snapshot&&!snapshot.groupServiceScope?2:20) || groups.some(code=>!availableGroups.some(g=>g.code===code))))) {
       setError(msg('제목, 대상 집단, 인도자를 확인해 주세요.')); return
     }
+    if(additionalGroups.some(code=>!addGroupChoices.some(g=>g.code===code))){setError(msg('집단 목록이 변경되었습니다. 다시 열어 확인해 주세요.'));return}
     const allTimes = [...slots,...selected.map(id=>companionTimes[id])]
     if (allTimes.some(s => !s.time || !s.end || s.time>=s.end)) { setError(msg('종료 시간은 시작 시간 이후로 정해 주세요.')); return }
     if (mode==='virtual' && access.joinUrl && !/^https:\/\/\S+$/.test(access.joinUrl)) {
@@ -130,6 +136,21 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     let rows: ServiceRow[]
     if (snapshot) {
       rows=[{id:snapshot.id,version:snapshot.editVersion,payload:base},...companions.filter(e=>selected.includes(e.id)).map(e=>({id:e.id,version:e.editVersion,payload:{...base,time:companionTimes[e.id].time,end_time:companionTimes[e.id].end}}))]
+      // Add independent events; never transfer an existing event's roster/assignments to another group.
+      if(snapshot.groupServiceScope){
+        const additions:ServiceRow[]=[]
+        for(const row of rows)for(const code of additionalGroups){
+          const existing=existingGroupEvents.find(e=>e.date===row.payload.event_date&&e.time===row.payload.time&&e.targetGroups?.includes(code))
+          if(existing){
+            if((existing.endTime??'')!==row.payload.end_time){setError(msg('추가할 집단에 종료 시간이 다른 일정이 있습니다. 해당 일정을 먼저 확인해 주세요.'));return}
+            continue
+          }
+          if(!additions.some(r=>r.payload.event_date===row.payload.event_date&&r.payload.time===row.payload.time&&r.payload.target_groups[0]===code)){
+            additions.push({payload:{...row.payload,target_groups:[code]}})
+          }
+        }
+        rows.push(...additions)
+      }
     } else {
       rows=dates.flatMap(d=>slots.flatMap((s,i)=>(kind==='group'?groups:[null]).map(group=>{
         const key=`${i}:${group ?? 'congregation'}`
@@ -194,7 +215,11 @@ export function ServiceEventEditor({ language,date,event,events,users,onClose,on
     <header><div><h2>{msg(snapshot?'일정 수정':'일정 추가')}</h2><span className="gs-editor-date">{day.replaceAll('-','.')}</span></div><button type="button" disabled={locked} onClick={onClose} aria-label={msg('닫기')}>×</button></header>
     <form noValidate={presetKey!==null} onSubmit={e=>{e.preventDefault();if(presetKey!==null)void savePresets();else void save()}}><fieldset disabled={locked}>
       <div className="gs-segment" role="group" aria-label={msg('봉사 구분')}>{(['congregation','group'] as const).map(k=><button type="button" key={k} disabled={snapshot?.groupServiceScope} aria-pressed={kind===k} onClick={()=>changeKind(k)}>{msg(k==='group'?'집단봉사':'회중봉사')}</button>)}</div>
-      {kind==='group' && <fieldset className="gs-groups"><legend>{msg('대상 집단')}</legend>{availableGroups.map(g=><label key={g.code}><input type="checkbox" aria-label={groupLabel([g.code],language,globalSettings.user_groups,globalSettings.service_group_directory)} checked={groups.includes(g.code)} disabled={snapshot?.groupServiceScope || !g.active || (!!snapshot&&groups.length>=2&&!groups.includes(g.code))} onChange={()=>setGroups(prev=>prev.includes(g.code)?prev.filter(c=>c!==g.code):[...prev,g.code])} /><span className="gs-choice-mark" aria-hidden>{groups.includes(g.code)?'✓':'+'}</span>{g.name}</label>)}</fieldset>}
+      {kind==='group' && <fieldset className="gs-groups"><legend>{msg('대상 집단')}</legend>{groupChoices.map(g=><label key={g.code}><input type="checkbox" aria-label={groupLabel([g.code],language,globalSettings.user_groups,globalSettings.service_group_directory)} checked={groups.includes(g.code)} disabled={snapshot?.groupServiceScope || !g.active || (!!snapshot&&groups.length>=2&&!groups.includes(g.code))} onChange={()=>setGroups(prev=>prev.includes(g.code)?prev.filter(c=>c!==g.code):[...prev,g.code])} /><span className="gs-choice-mark" aria-hidden>{groups.includes(g.code)?'✓':'+'}</span>{g.name}</label>)}</fieldset>}
+      {addGroupChoices.length>0&&<fieldset className="gs-groups"><legend>{msg('집단 추가')}</legend>{addGroupChoices.map(g=><label key={g.code}>
+        <input type="checkbox" aria-label={g.name} checked={additionalGroups.includes(g.code)} onChange={()=>setAdditionalGroups(prev=>prev.includes(g.code)?prev.filter(code=>code!==g.code):[...prev,g.code])}/>
+        <span className="gs-choice-mark" aria-hidden>{additionalGroups.includes(g.code)?'✓':'+'}</span>{g.name}
+      </label>)}</fieldset>}
       <label>{msg('날짜')}<input type="date" value={day} onChange={e=>setDay(e.target.value)} required /></label>
       <label>{msg('제목')}<input value={title} maxLength={200} onChange={e=>setTitle(e.target.value)} required /></label>
       {slots.map((s,i)=><div key={i} className="gs-slot">

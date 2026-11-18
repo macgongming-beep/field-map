@@ -73,6 +73,38 @@ if(process.argv.includes('--inspect')){
       if not (e->>'ok')::boolean then raise exception 'Event creation failed'; end if;
       perform set_config('test.event_id',e#>>'{ids,0}',true);
     end $$;
+    do $$declare e public.calendar_events; payload jsonb; rows jsonb; result jsonb; retry jsonb;
+      request_id uuid:=gen_random_uuid(); roster text; assignments text; version bigint; begin
+      perform set_config('request.headers',jsonb_build_object('x-session-token',current_setting('test.admin_token'))::text,true);
+      select * into strict e from public.calendar_events c where c.group_service_scope
+        and exists(select 1 from public.event_participants p where p.event_id=c.id)
+        and exists(select 1 from public.event_card_assignments a where a.event_id=c.id) order by c.id limit 1;
+      select md5(jsonb_agg(to_jsonb(p) order by p.user_name)::text) into roster from event_participants p where event_id=e.id;
+      select md5(jsonb_agg(to_jsonb(a) order by a.id)::text) into assignments from event_card_assignments a where event_id=e.id;
+      payload:=to_jsonb(e)||jsonb_build_object('access',case when e.meeting_mode='virtual' then get_event_meeting_access(e.id)
+        else jsonb_build_object('joinUrl','','meetingNumber','','passcode','') end);
+      rows:=jsonb_build_array(jsonb_build_object('id',e.id,'version',e.edit_version::text,'payload',payload),
+        jsonb_build_object('payload',(payload-'series_id')||jsonb_build_object('target_groups',jsonb_build_array(current_setting('test.group_code')))));
+      result:=save_service_events_tx(current_setting('test.admin_token')::uuid,rows,request_id,false);
+      retry:=save_service_events_tx(current_setting('test.admin_token')::uuid,rows,request_id,false);
+      if result is distinct from retry or (result#>>'{ids,0}')::int<>e.id or jsonb_array_length(result->'ids')<>2 then raise exception 'Extension retry or IDs changed'; end if;
+      if roster is distinct from (select md5(jsonb_agg(to_jsonb(p) order by p.user_name)::text) from event_participants p where event_id=e.id)
+        or assignments is distinct from (select md5(jsonb_agg(to_jsonb(a) order by a.id)::text) from event_card_assignments a where event_id=e.id)
+        then raise exception 'Extension changed roster or assignments'; end if;
+      select edit_version into version from calendar_events where id=e.id;
+      begin
+        perform save_service_events_tx(current_setting('test.admin_token')::uuid,rows,gen_random_uuid(),false);
+        raise exception 'Stale extension unexpectedly saved';
+      exception when sqlstate 'PT409' then null; end;
+      rows:=jsonb_set(rows,'{0,version}',to_jsonb(version::text));
+      begin
+        perform save_service_events_tx(current_setting('test.admin_token')::uuid,rows,gen_random_uuid(),false);
+        raise exception 'Duplicate extension unexpectedly saved';
+      exception when others then
+        if sqlerrm not like '%already occupies%' then raise; end if;
+      end;
+      if (select edit_version from calendar_events where id=e.id)<>version then raise exception 'Failed extension partly saved'; end if;
+    end $$;
     reset role;
     do $$declare actor integer; d jsonb; c text:=current_setting('test.group_code'); begin
       select id into strict actor from app_users where role='user' and is_active and approval_status='approved' order by id limit 1;
@@ -93,5 +125,5 @@ if(process.argv.includes('--inspect')){
   const rows=JSON.parse(sql(assignmentInventorySql))
   const phase=rows.find(r=>r.signature.startsWith('public.assign_team_service_bulk_tx('))?.anon_execute?'compatibility':'strict'
   assertAssignmentInventory(rows,{environment:'demo',phase})
-  console.log(JSON.stringify({demo:true,rollback:true,anonymousRpc:true,adminOnly:true,stableCodes:true,membershipRename:true,archiveHistory:true,staleRevision:true,assignmentInventory:rows.length,phase}))
+  console.log(JSON.stringify({demo:true,rollback:true,anonymousRpc:true,adminOnly:true,stableCodes:true,membershipRename:true,archiveHistory:true,staleRevision:true,extendExistingSlot:true,preservedRosterAndAssignments:true,idempotentRetry:true,atomicConflict:true,assignmentInventory:rows.length,phase}))
 }else throw new Error('Choose --inspect, --apply or --verify')

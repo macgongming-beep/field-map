@@ -1,4 +1,6 @@
 export const groupServiceZh: Record<string,string> = {
+  '집단 추가':'添加小组',
+  '추가할 집단에 종료 시간이 다른 일정이 있습니다. 해당 일정을 먼저 확인해 주세요.':'要添加的小组已有结束时间不同的安排，请先检查该安排。',
   '편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다. 덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.':'编辑期间，其他人分享了此安排的分配。未覆盖，请刷新查看最新内容。',
   '배정 내용이 변경됐어요':'分配内容已更改','신청자 또는 배정이 변경되어 저장하지 않았습니다. 다시 열어 최신 내용을 확인해 주세요.':'报名者或分配已更改，未保存。请重新打开查看最新内容。',
   '신청 {n}건':'报名 {n} 次','신청자를 추가했습니다':'已添加报名者','참가자를 제외했습니다':'已移除参加者','일정을 불러오지 못했습니다.':'无法加载安排。',
@@ -36,6 +38,8 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '집단 추가':'Add groups',
+  '추가할 집단에 종료 시간이 다른 일정이 있습니다. 해당 일정을 먼저 확인해 주세요.':'The group already has an event with a different end time. Check that event first.',
   '편집하는 사이 다른 사람이 이 일정의 배정을 공유했습니다. 덮어쓰지 않았어요. 최신 내용을 보려면 새로고침하세요.':'Someone shared this assignment while you were editing. Nothing was overwritten. Refresh to see the latest version.',
   '배정 내용이 변경됐어요':'Assignments have changed','신청자 또는 배정이 변경되어 저장하지 않았습니다. 다시 열어 최신 내용을 확인해 주세요.':'Participants or assignments have changed. Nothing was saved. Reopen to review the latest version.',
   '신청 {n}건':'{n} applications','신청자를 추가했습니다':'Applicant added','참가자를 제외했습니다':'Participant removed','일정을 불러오지 못했습니다.':'Could not load the event.',

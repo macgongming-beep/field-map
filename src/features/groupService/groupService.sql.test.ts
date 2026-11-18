@@ -92,6 +92,30 @@ test('batch retry is idempotent, duplicate import slot and mismatched retries fa
   await expect(save(rows)).rejects.toThrow('already occupies')
   expect((await db.query('select count(*)::int n from calendar_events')).rows[0]).toEqual({n:1})
 })
+test('extending an existing slot adds a new group atomically, preserving existing IDs, rosters and assignments',async()=>{
+  await db.exec("insert into service_groups values('fifth','다섯째','第五组','第五组') on conflict do nothing")
+  const original={...payload(),target_groups:['dongtan'],group_service_scope:true}
+  const {ids:[id,other]}=await save([{payload:original},{payload:{...original,target_groups:['singal']}}])
+  await db.query("insert into event_participants values($1,'Member','신청')",[id])
+  await db.query("insert into event_card_assignments values($1,'Member')",[id])
+  const request=crypto.randomUUID()
+  const rows=[{id,version:await version(id),payload:original},{payload:{...original,target_groups:['fifth']}}]
+  const result=await save(rows,1,request)
+  expect(result.ids[0]).toBe(id)
+  expect(result.ids[1]).not.toBe(id)
+  expect(await save(rows,1,request)).toEqual(result)
+  expect((await db.query('select id,target_groups from calendar_events order by id')).rows).toEqual([
+    {id,target_groups:['dongtan']},{id:other,target_groups:['singal']},{id:result.ids[1],target_groups:['fifth']}])
+  expect((await db.query('select * from event_participants')).rows).toEqual([{event_id:id,user_name:'Member',role:'신청'}])
+  expect((await db.query('select * from event_card_assignments')).rows).toEqual([{event_id:id,user_name:'Member'}])
+  expect(await version(other)).toBe('1')
+  const before=await version(id)
+  await expect(save([{id,version:before,payload:{...original,title:'Must roll back'}},{payload:{...original,target_groups:['fifth']}}])).rejects.toThrow('already occupies')
+  expect(await version(id)).toBe(before)
+  expect((await db.query('select title from calendar_events where id=$1',[id])).rows[0].title).toBe('Test')
+  await expect(save([{id,version:'0',payload:original},{payload:{...original,target_groups:['cheoin']}}])).rejects.toThrow('reload')
+  expect((await db.query('select count(*)::int n from calendar_events')).rows[0]).toEqual({n:3})
+})
 test('invalid second row rolls back first row and access information',async()=>{
   await expect(save([{payload:payload()},{payload:{...payload('17:00','19:00'),target_groups:['unknown']}}])).rejects.toThrow()
   expect((await db.query('select count(*)::int n from calendar_events')).rows[0]).toEqual({n:0})
