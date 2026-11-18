@@ -136,6 +136,7 @@
 기존 일정에 새 집단 추가: [0132 신청·배정을 유지한 시간대 확장](0132-add-groups-from-existing-service-event.md)
 모임 정보와 운영 전환: [0133 기본 펼침·线上/现场 표시와 집단 관리 배포](0133-expanded-meeting-info-production-release.md)
 반복 수정과 기본 집단: [0134 이후 일정 수정 범위와 내 집단 우선 탭](0134-repeat-edit-scope-and-own-group.md)
+탭 위치 후속 결정: [0135 순서는 공통으로 고정하고 내 집단만 선택](0135-fixed-group-tab-order.md)
 
 ```markdown
 # 제목

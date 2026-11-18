@@ -86,7 +86,6 @@ export function GroupServiceDetail({event,events,language,currentVisitor,current
   const groups=serviceGroupOptions(globalSettings,language)
   // Existing schedules remain visible even if their group is retired or settings are stale.
   const tabGroups=[...groups,...(context?.events??[]).filter(e=>!groups.some(g=>g.code===e.groupCode)).map(e=>({code:e.groupCode,name:e.groupCode,active:false}))]
-    .sort((a,b)=>Number(b.code===context?.ownGroup)-Number(a.code===context?.ownGroup))
   const names=current?territoryApplicants(current):[]
   const scheduleActions=current&&selectedMeta?.canEdit&&(onEdit||onDelete)
     ?<GroupScheduleActions key={current.id} language={language} onEdit={onEdit?()=>onEdit(current.id):undefined} onDelete={onDelete?()=>onDelete(current.id):undefined}/>:null

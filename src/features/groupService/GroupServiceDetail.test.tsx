@@ -196,24 +196,26 @@ test('repeated notification returns to its group without reloading context; manu
   expect(screen.getByRole('tab',{name:'신갈 1'}).getAttribute('aria-selected')).toBe('true')
   expect(mocks.context).toHaveBeenCalledTimes(2)
 })
-test('own group is first and selected; notification target wins and switching accounts resets selection',async()=>{
+test.each([false,true])('tab order stays fixed while own group, notifications and accounts change (mobile=%s)',async mobile=>{
   const context=(ownGroup:string|null)=>({ownGroup,events:events.map(e=>({id:e.id,groupCode:e.targetGroups![0],count:1,canManage:false,canRead:true}))})
   mocks.context.mockResolvedValue(context('dongbaek'))
-  const props={event:events[0],events,language:'ko' as const,currentVisitor:'First',currentUserId:1}
+  const props={event:events[0],events,language:'ko' as const,currentVisitor:'First',currentUserId:1,mobile}
   const {rerender}=render(<GroupServiceDetail {...props}/>)
-  await waitFor(()=>expect(screen.getAllByRole('tab')[0].textContent).toBe('동백 1'))
-  expect(screen.getAllByRole('tab')[0].getAttribute('aria-selected')).toBe('true')
+  const expectOrder=()=>expect(screen.getAllByRole('tab').map(tab=>tab.textContent)).toEqual(['동탄 1','신갈 1','처인 1','동백 1'])
+  await waitFor(()=>expect(screen.getByRole('tab',{name:'동백 1'}).getAttribute('aria-selected')).toBe('true'))
+  expectOrder()
   fireEvent.click(screen.getByRole('tab',{name:'신갈 1'}))
   fireEvent(document,new Event('visibilitychange'))
   await waitFor(()=>expect(mocks.context).toHaveBeenCalledTimes(2))
   expect(screen.getByRole('tab',{name:'신갈 1'}).getAttribute('aria-selected')).toBe('true')
+  expectOrder()
   rerender(<GroupServiceDetail {...props} commentEntry={{eventId:3,commentId:1,requestKey:'notice'}}/>)
   expect(screen.getByRole('tab',{name:'처인 1'}).getAttribute('aria-selected')).toBe('true')
-  expect(screen.getAllByRole('tab')[0].textContent).toBe('동백 1')
+  expectOrder()
   mocks.context.mockResolvedValue(context('singal'))
   rerender(<GroupServiceDetail {...props} currentUserId={2} currentVisitor="Second"/>)
-  await waitFor(()=>expect(screen.getAllByRole('tab')[0].textContent).toBe('신갈 1'))
-  expect(screen.getAllByRole('tab')[0].getAttribute('aria-selected')).toBe('true')
+  await waitFor(()=>expect(screen.getByRole('tab',{name:'신갈 1'}).getAttribute('aria-selected')).toBe('true'))
+  expectOrder()
 })
 test.each([null,'absent-group'])('no scheduled own group (%s) retains default order and permits applying',async ownGroup=>{
   mocks.context.mockResolvedValue({ownGroup,events:events.map(e=>({id:e.id,groupCode:e.targetGroups![0],count:1,canManage:false,canRead:false}))})
