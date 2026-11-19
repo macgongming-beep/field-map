@@ -19,6 +19,7 @@ import {
 } from '../../hooks/assignmentDraft'
 import { TeamBuildScreen } from './TeamBuildScreen'
 import { ZoneAssignScreen } from './ZoneAssignScreen'
+import { createAssignmentWorkspace } from './assignmentWorkspace'
 import { showToast } from '../../lib/toast'
 import { pushBackHandler } from '../../lib/backStack'
 import { msg } from '../../lib/msg'
@@ -152,6 +153,7 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
   }, [])
 
   const [screen, setScreen] = useState<'teams' | 'zones'>('teams')
+  const [workspace] = useState(createAssignmentWorkspace)
   const [sharing, setSharing] = useState(false)
   const [confirmShare, setConfirmShare] = useState(false)
   const [shareConflict, setShareConflict] = useState(false)
@@ -267,6 +269,7 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
     return (
       <div className="asg-editor">
         <ZoneAssignScreen
+          workspace={workspace}
           teams={teams}
           activeTeamId={activeTeamId}
           cards={cards}

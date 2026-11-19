@@ -12,6 +12,14 @@ function makeState(teams: DraftTeam[], activeTeamId: string | null = teams[0]?.i
 }
 
 describe('draftReducer — 팀', () => {
+  it('first card and inherited scope are one undoable action, never replacing an existing scope', () => {
+    const state = makeState([team({ id: 'a' }), team({ id: 'b', cardScope: '상가' }), team({ id: 'c', cardIds: [20] })])
+    const next = draftReducer(state, { type: 'ASSIGN_CARD', teamId: 'a', cardId: 10, scope: '주택' })
+    expect(next.draft.teams[0]).toMatchObject({ cardIds: [10], cardScope: '주택' })
+    expect(draftReducer(next, { type: 'UNDO' }).draft).toEqual(state.draft)
+    expect(draftReducer(state, { type: 'ASSIGN_CARD', teamId: 'b', cardId: 10, scope: '주택' }).draft.teams[1].cardScope).toBe('상가')
+    expect(draftReducer(state, { type: 'ASSIGN_CARD', teamId: 'c', cardId: 10, scope: '주택' }).draft.teams[2].cardScope).toBeUndefined()
+  })
   it('a committed personal write updates current and undo revision without discarding team edits', () => {
     const state=makeState([team({members:['A']})])
     state.undo={...state.draft,baseRevision:'4',teams:[team({members:['B']})]}

@@ -163,7 +163,10 @@ export function draftReducer(state: DraftState, action: DraftAction): DraftState
 
     case 'ASSIGN_CARD': {
       // undo 스냅샷 남김. 다른 팀 배정은 유지 (같은 구역 공동 배정 허용)
-      const teams = addCardToTeam(state.draft.teams, action.cardId, action.teamId)
+      const source = state.draft.teams.map((team) => team.id === action.teamId
+        && team.cardScope === undefined && team.cardIds.length === 0 && action.scope !== undefined
+        ? { ...team, cardScope: action.scope } : team)
+      const teams = addCardToTeam(source, action.cardId, action.teamId)
       return { ...state, undo: state.draft, draft: touch({ ...state.draft, teams }) }
     }
 

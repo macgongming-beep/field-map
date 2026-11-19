@@ -54,7 +54,7 @@ export type DraftAction =
   | { type: 'REMOVE_MEMBER'; teamId: string; name: string }
   | { type: 'MOVE_MEMBER'; name: string; toTeamId: string }   // 다른 팀으로 이동
   // 구역 카드 (undo 대상)
-  | { type: 'ASSIGN_CARD'; teamId: string; cardId: number }    // 활성팀에 카드 추가
+  | { type: 'ASSIGN_CARD'; teamId: string; cardId: number; scope?: DraftTeam['cardScope'] }    // 활성팀에 카드 추가
   | { type: 'UNASSIGN_CARD'; teamId: string; cardId: number }
   | { type: 'MOVE_CARD'; cardId: number; toTeamId: string }    // 다른 팀 카드 → 활성팀 이동
   // 정제 / 되돌리기

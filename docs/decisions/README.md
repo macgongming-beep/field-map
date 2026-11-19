@@ -140,6 +140,7 @@
 생성/메뉴 후속: [0136 반복 생성 인도자 선택과 PC 메뉴 가시성](0136-repeat-create-leaders-and-visible-pc-menu.md)
 장소/모임 표시: [0137 장소 즐겨찾기 복구와 제목 옆 모임 표시](0137-place-favorites-and-meeting-badges.md)
 배포 사용량: [0138 자동 중복 배포 차단과 데모 배포 경로 통일](0138-explicit-deployment-policy.md)
+배정 화면 기억: [0139 배정 중 선택 조건과 지도 위치 유지](0139-assignment-workspace-retention.md)
 
 ```markdown
 # 제목

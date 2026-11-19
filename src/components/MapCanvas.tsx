@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- 네이버 지도 SDK(window.naver)는 공식 TS 타입이 없어 any 사용이 불가피함 */
 import { useState, useEffect, useMemo, useRef } from 'react'
-import type { MouseEvent } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import type { Building, BuildingStatus, CardBoundary, GeoPoint, TerritoryCard } from '../types'
 import { boundaryIntersectsBounds, clusterByGrid, getClusterThresholdKm, shouldRebuildMapMarkersOnIdle } from '../utils/mapClustering'
 import { getBuildingStatus, getCardName, getMockPosition, isValidMapCoordinate } from '../utils/mapUtils'
@@ -14,6 +14,8 @@ import { stripRegionPrefix } from '../lib/regions'
 import { removeStaleKeyedEntries, upsertKeyedEntry, type KeyedEntry } from '../utils/keyedReconciliation'
 
 const STATUS_COLORS: Record<BuildingStatus, string> = BUILDING_STATUS_COLORS
+
+export type MapViewportMemory = { current: { lat: number; lng: number; zoom: number } | null }
 
 // 핀은 **속(채움)과 테두리**를 따로 쓴다.
 //   속   파랑 = 아직 가 볼 곳이 있다
@@ -440,6 +442,8 @@ function markerHtml(
 // ── Naver Map Canvas ───────────────────────────────────────────────────────
 
 function NaverMapCanvas({
+  viewportMemory,
+  toolbarAction,
   buildings,
   informalPlaces = [],
   onSelectInformal,
@@ -488,6 +492,8 @@ function NaverMapCanvas({
   cardColorMap,
   hideBuildingMarkers = false,
 }: {
+  viewportMemory?: MapViewportMemory
+  toolbarAction?: ReactNode
   buildings: Building[]
   informalPlaces?: InformalPlacePin[]
   onSelectInformal?: (id: number) => void
@@ -546,6 +552,23 @@ function NaverMapCanvas({
 }) {
   const mapRef = useRef<HTMLDivElement | null>(null)
   const mapInstanceRef = useRef<any>(null)
+  const viewportMemoryRef = useRef(viewportMemory)
+  viewportMemoryRef.current = viewportMemory
+  const viewportTrackingActive = useRef(true)
+  const rememberViewport = () => {
+    const map = mapInstanceRef.current
+    const memory = viewportMemoryRef.current
+    if (!map || !memory || !viewportTrackingActive.current) return
+    const center = map.getCenter()
+    memory.current = { lat: center.lat(), lng: center.lng(), zoom: map.getZoom() }
+  }
+  useEffect(() => {
+    viewportTrackingActive.current = true
+    return () => {
+      rememberViewport()
+      viewportTrackingActive.current = false
+    }
+  }, [])
   const markersRef = useRef<Map<string, KeyedEntry<any>>>(new Map())
   const viewportMarkersDirtyRef = useRef(false)
   const boundaryRef = useRef<any>(null)
@@ -1479,7 +1502,10 @@ function NaverMapCanvas({
       const hasFocusPoint = !!fp && isValidMapCoordinate(Number(fp.lat), Number(fp.lng))
       if (hasFocusPoint) lastFocusPointRef.current = `${fp!.lat},${fp!.lng}`
 
-      const center = hasFocusPoint
+      const savedViewport = viewportMemoryRef.current?.current
+      const center = savedViewport
+        ? new naver.maps.LatLng(savedViewport.lat, savedViewport.lng)
+        : hasFocusPoint
         ? new naver.maps.LatLng(Number(fp!.lat), Number(fp!.lng))
         : hasFocusTarget
           ? new naver.maps.LatLng(Number(focusTarget!.lat), Number(focusTarget!.lng))
@@ -1492,7 +1518,7 @@ function NaverMapCanvas({
 
       mapInstanceRef.current = new naver.maps.Map(mapRef.current, {
         center,
-        zoom: hasFocusPoint ? (fp!.zoom ?? 17) : hasFocusTarget ? 17 : 15,
+        zoom: savedViewport?.zoom ?? (hasFocusPoint ? (fp!.zoom ?? 17) : hasFocusTarget ? 17 : 15),
         mapTypeControl: false,
         zoomControl: false,
       })
@@ -1537,7 +1563,7 @@ function NaverMapCanvas({
       const initialCardId = selectedCardIdRef.current
       // 좌표를 지정해 들어온 경우(비공식 장소)도 건물과 같다 — 이미 그 자리에
       // 맞춰 뒀는데 아래 fitTerritoryBoundary() 가 용인 전체로 되돌려 버린다
-      if (hasFocusTarget || hasFocusPoint) {
+      if (savedViewport || hasFocusTarget || hasFocusPoint) {
         hasFitBoundaryRef.current = true
         suppressNextCardFitRef.current = true
         mountedWithFocusRef.current = true
@@ -1567,6 +1593,11 @@ function NaverMapCanvas({
       }
       syncCardBoundaries()
       rebuildDraftBoundary()
+      // Assignment maps fit once, then keep the operator's camera through team/filter changes.
+      if (viewportMemoryRef.current) {
+        mountedWithFocusRef.current = true
+        rememberViewport()
+      }
 
       naver.maps.Event.addListener(mapInstanceRef.current, 'rightclick', (event: any) => {
         onMapRightClickRef.current?.(event.coord.lat(), event.coord.lng())
@@ -1598,6 +1629,7 @@ function NaverMapCanvas({
         cardLabelsRef.current.forEach((label) => { if (label.getMap()) label.setMap(null) })
       })
       naver.maps.Event.addListener(mapInstanceRef.current, 'idle', () => {
+        rememberViewport()
         updateCardLabelVisibilityRef.current()
         // 드래그하는 동안에는 기존 핀을 유지하고, 손을 뗀 뒤 새 화면의 핀만 한 번 갱신한다.
         if (shouldRebuildMapMarkersOnIdle({
@@ -1769,7 +1801,7 @@ function NaverMapCanvas({
       // 지정한 건물로 들어왔으면 이미 그 위치다 — 전체 보기로 되돌리지 않는다
       if (isInitialLoad && mountedWithFocusRef.current) {
         // 위에서 signature 는 기록해 두었으므로 다음부터는 이 분기로 오지 않는다
-      } else if (isInitialLoad && !editingBuildingLocationRef.current && !addingBuildingRef.current) {
+      } else if (isInitialLoad && !viewportMemoryRef.current && !editingBuildingLocationRef.current && !addingBuildingRef.current) {
         // 특정 카드로 진입한 경우, 건물 마커 기준(과도한 줌인) 대신 구역선 전체가 보이게 fit
         const sel = selectedCardIdRef.current
         const selBoundary = (sel !== null && sel !== '전체')
@@ -1810,7 +1842,7 @@ function NaverMapCanvas({
 
     if (cardSelectionChanged || highlightedScopeChanged) {
       // 지정한 건물을 보고 있는 중이라면 그 화면을 유지한다
-      if (suppressNextCardFitRef.current) {
+      if (viewportMemoryRef.current || suppressNextCardFitRef.current) {
         suppressNextCardFitRef.current = false
         prevSelectedCardIdRef.current = selectedCardId
         prevHighlightedCardIdsSignatureRef.current = highlightedCardIdsSignature
@@ -1880,6 +1912,7 @@ function NaverMapCanvas({
             </svg>
           </button>
         )}
+        {toolbarAction}
         <button className="toolbar-btn" onClick={handleGPS} title="현재 위치" type="button" aria-label="현재 위치">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="3"/>
@@ -1959,6 +1992,8 @@ function NaverMapCanvas({
 // ── Public MapCanvas ───────────────────────────────────────────────────────
 
 export function MapCanvas({
+  viewportMemory,
+  toolbarAction,
   buildings,
   aggregateMarkers = [],
   cardBoundaries = [],
@@ -2006,6 +2041,8 @@ export function MapCanvas({
   informalShape,
   focusPoint,
 }: {
+  viewportMemory?: MapViewportMemory
+  toolbarAction?: ReactNode
   buildings: Building[]
   informalPlaces?: InformalPlacePin[]
   onSelectInformal?: (id: number) => void
@@ -2069,6 +2106,8 @@ export function MapCanvas({
     return (
       <div className="map-canvas-container" style={{ width: '100%', height: '100%' }}>
         <NaverMapCanvas
+          viewportMemory={viewportMemory}
+          toolbarAction={toolbarAction}
           buildings={validBuildings}
           informalPlaces={informalPlaces}
           onSelectInformal={onSelectInformal}
@@ -2139,6 +2178,7 @@ export function MapCanvas({
       }}
     >
       <div className="mock-map-grid" />
+      {toolbarAction && <div className="map-toolbar-overlay" style={{ position: 'absolute', right: 12, top: 100, zIndex: 40 }}>{toolbarAction}</div>}
       <svg className="mock-boundary-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         <polygon points={getMockBoundaryPoints()} />
         {cardBoundaries

@@ -6,7 +6,7 @@ import { teamServiceEnabled } from '../../config/teamService'
 // 활성팀에 카드 배정/해제. 다른 팀 카드 탭 = 활성팀으로 이동 + undo.
 // 모든 상태는 draft 단일 reducer에서 파생.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getRegionNames, stripRegionPrefix } from '../../lib/regions'
 import type { Dispatch } from 'react'
 import type { Building, CardBoundary, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, InformalGroup, TerritoryCard, VisitHistory } from '../../types'
@@ -23,11 +23,14 @@ import { getBuildingStatus } from '../../utils/mapUtils'
 import { msg } from '../../lib/msg'
 import { buildingHasUsage, scopeBuildingToUsage, unitsForUsage } from '../../utils/unitUsage'
 import { scopeServiceBuildings } from '../../utils/cardServiceScope'
+import { chineseMapBuildings } from '../../utils/mapChineseFilter'
+import { createAssignmentWorkspace, type AssignmentWorkspace } from './assignmentWorkspace'
 
 type BuildingTypeFilter = '전체' | '주택' | '상가'
 const scopeLabel = (scope: BuildingTypeFilter) => msg(scope === '주택' ? '주택봉사' : scope === '상가' ? '상가봉사' : '전체')
 
 type Props = {
+  workspace?: AssignmentWorkspace
   teams: DraftTeam[]
   activeTeamId: string | null
   cards: TerritoryCard[]           // 인도자 담당 카드 (배정 대상)
@@ -55,25 +58,30 @@ type ViewMode = 'list' | 'map'
 
 
 
-export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitHistories = [], cardBoundaries, canEdit, dispatch, eventId, currentVisitor, allCards = [], informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onBack }: Props) {
-  const [view, setView] = useState<ViewMode>('map')
-  const [mainTab, setMainTab] = useState<'카드' | '비공식' | '식당'>('카드')
+export function ZoneAssignScreen({ workspace: suppliedWorkspace, teams, activeTeamId, cards, buildings, visitHistories = [], cardBoundaries, canEdit, dispatch, eventId, currentVisitor, allCards = [], informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onBack }: Props) {
+  const [localWorkspace] = useState(createAssignmentWorkspace)
+  const workspace = suppliedWorkspace ?? localWorkspace
+  const [view, setView] = useState<ViewMode>(workspace.view)
+  const [mainTab, setMainTab] = useState<'카드' | '비공식' | '식당'>(workspace.mainTab)
   const isMapView = mainTab === '카드' && view === 'map'
-  const [query, setQuery] = useState('')
-  const [unassignedOnly, setUnassignedOnly] = useState(false)
-  const [legacyTypeFilter, setLegacyTypeFilter] = useState<BuildingTypeFilter>('전체')
+  const [query, setQuery] = useState(workspace.query)
+  const [unassignedOnly, setUnassignedOnly] = useState(workspace.unassignedOnly)
+  const [legacyTypeFilter, setLegacyTypeFilter] = useState<BuildingTypeFilter>(workspace.legacyTypeFilter)
+  const [preferredScope, setPreferredScope] = useState<BuildingTypeFilter>(() => teams.find(team => team.id === activeTeamId)?.cardScope ?? workspace.preferredScope)
+  const [chineseOnly, setChineseOnly] = useState(workspace.chineseOnly)
   const activeTeam = teams.find((t) => t.id === activeTeamId) ?? null
   const scopeEnabled = teamServiceEnabled()
   const buildingTypeFilter: BuildingTypeFilter = useMemo(() => {
-    if (!teamServiceEnabled()) return legacyTypeFilter
-    return teams.find((t) => t.id === activeTeamId)?.cardScope ?? '전체'
-  }, [teams, activeTeamId, legacyTypeFilter])
+    if (!scopeEnabled) return legacyTypeFilter
+    return activeTeam?.cardScope ?? (activeTeam?.cardIds.length ? '전체' : preferredScope)
+  }, [scopeEnabled, activeTeam, legacyTypeFilter, preferredScope])
   const changeScope = (scope: BuildingTypeFilter) => {
     if (!canEdit || !activeTeam) return false
     const valid = new Set(scopeServiceBuildings(buildings, activeTeam.cardIds, scope).map((b) => b.cardId))
     const retained = activeTeam.cardIds.filter((id) => valid.has(id))
     const removed = activeTeam.cardIds.length - retained.length
     if (removed && !window.confirm(msg('해당 세대가 없는 카드 {n}개를 배정에서 제외할까요?', { n: removed }))) return false
+    setPreferredScope(scope)
     dispatch({ type: 'SET_CARD_SCOPE', teamId: activeTeam.id, scope, cardIds: retained })
     return true
   }
@@ -97,7 +105,10 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
   }, [cards])
   // 기본은 전체. 구를 누르면 **더해지고**, 다시 누르면 빠진다.
   // (예전엔 하나만 골라져서 처인구를 보다 기흥구를 누르면 처인구가 사라졌다)
-  const [selectedRegions, setSelectedRegions] = useState<Set<string>>(() => new Set())
+  const [selectedRegions, setSelectedRegions] = useState<Set<string>>(() => new Set(workspace.selectedRegions))
+  useEffect(() => {
+    Object.assign(workspace, { view, mainTab, query, unassignedOnly, legacyTypeFilter, preferredScope, selectedRegions, chineseOnly })
+  }, [workspace, view, mainTab, query, unassignedOnly, legacyTypeFilter, preferredScope, selectedRegions, chineseOnly])
   const toggleRegion = (r: string) =>
     setSelectedRegions((prev) => {
       const next = new Set(prev)
@@ -135,13 +146,13 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
 
   // 지도용 buildings — 선택 구 + 타입 필터 + 완료 제외 (건물 포인트 표시용)
   const mapBuildings = useMemo(() => {
-    return buildings.filter((b) => {
+    const scoped = buildings.filter((b) => {
       if (!myCardIds.has(b.cardId)) return false
       if (!buildingHasUsage(b, buildingTypeFilter)) return false
-      if (getBuildingStatus(scopeBuildingToUsage(b, buildingTypeFilter)) === '방문완료') return false
       return true
     }).map((b) => scopeBuildingToUsage(b, buildingTypeFilter))
-  }, [buildings, myCardIds, buildingTypeFilter])
+    return chineseMapBuildings(scoped, chineseOnly).filter(b => getBuildingStatus(b) !== '방문완료')
+  }, [buildings, myCardIds, buildingTypeFilter, chineseOnly])
 
   // 카드별 주택/상가 세대 수
   const unitStats = useMemo(() => {
@@ -377,7 +388,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
     if (activeTeam.cardIds.includes(cardId)) {
       dispatch({ type: 'UNASSIGN_CARD', teamId: activeTeam.id, cardId })
     } else {
-      dispatch({ type: 'ASSIGN_CARD', teamId: activeTeam.id, cardId })
+      dispatch({ type: 'ASSIGN_CARD', teamId: activeTeam.id, cardId, ...(scopeEnabled ? { scope: buildingTypeFilter } : {}) })
     }
   }
 
@@ -410,7 +421,10 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
                 aria-pressed={isActive}
                 className={`asg-teambar-card${isActive ? ' is-active' : ''}`}
                 style={{ borderColor: isActive ? teamHex(team.color) : undefined }}
-                onClick={() => dispatch({ type: 'SET_ACTIVE_TEAM', teamId: team.id })}
+                onClick={() => {
+                  if (team.cardScope !== undefined) setPreferredScope(team.cardScope)
+                  dispatch({ type: 'SET_ACTIVE_TEAM', teamId: team.id })
+                }}
               >
                 <span className="asg-teambar-name">
                   <span className="asg-team-dot" style={{ background: teamHex(team.color) }} />
@@ -484,6 +498,14 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
           )}
 
           <MapCanvas
+            viewportMemory={workspace.viewport}
+            hideActionButton
+            toolbarAction={<button type="button" className={`toolbar-btn${chineseOnly ? ' active' : ''}`}
+              aria-label={t(currentLang(), 'map.chineseOnly')} title={t(currentLang(), 'map.chineseOnly')}
+              aria-pressed={chineseOnly} onClick={() => setChineseOnly(value => !value)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M2 21a8 8 0 0 1 13.292-6" /><circle cx="10" cy="8" r="5" /><path d="m16 19 2 2 4-4" />
+              </svg></button>}
             buildings={mapBuildings}
             cardBoundaries={myBoundaries}
             cards={regionCards}
@@ -496,7 +518,7 @@ export function ZoneAssignScreen({ teams, activeTeamId, cards, buildings, visitH
             onSelectCardBoundary={(cardId) => {
               if (!canEdit || !activeTeam) return
               if (activeTeam.cardIds.includes(cardId)) dispatch({ type: 'UNASSIGN_CARD', teamId: activeTeam.id, cardId })
-              else dispatch({ type: 'ASSIGN_CARD', teamId: activeTeam.id, cardId })
+              else dispatch({ type: 'ASSIGN_CARD', teamId: activeTeam.id, cardId, ...(scopeEnabled ? { scope: buildingTypeFilter } : {}) })
             }}
           />
           <div className="asg-zone-map-hint">
