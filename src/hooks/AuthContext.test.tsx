@@ -226,6 +226,40 @@ test('local user change events bypass a recent directory and share the new pendi
 })
 
 test.each([
+  { id: 9, role: 'admin', token: 'token-two' },
+  { id: 7, role: 'user', token: 'token-two' },
+  { id: 7, role: 'admin', token: 'token-two' },
+])('a completed fresh directory never suppresses the next identity read $id / $role / $token', async next => {
+  remember()
+  let now = 1_000
+  vi.spyOn(Date, 'now').mockImplementation(() => now)
+  render(<MemoryRouter><Owner showLeaves={false} /></MemoryRouter>)
+  await waitFor(() => expect(consumer.allUsers[0]?.name).toBe('Applicant'))
+  await act(async () => { await consumer.ensureAllUsersFresh() })
+  expect(api.directory).toHaveBeenCalledTimes(1)
+
+  // Keep A's successful freshness intact: a forced refresh would erase the evidence.
+  now += 1
+  let finish!: (value: object) => void
+  api.directory.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  api.rpc.mockImplementation(async (name: string) => name === 'auth_login'
+    ? { data: [{ ...self, ...next, name: 'Next owner' }], error: null }
+    : name === 'get_user_directory' ? api.directory() : { data: true, error: null })
+  await act(async () => { expect(await consumer.login('next', '0000', true)).toBe(true) })
+  expect(consumer.user).toMatchObject({ id: next.id, role: next.role, authToken: next.token })
+  await waitFor(() => expect(api.directory).toHaveBeenCalledTimes(2))
+  expect(consumer.allUsers).toEqual([])
+  await act(async () => {
+    const pendingRead = consumer.ensureAllUsersFresh()
+    finish({ data: [{ ...pending, name: 'Next directory' }], error: null })
+    await pendingRead
+  })
+  expect(consumer.allUsers.map(user => user.name)).toEqual(['Next directory'])
+  await act(async () => { await consumer.ensureAllUsersFresh() })
+  expect(api.directory).toHaveBeenCalledTimes(2)
+})
+
+test.each([
   { id: 7, role: 'user', token: 'token-two' },
   { id: 9, role: 'admin', token: 'token-two' },
   { id: 7, role: 'admin', token: 'token-two' },
