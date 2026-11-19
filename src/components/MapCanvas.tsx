@@ -1066,7 +1066,7 @@ function NaverMapCanvas({
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const naver = (window as any).naver
-        if (!naver?.maps) return
+        if (!naver?.maps || !mapInstanceRef.current || !viewportTrackingActive.current) return
         const lat = pos.coords.latitude
         const lng = pos.coords.longitude
         const latLng = new naver.maps.LatLng(lat, lng)
@@ -1092,7 +1092,7 @@ function NaverMapCanvas({
             zIndex: 999,
           })
         }
-        mapInstanceRef.current.morph(latLng, 16)
+        mapInstanceRef.current.panTo(latLng)
       },
       (error) => {
         if (error.code === error.PERMISSION_DENIED) {

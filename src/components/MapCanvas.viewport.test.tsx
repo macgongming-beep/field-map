@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { MapCanvas, type MapViewportMemory } from './MapCanvas'
 import { testBoundary } from '../test/territoryFixture'
@@ -22,12 +22,15 @@ class Overlay {
   setMap(map: unknown) { this.map = map }
   getMap() { return this.map }
   setOptions() {}
+  setPosition() {}
 }
 const maps: FakeMap[] = []
 class FakeMap {
   center: LatLng
   zoom: number
   fitBounds = vi.fn(() => { this.center = new LatLng(37.2, 127.2); this.zoom = 12 })
+  panTo = vi.fn((center: LatLng) => { this.center = center })
+  morph = vi.fn((center: LatLng, zoom: number) => { this.center = center; this.zoom = zoom })
   constructor(_element: unknown, options: { center: LatLng; zoom: number }) {
     this.center = options.center; this.zoom = options.zoom; maps.push(this)
   }
@@ -86,4 +89,29 @@ test('ordinary maps still fit the newly selected card scope', () => {
   const fitted = map.fitBounds.mock.calls.length
   view.rerender(<MapCanvas {...props} highlightedCardIds={new Set([2])} />)
   expect(map.fitBounds.mock.calls.length).toBeGreaterThan(fitted)
+})
+
+test.each([false, true])('GPS preserves the current zoom, including zoom changed while waiting (workspace=%s)', (withWorkspace) => {
+  let locate: PositionCallback | undefined
+  const getCurrentPosition = vi.fn((success: PositionCallback) => { locate = success })
+  vi.stubGlobal('navigator', Object.create(navigator, { geolocation: { value: { getCurrentPosition } } }))
+  const memory: MapViewportMemory = { current: null }
+  const view = render(<MapCanvas {...props} viewportMemory={withWorkspace ? memory : undefined} />)
+  const map = maps[0]
+  const success = () => locate!({ coords: { latitude: 37.244, longitude: 127.181 } } as GeolocationPosition)
+  act(() => { map.setZoom(19) })
+  fireEvent.click(screen.getByRole('button', { name: '현재 위치' }))
+  act(success)
+  expect(map.getZoom()).toBe(19)
+  expect(map.getCenter().lat()).toBe(37.244)
+  expect(map.getCenter().lng()).toBe(127.181)
+  fireEvent.click(screen.getByRole('button', { name: '현재 위치' }))
+  act(() => { map.setZoom(13); success(); emit(map, 'idle') })
+  expect(map.getZoom()).toBe(13)
+  expect(getCurrentPosition).toHaveBeenCalledTimes(2)
+  if (withWorkspace) expect(memory.current).toEqual({ lat: 37.244, lng: 127.181, zoom: 13 })
+  fireEvent.click(screen.getByRole('button', { name: '현재 위치' }))
+  view.unmount()
+  act(success)
+  expect(map.panTo).toHaveBeenCalledTimes(2)
 })
