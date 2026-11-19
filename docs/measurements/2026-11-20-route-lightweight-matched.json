@@ -1,0 +1,2027 @@
+{
+  "baselineCommit": "fec585966d5ba742dabc44efa392c1f15ee96361",
+  "currentCommit": "cf049a8bf20c0c219bf27b14e5ea929b253d29a3",
+  "sourceHash": "439fd2d38ef25e62845d923d134e8e0c4f67aa3226b8a3a4f127f55f25e36be7",
+  "envHash": "ea054229fd12496ee02f569fe8000af2d4d0e728515927cec12afd54b211fbde",
+  "demoBackendOnly": true,
+  "demoMode": false,
+  "optIns": {
+    "VITE_ROUTE_LIGHTWEIGHT_ENABLED": true,
+    "VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED": true
+  },
+  "engine": "webkit",
+  "restDelayMs": 120,
+  "serviceWorkers": "blocked",
+  "stableWindowMs": 200,
+  "limitations": [
+    "Decoded REST bodies, not billed egress.",
+    "Cold app reload in a fresh authenticated context; static browser cache is not forcibly disabled.",
+    "Single sequential browser process, service workers blocked, only demo backend network allowed.",
+    "Full-route sweeps are single samples. Three alternating pairs provide small-sample medians, not a guarantee that every route is faster; live backend latency varies."
+  ],
+  "errors": {
+    "before": 0,
+    "after": 0
+  },
+  "sections": [
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-cold",
+      "before": {
+        "requests": 29,
+        "bytes": 54513,
+        "stableReadyMs": 1172,
+        "firstReadyMs": 1172,
+        "readinessLosses": 0,
+        "dataReadyMs": 1381
+      },
+      "after": {
+        "requests": 29,
+        "bytes": 54514,
+        "stableReadyMs": 1431,
+        "firstReadyMs": 1431,
+        "readinessLosses": 0,
+        "dataReadyMs": 1641
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "calendar-first",
+      "before": {
+        "requests": 6,
+        "bytes": 29395,
+        "stableReadyMs": 443,
+        "firstReadyMs": 443,
+        "readinessLosses": 0,
+        "dataReadyMs": 485
+      },
+      "after": {
+        "requests": 5,
+        "bytes": 29393,
+        "stableReadyMs": 434,
+        "firstReadyMs": 434,
+        "readinessLosses": 0,
+        "dataReadyMs": 472
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-after-calendar",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 9,
+        "firstReadyMs": 9,
+        "readinessLosses": 0,
+        "dataReadyMs": 440
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 452
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "calendar-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 10,
+        "firstReadyMs": 10,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "activity",
+      "before": {
+        "unavailableInRole": true
+      },
+      "after": {
+        "unavailableInRole": true
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "zone-first",
+      "before": {
+        "requests": 11,
+        "bytes": 65279,
+        "stableReadyMs": 651,
+        "firstReadyMs": 651,
+        "readinessLosses": 0,
+        "dataReadyMs": 886
+      },
+      "after": {
+        "requests": 7,
+        "bytes": 31310,
+        "stableReadyMs": 653,
+        "firstReadyMs": 653,
+        "readinessLosses": 0,
+        "dataReadyMs": 890
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-after-zone",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 419
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 14,
+        "firstReadyMs": 14,
+        "readinessLosses": 0,
+        "dataReadyMs": 407
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "zone-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 8,
+        "firstReadyMs": 8,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "assignment-first",
+      "before": {
+        "requests": 8,
+        "bytes": 38897,
+        "stableReadyMs": 627,
+        "firstReadyMs": 627,
+        "readinessLosses": 0,
+        "dataReadyMs": 856
+      },
+      "after": {
+        "requests": 7,
+        "bytes": 31311,
+        "stableReadyMs": 785,
+        "firstReadyMs": 785,
+        "readinessLosses": 0,
+        "dataReadyMs": 1002
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-after-assignment",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 10,
+        "firstReadyMs": 10,
+        "readinessLosses": 0,
+        "dataReadyMs": 435
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 414
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "assignment-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 10,
+        "firstReadyMs": 10,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "settings-first",
+      "before": {
+        "requests": 2,
+        "bytes": 939,
+        "stableReadyMs": 27,
+        "firstReadyMs": 27,
+        "readinessLosses": 0,
+        "dataReadyMs": 264
+      },
+      "after": {
+        "requests": 2,
+        "bytes": 939,
+        "stableReadyMs": 29,
+        "firstReadyMs": 29,
+        "readinessLosses": 0,
+        "dataReadyMs": 282
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-after-settings",
+      "before": {
+        "requests": 4,
+        "bytes": 1509,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 415
+      },
+      "after": {
+        "requests": 4,
+        "bytes": 1509,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 474
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "settings-repeat",
+      "before": {
+        "requests": 2,
+        "bytes": 939,
+        "stableReadyMs": 10,
+        "firstReadyMs": 10,
+        "readinessLosses": 0,
+        "dataReadyMs": 241
+      },
+      "after": {
+        "requests": 2,
+        "bytes": 939,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 231
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "profile-first",
+      "before": {
+        "requests": 3,
+        "bytes": 1477,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 244
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 1477,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 257
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "push-settings-first",
+      "before": {
+        "requests": 7,
+        "bytes": 7753,
+        "stableReadyMs": 43,
+        "firstReadyMs": 43,
+        "readinessLosses": 0,
+        "dataReadyMs": 649
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 394,
+        "stableReadyMs": 44,
+        "firstReadyMs": 44,
+        "readinessLosses": 0,
+        "dataReadyMs": 304
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "users-settings-first",
+      "before": {
+        "requests": 17,
+        "bytes": 88003,
+        "stableReadyMs": 1239,
+        "firstReadyMs": 1239,
+        "readinessLosses": 0,
+        "dataReadyMs": 1356
+      },
+      "after": {
+        "requests": 2,
+        "bytes": 1467,
+        "stableReadyMs": 37,
+        "firstReadyMs": 37,
+        "readinessLosses": 0,
+        "dataReadyMs": 366
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "signup-settings-first",
+      "before": {
+        "requests": 6,
+        "bytes": 15552,
+        "stableReadyMs": 409,
+        "firstReadyMs": 409,
+        "readinessLosses": 0,
+        "dataReadyMs": 721
+      },
+      "after": {
+        "requests": 1,
+        "bytes": 939,
+        "stableReadyMs": 10,
+        "firstReadyMs": 10,
+        "readinessLosses": 0,
+        "dataReadyMs": 393
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "team-editor-first",
+      "before": {
+        "requests": 9,
+        "bytes": 39442,
+        "stableReadyMs": 639,
+        "firstReadyMs": 639,
+        "readinessLosses": 0,
+        "dataReadyMs": 677
+      },
+      "after": {
+        "requests": 9,
+        "bytes": 39442,
+        "stableReadyMs": 683,
+        "firstReadyMs": 683,
+        "readinessLosses": 0,
+        "dataReadyMs": 706
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "team-editor-repeat",
+      "before": {
+        "requests": 3,
+        "bytes": 1486,
+        "stableReadyMs": 398,
+        "firstReadyMs": 398,
+        "readinessLosses": 0,
+        "dataReadyMs": 411
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 1486,
+        "stableReadyMs": 563,
+        "firstReadyMs": 563,
+        "readinessLosses": 0,
+        "dataReadyMs": 577
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-cold",
+      "before": {
+        "requests": 29,
+        "bytes": 51613,
+        "stableReadyMs": 1191,
+        "firstReadyMs": 1191,
+        "readinessLosses": 0,
+        "dataReadyMs": 1393
+      },
+      "after": {
+        "requests": 29,
+        "bytes": 51613,
+        "stableReadyMs": 1440,
+        "firstReadyMs": 1440,
+        "readinessLosses": 0,
+        "dataReadyMs": 1679
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "calendar-first",
+      "before": {
+        "requests": 6,
+        "bytes": 29761,
+        "stableReadyMs": 421,
+        "firstReadyMs": 421,
+        "readinessLosses": 0,
+        "dataReadyMs": 449
+      },
+      "after": {
+        "requests": 5,
+        "bytes": 29759,
+        "stableReadyMs": 572,
+        "firstReadyMs": 572,
+        "readinessLosses": 0,
+        "dataReadyMs": 589
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-after-calendar",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 10,
+        "firstReadyMs": 10,
+        "readinessLosses": 0,
+        "dataReadyMs": 525
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 854
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "calendar-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "activity-first",
+      "before": {
+        "requests": 11,
+        "bytes": 38219,
+        "stableReadyMs": 623,
+        "firstReadyMs": 623,
+        "readinessLosses": 0,
+        "dataReadyMs": 851
+      },
+      "after": {
+        "requests": 10,
+        "bytes": 38217,
+        "stableReadyMs": 739,
+        "firstReadyMs": 739,
+        "readinessLosses": 0,
+        "dataReadyMs": 991
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-after-activity",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 8,
+        "firstReadyMs": 8,
+        "readinessLosses": 0,
+        "dataReadyMs": 410
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 495
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "activity-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 9,
+        "firstReadyMs": 9,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "zone-first",
+      "before": {
+        "requests": 11,
+        "bytes": 30634,
+        "stableReadyMs": 634,
+        "firstReadyMs": 634,
+        "readinessLosses": 0,
+        "dataReadyMs": 882
+      },
+      "after": {
+        "requests": 10,
+        "bytes": 30633,
+        "stableReadyMs": 670,
+        "firstReadyMs": 670,
+        "readinessLosses": 0,
+        "dataReadyMs": 910
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-after-zone",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 413
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 14,
+        "firstReadyMs": 14,
+        "readinessLosses": 0,
+        "dataReadyMs": 455
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "zone-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "assignment",
+      "before": {
+        "unavailableInRole": true
+      },
+      "after": {
+        "unavailableInRole": true
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "settings-first",
+      "before": {
+        "requests": 1,
+        "bytes": 1305,
+        "stableReadyMs": 25,
+        "firstReadyMs": 25,
+        "readinessLosses": 0,
+        "dataReadyMs": 262
+      },
+      "after": {
+        "requests": 1,
+        "bytes": 1305,
+        "stableReadyMs": 23,
+        "firstReadyMs": 23,
+        "readinessLosses": 0,
+        "dataReadyMs": 278
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-after-settings",
+      "before": {
+        "requests": 4,
+        "bytes": 1875,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 427
+      },
+      "after": {
+        "requests": 4,
+        "bytes": 1875,
+        "stableReadyMs": 9,
+        "firstReadyMs": 9,
+        "readinessLosses": 0,
+        "dataReadyMs": 441
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "settings-repeat",
+      "before": {
+        "requests": 1,
+        "bytes": 1305,
+        "stableReadyMs": 9,
+        "firstReadyMs": 9,
+        "readinessLosses": 0,
+        "dataReadyMs": 240
+      },
+      "after": {
+        "requests": 1,
+        "bytes": 1305,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 237
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "profile-first",
+      "before": {
+        "requests": 3,
+        "bytes": 1847,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 263
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 1848,
+        "stableReadyMs": 15,
+        "firstReadyMs": 15,
+        "readinessLosses": 0,
+        "dataReadyMs": 304
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "push-settings-first",
+      "before": {
+        "requests": 5,
+        "bytes": 5413,
+        "stableReadyMs": 38,
+        "firstReadyMs": 38,
+        "readinessLosses": 0,
+        "dataReadyMs": 633
+      },
+      "after": {
+        "requests": 1,
+        "bytes": 270,
+        "stableReadyMs": 42,
+        "firstReadyMs": 42,
+        "readinessLosses": 0,
+        "dataReadyMs": 300
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "team-editor-first",
+      "before": {
+        "requests": 9,
+        "bytes": 38392,
+        "stableReadyMs": 618,
+        "firstReadyMs": 618,
+        "readinessLosses": 0,
+        "dataReadyMs": 646
+      },
+      "after": {
+        "requests": 9,
+        "bytes": 38391,
+        "stableReadyMs": 670,
+        "firstReadyMs": 670,
+        "readinessLosses": 0,
+        "dataReadyMs": 704
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "team-editor-repeat",
+      "before": {
+        "requests": 3,
+        "bytes": 1486,
+        "stableReadyMs": 432,
+        "firstReadyMs": 432,
+        "readinessLosses": 0,
+        "dataReadyMs": 462
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 1486,
+        "stableReadyMs": 528,
+        "firstReadyMs": 528,
+        "readinessLosses": 0,
+        "dataReadyMs": 559
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "home-cold",
+      "before": {
+        "requests": 39,
+        "bytes": 47002,
+        "stableReadyMs": 2534,
+        "firstReadyMs": 2534,
+        "readinessLosses": 0,
+        "dataReadyMs": 2769
+      },
+      "after": {
+        "requests": 38,
+        "bytes": 46967,
+        "stableReadyMs": 1982,
+        "firstReadyMs": 1982,
+        "readinessLosses": 0,
+        "dataReadyMs": 2169
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "calendar-first",
+      "before": {
+        "requests": 17,
+        "bytes": 19568,
+        "stableReadyMs": 441,
+        "firstReadyMs": 441,
+        "readinessLosses": 0,
+        "dataReadyMs": 2232
+      },
+      "after": {
+        "requests": 17,
+        "bytes": 19568,
+        "stableReadyMs": 699,
+        "firstReadyMs": 699,
+        "readinessLosses": 0,
+        "dataReadyMs": 2334
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "home-after-calendar",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 451
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 494
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "calendar-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "activity-first",
+      "before": {
+        "requests": 19,
+        "bytes": 6225,
+        "stableReadyMs": 665,
+        "firstReadyMs": 665,
+        "readinessLosses": 0,
+        "dataReadyMs": 2089
+      },
+      "after": {
+        "requests": 18,
+        "bytes": 6223,
+        "stableReadyMs": 652,
+        "firstReadyMs": 652,
+        "readinessLosses": 0,
+        "dataReadyMs": 2059
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "home-after-activity",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 433
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 411
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "activity-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "zone",
+      "before": {
+        "unavailableInRole": true
+      },
+      "after": {
+        "unavailableInRole": true
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "assignment",
+      "before": {
+        "unavailableInRole": true
+      },
+      "after": {
+        "unavailableInRole": true
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "settings-first",
+      "before": {
+        "requests": 1,
+        "bytes": 3890,
+        "stableReadyMs": 29,
+        "firstReadyMs": 29,
+        "readinessLosses": 0,
+        "dataReadyMs": 266
+      },
+      "after": {
+        "requests": 1,
+        "bytes": 3890,
+        "stableReadyMs": 27,
+        "firstReadyMs": 27,
+        "readinessLosses": 0,
+        "dataReadyMs": 267
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "home-after-settings",
+      "before": {
+        "requests": 4,
+        "bytes": 4460,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 418
+      },
+      "after": {
+        "requests": 4,
+        "bytes": 4460,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 432
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "settings-repeat",
+      "before": {
+        "requests": 1,
+        "bytes": 3890,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 244
+      },
+      "after": {
+        "requests": 1,
+        "bytes": 3890,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 238
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "profile-first",
+      "before": {
+        "requests": 3,
+        "bytes": 4432,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 257
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 4432,
+        "stableReadyMs": 15,
+        "firstReadyMs": 15,
+        "readinessLosses": 0,
+        "dataReadyMs": 255
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "push-settings-first",
+      "before": {
+        "requests": 5,
+        "bytes": 5411,
+        "stableReadyMs": 38,
+        "firstReadyMs": 38,
+        "readinessLosses": 0,
+        "dataReadyMs": 658
+      },
+      "after": {
+        "requests": 1,
+        "bytes": 270,
+        "stableReadyMs": 39,
+        "firstReadyMs": 39,
+        "readinessLosses": 0,
+        "dataReadyMs": 312
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-cold",
+      "before": {
+        "requests": 29,
+        "bytes": 54514,
+        "stableReadyMs": 1289,
+        "firstReadyMs": 1289,
+        "readinessLosses": 0,
+        "dataReadyMs": 1498
+      },
+      "after": {
+        "requests": 29,
+        "bytes": 54513,
+        "stableReadyMs": 1331,
+        "firstReadyMs": 1331,
+        "readinessLosses": 0,
+        "dataReadyMs": 1536
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "calendar-first",
+      "before": {
+        "requests": 6,
+        "bytes": 29395,
+        "stableReadyMs": 439,
+        "firstReadyMs": 439,
+        "readinessLosses": 0,
+        "dataReadyMs": 461
+      },
+      "after": {
+        "requests": 4,
+        "bytes": 28454,
+        "stableReadyMs": 456,
+        "firstReadyMs": 456,
+        "readinessLosses": 0,
+        "dataReadyMs": 479
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-after-calendar",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 11,
+        "firstReadyMs": 11,
+        "readinessLosses": 0,
+        "dataReadyMs": 453
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 9,
+        "firstReadyMs": 9,
+        "readinessLosses": 0,
+        "dataReadyMs": 454
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "calendar-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 17,
+        "firstReadyMs": 17,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 17,
+        "firstReadyMs": 17,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "activity",
+      "before": {
+        "unavailableInRole": true
+      },
+      "after": {
+        "unavailableInRole": true
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "zone-first",
+      "before": {
+        "requests": 17,
+        "bytes": 94733,
+        "stableReadyMs": 725,
+        "firstReadyMs": 725,
+        "readinessLosses": 0,
+        "dataReadyMs": 1551
+      },
+      "after": {
+        "requests": 6,
+        "bytes": 37956,
+        "stableReadyMs": 666,
+        "firstReadyMs": 666,
+        "readinessLosses": 0,
+        "dataReadyMs": 677
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-after-zone",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 537
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 427
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "zone-repeat",
+      "before": {
+        "requests": 5,
+        "bytes": 14614,
+        "stableReadyMs": 22,
+        "firstReadyMs": 22,
+        "readinessLosses": 0,
+        "dataReadyMs": 634
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 22,
+        "firstReadyMs": 22,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "assignment-first",
+      "before": {
+        "requests": 8,
+        "bytes": 38896,
+        "stableReadyMs": 640,
+        "firstReadyMs": 640,
+        "readinessLosses": 0,
+        "dataReadyMs": 880
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 24,
+        "firstReadyMs": 24,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-after-assignment",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 13,
+        "firstReadyMs": 13,
+        "readinessLosses": 0,
+        "dataReadyMs": 418
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 10,
+        "firstReadyMs": 10,
+        "readinessLosses": 0,
+        "dataReadyMs": 427
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "assignment-repeat",
+      "before": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "after": {
+        "requests": 0,
+        "bytes": 0,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 0
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "settings-first",
+      "before": {
+        "requests": 4,
+        "bytes": 668,
+        "stableReadyMs": 19,
+        "firstReadyMs": 19,
+        "readinessLosses": 0,
+        "dataReadyMs": 310
+      },
+      "after": {
+        "requests": 4,
+        "bytes": 668,
+        "stableReadyMs": 38,
+        "firstReadyMs": 38,
+        "readinessLosses": 0,
+        "dataReadyMs": 287
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-after-settings",
+      "before": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 7,
+        "firstReadyMs": 7,
+        "readinessLosses": 0,
+        "dataReadyMs": 440
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 570,
+        "stableReadyMs": 12,
+        "firstReadyMs": 12,
+        "readinessLosses": 0,
+        "dataReadyMs": 414
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "settings-repeat",
+      "before": {
+        "requests": 4,
+        "bytes": 668,
+        "stableReadyMs": 18,
+        "firstReadyMs": 18,
+        "readinessLosses": 0,
+        "dataReadyMs": 251
+      },
+      "after": {
+        "requests": 4,
+        "bytes": 668,
+        "stableReadyMs": 18,
+        "firstReadyMs": 18,
+        "readinessLosses": 0,
+        "dataReadyMs": 268
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "team-editor-first",
+      "before": {
+        "requests": 9,
+        "bytes": 39442,
+        "stableReadyMs": 670,
+        "firstReadyMs": 670,
+        "readinessLosses": 0,
+        "dataReadyMs": 695
+      },
+      "after": {
+        "requests": 9,
+        "bytes": 39442,
+        "stableReadyMs": 658,
+        "firstReadyMs": 658,
+        "readinessLosses": 0,
+        "dataReadyMs": 674
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "team-editor-repeat",
+      "before": {
+        "requests": 3,
+        "bytes": 1486,
+        "stableReadyMs": 493,
+        "firstReadyMs": 493,
+        "readinessLosses": 0,
+        "dataReadyMs": 519
+      },
+      "after": {
+        "requests": 3,
+        "bytes": 1486,
+        "stableReadyMs": 413,
+        "firstReadyMs": 413,
+        "readinessLosses": 0,
+        "dataReadyMs": 431
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    }
+  ],
+  "coldPairs": [
+    {
+      "repeat": 1,
+      "role": "user",
+      "width": 390,
+      "step": "home-cold",
+      "before": {
+        "requests": 39,
+        "bytes": 47002,
+        "stableReadyMs": 2398,
+        "firstReadyMs": 2398,
+        "readinessLosses": 0,
+        "dataReadyMs": 2605
+      },
+      "after": {
+        "requests": 38,
+        "bytes": 46968,
+        "stableReadyMs": 1956,
+        "firstReadyMs": 1956,
+        "readinessLosses": 0,
+        "dataReadyMs": 2159
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "repeat": 2,
+      "role": "user",
+      "width": 390,
+      "step": "home-cold",
+      "before": {
+        "requests": 39,
+        "bytes": 47002,
+        "stableReadyMs": 2429,
+        "firstReadyMs": 2429,
+        "readinessLosses": 0,
+        "dataReadyMs": 2647
+      },
+      "after": {
+        "requests": 38,
+        "bytes": 46968,
+        "stableReadyMs": 1901,
+        "firstReadyMs": 1901,
+        "readinessLosses": 0,
+        "dataReadyMs": 2104
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "repeat": 3,
+      "role": "user",
+      "width": 390,
+      "step": "home-cold",
+      "before": {
+        "requests": 39,
+        "bytes": 47002,
+        "stableReadyMs": 2327,
+        "firstReadyMs": 2327,
+        "readinessLosses": 0,
+        "dataReadyMs": 2534
+      },
+      "after": {
+        "requests": 38,
+        "bytes": 46967,
+        "stableReadyMs": 1963,
+        "firstReadyMs": 1963,
+        "readinessLosses": 0,
+        "dataReadyMs": 2163
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    }
+  ],
+  "assignmentPairs": [
+    {
+      "repeat": 1,
+      "role": "administrator",
+      "width": 390,
+      "step": "assignment-first",
+      "before": {
+        "requests": 8,
+        "bytes": 38897,
+        "stableReadyMs": 716,
+        "firstReadyMs": 716,
+        "readinessLosses": 0,
+        "dataReadyMs": 947
+      },
+      "after": {
+        "requests": 7,
+        "bytes": 31311,
+        "stableReadyMs": 651,
+        "firstReadyMs": 651,
+        "readinessLosses": 0,
+        "dataReadyMs": 892
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "repeat": 2,
+      "role": "administrator",
+      "width": 390,
+      "step": "assignment-first",
+      "before": {
+        "requests": 8,
+        "bytes": 38897,
+        "stableReadyMs": 661,
+        "firstReadyMs": 661,
+        "readinessLosses": 0,
+        "dataReadyMs": 897
+      },
+      "after": {
+        "requests": 7,
+        "bytes": 31311,
+        "stableReadyMs": 654,
+        "firstReadyMs": 654,
+        "readinessLosses": 0,
+        "dataReadyMs": 883
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "repeat": 3,
+      "role": "administrator",
+      "width": 390,
+      "step": "assignment-first",
+      "before": {
+        "requests": 8,
+        "bytes": 38897,
+        "stableReadyMs": 661,
+        "firstReadyMs": 661,
+        "readinessLosses": 0,
+        "dataReadyMs": 887
+      },
+      "after": {
+        "requests": 7,
+        "bytes": 31311,
+        "stableReadyMs": 668,
+        "firstReadyMs": 668,
+        "readinessLosses": 0,
+        "dataReadyMs": 904
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    }
+  ],
+  "userCalendarPairs": [
+    {
+      "repeat": 1,
+      "role": "user",
+      "width": 390,
+      "step": "calendar-first",
+      "before": {
+        "requests": 17,
+        "bytes": 19568,
+        "stableReadyMs": 451,
+        "firstReadyMs": 451,
+        "readinessLosses": 0,
+        "dataReadyMs": 2297
+      },
+      "after": {
+        "requests": 17,
+        "bytes": 19567,
+        "stableReadyMs": 477,
+        "firstReadyMs": 477,
+        "readinessLosses": 0,
+        "dataReadyMs": 2189
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "repeat": 2,
+      "role": "user",
+      "width": 390,
+      "step": "calendar-first",
+      "before": {
+        "requests": 17,
+        "bytes": 19568,
+        "stableReadyMs": 423,
+        "firstReadyMs": 423,
+        "readinessLosses": 0,
+        "dataReadyMs": 2215
+      },
+      "after": {
+        "requests": 17,
+        "bytes": 19567,
+        "stableReadyMs": 434,
+        "firstReadyMs": 434,
+        "readinessLosses": 0,
+        "dataReadyMs": 2089
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "repeat": 3,
+      "role": "user",
+      "width": 390,
+      "step": "calendar-first",
+      "before": {
+        "requests": 17,
+        "bytes": 19568,
+        "stableReadyMs": 462,
+        "firstReadyMs": 462,
+        "readinessLosses": 0,
+        "dataReadyMs": 2286
+      },
+      "after": {
+        "requests": 17,
+        "bytes": 19568,
+        "stableReadyMs": 503,
+        "firstReadyMs": 503,
+        "readinessLosses": 0,
+        "dataReadyMs": 2148
+      },
+      "errors": {
+        "before": 0,
+        "after": 0
+      }
+    }
+  ],
+  "coldMedian": {
+    "readyMs": {
+      "before": 2398,
+      "after": 1956,
+      "delta": -442,
+      "reductionPercent": 18.4
+    },
+    "dataReadyMs": {
+      "before": 2605,
+      "after": 2159,
+      "delta": -446,
+      "reductionPercent": 17.1
+    },
+    "requests": {
+      "before": 39,
+      "after": 38,
+      "delta": -1,
+      "reductionPercent": 2.6
+    },
+    "bytes": {
+      "before": 47002,
+      "after": 46968,
+      "delta": -34,
+      "reductionPercent": 0.1
+    }
+  },
+  "assignmentMedian": {
+    "readyMs": {
+      "before": 661,
+      "after": 654,
+      "delta": -7,
+      "reductionPercent": 1.1
+    },
+    "dataReadyMs": {
+      "before": 897,
+      "after": 892,
+      "delta": -5,
+      "reductionPercent": 0.6
+    },
+    "requests": {
+      "before": 8,
+      "after": 7,
+      "delta": -1,
+      "reductionPercent": 12.5
+    },
+    "bytes": {
+      "before": 38897,
+      "after": 31311,
+      "delta": -7586,
+      "reductionPercent": 19.5
+    }
+  },
+  "userCalendarMedian": {
+    "readyMs": {
+      "before": 451,
+      "after": 477,
+      "delta": 26,
+      "reductionPercent": -5.8
+    },
+    "dataReadyMs": {
+      "before": 2286,
+      "after": 2148,
+      "delta": -138,
+      "reductionPercent": 6
+    },
+    "requests": {
+      "before": 17,
+      "after": 17,
+      "delta": 0,
+      "reductionPercent": 0
+    },
+    "bytes": {
+      "before": 19568,
+      "after": 19567,
+      "delta": -1,
+      "reductionPercent": 0
+    }
+  },
+  "navigationSmoke": {
+    "errors": 0,
+    "heldRequests": 4,
+    "abortedReads": 0,
+    "checks": [
+      {
+        "step": "zone-pending",
+        "path": "/zone",
+        "navVisible": true,
+        "loadingVisible": true,
+        "zoneControlVisible": false,
+        "regionRows": 0
+      },
+      {
+        "step": "home-during-pending",
+        "path": "/",
+        "navVisible": true,
+        "loadingVisible": false,
+        "zoneControlVisible": false,
+        "regionRows": 0
+      },
+      {
+        "step": "zone-recovered",
+        "path": "/zone",
+        "navVisible": true,
+        "loadingVisible": false,
+        "zoneControlVisible": true,
+        "regionRows": 3
+      }
+    ]
+  }
+}

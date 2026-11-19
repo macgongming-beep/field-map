@@ -1,0 +1,579 @@
+{
+  "commit": "cf049a8bf20c0c219bf27b14e5ea929b253d29a3",
+  "deployment": "dpl_A3CH5cKobNKc5V48ficYxxhoFzSX",
+  "url": "https://chinese-territory-app-demo.vercel.app",
+  "engine": "webkit",
+  "artificialDelayMs": 0,
+  "serviceWorkers": "blocked",
+  "productionChanged": false,
+  "failures": [],
+  "sections": [
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-cold",
+      "readyMs": 755,
+      "requests": 29,
+      "bytes": 54513,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "calendar-first",
+      "readyMs": 192,
+      "requests": 5,
+      "bytes": 29393,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-after-calendar",
+      "readyMs": 11,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "calendar-repeat",
+      "readyMs": 16,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "zone-first",
+      "readyMs": 285,
+      "requests": 7,
+      "bytes": 31311,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-after-zone",
+      "readyMs": 14,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "zone-repeat",
+      "readyMs": 9,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "assignment-first",
+      "readyMs": 267,
+      "requests": 7,
+      "bytes": 31311,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-after-assignment",
+      "readyMs": 9,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "assignment-repeat",
+      "readyMs": 11,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "settings-first",
+      "readyMs": 28,
+      "requests": 2,
+      "bytes": 939,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "home-after-settings",
+      "readyMs": 11,
+      "requests": 4,
+      "bytes": 1509,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "settings-repeat",
+      "readyMs": 12,
+      "requests": 2,
+      "bytes": 939,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "profile-first",
+      "readyMs": 11,
+      "requests": 3,
+      "bytes": 1476,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "push-settings-first",
+      "readyMs": 46,
+      "requests": 3,
+      "bytes": 394,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "users-settings-first",
+      "readyMs": 35,
+      "requests": 2,
+      "bytes": 1467,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "signup-settings-first",
+      "readyMs": 10,
+      "requests": 1,
+      "bytes": 939,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "team-editor-first",
+      "readyMs": 273,
+      "requests": 9,
+      "bytes": 39442,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 390,
+      "step": "team-editor-repeat",
+      "readyMs": 146,
+      "requests": 3,
+      "bytes": 1486,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-cold",
+      "readyMs": 704,
+      "requests": 29,
+      "bytes": 51613,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "calendar-first",
+      "readyMs": 186,
+      "requests": 5,
+      "bytes": 29759,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-after-calendar",
+      "readyMs": 10,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "calendar-repeat",
+      "readyMs": 12,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "activity-first",
+      "readyMs": 269,
+      "requests": 10,
+      "bytes": 38217,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-after-activity",
+      "readyMs": 11,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "activity-repeat",
+      "readyMs": 11,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "zone-first",
+      "readyMs": 272,
+      "requests": 10,
+      "bytes": 30632,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-after-zone",
+      "readyMs": 13,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "zone-repeat",
+      "readyMs": 12,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "settings-first",
+      "readyMs": 24,
+      "requests": 1,
+      "bytes": 1305,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "home-after-settings",
+      "readyMs": 11,
+      "requests": 4,
+      "bytes": 1875,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "settings-repeat",
+      "readyMs": 12,
+      "requests": 1,
+      "bytes": 1305,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "profile-first",
+      "readyMs": 12,
+      "requests": 3,
+      "bytes": 1848,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "push-settings-first",
+      "readyMs": 10,
+      "requests": 1,
+      "bytes": 270,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "team-editor-first",
+      "readyMs": 262,
+      "requests": 9,
+      "bytes": 38392,
+      "readinessLosses": 0
+    },
+    {
+      "role": "leader",
+      "width": 390,
+      "step": "team-editor-repeat",
+      "readyMs": 162,
+      "requests": 3,
+      "bytes": 1486,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "home-cold",
+      "readyMs": 989,
+      "requests": 38,
+      "bytes": 46968,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "calendar-first",
+      "readyMs": 189,
+      "requests": 17,
+      "bytes": 19568,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "home-after-calendar",
+      "readyMs": 10,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "calendar-repeat",
+      "readyMs": 13,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "activity-first",
+      "readyMs": 279,
+      "requests": 18,
+      "bytes": 6223,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "home-after-activity",
+      "readyMs": 10,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "activity-repeat",
+      "readyMs": 12,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "settings-first",
+      "readyMs": 29,
+      "requests": 1,
+      "bytes": 3890,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "home-after-settings",
+      "readyMs": 9,
+      "requests": 4,
+      "bytes": 4460,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "settings-repeat",
+      "readyMs": 11,
+      "requests": 1,
+      "bytes": 3890,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "profile-first",
+      "readyMs": 13,
+      "requests": 3,
+      "bytes": 4432,
+      "readinessLosses": 0
+    },
+    {
+      "role": "user",
+      "width": 390,
+      "step": "push-settings-first",
+      "readyMs": 11,
+      "requests": 1,
+      "bytes": 270,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-cold",
+      "readyMs": 767,
+      "requests": 29,
+      "bytes": 54513,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "calendar-first",
+      "readyMs": 250,
+      "requests": 4,
+      "bytes": 28454,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-after-calendar",
+      "readyMs": 12,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "calendar-repeat",
+      "readyMs": 14,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "zone-first",
+      "readyMs": 321,
+      "requests": 6,
+      "bytes": 37956,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-after-zone",
+      "readyMs": 13,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "zone-repeat",
+      "readyMs": 24,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "assignment-first",
+      "readyMs": 7,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-after-assignment",
+      "readyMs": 13,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "assignment-repeat",
+      "readyMs": 10,
+      "requests": 0,
+      "bytes": 0,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "settings-first",
+      "readyMs": 20,
+      "requests": 4,
+      "bytes": 667,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "home-after-settings",
+      "readyMs": 14,
+      "requests": 3,
+      "bytes": 570,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "settings-repeat",
+      "readyMs": 16,
+      "requests": 4,
+      "bytes": 667,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "team-editor-first",
+      "readyMs": 289,
+      "requests": 9,
+      "bytes": 39442,
+      "readinessLosses": 0
+    },
+    {
+      "role": "administrator",
+      "width": 1440,
+      "step": "team-editor-repeat",
+      "readyMs": 159,
+      "requests": 3,
+      "bytes": 1486,
+      "readinessLosses": 0
+    }
+  ]
+}

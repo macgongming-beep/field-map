@@ -13,6 +13,8 @@
 
 ## 목록
 
+데모 주요 화면 속도 개선: [0140 모바일 주요 화면의 조회와 대기 개선](0140-demo-section-loading.md).
+
 최신 운영 반영: [0067 달 이동 복구와 홈 재사용](0067-production-navigation-home-reads.md)
 
 운영 미반영 후보: [0108 최신 main 기반 집단 봉사 후보](0108-main-based-group-service-candidate.md).
