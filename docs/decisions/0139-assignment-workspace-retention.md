@@ -118,3 +118,6 @@ GPS 보완 코드 `28e66b8`의 데모 배포 `dpl_GrK4HejnUm7Mn72akk6vQmyVc9Ed`�
   기록: `scratch/assignment-workspace-review-mutations.json`, `scratch/assignment-review-browser.json`.
 
 운영은 미적용이며 이 보완도 데모 한 번만 배포한다.
+
+보완 코드 `88ad20c`의 데모 배포 `dpl_4EunXpX59AN4JWSG97S2WJRdEGpM`가 READY로 완료됐다.
+운영 배포는 기존 `dpl_GMaTD3SvLFTzHw9K6tfMPora6v2P` 그대로다.
