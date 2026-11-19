@@ -39,13 +39,28 @@ export function createRecipientPreview(userName: string, options: { includeHisto
       const linkedCards: RawEventCardAssignmentCard[] = []
       const eventIds = [...new Set(assignments.map((row) => row.event_id))]
       const events: RawCalendarEvent[] = []
-      for (let from = 0; from < eventIds.length; from += 100) {
-        linkedCards.push(...await pages<RawEventCardAssignmentCard>((start, end) => supabase.from('event_card_assignment_cards')
-          .select('*').eq('user_name', userName).in('event_id', eventIds.slice(from, from + 100)).order('id').range(start, end)))
-      }
-      for (let from = 0; from < eventIds.length; from += 100) {
-        events.push(...await pages<RawCalendarEvent>((start, end) => supabase.from('calendar_events')
-          .select('*, event_participants(*)').in('id', eventIds.slice(from, from + 100)).order('id').range(start, end)))
+      const readLinks = (ids: number[]) => pages<RawEventCardAssignmentCard>((start, end) => supabase.from('event_card_assignment_cards')
+        .select('*').eq('user_name', userName).in('event_id', ids).order('id').range(start, end))
+      const readEvents = (ids: number[]) => pages<RawCalendarEvent>((start, end) => supabase.from('calendar_events')
+        .select('*, event_participants(*)').in('id', ids).order('id').range(start, end))
+      if (import.meta.env.VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED === 'true') {
+        for (let from = 0; from < eventIds.length; from += 100) {
+          const ids = eventIds.slice(from, from + 100)
+          // Both depend only on assignment IDs. Drain both before failure/retry.
+          const [links, calendar] = await Promise.allSettled([readLinks(ids), readEvents(ids)])
+          check()
+          if (links.status === 'rejected') throw links.reason
+          if (calendar.status === 'rejected') throw calendar.reason
+          linkedCards.push(...links.value)
+          events.push(...calendar.value)
+        }
+      } else {
+        for (let from = 0; from < eventIds.length; from += 100) {
+          linkedCards.push(...await readLinks(eventIds.slice(from, from + 100)))
+        }
+        for (let from = 0; from < eventIds.length; from += 100) {
+          events.push(...await readEvents(eventIds.slice(from, from + 100)))
+        }
       }
       const merged = mergeEventCardAssignments(assignments.map(toEventCardAssignment), linkedCards)
       return events.map((event) => toCalendarEvent(event, merged.filter((row) => row.eventId === event.id)))

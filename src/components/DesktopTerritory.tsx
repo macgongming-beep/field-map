@@ -3,7 +3,7 @@ import { kindToFilters, filtersToKind, type BuildingKind } from '../utils/buildi
 import { canEditVisitor, visitorOptionsFrom } from '../utils/visitorPicker'
 import type { AppLanguage } from '../i18n'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import { useAuth } from '../hooks/useAuth'
+import { useSharedAuth } from '../hooks/AuthContext'
 import { getRegionNames } from '../lib/regions'
 import { getAreaFilterOptions } from '../utils/areaOptions'
 import { buildDuplicateUnitPreviews, planDuplicateBuildingMerge } from '../utils/duplicateBuildingMerge'
@@ -271,7 +271,8 @@ export function DesktopTerritory({
   onApproveRestaurantRequest?: (id: number, opts: { name: string; address: string; reviewer: string; existingBuildingId?: number | null; lat?: number; lng?: number }) => Promise<void>
   onRejectRestaurantRequest?: (id: number, reviewer: string) => Promise<void>
 }) {
-  const { allUsers, fetchAllUsers } = useAuth()
+  const { allUsers, ensureAllUsersFresh } = useSharedAuth()
+  useEffect(() => { void ensureAllUsersFresh() }, [ensureAllUsersFresh])
   const isAdmin = role === 'admin'
 
   // 방문자를 고칠 수 있는 사람: 관리자·개발자·인도자.
@@ -406,14 +407,6 @@ export function DesktopTerritory({
   const pointDetailPaneRef = useRef<HTMLElement | null>(null)
   const pointRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const boundaryImportInputRef = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    // ⚠ 인도자도 방문자를 고칠 수 있으므로 목록이 필요하다.
-    //   예전엔 관리자일 때만 받아서, 인도자에게는 고를 이름이 없었다.
-    if (canEditVisitorHere && allUsers.length === 0) {
-      fetchAllUsers()
-    }
-  }, [allUsers.length, fetchAllUsers, canEditVisitorHere])
 
   const cardMap = useMemo(() => new Map(cards.map((card) => [card.id, card])), [cards])
   const buildingsByCardId = useMemo(() => {

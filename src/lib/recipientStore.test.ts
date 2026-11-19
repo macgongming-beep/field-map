@@ -23,11 +23,81 @@ afterEach(() => vi.unstubAllEnvs())
 
 beforeEach(() => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'false')
   vi.clearAllMocks(); state.token = 'session'; state.rows = {}
   state.previewOptions = []
   state.assignments.mockResolvedValue([])
   state.rpc.mockResolvedValue({ data: [], error: null })
   state.prefetch.mockImplementation((ids: number[]) => ({ details: Promise.resolve({ buildings: ids.map((card_id) => ({ card_id })), boundaries: [], histories: [], baseline: null }) }))
+})
+
+test.each(['2026-11-20T00:00:00.000Z', null])('explicit opt-in passes baseline %s only to its own snapshot with demo off', async (baseline) => {
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'true')
+  state.rows.card_assignments = [{ card_id: 1, user_name: 'me' }]
+  const reader = createRecipientStoreReader('me')
+  reader.refresh(undefined, baseline)
+  const first = reader.read()
+  expect(reader.read()).toBe(first)
+  await first
+  expect(state.prefetch).toHaveBeenCalledExactlyOnceWith([1], { baseline })
+  state.rows.card_assignments = [{ card_id: 2, user_name: 'me' }]
+  reader.refresh()
+  await reader.read()
+  expect(state.prefetch).toHaveBeenLastCalledWith([2])
+  expect(reader.cardIds()).toEqual([2])
+  reader.dispose()
+  reader.resume()
+  await reader.read()
+  expect(state.prefetch).toHaveBeenLastCalledWith([2])
+})
+
+test.each(['false', undefined])('without opt-in (%s), ignores supplied baseline even in demo mode', async (flag) => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true')
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', flag)
+  state.rows.card_assignments = [{ card_id: 1, user_name: 'me' }]
+  const reader = createRecipientStoreReader('me')
+  reader.refresh(undefined, '2026-11-20T00:00:00.000Z')
+  await reader.read()
+  expect(state.prefetch).toHaveBeenCalledExactlyOnceWith([1])
+})
+
+test.each(['refresh', 'resume', 'identity'])('late discovery cannot start details with a stale baseline after %s', async (action) => {
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'true')
+  let release!: (value: CalendarEvent[]) => void
+  state.assignments.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+  const reader = createRecipientStoreReader('me')
+  reader.refresh(undefined, '2026-11-19T00:00:00.000Z')
+  const oldRead = reader.read()
+  const rejected = expect(oldRead).rejects.toThrow(action === 'identity' ? 'session changed' : 'scope changed')
+  if (action === 'refresh') reader.refresh()
+  else if (action === 'resume') { reader.dispose(); reader.resume() }
+  else state.token = 'other-session'
+  release([{ cardAssignments: [{ userName: 'me', assignedCardIds: [99] }] }] as CalendarEvent[])
+  await rejected
+  expect(state.prefetch).not.toHaveBeenCalled()
+  expect(reader.scoped).toBe(false)
+  if (action !== 'identity') {
+    state.rows.card_assignments = [{ card_id: 2, user_name: 'me' }]
+    await reader.read()
+    expect(state.prefetch).toHaveBeenCalledExactlyOnceWith([2])
+    expect(reader.cardIds()).toEqual([2])
+  }
+})
+
+test('late details cannot overwrite a refreshed scope', async () => {
+  let release!: (value: { buildings: []; histories: []; boundaries: []; baseline: null }) => void
+  state.prefetch.mockImplementationOnce(() => ({ details: new Promise(resolve => { release = resolve }) }))
+  state.rows.card_assignments = [{ card_id: 1, user_name: 'me' }]
+  const reader = createRecipientStoreReader('me')
+  const oldRead = reader.read()
+  const rejected = expect(oldRead).rejects.toThrow('scope changed')
+  await vi.waitFor(() => expect(state.prefetch).toHaveBeenCalledTimes(1))
+  reader.refresh()
+  state.rows.card_assignments = [{ card_id: 2, user_name: 'me' }]
+  await reader.read()
+  release({ buildings: [], histories: [], boundaries: [], baseline: null })
+  await rejected
+  expect(reader.cardIds()).toEqual([2])
 })
 
 test('demo lazy catalog excludes global restaurant cards but preserves personal restaurant assignments', async () => {

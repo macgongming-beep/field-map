@@ -18,11 +18,61 @@ const event = { id: 7, event_date: '2026-08-02', time: '10:00', title: 'Old meet
   event_participants: [{ user_name: 'A', role: '입명' }, { user_name: 'Guest', role: '게스트' }] }
 const assignment = { id: 1, event_id: 7, user_name: 'A', assigned_card_id: 10 }
 beforeEach(() => {
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', undefined)
   state.calls = []
   state.query.mockReset().mockImplementation(async (table: string) => ({ data: table === 'calendar_events' ? [event] : table === 'event_card_assignments' ? [assignment] : [], error: null }))
 })
 const now = new Date('2026-10-23T12:00:00')
 afterEach(() => vi.unstubAllEnvs())
+test.each(['admin', 'developer'] as const)('opt-in %s management and zone share home calendar without promoting history', role => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  const home = calendarReadScope('/', '', '', false, 'true', now, role)
+  const paths = ['/users', '/settings/users', '/signup-requests', '/settings/signup-requests',
+    '/settings/meeting-notes', '/special-periods', '/settings/special-periods', '/suggestions', '/settings/suggestions', '/zone']
+  for (const path of paths) {
+    // A stale full/month request from the previous calendar is not a management consumer.
+    expect(calendarReadScope(path, '', '2020-01', true, 'true', now, role)).toBe(home)
+    for (const flag of [undefined, 'false']) {
+      expect(calendarReadScope(path, '', '', false, flag, now, role)).toBe('full')
+    }
+    for (const search of ['?openEvent=7', '?openChat=7', '?unknown=1']) {
+      expect(calendarReadScope(path, search, '', false, 'true', now, role)).toBe('full')
+    }
+    expect(calendarReadScope(path + '/edit', '', '', false, 'true', now, role)).toBe('full')
+  }
+  for (const search of ['?scope=all', '?level=cards&region=R&dong=D&scope=mine', '?tab=territory', '?tab=informal', '?tab=restaurant']) {
+    expect(calendarReadScope('/zone', search, '', false, 'true', now, role)).toBe(home)
+  }
+  for (const search of ['?tab=unknown', '?view=map', '?tab=territory&openEvent=7', '?tab=territory&tab=unknown', '?scope=all&scope=mine']) {
+    expect(calendarReadScope('/zone', search, '', false, 'true', now, role)).toBe('full')
+  }
+  for (const path of ['/settings/unknown', '/settings/data-management', '/settings/territory-regions',
+    '/regular-visits', '/settings/regular-visits', '/place-change-requests', '/settings/place-change-requests',
+    '/service-logs', '/settings/service-logs', '/stats', '/map', '/territory']) {
+    expect(calendarReadScope(path, '', '', false, 'true', now, role)).toBe('full')
+  }
+  for (const demo of ['true', 'false', undefined]) {
+    vi.stubEnv('VITE_DEMO_MODE', demo)
+    for (const flag of ['true', 'false', undefined, 'TRUE', '1']) {
+      vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', flag)
+      for (const path of paths) {
+        expect(calendarReadScope(path, '', '', false, 'true', now, role)).toBe(flag === 'true' ? home : 'full')
+      }
+    }
+  }
+})
+
+test.each(['user', 'leader', undefined] as const)('opt-in management leaves non-admin %s scope unchanged', role => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  for (const path of ['/users', '/settings/users', '/settings/meeting-notes']) {
+    expect(calendarReadScope(path, '', '', false, 'true', now, role, 'Me')).toBe('full')
+  }
+  expect(calendarReadScope('/zone', '', '', false, 'true', now, role, 'Me'))
+    .toBe(role === 'leader' ? 'service:["Me","2026-10-23",null]' : 'full')
+})
+
 test.each([
   [undefined, undefined, false], [undefined, 'true', true],
   ['true', 'false', true], ['false', 'true', false], ['false', undefined, false],

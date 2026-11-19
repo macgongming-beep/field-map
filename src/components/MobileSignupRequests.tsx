@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { confirmDialog } from '../lib/confirm'
-import { useAuth } from '../hooks/useAuth'
+import { useSharedAuth } from '../hooks/AuthContext'
 import type { Role } from '../types'
 import { roleLabels } from '../types'
 import { AppHeader } from './AppHeader'
@@ -36,17 +36,14 @@ export function MobileSignupRequests({ isEmbedded }: { isEmbedded?: boolean }) {
     user: currentUser,
     allUsers,
     fetchAllUsers,
+    ensureAllUsersFresh,
     updateUserApprovalStatus,
     deleteUser,
-  } = useAuth()
+  } = useSharedAuth()
+  useEffect(() => { void ensureAllUsersFresh() }, [ensureAllUsersFresh])
   const [activeTab, setActiveTab] = useState<ApprovalTab>('pending')
 
   const isAdminLike = currentUser?.role === 'admin' || currentUser?.role === 'developer'
-
-  useEffect(() => {
-    if (isAdminLike) void fetchAllUsers()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdminLike, currentUser?.role])
 
   const counts = useMemo(() => {
     return allUsers.reduce<Record<ApprovalTab, number>>((acc, item) => {

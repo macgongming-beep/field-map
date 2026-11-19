@@ -12,18 +12,19 @@ import { DesktopTerritory } from './DesktopTerritory'
 import { territoryProps, testBuilding, testCard, testUnit } from '../test/territoryFixture'
 import { setRegions } from '../lib/regions'
 import type { VisitHistory } from '../types'
+import { AuthContext } from '../hooks/AuthContext'
+import { authFixture } from '../test/authFixture'
 
-// ⚠ `allUsers` 는 props 가 아니라 `useAuth()` 에서 온다. 이걸 안 채우면
+// ⚠ `allUsers` 는 props 가 아니라 `useSharedAuth()` 에서 온다. 이걸 안 채우면
 //   방문자 목록이 비어 **칸 자체가 안 그려지고**, 시험이 헛돈다.
-vi.mock('../hooks/useAuth', () => ({
-  useAuth: () => ({
+function editorAuth() {
+  return authFixture({
     allUsers: [
-      { id: 1, name: '박진호', role: 'admin', approvalStatus: 'approved' },
-      { id: 2, name: '정찬양', role: 'user', approvalStatus: 'approved' },
+      { id: 1, name: '박진호', loginId: 'admin', created_at: '', role: 'admin', approvalStatus: 'approved' },
+      { id: 2, name: '정찬양', loginId: 'member', created_at: '', role: 'user', approvalStatus: 'approved' },
     ],
-    fetchAllUsers: vi.fn(),
-  }),
-}))
+  })
+}
 
 vi.mock('../lib/naverGeocode', () => ({
   geocodeFirstMatch: vi.fn(async () => null),
@@ -47,7 +48,7 @@ function open(overrides: Record<string, unknown> = {}) {
     buildings: [building],
     ...overrides,
   })
-  render(<MemoryRouter><DesktopTerritory {...(props as never)} /></MemoryRouter>)
+  render(<MemoryRouter><AuthContext.Provider value={editorAuth()}><DesktopTerritory {...(props as never)} /></AuthContext.Provider></MemoryRouter>)
   return props
 }
 

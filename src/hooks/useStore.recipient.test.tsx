@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({
   recipientDetails: null as Promise<void> | null,
   creationAction: '' as '' | 'created' | 'existing',
   returnRows: [] as Record<string, unknown>[], returnLogs: [] as Record<string, unknown>[],
-  failedTable: '', proof: vi.fn(),
+  failedTable: '', proof: vi.fn(), clock: vi.fn(),
   requests: [] as Record<string, unknown>[],
   requestFilters: [] as unknown[][],
   unitParent: 20, insertError: false, unitLookupError: false,
@@ -40,7 +40,7 @@ vi.mock('../lib/recipientStore', async importOriginal => ({ ...await importOrigi
 }) }))
 vi.mock('../lib/cardSummaries', () => ({ fetchCardSummaries: state.summaries }))
 vi.mock('./recipientRecovery', () => ({ recoverRecipientBuildings: state.recover, readRecipientBoundaries: state.boundaries }))
-vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchBuildingSignalProof: state.proof, fetchTerritoryClock: async () => '2026-10-05T00:00:00Z' }))
+vi.mock('./territorySync', () => ({ fetchChangedBuildings: state.changed, fetchBuildingSignalProof: state.proof, fetchTerritoryClock: state.clock }))
 vi.mock('../lib/supabase', () => ({ supabase: {
   rpc: (name: string) => Promise.resolve({ data: name === 'create_building_tx' && state.creationAction
     ? { ok: true, action: state.creationAction, building_id: 11 } : { ok: true }, error: null }),
@@ -112,6 +112,8 @@ const building: RawBuilding = { id: 10, card_id: 1, name: 'assigned', address: '
   units: [{ id: 100, building_id: 10, number: '101', status: '미방문', is_chinese: true, memo: null, regular_visits: [] }] }
 beforeEach(() => {
   state.recipientDetails = null
+  state.clock.mockReset().mockResolvedValue('2026-10-05T00:00:00Z')
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'false')
   // Unrelated store fixtures use full cards; scoped-card tests opt in explicitly.
   vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'false')
   vi.stubEnv('VITE_SCOPED_VISIT_HISTORY_ENABLED', 'false')
@@ -215,6 +217,40 @@ function enableScopedHistories() {
   state.historyRows.push({ ...state.historyRows[0], id: 901, unit_id: 100, visitor_name: 'Another visitor' })
 }
 
+test.each(['true', 'false', undefined])('initial discovery waits for its baseline and only shares it with explicit opt-in (%s)', async flag => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', flag)
+  let release!: (baseline: string) => void
+  state.clock.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(state.clock).toHaveBeenCalledOnce())
+  expect(state.refresh).not.toHaveBeenCalled()
+  expect(state.reads).toEqual([])
+  await act(async () => { release('2026-10-05T00:00:00Z') })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).toBeNull()
+  expect(state.refresh.mock.calls).toEqual(flag === 'true' ? [[undefined, '2026-10-05T00:00:00Z']] : [[undefined]])
+  state.refresh.mockClear()
+  await act(async () => { await result.current.refetchSlices(['resources'], { triggeredBy: 'mutation:assignments' }) })
+  expect(state.refresh).toHaveBeenCalledExactlyOnceWith(undefined)
+})
+
+test.each(['reject', 'null'])('initial discovery shares a failed clock as null (%s) without blocking loading', async failure => {
+  vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'true')
+  if (failure === 'reject') state.clock.mockRejectedValueOnce(new Error('Clock unavailable'))
+  else state.clock.mockResolvedValueOnce(null)
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(state.refresh).toHaveBeenCalledExactlyOnceWith(undefined, null)
+  expect(result.current.error).toBeNull()
+  expect(result.current.buildings.map(row => row.id)).toEqual([10])
+})
+
 test('parallel initial home starts independent reads but gates cards and histories on fresh buildings', async () => {
   enableScopedHistories()
   vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
@@ -250,9 +286,11 @@ test('manual full refresh after initial success waits for calendar before recipi
   enableScopedHistories()
   vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
   vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'true')
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(result.current.error).toBeNull()
+  expect(state.refresh).toHaveBeenCalledExactlyOnceWith(undefined, '2026-10-05T00:00:00Z')
   const previousBuildings = result.current.buildings
   state.refresh.mockClear()
   state.reads = []
@@ -333,6 +371,7 @@ test.each(['full', 'service:["Volunteer","2026-10-05",null]'])('parallel initial
   vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
   vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'true')
   vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'true')
   let release!: (value: { data: Record<string, unknown>[]; error: null }) => void
   state.calendarResponses.push(new Promise(resolve => { release = resolve }))
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', scope))

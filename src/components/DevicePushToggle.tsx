@@ -17,7 +17,7 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
 } from '../lib/push'
-import { useAuth } from '../hooks/useAuth'
+import { useSharedAuth } from '../hooks/AuthContext'
 
 export type DevicePushState = 'on' | 'off' | 'denied' | 'unsupported' | 'needs-install'
 
@@ -31,7 +31,7 @@ export function DevicePushToggle({
   onOpenInstallGuide?: () => void
 }) {
   const lang = (language ?? 'ko') as AppLanguage
-  const { user } = useAuth()
+  const { user } = useSharedAuth()
   const [installed, setInstalled] = useState(isPWAInstalled())
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>(
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',

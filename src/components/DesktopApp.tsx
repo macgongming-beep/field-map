@@ -1,4 +1,5 @@
 import { teamServiceEnabled } from '../config/teamService'
+import { RouteReadGate } from '../hooks/RouteReadGate'
 import { useMemo, useRef, useState } from 'react'
 import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '../utils/cardServiceScope'
 import { showToast } from '../lib/toast'
@@ -574,6 +575,7 @@ export function DesktopApp({
       </aside>
 
       <div className="desktop-main">
+        <RouteReadGate>
         <Routes>
         <Route path="/" element={
           <DesktopHome
@@ -994,6 +996,7 @@ export function DesktopApp({
         <Route path="/signup-requests" element={<Navigate to="/settings/signup-requests" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </RouteReadGate>
       </div>
     </main>
   )

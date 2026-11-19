@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { calendarReadScope, calendarWindowEnabled } from './hooks/calendarReadScope'
 import { useSettingsCalendarScope } from './hooks/useSettingsCalendarScope'
 import { CalendarReadContext } from './hooks/CalendarReadContext'
+import { RouteReadContext } from './hooks/RouteReadContext'
 import { homeEventDetailId } from './lib/eventDetailNavigation'
 import { Toast } from './components/Toast'
 import { MeetingProvider } from './features/meetingNotes/MeetingProvider'
@@ -24,6 +25,7 @@ import { usePlaceDeletionRealtime } from './hooks/usePlaceDeletionRealtime'
 import { useUnitCreationRealtime } from './hooks/useUnitCreationRealtime'
 import { TerritoryRealtimeContext } from './hooks/territoryRealtimeContext'
 import { useAuth } from './hooks/useAuth'
+import { AuthContext } from './hooks/AuthContext'
 import type { Role } from './types'
 import type { AppLanguage } from './i18n'
 import { isAppLanguage, setCurrentLang } from './i18n'
@@ -86,8 +88,10 @@ function App() {
     location.search, import.meta.env.VITE_DEMO_MODE, import.meta.env.VITE_RECIPIENT_STORE_ENABLED)
   // A rename/role change must not reuse a narrow session snapshot or its pending reads.
   const sessionIdentity = recentSessionsEnabled() ? JSON.stringify([auth.user?.name, auth.user?.role]) : ''
-  return <AppSession key={`${auth.user?.id ?? 'guest'}:${recipient ? 'recipient' : 'full'}:${sessionIdentity}`}
-    auth={auth} recipientUser={recipient ? auth.user!.name : undefined} startup={startup} onScreenReady={finishStartup} />
+  return <AuthContext.Provider value={auth}>
+    <AppSession key={`${auth.user?.id ?? 'guest'}:${recipient ? 'recipient' : 'full'}:${sessionIdentity}`}
+      auth={auth} recipientUser={recipient ? auth.user!.name : undefined} startup={startup} onScreenReady={finishStartup} />
+  </AuthContext.Provider>
 }
 
 function AppSession({ auth, recipientUser, startup, onScreenReady }: {
@@ -409,12 +413,14 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
   // Full consumers must never render historical statistics from a home window.
   // Home detail owns CalendarReadGate too: keep its editor mounted while loading history.
   const homeCalendarDetail = !isDesktop && homeEventDetailId(location.pathname, location.search) !== null
-  if (buildingScopeReady === false) {
+  const needsBuildings = buildingScopeReady === false
+  const needsCalendar = windowedCalendar && location.pathname !== '/calendar' && !homeCalendarDetail && !calendarScopeReady
+  if (startup && needsBuildings) {
     return buildingReadError
       ? <div role="alert"><AppScreenReady onReady={onScreenReady} />{msg('자료를 불러오지 못했습니다.')}<button type="button" onClick={() => { void retryBuildingRead().catch(() => {}) }}>{msg('다시 시도')}</button></div>
       : <AppLoading startup={startup} />
   }
-  if (windowedCalendar && location.pathname !== '/calendar' && !homeCalendarDetail && !calendarScopeReady) {
+  if (startup && needsCalendar) {
     return calendarReadError
       ? <div role="alert"><AppScreenReady onReady={onScreenReady} />자료를 불러오지 못했습니다.<button type="button" onClick={() => { void retryCalendarRead().catch(() => {}) }}>다시 시도</button></div>
       : <AppLoading startup={startup} />
@@ -445,6 +451,11 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
           ...calendarDemand, ready: calendarScopeReady, error: calendarReadError, select: selectCalendarDemand,
           retry: () => { void retryCalendarRead().catch(() => {}) },
         } : null}>
+        <RouteReadContext.Provider value={{
+          ready: !needsBuildings && !needsCalendar,
+          error: needsBuildings ? buildingReadError : needsCalendar && calendarReadError,
+          retry: () => { void (needsBuildings ? retryBuildingRead() : retryCalendarRead()).catch(() => {}) },
+        }}>
         {isDesktop ? (
           <DesktopApp
             language={language}
@@ -670,12 +681,13 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
             />
           </div>
         )}
+        </RouteReadContext.Provider>
         </CalendarReadContext.Provider>
         </TerritoryRealtimeContext.Provider>
         </FullBuildingContext.Provider>
         </BuildingDetailContext.Provider>
         </ScopedCardContext.Provider>
-        <AppScreenReady onReady={onScreenReady} />
+        {!needsBuildings && !needsCalendar && <AppScreenReady onReady={onScreenReady} />}
       </Suspense>
       </MeetingProvider>
     </>

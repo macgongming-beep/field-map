@@ -54,6 +54,58 @@ function fixture() {
 }
 
 describe('recipient card prefetch', () => {
+  it.each(['2026-11-20T00:00:00.000Z', null])('uses the supplied pre-read baseline %s without a second clock', async (baseline) => {
+    const f = fixture()
+    const reader = createRecipientCardPrefetch(f.client, f.session, { includeHistories: false, includeSummaries: false })
+    const details = await reader.prefetch([1], { baseline }).details
+    expect(details.baseline).toBe(baseline)
+    expect(details.buildings.map(row => row.id)).toEqual([11])
+    expect(f.rpc).not.toHaveBeenCalled()
+    expect(f.calls.map(call => call.table)).toEqual(['buildings', 'card_boundaries', 'units'])
+    reader.invalidate()
+    const fresh = await reader.prefetch([1]).details
+    expect(f.rpc).toHaveBeenCalledExactlyOnceWith('territory_sync_clock')
+    expect(fresh.baseline).not.toBe(baseline)
+  })
+
+  it('does not relabel cached details with a newer supplied baseline', async () => {
+    const f = fixture()
+    const baseline = '2026-11-19T00:00:00.000Z'
+    await f.reader.prefetch([1, 2], { baseline }).details
+    const calls = f.calls.length
+    expect((await f.reader.prefetch([1], { baseline: '2026-11-20T00:00:00.000Z' }).details).baseline).toBe(baseline)
+    expect(f.calls).toHaveLength(calls)
+    expect(f.rpc.mock.calls.map(([name]) => name)).toEqual(['get_card_summaries'])
+  })
+
+  it('rejects malformed supplied clocks before any reads', () => {
+    const f = fixture()
+    expect(() => f.reader.prefetch([1], { baseline: 'bad-clock' })).toThrow('Invalid recipient baseline')
+    expect(f.rpc).not.toHaveBeenCalled()
+    expect(f.from).not.toHaveBeenCalled()
+  })
+
+  it('checks identity and invalidation after summaries even with a supplied clock', async () => {
+    const f = fixture()
+    let release!: (value: { data: { id: number }[]; error: null }) => void
+    f.rpc.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    const load = f.reader.prefetch([1], { baseline: '2026-11-20T00:00:00.000Z' })
+    f.reader.invalidate()
+    release({ data: [{ id: 1 }], error: null })
+    await expect(load.details).rejects.toThrow('scope changed')
+    expect(f.from).not.toHaveBeenCalled()
+  })
+
+  it('evicts a failed supplied-baseline load so retry reads fresh details', async () => {
+    const f = fixture()
+    f.response.mockRejectedValueOnce(new Error('Detail failed'))
+    await expect(f.reader.prefetch([1], { baseline: null }).details).rejects.toThrow('Detail failed')
+    const details = await f.reader.prefetch([1]).details
+    expect(details.buildings.map(row => row.id)).toEqual([11])
+    expect(details.baseline).toBeTruthy()
+    expect(f.rpc.mock.calls.filter(([name]) => name === 'territory_sync_clock')).toHaveLength(1)
+  })
+
   it('lets the store own summaries and starts paginated units before buildings finish', async () => {
     const f = fixture()
     f.rows.units = Array.from({ length: 1005 }, (_, i) => ({ id: i + 1, building_id: 11 }))

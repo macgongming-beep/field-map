@@ -31,6 +31,8 @@ export function createRecipientStoreReader(userName: string) {
   let pending: ReturnType<typeof load> | undefined
   let allowed: Set<number> | null = null
   let calendarSnapshot: CalendarEvent[] | undefined
+  let snapshotBaseline: string | null | undefined
+  let generation = 0
   const check = () => { if (!active || !token || getAuthToken() !== token) throw new Error('Recipient store session changed') }
   async function pages<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>) {
     const result: T[] = []
@@ -76,9 +78,14 @@ export function createRecipientStoreReader(userName: string) {
     return ids
   }
   async function load() {
+    const requestGeneration = generation
+    const baseline = snapshotBaseline
     const ids = await scopeIds(calendarSnapshot)
-    const details = await api.reader.prefetch(ids).details
     check()
+    if (requestGeneration !== generation) throw new Error('Recipient store scope changed')
+    const details = await (baseline === undefined ? api.reader.prefetch(ids) : api.reader.prefetch(ids, { baseline })).details
+    check()
+    if (requestGeneration !== generation) throw new Error('Recipient store scope changed')
     allowed = new Set(ids)
     return details
   }
@@ -90,7 +97,7 @@ export function createRecipientStoreReader(userName: string) {
       return allowed != null && ids.length === allowed.size && ids.every((id) => allowed!.has(id)) ? ids : null
     },
     resume() {
-      if (!active) { api = createRecipientPreview(userName, { includeHistories: false, includeSummaries: false }); pending = undefined; allowed = null; calendarSnapshot = undefined; active = true }
+      if (!active) { api = createRecipientPreview(userName, { includeHistories: false, includeSummaries: false }); pending = undefined; allowed = null; calendarSnapshot = undefined; snapshotBaseline = undefined; active = true }
     },
     allowsCard(id: number) { return allowed == null || allowed.has(id) },
     validateCards(cardIds: number[]) {
@@ -100,7 +107,14 @@ export function createRecipientStoreReader(userName: string) {
     },
     get scoped() { return allowed != null },
     cardIds() { check(); if (!allowed) throw new Error('Missing recipient card scope'); return [...allowed] },
-    refresh(calendar?: CalendarEvent[]) { check(); calendarSnapshot = calendar; pending = undefined; api.reader.invalidate() },
-    dispose() { active = false; api.dispose() },
+    refresh(calendar?: CalendarEvent[], baseline?: string | null) {
+      check()
+      generation += 1
+      calendarSnapshot = calendar
+      snapshotBaseline = import.meta.env.VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED === 'true' ? baseline : undefined
+      pending = undefined
+      api.reader.invalidate()
+    },
+    dispose() { active = false; generation += 1; api.dispose() },
   }
 }

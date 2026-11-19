@@ -847,7 +847,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           && (options?.triggeredBy === 'fetchAll' || options?.triggeredBy === 'initial:calendar-scope-retry')
           && ['calendar', 'buildings', 'cards', 'visits'].every(slice => requested.has(slice as Slice))
         if (parallelInitial) {
-          recipientReader.refresh(undefined)
+          if (import.meta.env.VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED === 'true') recipientReader.refresh(undefined, baseline)
+          else recipientReader.refresh(undefined)
           const buildingsRead = fetchSlice('buildings')
           const afterBuildings = new Set<Slice>(['cards', 'visits', 'visitHistories'])
           const reads = [...requested].map(slice => slice === 'buildings' ? buildingsRead

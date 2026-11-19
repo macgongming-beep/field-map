@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
 import { MobileHome } from './MobileHome'
 import { CalendarReadContext } from '../hooks/CalendarReadContext'
+import { RouteReadContext } from '../hooks/RouteReadContext'
 
 vi.mock('./AppHeader', () => ({ AppHeader: () => null }))
 const attention = vi.hoisted(() => vi.fn(() => ({})))
@@ -22,6 +23,27 @@ function Location() {
 }
 
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); attention.mockClear() })
+
+test('route data waits keep the real mobile navigation usable without mounting incomplete screens', () => {
+  const props = { language: 'ko', actualRole: 'admin', viewMode: 'admin', currentVisitor: 'Me', currentUser: { id: 1, name: 'Me', role: 'admin' }, allUsers: [],
+    cards: [], buildings: [], calendarEvents: [], serviceSessions: [], visitHistories: [], cardBoundaries: [],
+    notices: [], territoryRegions: [], returnVisits: [] } as unknown as ComponentProps<typeof MobileHome>
+  const retry = vi.fn()
+  const tree = (ready: boolean, error = false) => <MemoryRouter><RouteReadContext.Provider value={{ ready, error, retry }}>
+    <MobileHome {...props} /><Location />
+  </RouteReadContext.Provider></MemoryRouter>
+  const view = render(tree(false))
+  expect(screen.queryByRole('button', { name: 'open home event' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '캘린더', exact: true }))
+  expect(screen.getByText('/calendar')).toBeTruthy()
+  expect(screen.queryByText('calendar grid')).toBeNull()
+  view.rerender(tree(false, true))
+  fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
+  expect(retry).toHaveBeenCalledOnce()
+  expect(screen.getByRole('button', { name: '홈', exact: true })).toBeTruthy()
+  view.rerender(tree(true))
+  expect(screen.getByText('calendar grid')).toBeTruthy()
+})
 
 test.each(['admin', 'developer', 'leader', 'user'] as const)('%s reads management badges only on the settings screen', role => {
   const props = { language: 'ko', actualRole: role, viewMode: role, currentVisitor: 'Me', currentUser: { id: 1, name: 'Me', role }, allUsers: [],

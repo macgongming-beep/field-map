@@ -1,6 +1,7 @@
 import { teamServiceEnabled } from '../config/teamService'
 import { useContext, useMemo, useState } from 'react'
 import { CalendarReadContext } from '../hooks/CalendarReadContext'
+import { RouteReadGate } from '../hooks/RouteReadGate'
 import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '../utils/cardServiceScope'
 import { FontScalePicker } from './FontScalePicker'
 import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
@@ -843,7 +844,7 @@ export function MobileHome({
   return (
     <Routes>
       <Route path="/map" element={
-        <>
+        <RouteReadGate>
           <MobileMap language={language}
             translatePlaceNames={translatePlaceNames}
             informalAssets={informalAssets}
@@ -889,10 +890,11 @@ export function MobileHome({
             onOpenLocationSettings={() => navigate('/location-permission-settings')}
           />
           {/* 지도는 풀스크린 — 하단 탭 없음 */}
-        </>
+        </RouteReadGate>
       } />
       <Route path="/*" element={
         <main className="app-shell" style={{ paddingBottom: 72 }}>
+          <RouteReadGate>
           <Routes>
             {/* 홈 */}
             <Route path="/" element={
@@ -1690,6 +1692,7 @@ export function MobileHome({
                 실제로 그렇게 됐다. DesktopApp 에는 같은 폴백이 이미 있다 */}
             <Route path="*" element={<Navigate replace to="/" />} />
           </Routes>
+          </RouteReadGate>
 
           {BottomNav}
         </main>

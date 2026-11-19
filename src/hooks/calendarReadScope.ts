@@ -6,6 +6,7 @@ import type { Role } from '../types'
 import { isReturnVisitDetailPath } from '../utils/returnVisitDetailPath'
 import { returnDetailRetentionEnabled } from '../lib/returnDetailRetention'
 import { parseServiceCalendarScope } from './serviceCalendarScope'
+import { isLightweightManagementRoute } from '../utils/personalSettingsRoute'
 import { mergeEventCardAssignments, toCalendarEvent, toEventCardAssignment, type RawCalendarEvent, type RawEventCardAssignment, type RawEventCardAssignmentCard } from './storeTransforms'
 
 export function calendarWindowEnabled(flag = import.meta.env.VITE_CALENDAR_WINDOW_ENABLED, demo = import.meta.env.VITE_DEMO_MODE): boolean {
@@ -26,8 +27,15 @@ export function calendarReadScope(path: string, search: string, month: string, f
   // Admin card allocation does not consume historical events. Share the home
   // window so opening it does not promote a recent snapshot to all history.
   const adminAssignment = path === '/assignment' && (role === 'admin' || role === 'developer')
+  // Opted-in management and zone lists consume no calendar history. Unknown query
+  // modes (including ambiguous duplicate keys) remain full consumers.
+  const adminNonCalendar = import.meta.env.VITE_ROUTE_LIGHTWEIGHT_ENABLED === 'true'
+    && (role === 'admin' || role === 'developer')
+    && (isLightweightManagementRoute(path, search) || (path === '/zone'
+      && [...params.keys()].every(key => ['level', 'region', 'dong', 'scope', 'tab'].includes(key) && params.getAll(key).length === 1)
+      && [null, 'territory', 'informal', 'restaurant'].includes(params.get('tab'))))
   const homeDetail = homeEventDetailId(path, search) !== null
-  if (featureFlag !== 'true' || ((path === '/calendar' || homeDetail) && full) || (!adminAssignment && !['/', '/home', '/calendar'].includes(path))) return 'full'
+  if (featureFlag !== 'true' || ((path === '/calendar' || homeDetail) && full) || (!adminAssignment && !adminNonCalendar && !['/', '/home', '/calendar'].includes(path))) return 'full'
   if (params.has('openChat') || (params.has('openEvent') && !homeDetail)) return 'full'
   const recent = new Date(now)
   recent.setDate(recent.getDate() - 14)

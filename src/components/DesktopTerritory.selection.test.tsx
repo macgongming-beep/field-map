@@ -9,6 +9,8 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { DesktopTerritory } from './DesktopTerritory'
+import { AuthContext } from '../hooks/AuthContext'
+import { authFixture } from '../test/authFixture'
 import { territoryProps, testBuilding, testCard, testUnit } from '../test/territoryFixture'
 
 vi.mock('../lib/confirm', () => ({
@@ -18,7 +20,7 @@ vi.mock('../lib/confirm', () => ({
 
 const open = (overrides: Record<string, unknown> = {}) => {
   const props = territoryProps({ onDeleteCards: vi.fn(), ...overrides })
-  render(<MemoryRouter><DesktopTerritory {...(props as never)} /></MemoryRouter>)
+  render(<MemoryRouter><AuthContext.Provider value={authFixture()}><DesktopTerritory {...(props as never)} /></AuthContext.Provider></MemoryRouter>)
   return props as { onDeleteCards: ReturnType<typeof vi.fn> }
 }
 

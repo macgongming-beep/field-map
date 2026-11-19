@@ -1,7 +1,7 @@
 import { createContext } from 'react'
 import type { Role } from '../types'
 import { homeEventDetailId } from '../lib/eventDetailNavigation'
-import { isPersonalSettingsRoute } from '../utils/personalSettingsRoute'
+import { isLightweightManagementRoute, isPersonalSettingsRoute } from '../utils/personalSettingsRoute'
 import { toBuilding, type RawBuilding, type RawUnit } from './storeTransforms'
 
 export type BuildingDemand = 'home' | 'calendar' | 'zone' | 'map' | 'full'
@@ -25,6 +25,14 @@ export function buildingDemandForRoute(role: Role, pathname: string, search: str
   // Personal settings consume no building details. The store retains any richer snapshot.
   // Unknown query modes and administrative editors remain full consumers.
   if (!search && isPersonalSettingsRoute(pathname, search)) return 'home'
+  if (import.meta.env.VITE_ROUTE_LIGHTWEIGHT_ENABLED === 'true' && role === 'admin') {
+    if (isLightweightManagementRoute(pathname, search)) return 'home'
+    // Mobile allocation counts usage; desktop allocation only consumes cards.
+    if (pathname === '/assignment' && !search) {
+      if (desktop) return 'home'
+      if (calendarZoneBuildingDemandEnabled()) return 'zone'
+    }
+  }
   if (calendarZoneBuildingDemandEnabled()) {
     if (pathname === '/calendar' || (!desktop && homeEventDetailId(pathname, search) !== null)) return 'calendar'
     // Unknown/deep-link query modes remain full. Restaurant editors need complete data.

@@ -2,15 +2,16 @@ import {afterEach,beforeEach,expect,test,vi} from 'vitest'
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
 import {MemoryRouter} from 'react-router-dom'
 import {MobileUsers} from './MobileUsers'
+import {AuthContext} from '../hooks/AuthContext'
+import {authFixture} from '../test/authFixture'
 const mocks=vi.hoisted(()=>({manage:vi.fn(),legacyRename:vi.fn(),toast:vi.fn(),fetch:vi.fn(),directory:{revision:'1',groups:[{code:'fixed',name:'原名',active:true}]}}))
-vi.mock('../hooks/useAuth',()=>({useAuth:()=>({user:{id:1,role:'admin'},allUsers:[],fetchAllUsers:mocks.fetch,renameUserGroup:mocks.legacyRename})}))
 vi.mock('../lib/supabase',()=>({supabase:{from:()=>({select:()=>({in:async()=>({data:[{key:'service_group_directory',value:JSON.stringify(mocks.directory)}],error:null})})})}}))
 vi.mock('../features/groupService/api',()=>({manageServiceGroup:mocks.manage}))
 vi.mock('../lib/toast',()=>({showToast:mocks.toast}))
 vi.mock('../lib/confirm',()=>({confirmDialog:async()=>true}))
 beforeEach(()=>{vi.clearAllMocks();mocks.directory={revision:'1',groups:[{code:'fixed',name:'原名',active:true}]}})
 afterEach(cleanup)
-async function open(){render(<MemoryRouter><MobileUsers isEmbedded/></MemoryRouter>);await screen.findByRole('option',{name:'原名 (0)'});fireEvent.click(screen.getByLabelText('사용자 관리 더보기'));fireEvent.click(screen.getByRole('button',{name:'집단 편집'}))}
+async function open(){render(<MemoryRouter><AuthContext.Provider value={authFixture({fetchAllUsers:mocks.fetch,renameUserGroup:mocks.legacyRename})}><MobileUsers isEmbedded/></AuthContext.Provider></MemoryRouter>);await screen.findByRole('option',{name:'原名 (0)'});fireEvent.click(screen.getByLabelText('사용자 관리 더보기'));fireEvent.click(screen.getByRole('button',{name:'집단 편집'}))}
 test('renames an empty group atomically by code, never calls the old membership-only rename',async()=>{
   mocks.manage.mockResolvedValue({revision:'2',groups:[{code:'fixed',name:'新名',active:true}]})
   await open();fireEvent.click(screen.getByRole('button',{name:'原名 이름 변경'}))

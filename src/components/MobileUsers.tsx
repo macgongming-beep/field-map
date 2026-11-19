@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth, type LoginLogRecord } from '../hooks/useAuth'
+import type { LoginLogRecord } from '../hooks/useAuth'
+import { useSharedAuth } from '../hooks/AuthContext'
 import { supabase } from '../lib/supabase'
 import { showToast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirm'
@@ -55,7 +56,7 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
   const {
     user: currentUser,
     allUsers,
-    fetchAllUsers,
+    ensureAllUsersFresh,
     createUser,
     updateUserIdentity,
     updateUserRole,
@@ -65,7 +66,9 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
     updateCartServiceApproval,
     renameUserGroup,
     fetchUserLoginLogs,
-  } = useAuth()
+  } = useSharedAuth()
+
+  useEffect(() => { void ensureAllUsersFresh() }, [ensureAllUsersFresh])
 
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<UserFilter>('all')
@@ -98,11 +101,6 @@ export function MobileUsers({ isEmbedded }: { isEmbedded?: boolean }) {
   const [bulkGroup, setBulkGroup] = useState<string>('')
 
   const isAdminLike = currentUser?.role === 'admin' || currentUser?.role === 'developer'
-
-  useEffect(() => {
-    if (isAdminLike) void fetchAllUsers()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdminLike, currentUser?.role])
 
   // 집단 목록 로드 (서버 공유 — 관리자가 바꾸면 모두에게 반영)
   useEffect(() => {

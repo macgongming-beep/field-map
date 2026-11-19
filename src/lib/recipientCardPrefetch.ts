@@ -71,15 +71,17 @@ export function createRecipientCardPrefetch(
     return rows
   }
 
-  async function readDetails(ids: number[], requestGeneration: number): Promise<RecipientCardDetails> {
+  async function readDetails(ids: number[], requestGeneration: number, knownBaseline?: string | null): Promise<RecipientCardDetails> {
     if (!ids.length) return { buildings: [], histories: [], boundaries: [], baseline: null }
     check(requestGeneration)
     // Capture before any detail reads; failed clocks must not prevent initial loading.
-    let baseline: string | null = null
-    try {
-      const clock = await client.rpc('territory_sync_clock')
-      if (!clock.error && typeof clock.data === 'string' && Number.isFinite(Date.parse(clock.data))) baseline = clock.data
-    } catch { /* Recovery will need a fresh scoped read until a clock is available. */ }
+    let baseline = knownBaseline ?? null
+    if (knownBaseline === undefined) {
+      try {
+        const clock = await client.rpc('territory_sync_clock')
+        if (!clock.error && typeof clock.data === 'string' && Number.isFinite(Date.parse(clock.data))) baseline = clock.data
+      } catch { /* Recovery will need a fresh scoped read until a clock is available. */ }
+    }
     check(requestGeneration)
     const buildings: RawBuilding[] = []
     const boundaries: BoundaryRow[] = []
@@ -142,10 +144,12 @@ export function createRecipientCardPrefetch(
     }
   }
 
-  function prefetch(cardIds: number[]): RecipientCardLoad {
+  function prefetch(cardIds: number[], snapshot: { baseline?: string | null } = {}): RecipientCardLoad {
     const ids = normalizeIds(cardIds)
     const requestGeneration = generation
     check(requestGeneration)
+    // Supplied clocks must precede this snapshot's reads, never a later mutation.
+    if (snapshot.baseline != null && !Number.isFinite(Date.parse(snapshot.baseline))) throw new Error('Invalid recipient baseline')
     if (!ids.length) return { summaries: Promise.resolve([]), details: Promise.resolve({ buildings: [], histories: [], boundaries: [], baseline: null }) }
     // A single-card map reuses its team's in-flight prefetch instead of downloading it again.
     const covering = [...entries.values()].find((entry) => ids.every((id) => entry.ids.includes(id)))
@@ -166,7 +170,8 @@ export function createRecipientCardPrefetch(
     const key = ids.join(',')
     // useStore validates the full card summary set itself; do not fetch a subset twice.
     const summaries = options.includeSummaries === false ? Promise.resolve([]) : readSummaries(ids, requestGeneration)
-    const details = summaries.then(() => readDetails(ids, requestGeneration))
+    const baseline = snapshot.baseline
+    const details = summaries.then(() => readDetails(ids, requestGeneration, baseline))
     const load = { summaries, details }
     entries.set(key, { ids, load })
     // Handle background failures even when the user never opens the map. Awaiting details still rejects.

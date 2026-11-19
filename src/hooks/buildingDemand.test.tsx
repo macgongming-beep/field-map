@@ -65,6 +65,7 @@ const raw = (id = 1, cardId = 1): RawBuilding => ({
 const buildingReads = () => state.reads.filter(read => read.table === 'buildings')
 beforeEach(() => {
   vi.stubEnv('VITE_DEMO_MODE', 'false')
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', undefined)
   vi.stubEnv('VITE_BUILDING_DEMAND_ENABLED', 'true')
   vi.stubEnv('VITE_CALENDAR_ZONE_BUILDING_DEMAND_ENABLED', 'true')
   vi.stubEnv('VITE_TERRITORY_REALTIME_ENABLED', 'true')
@@ -155,6 +156,85 @@ test.each(['admin', 'leader'] as const)('%s personal settings do not promote bui
   await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
   expect(result.current.fullBuildingReader!.ready).toBe(true)
   expect(result.current.buildings[0].units[0].memo).toBe('saved unit memo')
+})
+
+test.each(['true', 'false', undefined])('opt-in management and assignment building reductions preserve gates with demo=%s', demo => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  const management = ['/users', '/settings/users', '/signup-requests', '/settings/signup-requests',
+    '/settings/meeting-notes', '/special-periods', '/settings/special-periods', '/suggestions', '/settings/suggestions']
+  for (const flag of ['true', 'false', undefined, 'TRUE', '1']) {
+    vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', flag)
+    for (const desktop of [false, true]) {
+      for (const path of management) {
+        expect(buildingDemandForRoute('admin', path, '', desktop)).toBe(flag === 'true' ? 'home' : 'full')
+      }
+      expect(buildingDemandForRoute('admin', '/assignment', '', desktop))
+        .toBe(flag === 'true' ? desktop ? 'home' : 'zone' : 'full')
+      for (const path of [...management, '/assignment']) {
+        expect(buildingDemandForRoute('leader', path, '', desktop)).toBe('full')
+        for (const role of ['user', 'developer'] as const) {
+          expect(buildingDemandForRoute(role, path, '', desktop)).toBeUndefined()
+        }
+        for (const search of ['?openEvent=9', '?openChat=9', '?unknown=1']) {
+          expect(buildingDemandForRoute('admin', path, search, desktop)).toBe('full')
+        }
+        expect(buildingDemandForRoute('admin', path + '/edit', '', desktop)).toBe('full')
+      }
+      for (const path of ['/settings/unknown', '/settings/data-management', '/settings/territory-regions',
+        '/regular-visits', '/settings/regular-visits', '/place-change-requests', '/settings/place-change-requests',
+        '/service-logs', '/settings/service-logs', '/stats', '/territory']) {
+        expect(buildingDemandForRoute('admin', path, '', desktop)).toBe('full')
+      }
+    }
+  }
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  vi.stubEnv('VITE_CALENDAR_ZONE_BUILDING_DEMAND_ENABLED', 'false')
+  expect(buildingDemandForRoute('admin', '/assignment', '', false)).toBe('full')
+  expect(buildingDemandForRoute('admin', '/assignment', '', true)).toBe('home')
+  vi.stubEnv('VITE_BUILDING_DEMAND_ENABLED', 'false')
+  for (const path of [...management, '/assignment']) {
+    for (const desktop of [false, true]) expect(buildingDemandForRoute('admin', path, '', desktop)).toBeUndefined()
+  }
+})
+
+test.each([false, true])('opt-in assignment desktop=%s promotes from management without weakening map or editor completeness', async desktop => {
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  state.rows[1].units[0].usage_type = '상가'
+  const { result, rerender } = renderHook(({ path }) =>
+    useStore(true, 'admin', undefined, undefined, 'tester', buildingDemandForRoute('admin', path, '', desktop)),
+  { initialProps: { path: '/users' } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(buildingReads()).toEqual([])
+  expect(result.current.cards.map(card => card.units)).toEqual([1, 1])
+  rerender({ path: '/assignment' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(buildingReads().map(read => read.columns)).toEqual(desktop ? [] : [ZONE_BUILDING_COLUMNS])
+  expect(result.current.fullBuildingReader!.ready).toBe(false)
+  if (!desktop) {
+    expect(result.current.buildings.map(b => [buildingHasUsage(b, '주택'), buildingHasUsage(b, '상가')]))
+      .toEqual([[true, false], [false, true]])
+    expect(result.current.buildingDetailReader!.ready(1)).toBe(false)
+    expect(result.current.buildings[0].units[0].memo).toBeUndefined()
+  }
+  rerender({ path: '/map' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(result.current.buildings[0].lat).toBe(37)
+  if (!desktop) {
+    expect(buildingReads().at(-1)?.columns).toBe(MAP_BUILDING_COLUMNS)
+    expect(result.current.buildingDetailReader!.ready(1)).toBe(false)
+    await act(async () => { await result.current.buildingDetailReader!.ensure(1) })
+    expect(result.current.buildingDetailReader!.ready(1)).toBe(true)
+  }
+  expect(result.current.buildings[0].units[0].memo).toBe('saved unit memo')
+  const buildings = result.current.buildings
+  state.reads = []
+  rerender({ path: '/settings/users' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(result.current.buildings).toBe(buildings)
+  expect(state.reads).toEqual([])
+  act(() => result.current.fullBuildingReader!.request())
+  await waitFor(() => expect(result.current.fullBuildingReader!.ready).toBe(true))
+  expect(result.current.buildings[1].units[0].memo).toBe('saved unit memo')
 })
 
 test.each(['admin', 'leader'] as const)('%s home detail adds only names and retains complete card summaries', async role => {

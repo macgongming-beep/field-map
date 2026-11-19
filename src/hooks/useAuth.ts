@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { shouldForceRelogin } from '../lib/sessionRelogin'
 import { showToast } from '../lib/toast'
@@ -52,6 +52,7 @@ export type LoginLogRecord = {
 const ROLE_VALUES: Role[] = ['admin', 'leader', 'user', 'developer']
 type DirectoryRow = Database['public']['Functions']['get_user_directory']['Returns'][number]
 const EMPTY_USERS: AppUserRecord[] = []
+const DIRECTORY_FRESH_MS = 60_000
 
 function isRole(value: unknown): value is Role {
   return typeof value === 'string' && ROLE_VALUES.includes(value as Role)
@@ -125,6 +126,12 @@ export function useAuth() {
   const directoryKey = user ? `${user.id}:${user.role}:${user.authToken ?? ''}` : ''
   const directoryOwner = useRef('')
   const directoryIdentity = useRef(directoryKey)
+  const directoryFresh = useRef<{ key: string; completedAt: number } | null>(null)
+  const directoryPending = useRef<{ key: string; promise: Promise<void> } | null>(null)
+  if (directoryIdentity.current !== directoryKey) {
+    directoryFresh.current = null
+    directoryPending.current = null
+  }
   directoryIdentity.current = directoryKey
   const directoryRead = useRef(0)
   const loginFailures = useRef({ loginId: '', count: 0, startedAt: 0 })
@@ -474,7 +481,7 @@ export function useAuth() {
     window.dispatchEvent(new Event('app-users-changed'))
   }
 
-  const fetchAllUsers = async () => {
+  const readAllUsers = useCallback(async () => {
     if (!user) return
     const read = ++directoryRead.current
     const key = directoryKey
@@ -488,6 +495,7 @@ export function useAuth() {
         showToast(msg('사용자 목록을 불러오지 못했습니다.'), 'error')
         return
       }
+      directoryFresh.current = { key, completedAt: Date.now() }
       setAllUsers(((result.data ?? []) as DirectoryRow[]).map(item => ({
         id: item.id, name: item.name, loginId: '', phone: null,
         role: isRole(item.role) ? item.role : 'user',
@@ -509,6 +517,7 @@ export function useAuth() {
     if (!current()) return
     if (!error && data) {
       directoryOwner.current = key
+      directoryFresh.current = { key, completedAt: Date.now() }
       const rows = data as unknown as Array<{ id: number; name: string; phone?: string | null; login_id: string | null; role: Role; approval_status?: AppUserRecord['approvalStatus'] | null; is_active?: boolean | null; group_name?: string | null; cart_service_approved?: boolean | null; cart_service_approved_at?: string | null; created_at: string; last_login_at?: string | null }>
       setAllUsers(rows
         .filter((item) => user.role === 'developer' || !isDeveloperAccount(item))
@@ -543,6 +552,7 @@ export function useAuth() {
       if (!current()) return
       if (!fallback.error && fallback.data) {
         directoryOwner.current = key
+        directoryFresh.current = { key, completedAt: Date.now() }
         setAllUsers((fallback.data as unknown as Array<{ id: number; name: string; login_id?: string | null; role: Role; created_at: string; last_login_at?: string | null }>)
           .filter((item) => user.role === 'developer' || !isDeveloperAccount(item))
           .map((item) => ({
@@ -558,13 +568,39 @@ export function useAuth() {
           })))
       }
     }
-  }
+  }, [user, directoryKey])
+
+  // Explicit refreshes and writes bypass freshness and supersede older reads.
+  const fetchAllUsers = useCallback((): Promise<void> => {
+    if (!user || directoryIdentity.current !== directoryKey || getAuthToken() !== user.authToken) return Promise.resolve()
+    directoryFresh.current = null
+    const read = readAllUsers()
+    const version = directoryRead.current
+    const pending = { key: directoryKey, promise: read }
+    pending.promise = read.catch(() => {
+      if (directoryIdentity.current === directoryKey && directoryRead.current === version && getAuthToken() === user.authToken) {
+        showToast(msg('사용자 목록을 불러오지 못했습니다.'), 'error')
+      }
+    }).finally(() => {
+      if (directoryPending.current === pending) directoryPending.current = null
+    })
+    directoryPending.current = pending
+    return pending.promise
+  }, [user, directoryKey, readAllUsers])
+
+  const ensureAllUsersFresh = useCallback((): Promise<void> => {
+    if (!user || directoryIdentity.current !== directoryKey || getAuthToken() !== user.authToken) return Promise.resolve()
+    if (directoryPending.current?.key === directoryKey) return directoryPending.current.promise
+    const fresh = directoryFresh.current
+    const age = fresh ? Date.now() - fresh.completedAt : -1
+    if (fresh?.key === directoryKey && age >= 0 && age < DIRECTORY_FRESH_MS) return Promise.resolve()
+    return fetchAllUsers()
+  }, [user, directoryKey, fetchAllUsers])
 
   // 로그인 직후 자동으로 전체 유저 목록 로드 (인도자 이름 드롭다운에 사용)
   useEffect(() => {
-    void fetchAllUsers()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [directoryKey])
+    void ensureAllUsersFresh()
+  }, [ensureAllUsersFresh])
 
   useEffect(() => {
     if (!user) return
@@ -573,8 +609,7 @@ export function useAuth() {
     }
     window.addEventListener('app-users-changed', onUsersChanged)
     return () => window.removeEventListener('app-users-changed', onUsersChanged)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.role])
+  }, [user, fetchAllUsers])
 
   const resetUserPin = async (userId: number, newPin: string = '0000') => {
     if (!isAdminLike(user?.role)) return false
@@ -938,6 +973,7 @@ export function useAuth() {
     updateMyProfile,
     allUsers: directoryOwner.current === directoryKey ? allUsers : EMPTY_USERS,
     fetchAllUsers,
+    ensureAllUsersFresh,
     resetUserPin,
     updateUserRole,
     updateUsersGroup,
