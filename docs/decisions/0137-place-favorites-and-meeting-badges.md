@@ -1,7 +1,7 @@
 # 장소 즐겨찾기 복구와 작은 모임 표시
 
 - 결정일: 2026-11-19
-- 상태: 데모 적용 완료, 운영 배포 한도로 보류
+- 상태: 데모 및 운영 적용 완료 (2026-11-19)
 
 새 ServiceEventEditor는 시간 즐겨찾기만 연결하고 기존 장소 즐겨찾기를 누락했다.
 운영 app_settings를 읽기 전용으로 확인하여 calendar_place_presets에 3개가 남아 있음을 확인했다.
@@ -36,3 +36,24 @@ target이 preview이므로 운영에 반영된 것으로 보지 않는다. 운�
 한도를 우회하거나 요금제/환경변수/별칭을 변경하지 않았다. 운영 확인 대기는 종료했다.
 한도가 풀린 뒤 같은 후보를 production target으로 빌드하고 정확한 SHA/READY/환경변수 및 별칭을
 다시 확인해야 한다. preview 배포를 그대로 운영 별칭에 붙이지 않는다.
+
+## 2026-11-19 즉시 운영 반영
+
+사용자가 저녁 예약을 취소하고 즉시 배포하도록 승인했다. 예약 `automation-4`는 삭제했다.
+현재 앱 소스가 검증 후보와 같음을 확인하고 장소/모임/집단 상세 시험 33개를 재실행해 통과했다.
+운영의 집단/리비전 설정은 true이며 변경하지 않았다. 민감 환경변수는 내려받을 때 빈 값으로
+반환되므로 로컬 파일의 빈 값으로 재빌드하지 않고, Vercel이 보관한 운영 설정으로 재빌드했다.
+
+검증 후보 `9b6a9289c8b9938c78e4ea30180ec4d90b30b47f`의 기존 미리보기를
+`vercel redeploy ... --target production`으로 **새로 빌드**했다. 이번 단일 시도는 제한 없이 성공했다.
+
+- 새 운영 배포: `dpl_GMaTD3SvLFTzHw9K6tfMPora6v2P`, production / READY.
+- 실제 운영 별칭 `chinese-territory-app.vercel.app`이 새 배포 ID에 연결됨을 API로 확인.
+- 홈페이지와 확인한 JS 파일 HTTP 200. 번들에서 운영 Supabase 주소를 확인하고 데모 주소가
+  포함되지 않음을 확인. 장소 즐겨찾기 키와 실제 `gs-meeting-badge` 코드는 공유 MeetingSettings 청크에서 확인.
+- 원격 Git 자동 배포는 disabled 유지. DB/자료/권한/환경변수는 변경하지 않았다.
+- 직전 운영 복구 기준: `dpl_4aj7JX9mms1cfoDvaGBaU3DQV7TL` (`1c3a18b`).
+- 검증 기록: `backups/deployment-policy-20261119/place-release-verification.json` (Git 제외).
+
+배포 후 검증은 버전/별칭/HTTP/번들 검사다. 운영에서 장소 추가·수정·삭제를 실제 실행하거나
+사용자의 아이폰 업데이트를 대신 확인한 것은 아니다. 사용자 기기에서 새 버전 적용 후 최종 확인한다.
