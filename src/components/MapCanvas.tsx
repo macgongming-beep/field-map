@@ -1569,6 +1569,17 @@ function NaverMapCanvas({
         mountedWithFocusRef.current = true
         prevSelectedCardIdRef.current = initialCardId
         prevHighlightedCardIdsSignatureRef.current = getHighlightedCardIdsSignature(highlightedCardIdsRef.current)
+      } else if (viewportMemoryRef.current) {
+        // Include buildings without polygons in the one-time assignment framing.
+        const ids = highlightedCardIdsRef.current
+        const points = [
+          ...cardBoundaries.filter(boundary => !ids || ids.has(boundary.cardId)).flatMap(boundary => boundary.points),
+          ...buildingsRef.current.filter(building => !ids || ids.has(building.cardId))
+            .map(building => ({ lat: Number(building.lat), lng: Number(building.lng) })),
+        ].filter(point => isValidMapCoordinate(point.lat, point.lng))
+        if (!fitBoundaryPoints(points)) fitTerritoryBoundary()
+        prevSelectedCardIdRef.current = initialCardId
+        prevHighlightedCardIdsSignatureRef.current = getHighlightedCardIdsSignature(ids)
       } else if (initialCardId !== null && initialCardId !== '전체') {
         const boundary = cardBoundaries.find((b: CardBoundary) => b.cardId === initialCardId)
         if (boundary && boundary.points.length >= 3) {

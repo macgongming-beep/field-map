@@ -7,14 +7,16 @@ import { ZoneAssignScreen } from './ZoneAssignScreen'
 import { createAssignmentWorkspace } from './assignmentWorkspace'
 import { draftReducer } from '../../hooks/assignmentDraft/reducer'
 import type { DraftState } from '../../hooks/assignmentDraft/types'
-import { testBuilding, testCard, testUnit } from '../../test/territoryFixture'
+import { testBoundary, testBuilding, testCard, testUnit } from '../../test/territoryFixture'
+import { draftToAssignments } from '../../hooks/assignmentDraft/persistence'
+import type { CardBoundary } from '../../types'
 import type { Building } from '../../types'
 
-vi.mock('../MapCanvas', () => ({ MapCanvas: ({ buildings, toolbarAction, onSelectCardBoundary, viewportMemory, hideActionButton }: {
-  buildings: Building[]; toolbarAction: ReactNode; onSelectCardBoundary: (id: number) => void; viewportMemory: unknown; hideActionButton: boolean
+vi.mock('../MapCanvas', () => ({ MapCanvas: ({ buildings, cardBoundaries, toolbarAction, onSelectCardBoundary, viewportMemory, hideActionButton }: {
+  buildings: Building[]; cardBoundaries: CardBoundary[]; toolbarAction: ReactNode; onSelectCardBoundary: (id: number) => void; viewportMemory: unknown; hideActionButton: boolean
 }) => <div data-testid="map" data-memory={Boolean(viewportMemory)} data-hide-add={hideActionButton}>
   {toolbarAction}<output data-testid="pins">{JSON.stringify(buildings.map(b => [b.id, b.units.map(u => u.id)]))}</output>
-  <button onClick={() => onSelectCardBoundary(1)}>select polygon</button>
+  {cardBoundaries.map(boundary => <button key={boundary.cardId} onClick={() => onSelectCardBoundary(boundary.cardId)}>{boundary.cardId === 1 ? 'select polygon' : `select polygon ${boundary.cardId}`}</button>)}
 </div> }))
 
 afterEach(() => { cleanup(); vi.unstubAllEnvs() })
@@ -26,13 +28,14 @@ const initial: DraftState = { activeTeamId: 'a', undo: null, draft: { mode: 'car
   { id: 'b', name: '팀 2', color: 'green', order: 1, members: ['B'], cardIds: [] },
   { id: 'c', name: '팀 3', color: 'orange', order: 2, members: ['C'], cardIds: [2], cardScope: '상가' },
   { id: 'd', name: '팀 4', color: 'purple', order: 3, members: ['D'], cardIds: [], cardScope: '전체' },
+  { id: 'e', name: '팀 5', color: 'blue', order: 4, members: ['E'], cardIds: [1] },
 ] } }
 function Harness({ canEdit = true }: { canEdit?: boolean }) {
   const [state, dispatch] = useReducer(draftReducer, initial)
   const [open, setOpen] = useState(true)
   const [workspace] = useState(createAssignmentWorkspace)
   const props: ComponentProps<typeof ZoneAssignScreen> = { workspace, teams: state.draft.teams, activeTeamId: state.activeTeamId,
-    cards, buildings, cardBoundaries: [], eventId: 1, currentVisitor: 'A', canEdit, dispatch, onBack: () => setOpen(false) }
+    cards, buildings, cardBoundaries: [testBoundary(1, [37.1, 127.1, 37.2, 127.2]), testBoundary(2, [37.2, 127.2, 37.3, 127.3])], eventId: 1, currentVisitor: 'A', canEdit, dispatch, onBack: () => setOpen(false) }
   return <><output data-testid="draft">{JSON.stringify(state.draft)}</output><button onClick={() => setOpen(true)}>reopen</button>
     {open && <ZoneAssignScreen {...props} />}</>
 }
@@ -100,4 +103,42 @@ test('fresh editor workspace does not inherit another event or account preferenc
   first.preferredScope = '주택'
   first.viewport.current = { lat: 37.2, lng: 127.1, zoom: 19 }
   expect(createAssignmentWorkspace()).toMatchObject({ preferredScope: '전체', chineseOnly: false, viewport: { current: null } })
+})
+
+test('browsing saved teams and returning through team setup never replaces the last explicit preference', () => {
+  vi.stubEnv('VITE_TEAM_SERVICE_ENABLED', 'true')
+  render(<Harness />)
+  fireEvent.click(screen.getByRole('button', { name: '상가봉사', exact: true }))
+  fireEvent.click(team('팀 4'))
+  expect(screen.getByRole('button', { name: '전체', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(screen.getByRole('button', { name: '뒤로', exact: true }))
+  fireEvent.click(screen.getByText('reopen'))
+  fireEvent.click(team('팀 2'))
+  expect(screen.getByRole('button', { name: '상가봉사', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  expect(draft().teams[3].cardScope).toBe('전체')
+})
+
+test('legacy local draft with cards but no scope still displays all, without changing the preference', () => {
+  vi.stubEnv('VITE_TEAM_SERVICE_ENABLED', 'true')
+  render(<Harness />)
+  fireEvent.click(screen.getByRole('button', { name: '상가봉사', exact: true }))
+  fireEvent.click(team('팀 5'))
+  expect(screen.getByRole('button', { name: '전체', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  expect(draft().teams[4]).toMatchObject({ cardIds: [1] })
+  expect(draft().teams[4].cardScope).toBeUndefined()
+  fireEvent.click(team('팀 2'))
+  expect(screen.getByRole('button', { name: '상가봉사', exact: true })).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('assigning while Chinese display is enabled keeps the same selectable cards and sharing payload', () => {
+  vi.stubEnv('VITE_TEAM_SERVICE_ENABLED', 'true')
+  const first = render(<Harness />)
+  fireEvent.click(screen.getByText('select polygon'))
+  const withoutFilter = draftToAssignments(draft())
+  first.unmount()
+  render(<Harness />)
+  fireEvent.click(screen.getByRole('button', { name: '중국어 사용 세대만 표시' }))
+  expect(screen.getByText('select polygon 2')).toBeInTheDocument()
+  fireEvent.click(screen.getByText('select polygon'))
+  expect(draftToAssignments(draft())).toEqual(withoutFilter)
 })

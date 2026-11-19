@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { MapCanvas, type MapViewportMemory } from './MapCanvas'
-import { testBoundary } from '../test/territoryFixture'
+import { testBoundary, testBuilding } from '../test/territoryFixture'
 
 class LatLng {
   constructor(private latitude: number, private longitude: number) {}
@@ -28,7 +28,7 @@ const maps: FakeMap[] = []
 class FakeMap {
   center: LatLng
   zoom: number
-  fitBounds = vi.fn(() => { this.center = new LatLng(37.2, 127.2); this.zoom = 12 })
+  fitBounds = vi.fn((_bounds?: Bounds) => { this.center = new LatLng(37.2, 127.2); this.zoom = 12 })
   panTo = vi.fn((center: LatLng) => { this.center = center })
   morph = vi.fn((center: LatLng, zoom: number) => { this.center = center; this.zoom = zoom })
   constructor(_element: unknown, options: { center: LatLng; zoom: number }) {
@@ -89,6 +89,16 @@ test('ordinary maps still fit the newly selected card scope', () => {
   const fitted = map.fitBounds.mock.calls.length
   view.rerender(<MapCanvas {...props} highlightedCardIds={new Set([2])} />)
   expect(map.fitBounds.mock.calls.length).toBeGreaterThan(fitted)
+})
+
+test('first assignment framing includes buildings whose cards have no boundary', () => {
+  render(<MapCanvas {...props} viewportMemory={{ current: null }} hideBuildingMarkers
+    buildings={[{ ...testBuilding(3, 3, 'no polygon'), lat: 37.6, lng: 127.6 }]}
+    highlightedCardIds={new Set([1, 3])} />)
+  const bounds = maps[0].fitBounds.mock.calls[0][0] as unknown as Bounds
+  expect(bounds.getSW().lat()).toBe(37.1)
+  expect(bounds.getNE().lat()).toBe(37.6)
+  expect(bounds.getNE().lng()).toBe(127.6)
 })
 
 test.each([false, true])('GPS preserves the current zoom, including zoom changed while waiting (workspace=%s)', (withWorkspace) => {

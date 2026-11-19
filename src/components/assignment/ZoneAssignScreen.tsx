@@ -67,7 +67,7 @@ export function ZoneAssignScreen({ workspace: suppliedWorkspace, teams, activeTe
   const [query, setQuery] = useState(workspace.query)
   const [unassignedOnly, setUnassignedOnly] = useState(workspace.unassignedOnly)
   const [legacyTypeFilter, setLegacyTypeFilter] = useState<BuildingTypeFilter>(workspace.legacyTypeFilter)
-  const [preferredScope, setPreferredScope] = useState<BuildingTypeFilter>(() => teams.find(team => team.id === activeTeamId)?.cardScope ?? workspace.preferredScope)
+  const [preferredScope, setPreferredScope] = useState<BuildingTypeFilter>(workspace.preferredScope)
   const [chineseOnly, setChineseOnly] = useState(workspace.chineseOnly)
   const activeTeam = teams.find((t) => t.id === activeTeamId) ?? null
   const scopeEnabled = teamServiceEnabled()
@@ -421,10 +421,7 @@ export function ZoneAssignScreen({ workspace: suppliedWorkspace, teams, activeTe
                 aria-pressed={isActive}
                 className={`asg-teambar-card${isActive ? ' is-active' : ''}`}
                 style={{ borderColor: isActive ? teamHex(team.color) : undefined }}
-                onClick={() => {
-                  if (team.cardScope !== undefined) setPreferredScope(team.cardScope)
-                  dispatch({ type: 'SET_ACTIVE_TEAM', teamId: team.id })
-                }}
+                onClick={() => dispatch({ type: 'SET_ACTIVE_TEAM', teamId: team.id })}
               >
                 <span className="asg-teambar-name">
                   <span className="asg-team-dot" style={{ background: teamHex(team.color) }} />
