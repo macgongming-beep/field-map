@@ -96,3 +96,12 @@ Supabase 연결 자체를 거부한다. 기록은 위 LABEL의 scratch JSON/PNG�
 관련 UI/화면 시험 20개와 lint, 데모 빌드가 통과했다. 아이콘 경로를 다른
 모양으로 바꾼 변이는 새 시험 1개가 실패하여 검출했다. 브라우저 확인 도구는
 `scripts/smokeGroupMapIcon.mjs`이며 운영 연결/업무 쓰기를 거부한다.
+
+앱 소스 `a1f4011`, 산출물 `scratch/group-territory-release-landplot`을 데모에
+1회 배포했다(`dpl_VsWb3iETFPy95WtKTaE2E3fTxeZq`, READY). 로컬 산출물과
+배포된 데모 양쪽에서 WebKit 390/320px, 390px 큰 글씨 및 Chromium 1440px를
+확인했다. 안내는 버튼 아래/화면 안에 표시되고 사라지며, 표시 전후 헤더 높이는
+같다. 결과는 `scratch/group-map-landplot-local.json`과
+`scratch/group-map-landplot-deployed.json`. 최초 PC 검사는 토글 후 버튼 이동으로
+포인터가 벗어나 안내가 닫혀 대기 실패했다. PC에서는 키보드 포커스로 안내를
+확인하도록 검사만 수정하여 재통과했다. 운영 앱/DB는 변경하지 않았다.
