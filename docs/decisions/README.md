@@ -13,6 +13,8 @@
 
 ## 목록
 
+집단 구역 관리 화면 정리: [0148 간결한 지도와 큰 목록](0148-compact-group-territory-browse.md).
+
 집단 일정의 구역 후보와 지도 배정: [0147 집단 일정의 구역 범위와 지도 선택](0147-event-group-territory-map.md).
 
 운영 백업 복구 준비: [0142 격리 복구 리허설과 남은 중단 지점](0142-offline-production-backup-rehearsal.md).

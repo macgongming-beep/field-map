@@ -1,10 +1,12 @@
 .group-territory-assignment { width: 100%; max-width: 1000px; box-sizing: border-box; margin: 0 auto; padding: 20px; color: var(--ink); }
 .group-territory-assignment h1 { font-size: 22px; margin: 0 0 24px; }
+.group-territory-assignment.is-compact { padding: 0; }
 .group-territory-select { display: flex; align-items: center; gap: 16px; font-weight: 600; }
 .group-territory-select, .group-territory-scope { position: relative; }
 .group-territory-select::after, .group-territory-scope::after { content: ''; position: absolute; right: 12px; top: 50%; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-75%) rotate(45deg); pointer-events: none; }
 .group-territory-select select { flex: 1; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface, #fff); color: inherit; font: inherit; }
-.group-territory-tabs { display: flex; border-bottom: 1px solid var(--border-default); margin: 20px 0 16px; }
+.group-territory-navigation { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.group-territory-tabs { display: flex; flex: 1; min-width: 0; border-bottom: 1px solid var(--border-default); }
 .group-territory-tabs button { flex: 1; padding: 12px 4px; border: 0; border-radius: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink); }
 .group-territory-tabs button[aria-selected="true"] { border-bottom-color: var(--ink); font-weight: 700; }
 .group-territory-assignment input[type="search"] { width: 100%; box-sizing: border-box; min-height: 42px; padding: 10px; border: 1px solid var(--border-default); border-radius: 6px; }
@@ -19,10 +21,12 @@
 .group-territory-list strong { display: block; font-size: 16px; overflow-wrap: anywhere; }
 .group-territory-list small { display: block; margin-top: 6px; color: var(--gray-500); }
 .group-territory-assignment input[type="checkbox"] { accent-color: var(--ink); width: 18px; height: 18px; flex-shrink: 0; }
-.group-territory-browse { display: flex; gap: 8px; align-items: center; }
-.group-territory-browse input { flex: 1; min-width: 0; }
+.group-territory-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin-bottom: 10px; }
+.group-territory-filters select { min-width: 0; width: 100%; height: 40px; padding: 6px; font: inherit; font-size: 14px; color: var(--ink); border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface, #fff); }
+.group-territory-result-count { margin: 0 0 8px; font-size: 12px; color: var(--gray-500); }
+.group-territory-more { display: block; margin: 16px auto; min-height: 40px; padding: 8px 20px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface, #fff); color: var(--ink); }
 .group-territory-view { display: flex; flex-shrink: 0; border: 1px solid var(--border-default); border-radius: 6px; overflow: hidden; }
-.group-territory-view button { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); }
+.group-territory-view button { display: grid; place-items: center; width: 34px; height: 40px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); }
 .group-territory-view button[aria-pressed="true"] { background: var(--gray-100); }
 .group-territory-view svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .group-territory-map { position: relative; height: min(560px, calc(62svh / var(--app-zoom, 1))); min-height: 300px; width: 100%; overflow: hidden; }

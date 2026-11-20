@@ -69,7 +69,7 @@ function SearchIcon({ size = 16 }: { size?: number }) {
 
 export function MobileAdminAssignment(props: Parameters<typeof LegacyMobileAdminAssignment>[0] & { cardBoundaries?: CardBoundary[] }) {
   const groupTerritory = useGroupTerritory()
-  return groupTerritory.enabled ? <GroupTerritoryAssignment cards={props.cards} cardBoundaries={props.cardBoundaries} /> : <LegacyMobileAdminAssignment {...props} />
+  return groupTerritory.enabled ? <GroupTerritoryAssignment compact cards={props.cards} cardBoundaries={props.cardBoundaries} /> : <LegacyMobileAdminAssignment {...props} />
 }
 
 function LegacyMobileAdminAssignment({
