@@ -18,11 +18,13 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { GROUP_BACKUP_TABLES, ownerConnection, runOwnerSql, snapshotSql } from './groupTerritoryBackup.mjs'
+import { OWNER_BACKUP_TABLES, ownerConnection, runOwnerSql, snapshotSql } from './groupTerritoryBackup.mjs'
+
+process.umask(0o077)
 
 // ── .env.local 로드 (dotenv 의존성 없이 직접 파싱) ──────────────
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -62,7 +64,6 @@ const TABLES = [
   // 사용자/인증
   'app_users',
   'login_logs',
-  'app_sessions',          // 향후 추가될 수 있음 (없으면 자동 스킵)
 
   // 구역/카드
   'cards',
@@ -84,6 +85,7 @@ const TABLES = [
 
   // 캘린더/일정
   'calendar_events',
+  'event_meeting_access',
   'service_meeting_collections',
   'service_meeting_notes',
   'event_participants',
@@ -96,6 +98,8 @@ const TABLES = [
   'return_visit_logs',
   'phone_surveys',         // 전화 조사 대장 — 어디에 걸었는지의 유일한 기록
   'restaurant_requests',
+  'place_change_requests',
+  'territory_report_shares',
 
   // 배정 (추가)
   'event_restaurant_assignments',
@@ -125,6 +129,7 @@ const TABLES = [
 
 // 일부러 백업하지 않는 표 — 왜인지 적어 둔다. 안 그러면 "빠뜨렸나?" 를 매번 다시 조사하게 된다.
 //   auth_sessions              로그인 토큰. 되살리면 옛 세션이 되살아난다. 다시 로그인하면 그만이다
+//   app_sessions               같은 이유로 로그인 세션은 이름과 무관하게 제외한다
 //   app_private_settings       푸시 비밀키 등. 평문 파일로 내려받지 않는다
 //   app_users_backup_20260430  2026-04-30 작업 때의 임시 사본. 평문 PIN 이 담겨 있고
 //                              anon 키로 읽히던 것을 확인해 제거했다
@@ -209,13 +214,15 @@ function dumpPrivateMergeAudits(dir) {
   if (result.status !== 0) {
     return { status: 'failed', reason: result.stderr?.trim() || 'pg_dump 실패' }
   }
+  chmodSync(file, 0o600)
   return { status: 'ok', file }
 }
 
 async function main() {
   const stamp = todayStamp()
   const dir = join(projectRoot, 'backups', stamp)
-  mkdirSync(dir, { recursive: true })
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  chmodSync(dir, 0o700)
 
   console.log(`📦 Supabase 백업 시작`)
   console.log(`📁 위치: backups/${stamp}/\n`)
@@ -229,11 +236,12 @@ async function main() {
   const ownerEnv = ownerConnection(DB_URL, SUPABASE_URL)
   const present = JSON.parse(runOwnerSql(`set transaction read only;
     select coalesce(jsonb_agg(tablename),'[]') from pg_tables where schemaname='public'
-    and tablename in ('service_groups','app_users','app_settings','cards','card_group_assignments');`, ownerEnv))
+    and tablename in ('service_groups','app_users','app_settings','cards','card_group_assignments',
+      'event_meeting_access','place_change_requests','territory_report_shares');`, ownerEnv))
   const snapshot = JSON.parse(runOwnerSql(snapshotSql(present), ownerEnv))
 
   for (const t of TABLES) {
-    const result = GROUP_BACKUP_TABLES.includes(t)
+    const result = OWNER_BACKUP_TABLES.includes(t)
       ? (snapshot[t] ? { status: 'ok', rows: snapshot[t] } : { status: 'skipped' })
       : await dumpTable(t)
     if (result.status === 'skipped') {
@@ -247,6 +255,7 @@ async function main() {
     }
     const file = join(dir, `${t}.json`)
     writeFileSync(file, JSON.stringify(result.rows, null, 2), 'utf-8')
+    chmodSync(file, 0o600)
     total += result.rows.length
     success++
     console.log(`✅ ${t.padEnd(32)} ${String(result.rows.length).padStart(5)} 행`)

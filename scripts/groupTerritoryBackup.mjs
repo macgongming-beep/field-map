@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 
 export const GROUP_BACKUP_TABLES = ['service_groups', 'app_users', 'app_settings', 'cards', 'card_group_assignments']
+export const OWNER_BACKUP_TABLES = [...GROUP_BACKUP_TABLES, 'event_meeting_access', 'place_change_requests', 'territory_report_shares']
 export const GROUP_CONFLICT_KEYS = { service_groups: 'code', card_group_assignments: 'card_id,group_code' }
 export const DIRECTORY_KEYS = new Set(['service_group_directory', 'user_groups'])
 const quote = value => `"${value.replaceAll('"', '""')}"`
@@ -33,12 +34,12 @@ export function runOwnerSql(sql, env) {
     encoding: 'utf8', maxBuffer: 128 * 1024 * 1024,
   })
   // PostgreSQL errors can echo entire records (including PIN hashes); do not log stderr.
-  if (result.status !== 0) throw new Error('Protected database operation failed; transaction rolled back. Check schema, owner access and backup data.')
+  if (result.status !== 0) throw new Error('Protected database operation failed. SQL errors roll back; after a connection loss, verify target state before retrying. Check schema, owner access and backup data.')
   return result.stdout.trim()
 }
 
 export function snapshotSql(tables) {
-  if (tables.some(table => !GROUP_BACKUP_TABLES.includes(table))) throw new Error('Unexpected snapshot table')
+  if (tables.some(table => !OWNER_BACKUP_TABLES.includes(table))) throw new Error('Unexpected snapshot table')
   return `set transaction read only;select jsonb_build_object(${tables.map(table =>
     `${literal(table)},(select coalesce(jsonb_agg(to_jsonb(r) order by to_jsonb(r)::text),'[]'::jsonb) from public.${quote(table)} r)`
   ).join(',')});`

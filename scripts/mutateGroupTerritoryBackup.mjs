@@ -21,8 +21,8 @@ try {
     ['restoration overwrites missing-only rows',helper,'replace && updates.length','updates.length'],
     ['directory membership left stale',helper,'u.group_name is distinct from (case when g.is_active then g.display_name else null end)','false'],
     ['incomplete backup accepted',helper,'if (!featureInstalled) return','if (true) return'],
-    ['derived settings bypass entry-point filter','scripts/restore.js','rows = rows.filter(row => !DIRECTORY_KEYS.has(row.key))','rows = rows'],
-    ['entry point ignores consistent snapshot','scripts/backup.js','const result = GROUP_BACKUP_TABLES.includes(t)','const result = false'],
+    ['derived settings bypass entry-point filter','scripts/restore.js',"name === 'app_settings' ? rows.filter(row => !DIRECTORY_KEYS.has(row.key)) : rows",'rows'],
+    ['entry point ignores consistent snapshot','scripts/backup.js','const result = OWNER_BACKUP_TABLES.includes(t)','const result = false'],
   ]) {
     const path=join(directory,file),original=readFileSync(path,'utf8')
     assert.equal(original.split(before).length,2,name)

@@ -9,16 +9,16 @@
  *   npm run restore                     오늘 백업을 검사
  *   npm run restore -- 2026-08-22       그 날짜 백업을 검사
  *   npm run restore -- --table units    한 표만
- *   npm run restore -- --write          실제로 넣기 (빠진 행만, 지우지 않음)
- *   npm run restore -- --write --replace  있는 행도 덮어쓰기
+ *   npm run restore -- --write --maintenance          실제로 넣기 (빠진 행만)
+ *   npm run restore -- --write --maintenance --replace  있는 행도 덮어쓰기
  *
  * 안전 원칙
  *   · 아무것도 지우지 않는다. --replace 도 덮어쓰기지 삭제가 아니다
  *   · 기본값은 빠진 행만 넣는다 — 잘못 돌려도 멀쩡한 데이터가 상하지 않는다
- *   · 부모 표부터 넣는다. 순서가 틀리면 외래키에 막혀 중간에 멈춘다
+ *   · 실제 외래키를 따라 부모부터 넣으며, 오류 시 이번 실행 전체를 되돌린다
  *
- * ⚠ 넣기가 끝나면 시퀀스(다음 id) 를 맞춰야 한다. 안 그러면 새 글을 쓸 때
- *   이미 쓰인 id 를 다시 내주어 충돌한다. 스크립트가 맨 끝에 SQL 을 찍어 준다.
+ * 쓰기는 --maintenance 확인과 DB 소유자 연결이 필요하다. 앱 사용을 중단한
+ * 복구 환경에서만 실행한다. 한 트랜잭션으로 복원하고 다음 id도 함께 맞춘다.
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -26,7 +26,8 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GROUP_CONFLICT_KEYS, DIRECTORY_KEYS, assertGroupBackup, ownerConnection, runOwnerSql,
-  GROUP_RESTORE_PREFLIGHT, restoreGroupTableSql } from './groupTerritoryBackup.mjs'
+  GROUP_RESTORE_PREFLIGHT } from './groupTerritoryBackup.mjs'
+import { atomicRestoreSql } from './atomicRestore.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectRoot = join(__dirname, '..')
@@ -55,7 +56,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSessio
 /**
  * 넣는 차례. 부모가 먼저다.
  * 예: 건물이 있어야 세대를 넣고, 세대가 있어야 방문 기록을 넣는다.
- * 여기 없는 표는 맨 뒤에 붙는다 (새 표를 만들면 여기에도 넣어 줄 것).
+ * 쓰기 모드는 등록되지 않은 표를 거부한다. 실제 적재 순서는 DB 외래키를 따른다.
  */
 const RESTORE_ORDER = [
   // 1. 남을 참조하지 않는 것
@@ -68,6 +69,7 @@ const RESTORE_ORDER = [
   'buildings', 'units',
   // 4. 일정 (봉사 세션이 참조한다)
   'calendar_events',
+  'event_meeting_access',
   'service_meeting_collections', 'service_meeting_notes',
   'service_sessions',
   // 5. 방문 (세대·세션을 참조한다)
@@ -81,6 +83,7 @@ const RESTORE_ORDER = [
   'push_subscriptions',
   // 8. 나머지
   'phone_surveys', 'restaurant_requests', 'service_logs', 'service_suggestions',
+  'place_change_requests', 'territory_report_shares',
   'login_logs',
 ]
 
@@ -96,6 +99,7 @@ const CONFLICT_KEYS = {
   card_boundaries: 'card_id',
   chat_read_status: 'event_id,user_id',
   notification_preferences: 'user_id',
+  event_meeting_access: 'event_id',
 }
 
 /** 표가 아니라 뷰 — 되돌릴 대상이 아니다 (원본은 notification_preferences) */
@@ -134,7 +138,7 @@ function loadTable(name) {
   if (!existsSync(file)) return null
   try {
     const parsed = JSON.parse(readFileSync(file, 'utf-8'))
-    return Array.isArray(parsed) ? parsed : null
+    return Array.isArray(parsed) ? parsed : {error:'Expected an array'}
   } catch (e) {
     return { error: e.message }
   }
@@ -155,20 +159,6 @@ function conflictKeyFor(name, rows) {
   return null
 }
 
-async function insertRows(name, rows, onConflict) {
-  const chunkSize = 500
-  let done = 0
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    const chunk = rows.slice(i, i + chunkSize)
-    const { error } = await supabase
-      .from(name)
-      .upsert(chunk, { onConflict, ignoreDuplicates: !replace })
-    if (error) return { done, error }
-    done += chunk.length
-  }
-  return { done, error: null }
-}
-
 async function main() {
   console.log(`\n📦 백업: backups/${stamp}`)
   console.log(write
@@ -180,10 +170,35 @@ async function main() {
   const extra = files.map((f) => f.slice(0, -5)).filter((t) => !known.has(t))
   if (extra.length > 0) {
     console.log(`⚠️  차례가 정해지지 않은 표: ${extra.join(', ')}`)
-    console.log('   맨 뒤에 넣습니다. 외래키에 막히면 scripts/restore.js 의 RESTORE_ORDER 에 자리를 잡아 주세요.\n')
+    console.log('   쓰기 모드에서는 거부합니다. scripts/restore.js 의 RESTORE_ORDER 에 등록하세요.\n')
   }
 
   const order = tableArg ? [tableArg] : [...RESTORE_ORDER, ...extra]
+  if (write) {
+    if (!args.includes('--maintenance')) throw new Error('Stop app access first, then explicitly pass --maintenance')
+    if (extra.length || (tableArg && !known.has(tableArg))) throw new Error('Unreviewed backup tables; update the restore allowlist first')
+    const payload = {}
+    for (const name of order) {
+      if (VIEWS.has(name)) continue
+      const rows = loadTable(name)
+      if (rows === null) {
+        if (tableArg) throw new Error('Selected backup file is missing or not an array')
+        continue
+      }
+      if (rows.error) throw new Error('Invalid backup JSON; no restore performed')
+      payload[name] = name === 'app_settings' ? rows.filter(row => !DIRECTORY_KEYS.has(row.key)) : rows
+    }
+    const ownerEnv = ownerConnection(process.env.SUPABASE_DB_URL, SUPABASE_URL)
+    const installed = runOwnerSql("set transaction read only;select to_regclass('public.card_group_assignments') is not null;", ownerEnv) === 't'
+    if (!tableArg || ['service_groups','cards','card_group_assignments'].includes(tableArg)) {
+      assertGroupBackup(Object.fromEntries(['service_groups','cards','card_group_assignments'].map(name => [name,loadTable(name)])), installed)
+    }
+    if (installed) runOwnerSql(`set transaction read only;${GROUP_RESTORE_PREFLIGHT}`, ownerEnv)
+    runOwnerSql(atomicRestoreSql(payload, {replace, full: !tableArg, requiredTables: RESTORE_ORDER.filter(name => !VIEWS.has(name))}), ownerEnv)
+    console.log('🎉 넣기 완료 (한 트랜잭션, 다음 번호 자동 정리)')
+    console.log('로그인 세션·비밀키·설치 상태와 별도 private 감사 백업은 복구 절차에서 따로 확인하세요.')
+    return
+  }
   const groupFiles = Object.fromEntries(['service_groups', 'cards', 'card_group_assignments'].map(name => [name, loadTable(name)]))
   const protectedSelection = !tableArg || ['service_groups', 'cards', 'card_group_assignments', 'app_settings'].includes(tableArg)
   let ownerEnv
@@ -195,7 +210,6 @@ async function main() {
     if (groupInstalled) runOwnerSql(`set transaction read only;${GROUP_RESTORE_PREFLIGHT}`, ownerEnv)
   }
   const problems = []
-  const sequences = []
   let totalRows = 0
 
   for (const name of order) {
@@ -205,13 +219,15 @@ async function main() {
     }
     let rows = loadTable(name)
     if (rows === null) {
-      if (tableArg) console.log(`  ${name.padEnd(30)} 백업 파일 없음`)
+      if (tableArg || await countInDb(name) !== null) {
+        console.log(`  ${name.padEnd(30)} 백업 파일 없음`)
+        problems.push(`${name}: 백업 파일 없음`)
+      }
       continue
     }
     if (rows.error) {
       console.log(`  ❌ ${name.padEnd(28)} 파일이 깨졌습니다 — ${rows.error}`)
       problems.push(`${name}: 파일 손상`)
-      if (write) throw new Error(`${name}: invalid backup; restore stopped`)
       continue
     }
 
@@ -225,7 +241,6 @@ async function main() {
     if (dbCount === null) {
       console.log(`  ⚠️  ${name.padEnd(28)} DB 에 이 표가 없습니다 (백업 ${rows.length}행)`)
       problems.push(`${name}: DB 에 표 없음`)
-      if (write) throw new Error(`${name}: target unavailable; restore stopped`)
       continue
     }
 
@@ -239,42 +254,9 @@ async function main() {
       const note = key ? '' : '   ← 같은 행을 알아볼 기준 없음. 넣기에서 건너뜁니다'
       console.log(`  ${mark} ${name.padEnd(28)} 백업 ${String(rows.length).padStart(5)}행  /  지금 ${String(dbCount).padStart(5)}행${note}`)
       if (!key) problems.push(`${name}: CONFLICT_KEYS 에 기준을 적어 주세요`)
-      if (rows.length > 0 && 'id' in rows[0]) {
-        const maxId = Math.max(...rows.map((r) => Number(r.id) || 0))
-        if (Number.isFinite(maxId) && maxId > 0) sequences.push({ name, maxId })
-      }
       continue
     }
 
-    if (rows.length === 0) { console.log(`  ·  ${name.padEnd(28)} 빈 백업 — 건너뜀`); continue }
-    const onConflict = conflictKeyFor(name, rows)
-    if (!onConflict) {
-      // 기준 없이 넣으면 있는 행이 통째로 복제된다. 넣지 않는 편이 낫다.
-      console.log(`  ⚠️  ${name.padEnd(28)} 같은 행을 알아볼 기준이 없어 건너뜁니다`)
-      problems.push(`${name}: CONFLICT_KEYS 에 기준을 적어 주세요`)
-      if (write) throw new Error(`${name}: conflict key missing; restore stopped`)
-      continue
-    }
-    let result
-    if (name === 'service_groups' || name === 'card_group_assignments' || (name === 'cards' && groupInstalled)) {
-      runOwnerSql(restoreGroupTableSql(name, rows, replace), ownerEnv)
-      result = { done: rows.length, error: null }
-    } else {
-      result = await insertRows(name, rows, onConflict)
-    }
-    const { done, error } = result
-    if (error) {
-      console.log(`  ❌ ${name.padEnd(28)} ${done}행까지 넣고 막힘 — ${error.message}`)
-      problems.push(`${name}: ${error.message}`)
-      throw new Error(`${name}: restore stopped; earlier tables may already be committed`)
-    } else {
-      const after = await countInDb(name)
-      console.log(`  ✅ ${name.padEnd(28)} ${done}행 처리 · 지금 ${after}행`)
-      if ('id' in rows[0]) {
-        const maxId = Math.max(...rows.map((r) => Number(r.id) || 0))
-        if (Number.isFinite(maxId) && maxId > 0) sequences.push({ name, maxId })
-      }
-    }
   }
 
   console.log(`\n${'─'.repeat(58)}`)
@@ -286,21 +268,13 @@ async function main() {
     console.log(write ? '🎉 넣기 완료' : '✅ 파일·대상 검사 통과 (실제 복원 성공을 보장하는 시험은 아님)')
   }
 
-  if (write && sequences.length > 0) {
-    console.log('\n📌 마지막으로 Supabase SQL Editor 에서 이걸 실행하세요.')
-    console.log('   안 하면 새 글을 쓸 때 이미 쓰인 id 를 다시 내주어 충돌합니다.\n')
-    for (const s of sequences) {
-      console.log(`select setval(pg_get_serial_sequence('public.${s.name}', 'id'), ${s.maxId}, true);`)
-    }
-    console.log('')
-  }
   if (!write) {
-    console.log(`   백업 ${totalRows}행. 실제로 넣으려면:  npm run restore -- --write`)
+    console.log(`   백업 ${totalRows}행. 실제로 넣으려면: npm run restore -- --write --maintenance`)
   }
 }
 
 main().catch((e) => {
   console.error('❌', e)
-  if (write) console.error('표 단위 복원입니다. 앞서 성공한 표는 이미 반영됐을 수 있으니 확인하세요.')
+  if (write) console.error('복원을 완료하지 못했습니다. SQL 오류는 전체 취소되며, 연결 끊김일 때는 대상 상태를 확인한 뒤 재시도하세요.')
   process.exit(1)
 })

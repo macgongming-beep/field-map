@@ -21,6 +21,7 @@ vi.mock('node:fs', async importOriginal => ({
   },
   readdirSync: (path: string) => path.endsWith('/backups') ? ['2026-11-20'] : Object.keys(io.files),
   mkdirSync: vi.fn(),
+  chmodSync: vi.fn(),
   writeFileSync: (path: string, contents: string) => io.writes.set(path.split('/').at(-1)!, contents),
 }))
 vi.mock('node:child_process', () => ({
@@ -43,6 +44,10 @@ vi.mock('../../../scripts/groupTerritoryBackup.mjs', async importOriginal => ({
   runOwnerSql: (sql: string) => {
     io.sql.push(sql)
     if (sql.includes('from pg_tables')) return JSON.stringify(io.present)
+    if (sql.includes('create temporary table restore_input')) {
+      if (io.missingTable) throw new Error('Target unavailable; rolled back')
+      return '{}'
+    }
     if (sql.includes("to_regclass('public.card_group_assignments')")) return 't'
     if (sql.includes('select jsonb_build_object(')) {
       return JSON.stringify(Object.fromEntries(io.present.map(table => [table,io.files[`${table}.json`]])))
@@ -53,10 +58,12 @@ vi.mock('../../../scripts/groupTerritoryBackup.mjs', async importOriginal => ({
 
 let argv: string[]
 let exitCode: typeof process.exitCode
+let umask: number
 beforeEach(() => {
   vi.resetModules()
   argv = process.argv
   exitCode = process.exitCode
+  umask = process.umask()
   process.exitCode = undefined
   process.argv = ['node','script','2026-11-20']
   vi.stubEnv('VITE_SUPABASE_URL','https://fixture.supabase.co')
@@ -72,13 +79,17 @@ beforeEach(() => {
     'cards.json': [{id:10,group_assignment_revision:1}],
     'card_group_assignments.json': [{card_id:10,group_code:'a',assigned_by:1}],
     'app_settings.json': [{key:'service_group_directory',value:'stale directory'}, {key:'user_groups',value:'stale names'}, {key:'ordinary_setting',value:'kept'}],
+    'event_meeting_access.json': [{event_id:1,passcode:'fixture-only'}],
+    'place_change_requests.json': [{id:1,note:'fixture-only'}],
+    'territory_report_shares.json': [{id:'fixture-only',snapshot:{}}],
   }
-  io.present = ['service_groups','app_users','cards','card_group_assignments','app_settings']
+  io.present = ['service_groups','app_users','cards','card_group_assignments','app_settings','event_meeting_access','place_change_requests','territory_report_shares']
   io.restReads = []; io.sql = []; io.upserts = []; io.writes.clear(); io.missingTable = null
 })
 afterEach(() => {
   process.argv = argv
   process.exitCode = exitCode
+  process.umask(umask)
   vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.unstubAllGlobals()
 })
 async function finished(text: string) {
@@ -106,14 +117,17 @@ test.each([true,false])('backup entry point uses one read-only snapshot, group f
 })
 
 test('restore entry point skips only derived settings and still restores ordinary settings', async () => {
-  process.argv.push('--write')
+  process.argv.push('--write','--maintenance')
   await import('../../../scripts/restore.js')
   await finished('넣기 완료')
-  expect(io.upserts.find(call => call.table === 'app_settings')?.rows).toEqual([{key:'ordinary_setting',value:'kept'}])
-  expect(io.upserts.find(call => call.table === 'app_users')?.rows).toEqual(io.files['app_users.json'])
-  expect(io.sql.some(sql => sql.includes('select private.publish_service_group_directory('))).toBe(true)
-  expect(io.sql.some(sql => sql.includes('alter table public.cards enable trigger'))).toBe(true)
-  expect(io.upserts.some(call => ['cards','service_groups','card_group_assignments'].includes(call.table))).toBe(false)
+  const writes = io.sql.filter(sql => sql.includes('create temporary table restore_input'))
+  expect(writes).toHaveLength(1)
+  expect(writes[0]).toContain('ordinary_setting')
+  expect(writes[0]).not.toContain('stale directory')
+  expect(writes[0]).not.toContain('stale names')
+  expect(writes[0]).toContain(JSON.stringify(io.files['app_users.json']))
+  expect(writes[0]).toContain('perform private.publish_service_group_directory(')
+  expect(io.upserts).toEqual([])
 })
 
 test('backup without owner connection stops before all table exports', async () => {
@@ -125,15 +139,23 @@ test('backup without owner connection stops before all table exports', async () 
   expect(io.writes.size).toBe(0)
 })
 
-test('write restore stops on missing table after earlier work and warns about partial completion', async () => {
-  process.argv.push('--write')
+test('write restore uses one owner transaction and reports rollback on missing table', async () => {
+  process.argv.push('--write','--maintenance')
   io.files['buildings.json'] = [{id:20}]
   io.files['calendar_events.json'] = [{id:30}]
   io.missingTable = 'buildings'
   await import('../../../scripts/restore.js')
   await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(1))
-  expect(io.sql.some(sql => sql.includes('insert into public."card_group_assignments"'))).toBe(true)
-  expect(io.upserts.some(call => call.table === 'calendar_events')).toBe(false)
-  expect(console.error).toHaveBeenCalledWith(expect.stringContaining('앞서 성공한 표는 이미 반영'))
+  expect(io.sql.filter(sql => sql.includes('create temporary table restore_input'))).toHaveLength(1)
+  expect(io.upserts).toEqual([])
+  expect(console.error).toHaveBeenCalledWith(expect.stringContaining('SQL 오류는 전체 취소'))
   expect(console.log).not.toHaveBeenCalledWith('🎉 넣기 완료')
+})
+
+test('write restore requires explicit maintenance acknowledgement before database access', async () => {
+  process.argv.push('--write')
+  await import('../../../scripts/restore.js')
+  await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(1))
+  expect(io.sql).toEqual([])
+  expect(io.upserts).toEqual([])
 })
