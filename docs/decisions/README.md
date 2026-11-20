@@ -13,6 +13,8 @@
 
 ## 목록
 
+집단 지도·배정 운영 반영: [0149 검토한 집단 지도 화면 운영 배포](0149-reviewed-group-map-production-release.md).
+
 집단 구역 관리 화면 정리: [0148 간결한 지도와 큰 목록](0148-compact-group-territory-browse.md).
 
 집단 일정의 구역 후보와 지도 배정: [0147 집단 일정의 구역 범위와 지도 선택](0147-event-group-territory-map.md).

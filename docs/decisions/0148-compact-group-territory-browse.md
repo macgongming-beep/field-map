@@ -1,6 +1,6 @@
 # 집단 구역 관리의 간결한 지도와 큰 목록
 
-- 상태: 데모 적용 및 배포 후 검증 완료, 운영 미적용
+- 상태: 운영 적용 완료 ([0149](0149-reviewed-group-map-production-release.md))
 - 결정일: 2026-11-20
 - 선행: [0147 집단 일정의 구역 범위와 지도 선택](0147-event-group-territory-map.md)
 
