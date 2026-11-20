@@ -51,6 +51,31 @@ function propsForMap() {
   }) as unknown as ComponentProps<typeof MobileMap>
 }
 function Location() { return <output data-testid="route">{useLocation().search}</output> }
+test.each(['admin', 'leader'] as const)('%s group selector shares the count row and keeps map filtering/navigation', role => {
+  const props = propsForMap()
+  props.actualRole = role; props.assignmentServiceMap = false; props.focusedCardIds = []; props.focusedScopeLabel = undefined
+  props.cards = [testCard(1, 'A territory'), testCard(2, 'B territory')].map((card, index) => ({ ...card, assignedGroupCodes: [index === 0 ? 'a' : 'b'] }))
+  props.buildings = [testBuilding(1, 1, 'A building', [testUnit(1, '101')]), testBuilding(2, 2, 'B building', [testUnit(2, '201')])]
+  const { container } = render(<GroupTerritoryContext.Provider value={{ enabled: true, canManage: false, ownCode: 'a', groups: [{ code: 'a', name: '东滩', active: true }, { code: 'b', name: '处仁', active: true }], save: vi.fn() }}>
+    {view(props, '/map?groupCode=b&return=%2Fzone')}
+  </GroupTerritoryContext.Provider>)
+  const summary = container.querySelector('.mobile-map-summary-row') as HTMLElement
+  const selector = within(summary).getByRole('combobox', { name: '집단 구역 보기' })
+  expect(within(summary).getByRole('tablist')).toBeVisible()
+  expect(container.querySelector('.mobile-map-header-content > .group-map-selector')).toBeNull()
+  expect(selector).toHaveValue('b')
+  fireEvent.click(screen.getByRole('button', { name: 'zoom close' }))
+  expect(screen.getByTestId('pins')).toHaveTextContent('2:')
+  fireEvent.change(selector, { target: { value: 'a' } })
+  expect(screen.getByTestId('route')).toHaveTextContent('groupCode=a')
+  expect(screen.getByTestId('route')).toHaveTextContent('return=%2Fzone')
+  expect(screen.getByTestId('pins')).toHaveTextContent('1:')
+  expect(screen.getByTestId('pins')).not.toHaveTextContent('2:')
+  fireEvent.change(selector, { target: { value: 'all' } })
+  expect(screen.queryByRole('combobox', { name: '집단 구역 보기' })).not.toBeInTheDocument()
+  expect(screen.getByTestId('pins')).toHaveTextContent('1:')
+  expect(screen.getByTestId('pins')).toHaveTextContent('2:')
+})
 test.each([['B territory', 'true'], ['A territory', 'false']])('search %s preserves selected group B and reveals the authorized result', async (name, pressed) => {
   const props = propsForMap()
   props.actualRole = 'leader'; props.assignmentServiceMap = false; props.focusedCardIds = []; props.focusedScopeLabel = undefined

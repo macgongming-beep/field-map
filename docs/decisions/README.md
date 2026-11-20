@@ -149,6 +149,7 @@
 배정 화면 기억: [0139 배정 중 선택 조건과 지도 위치 유지](0139-assignment-workspace-retention.md)
 집단 담당 구역: [0141 공동 담당 가능한 집단 구역 데모](0141-demo-shared-group-territories.md)
 집단 구역 운영 전환: [0145 공동 담당과 구역 필터 운영 배포](0145-group-territory-production-release.md)
+모바일 지도 헤더: [0146 집단 선택을 통계와 같은 줄로 축소](0146-compact-mobile-group-map-header.md)
 
 ```markdown
 # 제목

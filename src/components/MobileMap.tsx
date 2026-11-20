@@ -1724,6 +1724,7 @@ export function MobileMap({
               ) : navLevel === 'map' ? (
                 <>
                   <h1>{assignmentServiceMap ? focusedScopeLabel : selectedCardId ? translateKoreanAddress(cards.find(c => c.id === selectedCardId)?.name ?? t(language, 'map.zoneMap'), language, translatePlaceNames) : t(language, 'map.zoneMap')}</h1>
+                  <div className="mobile-map-summary-row">
                   {assignmentServiceMap ? <span className="mm-stats-sub">{msg('카드 {n}개', { n: displayedCardCount })} · {showChineseOnly ? `${t(language, 'map.chinese')} ` : ''}{typeCounts.전체}{msg('세대')}</span> : <span className="mm-stats-sub" role="tablist">
                     <button
                       type="button"
@@ -1753,6 +1754,8 @@ export function MobileMap({
                       <span>{t(language, 'map.shop')}</span><b className="tnum">{typeCounts.상가}</b>
                     </button>
                   </span>}
+                  {groupMap.selector}
+                  </div>
                 </>
               ) : (
                 <>
@@ -1819,7 +1822,6 @@ export function MobileMap({
               </>
             )}
           </div>
-          {navLevel === 'map' && groupMap.selector}
           {navLevel === 'map' && isUserMap && !isUserDirectAssignment && !showInformal && (
             <div className="mobile-map-field-actions">
               {activeSessionCard && (

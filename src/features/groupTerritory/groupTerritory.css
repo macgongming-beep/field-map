@@ -24,7 +24,12 @@
 .group-map-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .group-map-selector select { max-width: 180px; font-size: 13px; }
 .group-territory-select select, .group-territory-scope select { appearance: none; -webkit-appearance: none; padding-right: 32px; }
-.mobile-map-header .group-map-selector { margin-top: 8px; }
+.mobile-map-summary-row { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.mobile-map-summary-row .mm-stats-sub { flex: 1 1 auto; min-width: 0; }
+.mobile-map-summary-row .group-map-selector { flex: 0 1 80px; min-width: 0; max-width: 34%; }
+.mobile-map-summary-row .group-territory-scope { width: 100%; }
+.mobile-map-summary-row .group-territory-scope::after { right: 5px; }
+.mobile-map-summary-row .group-map-selector select { width: 100%; min-height: 36px; padding: 4px 20px 4px 6px; border: 0; border-radius: 4px; background: transparent; font-size: 16px; font-weight: 500; text-overflow: ellipsis; }
 .map-filter-control { position: relative; display: inline-flex; }
 .map-filter-toggle { border: 1px solid var(--border-default); border-radius: 6px; min-width: 36px; min-height: 36px; background: var(--surface, #fff); color: var(--ink); }
 .map-filter-toggle[aria-pressed="true"] { background: #e6eeea; border-color: #a5b9af; color: #263d32; }
