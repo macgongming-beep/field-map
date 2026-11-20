@@ -27,6 +27,9 @@ import { countInformalCards } from '../../utils/informalAssets'
 import { buildingHasUsage, scopeBuildingToUsage } from '../../utils/unitUsage'
 
 type ZoneKind = 'territory' | 'informal' | 'restaurant'
+import { useGroupTerritory } from '../../features/groupTerritory/context'
+import { groupOwnsCard, territoryGroupNames } from '../../features/groupTerritory/model'
+import { GroupScopeSelect } from '../../features/groupTerritory/GroupScopeSelect'
 type Scope = 'mine' | 'all'
 type ViewMode = 'list' | 'map'
 type Level = 'regions' | 'dongs' | 'cards'
@@ -54,7 +57,7 @@ type Props = {
   informalAssets?: InformalAsset[]
   informalGroups?: InformalGroup[]
   onOpenMap: (cardId: number) => void
-  onOpenAssignedMap: (cardIds: number[], context?: { region?: string; dong?: string; scope?: Scope }) => void
+  onOpenAssignedMap: (cardIds: number[], context?: { region?: string; dong?: string; scope?: Scope; groupCode?: string }) => void
   onShowMapView: () => void
   onUploadInformalAsset?: (input: { file: File; name: string; uploadedBy: string; groupId?: number | null }) => Promise<{ ok: boolean; assetId?: number; error?: string }>
   onDeleteInformalAsset?: (assetId: number) => Promise<boolean>
@@ -166,7 +169,11 @@ export function AdminMobileZone({
   const urlLevel = (searchParams.get('level') as Level | null) ?? 'regions'
   const urlRegion = searchParams.get('region') ?? ''
   const urlDong = searchParams.get('dong') ?? ''
-  const defaultScope: Scope = role === 'admin' ? 'all' : 'mine'
+  const groupTerritory = useGroupTerritory()
+  const useGroups = groupTerritory.enabled && role !== 'user'
+  const [chosenGroup, setChosenGroup] = useState<string | null>(null)
+  const groupCode = chosenGroup ?? groupTerritory.ownCode
+  const defaultScope: Scope = role === 'admin' || (useGroups && !groupTerritory.ownCode) ? 'all' : 'mine'
   const urlScope: Scope = (searchParams.get('scope') === 'all' || searchParams.get('scope') === 'mine')
     ? (searchParams.get('scope') as Scope)
     : defaultScope
@@ -228,11 +235,12 @@ export function AdminMobileZone({
   // ── 카드 필터: 담당/전체 ─────────────────────
   const baseCards = useMemo(() => {
     if (scope === 'all') return cards
+    if (useGroups) return cards.filter(card => groupOwnsCard(card, groupCode))
     return cards.filter((c) => {
       const leaders = c.assignedLeaders?.length ? c.assignedLeaders : c.assignedLeader ? [c.assignedLeader] : []
       return leaders.includes(currentVisitor) || c.assignedUsers.includes(currentVisitor)
     })
-  }, [cards, scope, currentVisitor])
+  }, [cards, scope, currentVisitor, useGroups, groupCode])
 
   // ── 건물 카운트 매핑 (전체 + 방문필요만) ─────────────────────────
   const cardBuildingCounts = useMemo(() => {
@@ -275,10 +283,10 @@ export function AdminMobileZone({
   // ── 상위 stats (전체/배정/미배정) ─────────────
   const topStats = useMemo(() => {
     const total = baseCards.length
-    const assigned = baseCards.filter((c) => c.status !== '미배정').length
-    const unassigned = baseCards.filter((c) => c.status === '미배정').length
+    const assigned = baseCards.filter((c) => useGroups ? !!c.assignedGroupCodes?.length : c.status !== '미배정').length
+    const unassigned = total - assigned
     return { total, assigned, unassigned }
-  }, [baseCards])
+  }, [baseCards, useGroups])
 
   // ── drill-down stats (현재 level 기준: 전체 카드 · 주택 · 상가) ───
   const drillStats = useMemo(() => {
@@ -497,12 +505,14 @@ export function AdminMobileZone({
       {level === 'regions' ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
           {/* user 는 본인 담당만 고정 — segmented 숨김 */}
-          {role !== 'user' && <SegmentedScope language={language} value={scope} onChange={setScope} />}
+          {role !== 'user' && (useGroups ? <GroupScopeSelect value={scope === 'all' ? 'all' : groupCode ?? 'all'} onChange={value => {
+            setScope(value === 'all' ? 'all' : 'mine'); if (value !== 'all') setChosenGroup(value)
+          }} /> : <SegmentedScope language={language} value={scope} onChange={setScope} />)}
           <ViewToggle language={language} value={view} onChange={(next) => {
             setView(next)
             if (next === 'map') {
               if (scope === 'mine') {
-                onOpenAssignedMap(baseCards.map((c) => c.id), { scope })
+                onOpenAssignedMap(baseCards.map((c) => c.id), { scope, groupCode: useGroups ? groupCode ?? undefined : undefined })
               } else {
                 onShowMapView()
               }
@@ -556,7 +566,7 @@ export function AdminMobileZone({
                 .filter((c) => !selectedRegion || c.region === selectedRegion)
                 .filter((c) => !selectedDong || c.area === selectedDong)
                 .map((c) => c.id)
-              onOpenAssignedMap(ctxCardIds, { region: selectedRegion || undefined, dong: selectedDong || undefined, scope })
+              onOpenAssignedMap(ctxCardIds, { region: selectedRegion || undefined, dong: selectedDong || undefined, scope, groupCode: useGroups && scope === 'mine' ? groupCode ?? undefined : undefined })
             }
           }} />
         </div>
@@ -999,6 +1009,7 @@ function CardRow({
   onClick: () => void
   typeFilter?: '전체' | '주택' | '상가'
 }) {
+  const groupTerritory = useGroupTerritory()
   // "최근 봉사 M/D" (없으면 —)
   const lastVisitText = (() => {
     if (!lastVisit) return '—'
@@ -1031,6 +1042,7 @@ function CardRow({
               </div>
               <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
                 {(() => {
+                  if (groupTerritory.enabled) return `${territoryGroupNames(card, groupTerritory.groups).join(' · ') || msg('미배정')} · `
                   const leaderCount = card.assignedLeaders?.length ?? (card.assignedLeader ? 1 : 0)
                   return leaderCount > 0
                     ? `${t(language, 'territory.assignedPrefix')} ${t(language, 'common.nPeople', { n: leaderCount })} · `

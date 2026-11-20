@@ -1,5 +1,6 @@
 import { teamServiceEnabled } from '../config/teamService'
 import { RouteReadGate } from '../hooks/RouteReadGate'
+import { useGroupTerritory } from '../features/groupTerritory/context'
 import { useMemo, useRef, useState } from 'react'
 import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '../utils/cardServiceScope'
 import { showToast } from '../lib/toast'
@@ -347,6 +348,7 @@ export function DesktopApp({
   onPlaceDeleted?: (signal: import('../types').PlaceDeletionSignal) => void
 }) {
   const navigate = useNavigate()
+  const groupTerritory = useGroupTerritory()
   const location = useLocation()
   const [searchParams] = useSearchParams()
   
@@ -762,7 +764,7 @@ export function DesktopApp({
                 onToggleInvitationLeft={onToggleInvitationLeft}
                 onUpdateUnitFlags={onUpdateUnitFlags}
                 visitHistories={visitHistories}
-                onSwitchToList={() => navigate('/zone')}
+                onSwitchToList={(groupCode) => navigate(groupCode ? `/zone?groupCode=${encodeURIComponent(groupCode)}` : '/zone')}
               />
             ) : (
               <DesktopTerritory
@@ -802,7 +804,8 @@ export function DesktopApp({
                 onOpenBuildingMap={openBuildingOnMap}
                 visitHistories={visitHistories}
                 onCreateBuilding={onCreateBuilding}
-                onSwitchToMap={() => navigate('/zone?view=map')}
+                initialGroupCode={searchParams.get('groupCode') ?? undefined}
+                onSwitchToMap={(groupCode) => navigate(`/zone?view=map${groupCode ? `&groupCode=${encodeURIComponent(groupCode)}` : ''}`)}
                 currentVisitor={currentVisitor}
                 informalAssets={informalAssets}
                 informalGroups={informalGroups}
@@ -866,7 +869,7 @@ export function DesktopApp({
           />
         } />
         <Route path="/assignment" element={
-          viewMode === 'admin' ? (
+          viewMode === 'admin' || (groupTerritory.enabled && viewMode === 'developer') ? (
             <DesktopAdminAssignment
               cards={cards}
               currentVisitor={currentVisitor}

@@ -91,8 +91,9 @@ test.each([
   props.buildings = [testBuilding(2, 1, 'unmarked', [testUnit(21, '201')])]
   render(view(props))
   const button = screen.getByRole('button', { name: help })
-  expect(button).toHaveAttribute('title', help)
+  expect(button).not.toHaveAttribute('title')
   fireEvent.click(button)
+  expect(screen.getByRole('tooltip')).toHaveTextContent(help)
   expect(screen.getByText(empty)).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: reset }))
   expect(button).toHaveAttribute('aria-pressed', 'false')

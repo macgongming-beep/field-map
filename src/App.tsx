@@ -36,6 +36,10 @@ import { recipientCardScopeEnabled } from './lib/recipientCardScope'
 import { ScopedCardContext } from './hooks/useCardDirectory'
 import { syncLanguageToServiceWorker } from './lib/swLanguage'
 import './App.css'
+import { GroupTerritoryContext } from './features/groupTerritory/context'
+import { groupTerritoryEnabled, ownTerritoryGroup } from './features/groupTerritory/model'
+import { serviceGroupOptions } from './features/groupService/model'
+import { saveTerritoryGroups } from './features/groupTerritory/api'
 
 const DesktopApp = lazy(() =>
   import('./components/DesktopApp').then((module) => ({ default: module.DesktopApp }))
@@ -436,6 +440,20 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
       <MaintenanceNotice userId={user.id} language={language} />
       <PwaInstallBanner language={language} />
       <MeetingProvider key={user.id} userId={user.id} canManage={user.role === 'admin' || user.role === 'developer'} language={language}>
+      <GroupTerritoryContext.Provider value={{
+        enabled: groupTerritoryEnabled() && actualRole !== 'user',
+        groups: groupTerritoryEnabled() ? serviceGroupOptions(globalSettings, language) : [],
+        ownCode: groupTerritoryEnabled() ? ownTerritoryGroup(serviceGroupOptions(globalSettings, language), allUsers.find(member => member.id === user.id)?.groupName) : null,
+        canManage: actualRole === 'admin' || actualRole === 'developer',
+        save: async (code, targets, action) => {
+          try { await saveTerritoryGroups(code, targets, action) }
+          catch (error) {
+            await refetchSlices(['cards'], { triggeredBy: 'mutation:group-territory-recovery' }).catch(() => {})
+            throw error
+          }
+          await refetchSlices(['cards'], { triggeredBy: 'mutation:group-territory' })
+        },
+      }}>
       {/* 지도 화면에서는 바텀시트 드래그와 충돌하므로 비활성화 */}
       {location.pathname !== '/map' && <PullToRefresh onRefresh={refetchAll} />}
       <Suspense
@@ -689,6 +707,7 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
         </ScopedCardContext.Provider>
         {!needsBuildings && !needsCalendar && <AppScreenReady onReady={onScreenReady} />}
       </Suspense>
+      </GroupTerritoryContext.Provider>
       </MeetingProvider>
     </>
   )

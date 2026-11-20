@@ -86,6 +86,8 @@ export type RawCard = {
   leader_name: string | null
   card_assignments: { user_name: string }[]
   card_leader_assignments?: { user_name: string; created_at?: string | null }[]
+  card_group_assignments?: { group_code: string }[]
+  group_assignment_revision?: number | string
 }
 
 export type RawCalendarEvent = {
@@ -378,6 +380,8 @@ export function toCard(raw: RawCard, buildings: Building[]): TerritoryCard {
     regularVisitPoints: [],
     assignedLeader: assignedLeaders[0] ?? raw.leader_name,
     assignedLeaders,
+    assignedGroupCodes: raw.card_group_assignments?.map(entry => entry.group_code),
+    groupAssignmentRevision: raw.group_assignment_revision == null ? undefined : String(raw.group_assignment_revision),
     leaderAssignedAt,
     assignedUsers: (raw.card_assignments ?? []).map((a) => a.user_name),
   }

@@ -3,6 +3,7 @@ import { t, type AppLanguage, currentLang } from '../i18n';
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { useTerritoryRealtime } from '../hooks/useTerritoryRealtime'
 import { MapCanvas } from './MapCanvas'
+import { useGroupMapScope } from '../features/groupTerritory/useGroupMapScope'
 import type { MapAggregateMarker } from './MapCanvas'
 import { SpecialPeriodBanner } from './SpecialPeriodBanner'
 import { UnitSlotGrid } from './UnitSlotGrid'
@@ -93,10 +94,10 @@ function informalKindLabel(kind: InformalKind): string {
 
 export function DesktopMap({
   language,
-  buildings,
+  buildings: sourceBuildings,
   boundaryEditRequest,
-  cardBoundaries,
-  cards,
+  cardBoundaries: sourceBoundaries,
+  cards: sourceCards,
   currentVisitor,
   actualRole,
   serviceSessions,
@@ -216,8 +217,10 @@ export function DesktopMap({
   onUpdateUnitFlags: (unitId: number, flags: Partial<Unit>) => void
   visitHistories: VisitHistory[]
   specialPeriods?: SpecialPeriod[]
-  onSwitchToList?: () => void
+  onSwitchToList?: (groupCode?: string) => void
 }) {
+  const groupMap = useGroupMapScope({ cards: sourceCards, buildings: sourceBuildings, cardBoundaries: sourceBoundaries }, actualRole, !!assignmentServiceLabel || !!focusedInformalId || focusedCardId != null || !!boundaryEditRequest)
+  const { cards, buildings, cardBoundaries } = groupMap
   // 지역 목록·순서는 DB 에서 온다 (lib/regions). 렌더마다 최신 값을 읽는다
   const regionNames = getRegionNames()
   const [cardFilter, setCardFilter] = useState<number | '전체'>('전체')
@@ -1566,6 +1569,8 @@ export function DesktopMap({
           })()}
         </div>
         <div className="map-toolbar" aria-label="지도 필터">
+          {groupMap.controls}
+          {groupMap.selector}
           <button
             aria-expanded={navigationOpen}
             className={`map-navigation-toggle${navigationOpen ? ' active' : ''}`}
@@ -1628,7 +1633,7 @@ export function DesktopMap({
           {/* 목록으로 전환 */}
           {onSwitchToList && (
             <button
-              onClick={onSwitchToList}
+              onClick={() => onSwitchToList(groupMap.controls ? groupMap.active ? groupMap.code ?? 'all' : 'all' : undefined)}
               type="button"
               style={{
                 display: 'flex', alignItems: 'center', gap: 5,
@@ -1989,6 +1994,7 @@ export function DesktopMap({
             )}
 
             <MapCanvas
+              viewportMemory={groupMap.viewportMemory}
               buildings={informalOnlyBoundaries ? [] : aggregateMapBuildings}
               aggregateMarkers={informalOnlyBoundaries ? [] : mapAggregateMarkers}
               onSelectAggregate={handleSelectAggregateMarker}

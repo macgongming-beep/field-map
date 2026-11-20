@@ -1,4 +1,9 @@
 import { t } from '../i18n'
+import { Link } from 'react-router-dom'
+import { useGroupTerritory } from '../features/groupTerritory/context'
+import { groupOwnsCard } from '../features/groupTerritory/model'
+import { GroupScopeSelect } from '../features/groupTerritory/GroupScopeSelect'
+import { GroupCardOwners } from '../features/groupTerritory/GroupCardOwners'
 import { kindToFilters, filtersToKind, type BuildingKind } from '../utils/buildingKindFilter'
 import { canEditVisitor, visitorOptionsFrom } from '../utils/visitorPicker'
 import type { AppLanguage } from '../i18n'
@@ -134,9 +139,9 @@ function ListPagination({
 
 export function DesktopTerritory({
   language,
-  buildings,
+  buildings: sourceBuildings,
   cardBoundaries,
-  cards,
+  cards: sourceCards,
   role,
   onSetCardLeaders,
   onSetMultipleCardLeaders,
@@ -171,6 +176,7 @@ export function DesktopTerritory({
   visitHistories,
   onCreateBuilding,
   onSwitchToMap,
+  initialGroupCode,
   // v2 신 배정 모델
   currentVisitor = '',
   informalAssets = [],
@@ -251,7 +257,8 @@ export function DesktopTerritory({
   onOpenInformalOnMap?: (assetId: number) => void
   onCreateTerritoryRegion?: (input: { name: string; city?: string }) => Promise<boolean>
   onCreateBuilding?: (input: { cardId: number; name: string; address: string; type: Building['type']; lat: number; lng: number }) => Promise<boolean>
-  onSwitchToMap?: () => void
+  onSwitchToMap?: (groupCode?: string) => void
+  initialGroupCode?: string
   currentVisitor?: string
   informalAssets?: InformalAsset[]
   informalGroups?: InformalGroup[]
@@ -272,6 +279,13 @@ export function DesktopTerritory({
   onRejectRestaurantRequest?: (id: number, reviewer: string) => Promise<void>
 }) {
   const { allUsers, ensureAllUsersFresh } = useSharedAuth()
+  const groupTerritory = useGroupTerritory()
+  const useGroups = groupTerritory.enabled && role !== 'user'
+  const [groupScope, setGroupScope] = useState<string | null>(null)
+  const selectedGroup = groupScope ?? initialGroupCode ?? (role === 'leader' ? groupTerritory.ownCode ?? 'all' : 'all')
+  const cards = useMemo(() => useGroups && selectedGroup !== 'all' ? sourceCards.filter(card => groupOwnsCard(card, selectedGroup)) : sourceCards, [sourceCards, selectedGroup, useGroups])
+  const groupCardIds = useMemo(() => new Set(cards.map(card => card.id)), [cards])
+  const buildings = useMemo(() => useGroups && selectedGroup !== 'all' ? sourceBuildings.filter(building => groupCardIds.has(building.cardId)) : sourceBuildings, [sourceBuildings, useGroups, selectedGroup, groupCardIds])
   useEffect(() => { void ensureAllUsersFresh() }, [ensureAllUsersFresh])
   const isAdmin = role === 'admin'
 
@@ -312,7 +326,7 @@ export function DesktopTerritory({
   const [areaExpanded, setAreaExpanded] = useState(false)
   const AREA_CHIP_LIMIT = 10
   const [assignmentFilter, setAssignmentFilter] = useSessionState<'전체' | '배정' | '미배정'>('dt.assignmentFilter', '전체')
-  const [leaderFilter, setLeaderFilter] = useSessionState('dt.leaderFilter', '전체')
+  const [leaderFilter, setLeaderFilter] = useSessionState(useGroups ? 'dt.groupFilter' : 'dt.leaderFilter', '전체')
   const [regularVisitFilter, setRegularVisitFilter] = useSessionState<'전체' | '있음' | '없음'>('dt.regularVisitFilter', '전체')
   const [cardStatusFilter, setCardStatusFilter] = useSessionState<CardStatusFilter>('dt.cardStatusFilter', '전체')
   const [doneExcludedOpen, setDoneExcludedOpen] = useState(false)
@@ -517,11 +531,11 @@ export function DesktopTerritory({
   //   이걸 의존성으로 쓰는 filteredCards 의 useMemo 가 **매번 다시 계산된다**
   //   (memo 를 붙여놓고 안 걸리는 상태가 된다).
   const getCardLeaderList = useCallback((card: TerritoryCard) =>
-    (card.assignedLeaders && card.assignedLeaders.length > 0)
+    useGroups ? card.assignedGroupCodes ?? [] : (card.assignedLeaders && card.assignedLeaders.length > 0)
       ? card.assignedLeaders
       : card.assignedLeader
         ? [card.assignedLeader]
-        : [], [])
+        : [], [useGroups])
 
   const cardHasRegularVisit = useCallback((card: TerritoryCard) =>
     card.regularVisits > 0 ||
@@ -1457,6 +1471,7 @@ export function DesktopTerritory({
       <div className="territory-main">
         {/* ── 페이지 헤더: 종류 탭이 곧 제목 (구역 카드 / 비공식 카드 / 식당) ── */}
         <header className="page-header">
+          {useGroups && <GroupScopeSelect value={selectedGroup} onChange={setGroupScope} />}
           <div className="page-header-text">
             <div className="zone-kind-tabs" role="tablist" aria-label="구역 종류">
               {[
@@ -1576,7 +1591,7 @@ export function DesktopTerritory({
               </>
             )}
             {onSwitchToMap && (
-              <button onClick={onSwitchToMap} type="button" className="tbl-toolbar-btn">
+              <button onClick={() => onSwitchToMap(useGroups && selectedGroup !== 'all' ? selectedGroup : undefined)} type="button" className="tbl-toolbar-btn">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 21 15 18 9 21 3 18 3 6"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="6" x2="15" y2="18"/></svg>
                 지도
               </button>
@@ -1628,7 +1643,7 @@ export function DesktopTerritory({
                   전체 선택 해제
                 </button>
               )}
-              <details className="territory-multi-select">
+              {useGroups ? <Link className="tbl-ghost-btn sm" to="/assignment">{msg('집단 구역 배정')}</Link> : <><details className="territory-multi-select">
                 <summary>{bulkLeaderNames.length > 0 ? `인도자 선택 ${bulkLeaderNames.length}` : '인도자 선택'}</summary>
                 <div className="territory-multi-select-menu">
                   {leaderOptions.map((name) => (
@@ -1642,7 +1657,7 @@ export function DesktopTerritory({
               </details>
               <button className="tbl-ghost-btn sm" disabled={bulkAssigning} onClick={handleAssignLeaderBulk} type="button">
                 {bulkAssigning ? '적용 중...' : '인도자 적용'}
-              </button>
+              </button></>}
               {onMergeCardBoundaries && visibleCheckedCardIds.length > 1 && (
                 <button className="tbl-ghost-btn sm" onClick={handleOpenCardMergeModal} type="button">카드 병합</button>
               )}
@@ -1683,7 +1698,7 @@ export function DesktopTerritory({
             </div>
             <div className="desk-kpi" style={{ gridColumn: 'span 3' }}>
               <div className="desk-kpi__num tnum">{assignedCards}</div>
-              <div className="desk-kpi__label">인도자 배정</div>
+              <div className="desk-kpi__label">{useGroups ? msg('집단 구역') : '인도자 배정'}</div>
             </div>
             <div className="desk-kpi" style={{ gridColumn: 'span 3' }}>
               <div className="desk-kpi__num tnum">{totalUnits}</div>
@@ -1770,11 +1785,11 @@ export function DesktopTerritory({
               {cardFilterPanelOpen && (
                 <div className="tbl-advanced-filter-panel">
                   <div className="tbl-filter-group">
-                    <span className="tbl-filter-label">인도자</span>
+                    <span className="tbl-filter-label">{useGroups ? msg('집단') : '인도자'}</span>
                     <select className="tbl-filter-select" value={leaderFilter} onChange={(e) => setLeaderFilter(e.target.value)}>
                       <option value="전체">전체</option>
                       {leaderFilterOptions.map((leaderName) => (
-                        <option key={leaderName} value={leaderName}>{leaderName}</option>
+                        <option key={leaderName} value={leaderName}>{useGroups ? groupTerritory.groups.find(group => group.code === leaderName)?.name ?? leaderName : leaderName}</option>
                       ))}
                     </select>
                   </div>
@@ -2075,7 +2090,7 @@ export function DesktopTerritory({
                 )}
                 <th className="territory-card-name-cell">카드</th>
                 <th style={{ width: 140 }}>진행</th>
-                <th className="territory-card-leader-cell">인도자</th>
+                <th className="territory-card-leader-cell">{useGroups ? msg('집단') : '인도자'}</th>
                 <th style={{ width: 80, textAlign: 'right' }}>중국어</th>
                 <th className="territory-card-secondary" style={{ width: 90, textAlign: 'right' }}>정기방문</th>
                 <th className="territory-card-secondary" style={{ width: 80 }}>구역선</th>
@@ -2112,7 +2127,7 @@ export function DesktopTerritory({
                       </div>
                     </td>
                     <td className="territory-card-leader-cell" onClick={(e) => e.stopPropagation()}>
-                      {isAdmin ? (
+                      {useGroups ? <GroupCardOwners card={card} readOnly={!isAdmin && role !== 'developer'} /> : isAdmin ? (
                         <details style={{ position: 'relative' }}>
                           <summary style={{ listStyle: 'none', cursor: 'pointer', fontSize: 13, color: leaders.length > 0 ? 'var(--gray-900)' : '#B45309', fontWeight: leaders.length > 0 ? 500 : 600 }}>
                             {leaderLabel}

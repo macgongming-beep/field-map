@@ -143,6 +143,7 @@
 장소/모임 표시: [0137 장소 즐겨찾기 복구와 제목 옆 모임 표시](0137-place-favorites-and-meeting-badges.md)
 배포 사용량: [0138 자동 중복 배포 차단과 데모 배포 경로 통일](0138-explicit-deployment-policy.md)
 배정 화면 기억: [0139 배정 중 선택 조건과 지도 위치 유지](0139-assignment-workspace-retention.md)
+집단 담당 구역: [0141 공동 담당 가능한 집단 구역 데모](0141-demo-shared-group-territories.md)
 
 ```markdown
 # 제목

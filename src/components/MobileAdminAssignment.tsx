@@ -21,6 +21,8 @@ import { confirmDialog } from '../lib/confirm'
 import type { Building, TerritoryCard } from '../types'
 import { isEmptyTerritoryCard, sortTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
 import { msg } from '../lib/msg'
+import { useGroupTerritory } from '../features/groupTerritory/context'
+import { GroupTerritoryAssignment } from '../features/groupTerritory/GroupTerritoryAssignment'
 import { buildingHasUsage } from '../utils/unitUsage'
 
 function getCardLeaders(card: TerritoryCard) {
@@ -65,7 +67,12 @@ function SearchIcon({ size = 16 }: { size?: number }) {
 }
 
 
-export function MobileAdminAssignment({
+export function MobileAdminAssignment(props: Parameters<typeof LegacyMobileAdminAssignment>[0]) {
+  const groupTerritory = useGroupTerritory()
+  return groupTerritory.enabled ? <GroupTerritoryAssignment cards={props.cards} /> : <LegacyMobileAdminAssignment {...props} />
+}
+
+function LegacyMobileAdminAssignment({
   cards: rawCards,
   buildings = [],
   leaderNames,

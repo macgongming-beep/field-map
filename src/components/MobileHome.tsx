@@ -6,6 +6,8 @@ import { assignedServiceScope, cardServiceLabel, scopeServiceBuildings } from '.
 import { FontScalePicker } from './FontScalePicker'
 import { Routes, Route, Navigate, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { MobileAdminAssignment } from './MobileAdminAssignment'
+import { useGroupTerritory } from '../features/groupTerritory/context'
+import { groupOwnsCard } from '../features/groupTerritory/model'
 import { MobileMap } from './MobileMap'
 import { MobileTerritory } from './MobileTerritory'
 import { MobileRegularVisitDetail } from './MobileRegularVisitDetail'
@@ -520,7 +522,8 @@ export function MobileHome({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }, [])
   const todayLabel = useMemo(() => formatHomeDate(new Date(), language), [language])
-  const leaderCards = useMemo(() => cards.filter((c) => c.assignedLeader === currentVisitor), [cards, currentVisitor])
+  const groupTerritory = useGroupTerritory()
+  const leaderCards = useMemo(() => cards.filter((c) => groupTerritory.enabled ? groupOwnsCard(c, groupTerritory.ownCode) : c.assignedLeader === currentVisitor), [cards, currentVisitor, groupTerritory.enabled, groupTerritory.ownCode])
 
   const todayEvents = useMemo(() =>
     calendarEvents.filter((e) => e.date === today).sort((a, b) => a.time.localeCompare(b.time)),
@@ -1085,17 +1088,17 @@ export function MobileHome({
                 subtitle={(() => {
                   if (role === 'admin') {
                     const total = cards.length
-                    const unassigned = cards.filter((c) => c.status === '미배정').length
+                    const unassigned = cards.filter((c) => groupTerritory.enabled ? !c.assignedGroupCodes?.length : c.status === '미배정').length
                     return t(language, 'zone.subtitleAdmin')
                       .replace('{total}', String(total))
                       .replace('{unassigned}', String(unassigned))
                   }
                   const myCards = cards.filter((c) =>
-                    c.assignedLeaders?.includes(currentVisitor) ||
+                    groupTerritory.enabled ? groupOwnsCard(c, groupTerritory.ownCode) : c.assignedLeaders?.includes(currentVisitor) ||
                     c.assignedLeader === currentVisitor ||
                     c.assignedUsers?.includes(currentVisitor)
                   ).length
-                  return `${t(language, 'home.assignedCards')} ${myCards}`
+                  return `${groupTerritory.enabled ? msg('집단 구역') : t(language, 'home.assignedCards')} ${myCards}`
                 })()}
                 userId={currentUser.id}
                 userName={currentVisitor}
@@ -1128,8 +1131,11 @@ export function MobileHome({
                 onOpenMap={(cardId) => navigate(`/map?cardId=${cardId}`)}
                 onOpenAssignedMap={(cardIds, context) => {
                   const params = new URLSearchParams()
-                  if (cardIds.length > 0) params.set('cardIds', cardIds.join(','))
-                  if (context?.scope === 'mine') params.set('scope', 'mine')
+                  if (context?.groupCode) params.set('groupCode', context.groupCode)
+                  else {
+                    if (cardIds.length > 0) params.set('cardIds', cardIds.join(','))
+                    if (context?.scope === 'mine') params.set('scope', 'mine')
+                  }
                   if (context?.region) params.set('region', context.region)
                   if (context?.dong) params.set('dong', context.dong)
                   navigate(`/map${params.toString() ? `?${params.toString()}` : ''}`)
@@ -1160,7 +1166,8 @@ export function MobileHome({
               <AppHeader
                 pageTitle={t(language, 'nav.assignment')}
                 language={language}
-                subtitle={role === 'admin' ? (() => {
+                subtitle={role === 'admin' || (groupTerritory.enabled && role === 'developer') ? (() => {
+                  if (groupTerritory.enabled) return msg('집단 구역 배정')
                   const leaderCount = leaderNames.length
                   const unassigned = cards.filter((c) => {
                     const ls = c.assignedLeaders?.length ? c.assignedLeaders : c.assignedLeader ? [c.assignedLeader] : []
@@ -1190,7 +1197,7 @@ export function MobileHome({
                 chatUsers={headerChatUsers}
                 onOpenMenu={() => navigate('/settings')}
               />
-              {role === 'admin' ? (
+              {role === 'admin' || (groupTerritory.enabled && role === 'developer') ? (
                 <MobileAdminAssignment
                   cards={cards}
                   buildings={buildings}

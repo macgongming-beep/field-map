@@ -4,11 +4,13 @@
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
 import { groupServiceZh } from './groupService'
+import { groupTerritoryZh } from './groupTerritory'
 export const messagesZh: Record<string, string> = {
   "삭제되었거나 찾을 수 없는 댓글입니다.": "这条评论已删除或无法找到。",
   "댓글을 불러오지 못했습니다.": "无法加载评论。",
   "이전 댓글 보기": "查看之前的评论",
   ...groupServiceZh,
+  ...groupTerritoryZh,
   '사용자 목록을 불러오지 못했습니다.': '无法加载用户列表。',
   '방문 기록을 불러오지 못했습니다.': '无法加载探访记录。',
   '지역 선택': '选择地区',

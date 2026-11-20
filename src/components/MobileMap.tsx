@@ -41,6 +41,8 @@ import { useTerritoryRealtime } from '../hooks/useTerritoryRealtime'
 import { BuildingDetailGate } from './BuildingDetailGate'
 import { useAddressMapPin } from '../hooks/useAddressMapPin'
 import { chineseMapBuildings, mapChineseFilterEnabled } from '../utils/mapChineseFilter'
+import { useGroupMapScope } from '../features/groupTerritory/useGroupMapScope'
+import { MapFilterButton } from '../features/groupTerritory/MapFilterButton'
 
 type NavLevel = 'area' | 'region' | 'card' | 'map'
 type BuildingTypeFilter = '전체' | Building['type']
@@ -96,9 +98,9 @@ function EditIcon({ size = 17 }: { size?: number }) {
 export function MobileMap({
   language,
   translatePlaceNames = false,
-  buildings,
-  cardBoundaries,
-  cards,
+  buildings: sourceBuildings,
+  cardBoundaries: sourceBoundaries,
+  cards: sourceCards,
   currentVisitor,
   currentUserId,
   actualRole,
@@ -204,6 +206,8 @@ export function MobileMap({
 }) {
   // URL 파라미터 (가상 핀용)
   const [searchParams, setSearchParams] = useSearchParams()
+  const groupMap = useGroupMapScope({ cards: sourceCards, buildings: sourceBuildings, cardBoundaries: sourceBoundaries }, actualRole, !!regularVisitScope || !!focusedInformalId || focusedCardIds.length > 0 || focusedCardId != null)
+  const { cards, buildings, cardBoundaries } = groupMap
   const focusedUnitId = searchParams.get('unitId') ? Number(searchParams.get('unitId')) : null
   const focusedInformalChildId = searchParams.get('informalChildId') ? Number(searchParams.get('informalChildId')) : null
   const addrParam = searchParams.get('addr')
@@ -1750,13 +1754,11 @@ export function MobileMap({
             </div>
             {navLevel === 'map' ? (
               <div className="mobile-map-header-actions">
+                {groupMap.controls}
                 {canFilterChinese && (
-                  <button
-                    type="button"
-                    className="mobile-map-header-action mobile-map-chinese-filter"
-                    aria-label={t(language, 'map.chineseOnly')}
-                    aria-pressed={showChineseOnly}
-                    title={t(language, 'map.chineseOnly')}
+                  <MapFilterButton
+                    label={t(language, 'map.chineseOnly')}
+                    pressed={showChineseOnly}
                     onClick={() => {
                       setChineseOnly(value => !value)
                       setShowMapActionMenu(false)
@@ -1769,7 +1771,7 @@ export function MobileMap({
                       <circle cx="10" cy="8" r="5" />
                       <path d="m16 19 2 2 4-4" />
                     </svg>
-                  </button>
+                  </MapFilterButton>
                 )}
                 <button
                   type="button"
@@ -1808,6 +1810,7 @@ export function MobileMap({
               </>
             )}
           </div>
+          {navLevel === 'map' && groupMap.selector}
           {navLevel === 'map' && isUserMap && !isUserDirectAssignment && !showInformal && (
             <div className="mobile-map-field-actions">
               {activeSessionCard && (
@@ -2087,6 +2090,7 @@ export function MobileMap({
                 if (place) showToast(place.memo?.trim() || place.name, 'info')
               }}
               buildings={showInformal || mapAggregateMarkers.length > 0 ? [] : mapBuildings}
+              viewportMemory={groupMap.viewportMemory}
               aggregateMarkers={showInformal ? [] : mapAggregateMarkers}
               cardBoundaries={showInformal || mapAggregateMarkers.length > 0 ? [] : mapBoundaries}
               cards={cards}

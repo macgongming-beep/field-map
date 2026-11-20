@@ -4,6 +4,9 @@
 // '보일지 말지'(zoneKind·activeTab·detailPaneOpen)는 부모가 판단하고,
 // 선택된 카드의 요약 셋은 한 덩이(summary)로 묶었다.
 import type { TerritoryCard, VisitHistory } from '../types'
+import { useGroupTerritory } from '../features/groupTerritory/context'
+import { GroupCardOwners } from '../features/groupTerritory/GroupCardOwners'
+import { msg } from '../lib/msg'
 
 export type SelectedCardSummary = {
   /** 중국어 세대 수 */
@@ -31,6 +34,7 @@ export function TerritoryDetailPane({
   leadersOf: getCardLeaderList, onToggleLeader: toggleCardLeader,
   onSetCardLeaders, formatRelativeDate,
 }: Props) {
+  const groupTerritory = useGroupTerritory()
   const selectedChinesePointCount = summary.chinesePointCount
   const selectedHasBoundary = summary.hasBoundary
   const selectedLastVisit = summary.lastVisit
@@ -109,8 +113,8 @@ export function TerritoryDetailPane({
 
   {/* 인도자 배정 */}
   <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
-    <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>인도자 배정</p>
-    {isAdmin ? (
+    <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{groupTerritory.enabled ? msg('집단 구역') : '인도자 배정'}</p>
+    {groupTerritory.enabled ? <GroupCardOwners card={selectedCard} readOnly={!isAdmin} /> : isAdmin ? (
       <>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {leaderOptions.map((leaderName) => (

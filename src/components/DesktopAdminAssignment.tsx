@@ -3,6 +3,8 @@ import { showToast } from '../lib/toast'
 import type { TerritoryCard } from '../types'
 import { isEmptyTerritoryCard, sortTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
 import { msg } from '../lib/msg'
+import { useGroupTerritory } from '../features/groupTerritory/context'
+import { GroupTerritoryAssignment } from '../features/groupTerritory/GroupTerritoryAssignment'
 
 function getCardLeaders(card: TerritoryCard) {
   return card.assignedLeaders && card.assignedLeaders.length > 0
@@ -134,7 +136,12 @@ function AssignmentStatusModal({
   )
 }
 
-export function DesktopAdminAssignment({
+export function DesktopAdminAssignment(props: Parameters<typeof LegacyDesktopAdminAssignment>[0]) {
+  const groupTerritory = useGroupTerritory()
+  return groupTerritory.enabled ? <GroupTerritoryAssignment cards={props.cards} /> : <LegacyDesktopAdminAssignment {...props} />
+}
+
+function LegacyDesktopAdminAssignment({
   cards: rawCards,
   currentVisitor,
   leaderNames,

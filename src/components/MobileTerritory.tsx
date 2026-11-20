@@ -9,6 +9,8 @@ import { findReturnVisitBuilding, getUserReturnVisits, normalizeVisitorName } fr
 import { RestaurantServiceSheet } from './RestaurantServiceSheet'
 import { msg } from '../lib/msg'
 import { showToast } from '../lib/toast'
+import { useGroupTerritory } from '../features/groupTerritory/context'
+import { groupOwnsCard } from '../features/groupTerritory/model'
 import { getAssignmentTeamMembers } from '../utils/assignmentTeamMembers'
 import { assignedServiceScope, cardServiceLabel } from '../utils/cardServiceScope'
 import { chooseCardForBuilding } from '../utils/chooseCardForBuilding'
@@ -534,16 +536,17 @@ export function MobileTerritory({
     [myTodaySessions]
   )
 
+  const groupTerritory = useGroupTerritory()
   const myCards = useMemo(() => {
     const assigned = (() => {
       if (role === 'user') return cards.filter((c) => c.assignedUsers.includes(currentVisitor))
-      if (role === 'leader') return cards.filter((c) => c.assignedLeader === currentVisitor)
+      if (role === 'leader') return cards.filter((c) => groupTerritory.enabled ? groupOwnsCard(c, groupTerritory.ownCode) : c.assignedLeader === currentVisitor)
       return cards.filter((c) => c.assignedLeader === currentVisitor || c.assignedUsers.includes(currentVisitor))
     })()
     const assignedIds = new Set(assigned.map((c) => c.id))
     const fromSession = cards.filter((c) => activeSessionCardIds.has(c.id) && !assignedIds.has(c.id))
     return [...assigned, ...fromSession]
-  }, [cards, role, currentVisitor, activeSessionCardIds])
+  }, [cards, role, currentVisitor, activeSessionCardIds, groupTerritory.enabled, groupTerritory.ownCode])
 
   const visibleCards = useMemo(() => {
     let list: TerritoryCard[]

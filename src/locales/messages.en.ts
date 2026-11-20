@@ -4,11 +4,13 @@
 // 여기에 없는 문장은 한국어로 표시되므로, 새 문구를 추가하면 여기에도 넣어 준다.
 
 import { groupServiceEn } from './groupService'
+import { groupTerritoryEn } from './groupTerritory'
 export const messagesEn: Record<string, string> = {
   "삭제되었거나 찾을 수 없는 댓글입니다.": "This comment was deleted or could not be found.",
   "댓글을 불러오지 못했습니다.": "Could not load comments.",
   "이전 댓글 보기": "Earlier comments",
   ...groupServiceEn,
+  ...groupTerritoryEn,
   '사용자 목록을 불러오지 못했습니다.': 'Could not load the user list.',
   '방문 기록을 불러오지 못했습니다.': 'Could not load visit records.',
   '지역 선택': 'Select district',

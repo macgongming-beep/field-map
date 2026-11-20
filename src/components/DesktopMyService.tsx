@@ -1,4 +1,6 @@
 import { t } from '../i18n'
+import { useGroupTerritory } from '../features/groupTerritory/context'
+import { groupOwnsCard } from '../features/groupTerritory/model'
 import type { AppLanguage } from '../i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Building, CalendarEvent, EventInformalAssignment, EventRestaurantAssignment, InformalAsset, ReturnVisit, ReturnVisitLog, Role, ServiceSession, TerritoryCard, TimeSlot } from '../types'
@@ -190,14 +192,15 @@ export function DesktopMyService({
     [myTodaySessions],
   )
 
+  const groupTerritory = useGroupTerritory()
   const myCards = useMemo(() => {
     const assigned = role === 'leader'
-      ? cards.filter((card) => card.assignedLeader === currentVisitor || card.assignedLeaders?.includes(currentVisitor))
+      ? cards.filter((card) => groupTerritory.enabled ? groupOwnsCard(card, groupTerritory.ownCode) : card.assignedLeader === currentVisitor || card.assignedLeaders?.includes(currentVisitor))
       : cards.filter((card) => card.assignedUsers.includes(currentVisitor))
     const assignedIds = new Set(assigned.map((card) => card.id))
     const fromSession = cards.filter((card) => activeSessionCardIds.has(card.id) && !assignedIds.has(card.id))
     return [...assigned, ...fromSession]
-  }, [activeSessionCardIds, cards, currentVisitor, role])
+  }, [activeSessionCardIds, cards, currentVisitor, role, groupTerritory.enabled, groupTerritory.ownCode])
 
   const myReturnVisits = useMemo(() =>
     getUserReturnVisits(returnVisits, currentVisitor),

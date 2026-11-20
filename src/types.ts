@@ -161,6 +161,8 @@ export type TerritoryCard = {
   progress: number
   assignedLeader: string | null
   assignedLeaders?: string[]
+  assignedGroupCodes?: string[]
+  groupAssignmentRevision?: string
   /** 인도자별 현재 담당 구역 배정 생성 시각. 수정 시각으로 해석하지 않는다. */
   leaderAssignedAt?: Record<string, string>
   assignedUsers: string[]
