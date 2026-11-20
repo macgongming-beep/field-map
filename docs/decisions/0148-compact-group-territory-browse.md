@@ -1,6 +1,6 @@
 # 집단 구역 관리의 간결한 지도와 큰 목록
 
-- 상태: 데모 검증, 운영 미적용
+- 상태: 데모 적용 및 배포 후 검증 완료, 운영 미적용
 - 결정일: 2026-11-20
 - 선행: [0147 집단 일정의 구역 범위와 지도 선택](0147-event-group-territory-map.md)
 
@@ -72,4 +72,15 @@ Supabase 연결 자체를 거부한다. 기록은 위 LABEL의 scratch JSON/PNG�
 
 ## 반영
 
-0138의 단일 경로로 데모에만 배포한다. 운영 앱/DB/설정은 변경하지 않는다.
+0138의 단일 경로로 데모에만 1회 배포했다. 운영 앱/DB/설정은 변경하지 않았다.
+
+- 앱 소스: `b8af3fe`
+- 검증 산출물: `scratch/group-territory-release-compactbrowsefinal`
+- 데모 배포: `dpl_78WbemnoQWZbidipEXha7AT4vFKw`, `READY`
+- 주소: https://chinese-territory-app-demo.vercel.app
+- 배포 후 `LABEL=compact-browse-deployed node scripts/smokeGroupTerritoryBrowse.mjs`
+  통과. 공개 데모의 WebKit 390/320px, 390px 큰 글씨 및 Chromium 1440px에서
+  앞서 측정한 지도 위치와 동일했고, 화면 오류/가로 넘침이 없었다.
+  필터 및 보기 전환의 추가 DB 요청은 두 브라우저 모두 0건이었다.
+- 결과: `scratch/compact-browse-deployed.json`. 이 반영 기록은 문서만 별도
+  커밋하며 추가 배포하지 않는다.
