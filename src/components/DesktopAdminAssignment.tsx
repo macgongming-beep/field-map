@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { showToast } from '../lib/toast'
-import type { TerritoryCard } from '../types'
+import type { CardBoundary, TerritoryCard } from '../types'
 import { isEmptyTerritoryCard, sortTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
 import { msg } from '../lib/msg'
 import { useGroupTerritory } from '../features/groupTerritory/context'
@@ -136,9 +136,9 @@ function AssignmentStatusModal({
   )
 }
 
-export function DesktopAdminAssignment(props: Parameters<typeof LegacyDesktopAdminAssignment>[0]) {
+export function DesktopAdminAssignment(props: Parameters<typeof LegacyDesktopAdminAssignment>[0] & { cardBoundaries?: CardBoundary[] }) {
   const groupTerritory = useGroupTerritory()
-  return groupTerritory.enabled ? <GroupTerritoryAssignment cards={props.cards} /> : <LegacyDesktopAdminAssignment {...props} />
+  return groupTerritory.enabled ? <GroupTerritoryAssignment cards={props.cards} cardBoundaries={props.cardBoundaries} /> : <LegacyDesktopAdminAssignment {...props} />
 }
 
 function LegacyDesktopAdminAssignment({

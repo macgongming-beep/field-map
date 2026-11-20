@@ -19,17 +19,24 @@
 .group-territory-list strong { display: block; font-size: 16px; overflow-wrap: anywhere; }
 .group-territory-list small { display: block; margin-top: 6px; color: var(--gray-500); }
 .group-territory-assignment input[type="checkbox"] { accent-color: var(--ink); width: 18px; height: 18px; flex-shrink: 0; }
+.group-territory-browse { display: flex; gap: 8px; align-items: center; }
+.group-territory-browse input { flex: 1; min-width: 0; }
+.group-territory-view { display: flex; flex-shrink: 0; border: 1px solid var(--border-default); border-radius: 6px; overflow: hidden; }
+.group-territory-view button { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); }
+.group-territory-view button[aria-pressed="true"] { background: var(--gray-100); }
+.group-territory-view svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.group-territory-map { position: relative; height: min(560px, calc(62svh / var(--app-zoom, 1))); min-height: 300px; width: 100%; overflow: hidden; }
+.group-territory-map .naver-map-canvas, .group-territory-map .mock-map { height: 100%; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
+.group-territory-no-boundary { border: 0; border-radius: 0; background: transparent; color: var(--gray-600); padding: 12px 0; font: inherit; }
 .group-territory-scope { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: fit-content; max-width: 100%; }
 .group-territory-scope select { max-width: 100%; min-height: 36px; border: 1px solid var(--border-default); border-radius: 6px; padding: 8px; background: var(--surface, #fff); color: var(--ink); font: inherit; }
 .group-map-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .group-map-selector select { max-width: 180px; font-size: 13px; }
 .group-territory-select select, .group-territory-scope select { appearance: none; -webkit-appearance: none; padding-right: 32px; }
-.mobile-map-summary-row { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.mobile-map-summary-row .mm-stats-sub { flex: 1 1 auto; min-width: 0; }
-.mobile-map-summary-row .group-map-selector { flex: 0 1 80px; min-width: 0; max-width: 34%; }
-.mobile-map-summary-row .group-territory-scope { width: 100%; }
-.mobile-map-summary-row .group-territory-scope::after { right: 5px; }
-.mobile-map-summary-row .group-map-selector select { width: 100%; min-height: 36px; padding: 4px 20px 4px 6px; border: 0; border-radius: 4px; background: transparent; font-size: 16px; font-weight: 500; text-overflow: ellipsis; }
+.mobile-map-title-copy > .group-map-selector { grid-column: 1; grid-row: 1; align-self: center; min-width: 0; }
+.mobile-map-title-copy .group-territory-scope { width: 100%; }
+.mobile-map-title-copy .group-territory-scope::after { right: 6px; }
+.mobile-map-title-copy .group-map-selector select { width: 100%; height: 36px; min-height: 36px; max-width: 100%; padding: 0 24px 0 0; border: 0; border-radius: 4px; background: transparent; font-size: 18px; font-weight: 700; letter-spacing: 0; text-overflow: ellipsis; }
 .map-filter-control { position: relative; display: inline-flex; }
 .map-filter-toggle { border: 1px solid var(--border-default); border-radius: 6px; min-width: 36px; min-height: 36px; background: var(--surface, #fff); color: var(--ink); }
 .map-filter-toggle[aria-pressed="true"] { background: #e6eeea; border-color: #a5b9af; color: #263d32; }

@@ -51,7 +51,7 @@ function propsForMap() {
   }) as unknown as ComponentProps<typeof MobileMap>
 }
 function Location() { return <output data-testid="route">{useLocation().search}</output> }
-test.each(['admin', 'leader'] as const)('%s group selector shares the count row and keeps map filtering/navigation', role => {
+test.each(['admin', 'leader'] as const)('%s group selector replaces the title without adding a header row and keeps filtering/navigation', role => {
   const props = propsForMap()
   props.actualRole = role; props.assignmentServiceMap = false; props.focusedCardIds = []; props.focusedScopeLabel = undefined
   props.cards = [testCard(1, 'A territory'), testCard(2, 'B territory')].map((card, index) => ({ ...card, assignedGroupCodes: [index === 0 ? 'a' : 'b'] }))
@@ -59,9 +59,10 @@ test.each(['admin', 'leader'] as const)('%s group selector shares the count row 
   const { container } = render(<GroupTerritoryContext.Provider value={{ enabled: true, canManage: false, ownCode: 'a', groups: [{ code: 'a', name: '东滩', active: true }, { code: 'b', name: '处仁', active: true }], save: vi.fn() }}>
     {view(props, '/map?groupCode=b&return=%2Fzone')}
   </GroupTerritoryContext.Provider>)
-  const summary = container.querySelector('.mobile-map-summary-row') as HTMLElement
-  const selector = within(summary).getByRole('combobox', { name: '집단 구역 보기' })
-  expect(within(summary).getByRole('tablist')).toBeVisible()
+  const title = container.querySelector('.mobile-map-title-copy') as HTMLElement
+  const selector = within(title).getByRole('combobox', { name: '집단 구역 보기' })
+  expect(within(title).getByRole('tablist')).toBeVisible()
+  expect(title.querySelector('h1')).toBeNull()
   expect(container.querySelector('.mobile-map-header-content > .group-map-selector')).toBeNull()
   expect(selector).toHaveValue('b')
   fireEvent.click(screen.getByRole('button', { name: 'zoom close' }))
@@ -73,6 +74,7 @@ test.each(['admin', 'leader'] as const)('%s group selector shares the count row 
   expect(screen.getByTestId('pins')).not.toHaveTextContent('2:')
   fireEvent.change(selector, { target: { value: 'all' } })
   expect(screen.queryByRole('combobox', { name: '집단 구역 보기' })).not.toBeInTheDocument()
+  expect(title.querySelector('h1')).not.toBeNull()
   expect(screen.getByTestId('pins')).toHaveTextContent('1:')
   expect(screen.getByTestId('pins')).toHaveTextContent('2:')
 })

@@ -1200,6 +1200,7 @@ export function MobileHome({
               {role === 'admin' || (groupTerritory.enabled && role === 'developer') ? (
                 <MobileAdminAssignment
                   cards={cards}
+                  cardBoundaries={cardBoundaries}
                   buildings={buildings}
                   leaderNames={leaderNames}
                   currentVisitor={currentVisitor}

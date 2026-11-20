@@ -26,6 +26,8 @@ import { msg } from '../../lib/msg'
 import { assignmentSelectionIssues } from '../../utils/assignmentSelectionIssues'
 import { AssignmentSelectionIssues } from './AssignmentSelectionIssues'
 import { FullBuildingContext } from '../../hooks/buildingDemand'
+import { useGroupTerritory } from '../../features/groupTerritory/context'
+import { eventTerritoryScope } from '../../features/groupTerritory/eventScope'
 
 // "5/29 (금) 10:00 · 봉사 모임" 형식
 function formatEventDateTime(event: CalendarEvent): string {
@@ -106,6 +108,9 @@ function AssignmentEditorSnapshot(props: Props) {
 }
 
 function AssignmentEditorContent({ event, cards, allCards, buildings, visitHistories = [], cardBoundaries, currentVisitor, canEdit, informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onClose, onShare }: Props) {
+  const territory = useGroupTerritory()
+  const groupScope = useMemo(() => eventTerritoryScope(event, cards, territory.groups, territory.enabled), [event, cards, territory.groups, territory.enabled])
+  const candidateCards = groupScope?.cards ?? cards
   // 편집 시작 시점의 서버 공유시각 — 공유 때 충돌 감지에 사용 (P0-3)
   const [entrySharedAt] = useState<string | null>(event.assignmentSharedAt ?? null)
   const [entryRevision] = useState(event.assignmentRevision)
@@ -213,8 +218,10 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
   const legacyPersonalCount = teamServiceEnabled() && event.assignmentTeamInformal == null
     ? eventInformalAssignments.filter((a) => a.eventId === event.id && a.id > 0).length : 0
   const selectionIssues = useMemo(() => teamServiceEnabled()
-    ? assignmentSelectionIssues(teams, allCards, informalAssets) : [],
-  [teams, allCards, informalAssets])
+    ? assignmentSelectionIssues(teams, groupScope ? candidateCards : allCards, informalAssets).map(issue => ({ ...issue,
+      name: issue.kind === 'card' ? allCards.find(card => card.id === issue.id)?.name ?? issue.name : issue.name,
+    })) : [],
+  [teams, allCards, informalAssets, groupScope, candidateCards])
 
   const doShare = async () => {
     if (sharing || legacyPersonalCount > 0 || selectionIssues.length > 0) return
@@ -272,7 +279,8 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
           workspace={workspace}
           teams={teams}
           activeTeamId={activeTeamId}
-          cards={cards}
+          cards={candidateCards}
+          groupName={groupScope ? groupScope.name || msg('집단 봉사') : undefined}
           buildings={buildings}
           visitHistories={visitHistories}
           cardBoundaries={cardBoundaries}
@@ -311,7 +319,7 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <div className="asg-editor-titles">
-            <strong>{msg('봉사 배정')}</strong>
+            <strong>{groupScope ? `${groupScope.name || msg('집단 봉사')} · ${msg('봉사 배정')}` : msg('봉사 배정')}</strong>
             <span>{formatEventDateTime(event)}</span>
           </div>
         </div>
@@ -319,6 +327,9 @@ function AssignmentEditorContent({ event, cards, allCards, buildings, visitHisto
 
       {legacyPersonalCount > 0 && <p className="asg-selection-issues" role="alert">
         {msg('개인 비공식 배정 {n}건이 남아 있어 공유할 수 없습니다. 기존 배정은 보존됩니다.', { n: legacyPersonalCount })}
+      </p>}
+      {groupScope && selectionIssues.some(issue => issue.kind === 'card') && <p className="asg-selection-issues" role="alert">
+        {msg('집단 담당 범위 밖의 기존 배정이 있습니다. 선택을 확인해 주세요.')}
       </p>}
       <AssignmentSelectionIssues issues={selectionIssues} canEdit={canEdit && !sharing} onRemove={(issue) => {
         if (issue.kind === 'card') dispatch({ type: 'UNASSIGN_CARD', teamId: issue.teamId, cardId: issue.id })

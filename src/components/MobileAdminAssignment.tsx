@@ -18,7 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { showToast } from '../lib/toast'
 import { confirmDialog } from '../lib/confirm'
-import type { Building, TerritoryCard } from '../types'
+import type { Building, CardBoundary, TerritoryCard } from '../types'
 import { isEmptyTerritoryCard, sortTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
 import { msg } from '../lib/msg'
 import { useGroupTerritory } from '../features/groupTerritory/context'
@@ -67,9 +67,9 @@ function SearchIcon({ size = 16 }: { size?: number }) {
 }
 
 
-export function MobileAdminAssignment(props: Parameters<typeof LegacyMobileAdminAssignment>[0]) {
+export function MobileAdminAssignment(props: Parameters<typeof LegacyMobileAdminAssignment>[0] & { cardBoundaries?: CardBoundary[] }) {
   const groupTerritory = useGroupTerritory()
-  return groupTerritory.enabled ? <GroupTerritoryAssignment cards={props.cards} /> : <LegacyMobileAdminAssignment {...props} />
+  return groupTerritory.enabled ? <GroupTerritoryAssignment cards={props.cards} cardBoundaries={props.cardBoundaries} /> : <LegacyMobileAdminAssignment {...props} />
 }
 
 function LegacyMobileAdminAssignment({

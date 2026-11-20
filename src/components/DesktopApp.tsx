@@ -872,6 +872,7 @@ export function DesktopApp({
           viewMode === 'admin' || (groupTerritory.enabled && viewMode === 'developer') ? (
             <DesktopAdminAssignment
               cards={cards}
+              cardBoundaries={cardBoundaries}
               currentVisitor={currentVisitor}
               leaderNames={leaderNames}
               onSetCardLeaders={onSetCardLeaders}

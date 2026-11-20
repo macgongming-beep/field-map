@@ -269,10 +269,11 @@ export function MobileMap({
   // 필터
   const [chineseOnly, setChineseOnly] = useState(false)
   const canFilterChinese = mapChineseFilterEnabled() && !focusedInformalId && !regularVisitScope && !addrParam
+  const hasMapHeaderFilters = canFilterChinese || Boolean(groupMap.controls)
   const showChineseOnly = canFilterChinese && chineseOnly
   const mapHeaderRef = useRef<HTMLElement | null>(null)
   useLayoutEffect(() => {
-    if (!canFilterChinese || navLevel !== 'map') return
+    if (!hasMapHeaderFilters || navLevel !== 'map') return
     const header = mapHeaderRef.current
     const shell = header?.parentElement
     if (!header || !shell) return
@@ -285,7 +286,7 @@ export function MobileMap({
       observer?.disconnect()
       shell.style.removeProperty('--map-filter-header-height')
     }
-  }, [canFilterChinese, navLevel])
+  }, [hasMapHeaderFilters, navLevel])
   const [statusFilter, setStatusFilter] = useState<PinGroup | '전체'>('전체')
   const [buildingTypeFilter, setBuildingTypeFilter] = useState<BuildingTypeFilter>('전체')
 
@@ -1704,7 +1705,7 @@ export function MobileMap({
   const hasAreaChips = !isUserMap && !enteredDirectly && areas.length > 1
   return (
     <main
-      className={`mobile-map-shell${navLevel === 'map' ? ' mobile-map-shell--map' : ''}${navLevel === 'map' && canFilterChinese ? ' mobile-map-shell--chinese-filter' : ''}`}
+      className={`mobile-map-shell${navLevel === 'map' ? ' mobile-map-shell--map' : ''}${navLevel === 'map' && hasMapHeaderFilters ? ' mobile-map-shell--chinese-filter' : ''}`}
       style={hasAreaChips && navLevel === 'map' ? { '--map-chips-push': '53px' } as React.CSSProperties : undefined}
     >
       {childDraftModal}
@@ -1723,8 +1724,7 @@ export function MobileMap({
                 <><h1>{selectedInformal.name}</h1><span className="mm-stats-sub">{msg('장소 {n}개', { n: informalChildren.length })}</span></>
               ) : navLevel === 'map' ? (
                 <>
-                  <h1>{assignmentServiceMap ? focusedScopeLabel : selectedCardId ? translateKoreanAddress(cards.find(c => c.id === selectedCardId)?.name ?? t(language, 'map.zoneMap'), language, translatePlaceNames) : t(language, 'map.zoneMap')}</h1>
-                  <div className="mobile-map-summary-row">
+                  {groupMap.selector ?? <h1>{assignmentServiceMap ? focusedScopeLabel : selectedCardId ? translateKoreanAddress(cards.find(c => c.id === selectedCardId)?.name ?? t(language, 'map.zoneMap'), language, translatePlaceNames) : t(language, 'map.zoneMap')}</h1>}
                   {assignmentServiceMap ? <span className="mm-stats-sub">{msg('카드 {n}개', { n: displayedCardCount })} · {showChineseOnly ? `${t(language, 'map.chinese')} ` : ''}{typeCounts.전체}{msg('세대')}</span> : <span className="mm-stats-sub" role="tablist">
                     <button
                       type="button"
@@ -1754,8 +1754,6 @@ export function MobileMap({
                       <span>{t(language, 'map.shop')}</span><b className="tnum">{typeCounts.상가}</b>
                     </button>
                   </span>}
-                  {groupMap.selector}
-                  </div>
                 </>
               ) : (
                 <>

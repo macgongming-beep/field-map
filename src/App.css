@@ -32398,7 +32398,11 @@ button:focus-visible {
 .asg-zone-navigation .asg-zone-toggle { gap: 2px; }
 .asg-zone-navigation .asg-zone-toggle button { border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
 .asg-zone-navigation .asg-zone-toggle button.is-on { background: var(--line); color: var(--ink); }
-.asg-zone .asg-editor-titles span { white-space: normal; overflow-wrap: anywhere; }
+.asg-zone .asg-editor-head-left { min-width: 0; width: 100%; }
+.asg-zone .asg-editor-back { flex-shrink: 0; }
+.asg-zone .asg-editor-titles { min-width: 0; flex: 1; }
+.asg-zone .asg-editor-titles strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; letter-spacing: 0; }
+.asg-zone .asg-editor-titles span { white-space: nowrap; height: 16px; line-height: 16px; }
 .asg-card-composition { max-width: 100%; min-height: 36px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font-size: 12px; }
 .asg-zone-view-slot { order: 1; }
 .asg-zone-navigation.is-unified { display: grid; grid-template-columns: auto 74px minmax(0, 1fr); gap: 12px; }

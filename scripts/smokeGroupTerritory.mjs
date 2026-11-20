@@ -139,7 +139,7 @@ try {
           await page.getByRole('button', { name: '집단 구역만 보기' }).click()
           await settle()
           assert.equal(await page.getByRole('combobox', { name: '집단 구역 보기' }).inputValue(), seed.groups[1].code)
-          assert.ok(!(await page.locator('.mobile-map-title-copy h1').innerText()).includes(seed.cards[1].name))
+          assert.equal(await page.locator('.mobile-map-title-copy .group-map-selector select').inputValue(), seed.groups[1].code)
           await shot('search-restore-group')
         }
         results.push({ role, width, filterReads: filteredReads, testedWrites: role === 'admin' && width === 390 && process.env.WRITE_TEST !== 'false' })

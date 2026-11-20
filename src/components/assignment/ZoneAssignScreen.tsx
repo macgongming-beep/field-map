@@ -30,6 +30,7 @@ type BuildingTypeFilter = '전체' | '주택' | '상가'
 const scopeLabel = (scope: BuildingTypeFilter) => msg(scope === '주택' ? '주택봉사' : scope === '상가' ? '상가봉사' : '전체')
 
 type Props = {
+  groupName?: string
   workspace?: AssignmentWorkspace
   teams: DraftTeam[]
   activeTeamId: string | null
@@ -58,7 +59,7 @@ type ViewMode = 'list' | 'map'
 
 
 
-export function ZoneAssignScreen({ workspace: suppliedWorkspace, teams, activeTeamId, cards, buildings, visitHistories = [], cardBoundaries, canEdit, dispatch, eventId, currentVisitor, allCards = [], informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onBack }: Props) {
+export function ZoneAssignScreen({ groupName, workspace: suppliedWorkspace, teams, activeTeamId, cards, buildings, visitHistories = [], cardBoundaries, canEdit, dispatch, eventId, currentVisitor, allCards = [], informalAssets = [], informalGroups = [], eventInformalAssignments = [], eventRestaurantAssignments = [], onAssignInformalToUser, onRemoveInformalAssignment, onAssignRestaurantToUser, onRemoveRestaurantAssignment, onBack }: Props) {
   const [localWorkspace] = useState(createAssignmentWorkspace)
   const workspace = suppliedWorkspace ?? localWorkspace
   const [view, setView] = useState<ViewMode>(workspace.view)
@@ -197,7 +198,7 @@ export function ZoneAssignScreen({ workspace: suppliedWorkspace, teams, activeTe
 
   // cardId → 짧은 카드명 (지역/구 접두 제거: "처인구 고림동 1" → "고림동 1")
   const shortName = (id: number) => {
-    const c = cards.find((x) => x.id === id)
+    const c = cards.find((x) => x.id === id) ?? allCards.find((x) => x.id === id)
     if (!c) return `카드 ${id}`
     return stripRegionPrefix(c.name)
   }
@@ -402,7 +403,7 @@ export function ZoneAssignScreen({ workspace: suppliedWorkspace, teams, activeTe
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
             <div className="asg-editor-titles">
-              <strong>{msg('구역 배분')}</strong>
+              <strong>{groupName ? `${groupName} · ${msg('구역 배분')}` : msg('구역 배분')}</strong>
               <span title={activeTeam ? activeTeam.members.join(' · ') : ''}>
                 {activeTeam ? `${activeTeam.name} · ${activeTeam.members.join(' · ')}` : ''}
               </span>
@@ -475,6 +476,7 @@ export function ZoneAssignScreen({ workspace: suppliedWorkspace, teams, activeTe
       </div>
 
       {/* 본문 */}
+      {groupName && cards.length === 0 && mainTab === '카드' && <p className="asg-selection-issues" role="status">{msg('집단 담당 구역이 없습니다.')}</p>}
       {isMapView ? (
         <div className="asg-zone-map">
           {/* 구 + 주택/상가 + 완료 필터 (sticky 헤더 바로 아래) */}
@@ -513,7 +515,7 @@ export function ZoneAssignScreen({ workspace: suppliedWorkspace, teams, activeTe
             isMobile
             onSelectBuilding={() => undefined}
             onSelectCardBoundary={(cardId) => {
-              if (!canEdit || !activeTeam) return
+              if (!canEdit || !activeTeam || !myCardIds.has(cardId)) return
               if (activeTeam.cardIds.includes(cardId)) dispatch({ type: 'UNASSIGN_CARD', teamId: activeTeam.id, cardId })
               else dispatch({ type: 'ASSIGN_CARD', teamId: activeTeam.id, cardId, ...(scopeEnabled ? { scope: buildingTypeFilter } : {}) })
             }}

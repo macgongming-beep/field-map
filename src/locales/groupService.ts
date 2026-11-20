@@ -1,4 +1,7 @@
 export const groupServiceZh: Record<string,string> = {
+  '경계선 없는 구역 {n}개':'没有边界的地区 {n} 个',
+  '집단 담당 구역이 없습니다.':'此小组尚未分配地区。',
+  '집단 담당 범위 밖의 기존 배정이 있습니다. 선택을 확인해 주세요.':'已有分配包含此小组范围以外的地区，请检查选择。',
   '자주 쓰는 장소':'常用地点','장소 설정':'地点设置','장소 설정 저장':'保存地点设置',
   '장소 이름과 지도 링크를 확인해 주세요.':'请检查地点名称和地图链接。',
   '장소 설정을 저장하지 못했습니다. 다시 시도해 주세요.':'无法保存地点设置，请重试。',
@@ -46,6 +49,9 @@ export const groupServiceZh: Record<string,string> = {
   '알림 보내기':'发送通知','알림 없이 저장':'保存但不通知','신청 완료':'已报名',
 }
 export const groupServiceEn: Record<string,string> = {
+  '경계선 없는 구역 {n}개':'{n} territories without boundaries',
+  '집단 담당 구역이 없습니다.':'No territories are assigned to this group.',
+  '집단 담당 범위 밖의 기존 배정이 있습니다. 선택을 확인해 주세요.':'Existing assignments include territories outside this group. Please review the selections.',
   '자주 쓰는 장소':'Saved places','장소 설정':'Place settings','장소 설정 저장':'Save place settings',
   '장소 이름과 지도 링크를 확인해 주세요.':'Check the place names and map links.',
   '장소 설정을 저장하지 못했습니다. 다시 시도해 주세요.':'Could not save place settings. Please try again.',
