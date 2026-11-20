@@ -10,6 +10,8 @@ try{
   for(const file of ['package.json','scripts/restore.js','scripts/groupTerritoryBackup.mjs','scripts/atomicRestore.mjs','scripts/rehearseProductionBackup.mjs',
     'scripts/rehearsal/localRestoreAdapter.mjs','scripts/rehearsal/offlineRestoreHooks.mjs',
     'supabase/migrations/20261119_0010_service_series_edit_targets.sql',
+    'supabase/migrations/20261120_1600_territory_group_assignments.sql',
+    'supabase/migrations/20261120_1700_territory_group_review.sql',
     'backups/2026-11-20','backups/service-series-production/before.dump']){
     mkdirSync(dirname(join(copy,file)),{recursive:true});cpSync(file,join(copy,file),{recursive:true})
   }

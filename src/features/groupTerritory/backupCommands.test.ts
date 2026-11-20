@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { chmodSync } from 'node:fs'
 
 const io = vi.hoisted(() => ({
   files: {} as Record<string, Record<string, unknown>[]>,
@@ -158,4 +159,27 @@ test('write restore requires explicit maintenance acknowledgement before databas
   await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(1))
   expect(io.sql).toEqual([])
   expect(io.upserts).toEqual([])
+})
+
+test.each(['extra file','explicit table'])('unreviewed restore %s is refused before DB access', async selection => {
+  process.argv.push('--write','--maintenance')
+  if (selection === 'extra file') io.files['unexpected_table.json'] = [{id:1}]
+  else process.argv.push('--table','unexpected_table')
+  await import('../../../scripts/restore.js')
+  await vi.waitFor(() => expect(process.exit).toHaveBeenCalledWith(1))
+  expect(io.sql).toEqual([])
+  expect(io.upserts).toEqual([])
+  expect(console.error).toHaveBeenCalledWith('❌', expect.objectContaining({message:expect.stringContaining('Unreviewed')}))
+})
+
+test('backup tightens sensitive data files to owner-only access, including existing files', async () => {
+  await import('../../../scripts/backup.js')
+  await finished('백업 완료')
+  expect(chmodSync).toHaveBeenCalledWith(expect.stringMatching(/\/backups\/\d{4}-\d{2}-\d{2}$/),0o700)
+  for (const name of ['event_meeting_access','app_users','place_change_requests','territory_report_shares']) {
+    expect(io.writes.has(`${name}.json`)).toBe(true)
+    expect(chmodSync).toHaveBeenCalledWith(expect.stringContaining(`/${name}.json`),0o600)
+  }
+  expect(chmodSync).toHaveBeenCalledWith(expect.stringContaining('/private_duplicate_building_merge_audits.sql'),0o600)
+  expect(process.umask()).toBe(0o077)
 })

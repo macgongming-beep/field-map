@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 
 process.umask(0o077)
+const runStarted=performance.now()
 const root=mkdtempSync(join(tmpdir(),'fieldmap-recovery-'))
 const source=resolve('backups/2026-11-20')
 const archive=resolve('backups/service-series-production/before.dump')
@@ -18,7 +19,7 @@ mkdirSync(output,{mode:0o700})
 writeFileSync(join(root,'LOCAL_REHEARSAL_ONLY'),'offline\n')
 const baseEnv={PATH:process.env.PATH,HOME:process.env.HOME,PGHOST:root,PGPORT:'55442',PGUSER:'postgres',PGDATABASE:'postgres'}
 const report={startedAt:new Date().toISOString(),source:'backups/2026-11-20',schemaArchive:'backups/service-series-production/before.dump',
-  networkAccess:false,productionAccess:false,deployment:false,checks:[],limitations:[
+  networkAccess:false,productionAccess:false,deployment:false,checks:[],commandTimings:[],limitations:[
     'Saved November 18 production schema plus its November 19 migration; no live schema recheck.',
     'Original restore CLI with offline SQL transport instead of PostgREST; not an HTTP/RLS verification.',
     'No real auth sessions, push secrets, cron or network extensions; crypto operations fail closed.',
@@ -51,15 +52,18 @@ function input(name,withFixtures=true){
 function cli(name,database,inputRoot,args=[]){
   const attempts=join(output,`${name}-attempts.jsonl`)
   writeFileSync(attempts,'')
+  const commandStarted=performance.now()
   const result=spawnSync(process.execPath,['--import',resolve('scripts/rehearsal/offlineRestoreHooks.mjs'),resolve('scripts/restore.js'),'2026-11-20','--write','--maintenance',...args],{
     env:{PATH:process.env.PATH,HOME:process.env.HOME,PSQL_BIN:psql,
       VITE_SUPABASE_URL:'https://rehearsal.invalid',SUPABASE_SERVICE_ROLE_KEY:'offline-only',SUPABASE_DB_URL:'postgresql://rehearsal-only',
       REHEARSAL_SOCKET:root,REHEARSAL_DATABASE:database,REHEARSAL_INPUT:inputRoot,REHEARSAL_ATTEMPTS:attempts},
     encoding:'utf8',timeout:180000,maxBuffer:16*1024*1024,
   })
+  const durationMs=Math.round(performance.now()-commandStarted)
+  report.commandTimings.push({name,durationMs,exitCode:result.status})
   writeFileSync(join(output,`${name}-cli.log`),(result.stdout||'')+'\n'+(result.stderr||''))
   const calls=readFileSync(attempts,'utf8').trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))
-  return {exitCode:result.status,failedCall:calls.find(c=>!c.ok)||null,successfulWrites:calls.filter(c=>c.action==='upsert'&&c.ok),calls,
+  return {exitCode:result.status,durationMs,failedCall:calls.find(c=>!c.ok)||null,successfulWrites:calls.filter(c=>c.action==='upsert'&&c.ok),calls,
     warnedRollback:(result.stderr||'').includes('SQL 오류는 전체 취소')}
 }
 let started=false
@@ -235,6 +239,33 @@ try{
   assert.equal(rollback.exitCode,1);assert.equal(sql('rehearsal_data',stateQuery),beforeGroups)
   assert.equal(sql('rehearsal_data',triggerQuery),triggerState)
   report.checks.push({name:'group_owner_transaction_failure',exitCode:rollback.exitCode,groupsMembersDirectoryUnchanged:true,allUserTriggersUnchanged:true})
+
+  // This feature is not installed in the saved production schema. Install only in
+  // a disposable clone to exercise the real CLI's links-only maintenance path.
+  clone('rehearsal_links_only','rehearsal_data')
+  for(const migration of ['20261120_1600_territory_group_assignments.sql','20261120_1700_territory_group_review.sql']) {
+    sql('rehearsal_links_only',readFileSync(`supabase/migrations/${migration}`,'utf8'))
+  }
+  const cardId=payload.cards[0].id
+  const links=payload.service_groups.slice(0,2).map(g=>({card_id:cardId,group_code:g.code,assigned_by:payload.app_users[0].id}))
+  assert.equal(links.length,2)
+  sql('rehearsal_links_only',`insert into card_group_assignments(card_id,group_code,assigned_by) values(${Number(cardId)},${lit(links[1].group_code)},${Number(links[1].assigned_by)});`)
+  const linkRevisionSql=`select group_assignment_revision from cards where id=${Number(cardId)}`
+  const linkBefore=Number(sql('rehearsal_links_only',linkRevisionSql))
+  const linkTriggers=sql('rehearsal_links_only',triggerQuery)
+  const linkInput=input('links_only')
+  writeFileSync(join(linkInput,'2026-11-20/card_group_assignments.json'),JSON.stringify(links))
+  const linkRestore=cli('links_only','rehearsal_links_only',linkInput,['--table','card_group_assignments'])
+  assert.equal(linkRestore.exitCode,0)
+  assert.equal(sql('rehearsal_links_only','select count(*) from card_group_assignments'),'2')
+  const linkAfter=Number(sql('rehearsal_links_only',linkRevisionSql));assert.ok(linkAfter>linkBefore)
+  assert.equal(sql('rehearsal_links_only',triggerQuery),linkTriggers)
+  sql('rehearsal_links_only',`do $$ begin begin
+    update public.cards set group_assignment_revision=0 where id=${Number(cardId)};
+    raise exception 'Revision guard was not restored';
+    exception when insufficient_privilege then null; end; end $$;`)
+  report.checks.push({name:'links_only_restore',exitCode:0,sharedGroupsPreserved:true,revisionBefore:linkBefore,
+    revisionAfter:linkAfter,allTriggerStatesPreserved:true,directRevisionWriteDenied:true})
   for(const entry of manifest.files)assert.equal(hash(readFileSync(join(source,`${entry.table}.json`))),entry.sha256)
   assert.equal(hash(readFileSync(join(source,'private_duplicate_building_merge_audits.sql'))),manifest.privateAuditSha256)
   report.sourceBackupUnchanged=true
@@ -244,6 +275,7 @@ finally{
   if(started)command(join(pgBin,'pg_ctl'),['-D',join(root,'data'),'-m','immediate','-w','stop'])
   rmSync(root,{recursive:true,force:true})
   report.finishedAt=new Date().toISOString();report.localClusterRemoved=true
+  report.totalDurationMs=Math.round(performance.now()-runStarted)
   writeFileSync(join(output,'report.json'),JSON.stringify(report,null,2))
   console.log(JSON.stringify({output,completed:report.completed,error:report.error,checks:report.checks.map(c=>({name:c.name,exitCode:c.exitCode})),productionAccess:false}))
 }

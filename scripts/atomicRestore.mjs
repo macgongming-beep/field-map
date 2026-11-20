@@ -33,6 +33,9 @@ do $restore$ declare r record; rel oid; begin
   if exists(select 1 from restore_input where name='service_groups') then
     insert into restore_relations select 'public.app_users'::regclass union select 'public.app_settings'::regclass on conflict do nothing;
   end if;
+  if exists(select 1 from restore_input where name='card_group_assignments') then
+    insert into restore_relations values('public.cards'::regclass) on conflict do nothing;
+  end if;
   if to_regclass('private.event_assignment_revisions') is not null then
     insert into restore_relations values('private.event_assignment_revisions'::regclass) on conflict do nothing;
   end if;

@@ -27,6 +27,15 @@ try {
     ['plaintext PIN accepted',helper,"table === 'app_users' && rows.some",'false && rows.some'],
     ['maintenance acknowledgement removed','scripts/restore.js',"if (!args.includes('--maintenance'))",'if (false)'],
     ['new business snapshot bypassed','scripts/backup.js','const result = OWNER_BACKUP_TABLES.includes(t)','const result = false'],
+    ['FK dependency ordering removed',helper,`and not exists(
+      select 1 from pg_constraint f join restore_input p on f.confrelid=to_regclass(format('public.%I',p.name))
+      where f.contype='f' and f.conrelid=to_regclass(format('public.%I',i.name)) and p.name<>i.name and not p.done
+    )`,''],
+    ['links-only restore omits cards from protected relations',helper,"insert into restore_relations values('public.cards'::regclass) on conflict do nothing;",'null;'],
+    ['group link restore does not invalidate card revisions',helper,'update public.cards set group_assignment_revision=group_assignment_revision+1;','null;'],
+    ['unreviewed file accepted','scripts/restore.js','extra.length || (tableArg && !known.has(tableArg))','tableArg && !known.has(tableArg)'],
+    ['unreviewed selected table accepted','scripts/restore.js','extra.length || (tableArg && !known.has(tableArg))','extra.length'],
+    ['backup data file chmod removed','scripts/backup.js','    chmodSync(file, 0o600)',''],
   ]) {
     const path=join(copy,file),original=readFileSync(path,'utf8')
     assert.equal(original.split(before).length,2,name)
