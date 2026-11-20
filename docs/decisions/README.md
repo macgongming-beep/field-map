@@ -148,6 +148,7 @@
 배포 사용량: [0138 자동 중복 배포 차단과 데모 배포 경로 통일](0138-explicit-deployment-policy.md)
 배정 화면 기억: [0139 배정 중 선택 조건과 지도 위치 유지](0139-assignment-workspace-retention.md)
 집단 담당 구역: [0141 공동 담당 가능한 집단 구역 데모](0141-demo-shared-group-territories.md)
+집단 구역 운영 전환: [0145 공동 담당과 구역 필터 운영 배포](0145-group-territory-production-release.md)
 
 ```markdown
 # 제목
