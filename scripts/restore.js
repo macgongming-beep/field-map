@@ -25,6 +25,8 @@ import { createClient } from '@supabase/supabase-js'
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { GROUP_CONFLICT_KEYS, DIRECTORY_KEYS, assertGroupBackup, ownerConnection, runOwnerSql,
+  GROUP_RESTORE_PREFLIGHT, restoreGroupTableSql } from './groupTerritoryBackup.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const projectRoot = join(__dirname, '..')
@@ -57,10 +59,11 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSessio
  */
 const RESTORE_ORDER = [
   // 1. 남을 참조하지 않는 것
+  'service_groups', // Membership validation needs the directory before app_users.
   'app_users', 'territory_regions', 'special_periods', 'notices', 'review_tasks',
   'app_settings', 'informal_groups',
   // 2. 구역
-  'cards', 'card_assignments', 'card_leader_assignments', 'card_boundaries',
+  'cards', 'card_group_assignments', 'card_assignments', 'card_leader_assignments', 'card_boundaries',
   // 3. 건물 → 세대
   'buildings', 'units',
   // 4. 일정 (봉사 세션이 참조한다)
@@ -88,6 +91,7 @@ const RESTORE_ORDER = [
  *   602개 구역선이 1204개가 되는 식이다. 모르는 표는 넣지 않고 건너뛴다.
  */
 const CONFLICT_KEYS = {
+  ...GROUP_CONFLICT_KEYS,
   app_settings: 'key',
   card_boundaries: 'card_id',
   chat_read_status: 'event_id,user_id',
@@ -180,6 +184,16 @@ async function main() {
   }
 
   const order = tableArg ? [tableArg] : [...RESTORE_ORDER, ...extra]
+  const groupFiles = Object.fromEntries(['service_groups', 'cards', 'card_group_assignments'].map(name => [name, loadTable(name)]))
+  const protectedSelection = !tableArg || ['service_groups', 'cards', 'card_group_assignments', 'app_settings'].includes(tableArg)
+  let ownerEnv
+  let groupInstalled = false
+  if (protectedSelection) {
+    ownerEnv = ownerConnection(process.env.SUPABASE_DB_URL, SUPABASE_URL)
+    groupInstalled = runOwnerSql("set transaction read only;select to_regclass('public.card_group_assignments') is not null;", ownerEnv) === 't'
+    assertGroupBackup(groupFiles, groupInstalled)
+    if (groupInstalled) runOwnerSql(`set transaction read only;${GROUP_RESTORE_PREFLIGHT}`, ownerEnv)
+  }
   const problems = []
   const sequences = []
   let totalRows = 0
@@ -189,7 +203,7 @@ async function main() {
       console.log(`  ·  ${name.padEnd(28)} 뷰라서 건너뜁니다 (원본 표에서 되살아납니다)`)
       continue
     }
-    const rows = loadTable(name)
+    let rows = loadTable(name)
     if (rows === null) {
       if (tableArg) console.log(`  ${name.padEnd(30)} 백업 파일 없음`)
       continue
@@ -197,13 +211,21 @@ async function main() {
     if (rows.error) {
       console.log(`  ❌ ${name.padEnd(28)} 파일이 깨졌습니다 — ${rows.error}`)
       problems.push(`${name}: 파일 손상`)
+      if (write) throw new Error(`${name}: invalid backup; restore stopped`)
       continue
+    }
+
+    if (name === 'app_settings') {
+      // These are derived from service_groups and guarded against direct writes.
+      rows = rows.filter(row => !DIRECTORY_KEYS.has(row.key))
+      console.log('  ·  집단 설정 두 항목은 건너뜁니다 (service_groups 복원 시 재생성)')
     }
 
     const dbCount = await countInDb(name)
     if (dbCount === null) {
       console.log(`  ⚠️  ${name.padEnd(28)} DB 에 이 표가 없습니다 (백업 ${rows.length}행)`)
       problems.push(`${name}: DB 에 표 없음`)
+      if (write) throw new Error(`${name}: target unavailable; restore stopped`)
       continue
     }
 
@@ -230,12 +252,21 @@ async function main() {
       // 기준 없이 넣으면 있는 행이 통째로 복제된다. 넣지 않는 편이 낫다.
       console.log(`  ⚠️  ${name.padEnd(28)} 같은 행을 알아볼 기준이 없어 건너뜁니다`)
       problems.push(`${name}: CONFLICT_KEYS 에 기준을 적어 주세요`)
+      if (write) throw new Error(`${name}: conflict key missing; restore stopped`)
       continue
     }
-    const { done, error } = await insertRows(name, rows, onConflict)
+    let result
+    if (name === 'service_groups' || name === 'card_group_assignments' || (name === 'cards' && groupInstalled)) {
+      runOwnerSql(restoreGroupTableSql(name, rows, replace), ownerEnv)
+      result = { done: rows.length, error: null }
+    } else {
+      result = await insertRows(name, rows, onConflict)
+    }
+    const { done, error } = result
     if (error) {
       console.log(`  ❌ ${name.padEnd(28)} ${done}행까지 넣고 막힘 — ${error.message}`)
       problems.push(`${name}: ${error.message}`)
+      throw new Error(`${name}: restore stopped; earlier tables may already be committed`)
     } else {
       const after = await countInDb(name)
       console.log(`  ✅ ${name.padEnd(28)} ${done}행 처리 · 지금 ${after}행`)
@@ -248,10 +279,11 @@ async function main() {
 
   console.log(`\n${'─'.repeat(58)}`)
   if (problems.length > 0) {
+    process.exitCode = 1
     console.log(`⚠️  걸린 것 ${problems.length}개:`)
     for (const p of problems) console.log(`   · ${p}`)
   } else {
-    console.log(write ? '🎉 넣기 완료' : '✅ 백업 파일에 문제 없음 — 되돌릴 수 있습니다')
+    console.log(write ? '🎉 넣기 완료' : '✅ 파일·대상 검사 통과 (실제 복원 성공을 보장하는 시험은 아님)')
   }
 
   if (write && sequences.length > 0) {
@@ -267,4 +299,8 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error('❌', e); process.exit(1) })
+main().catch((e) => {
+  console.error('❌', e)
+  if (write) console.error('표 단위 복원입니다. 앞서 성공한 표는 이미 반영됐을 수 있으니 확인하세요.')
+  process.exit(1)
+})

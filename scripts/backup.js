@@ -22,6 +22,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { GROUP_BACKUP_TABLES, ownerConnection, runOwnerSql, snapshotSql } from './groupTerritoryBackup.mjs'
 
 // ── .env.local 로드 (dotenv 의존성 없이 직접 파싱) ──────────────
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -65,6 +66,8 @@ const TABLES = [
 
   // 구역/카드
   'cards',
+  'service_groups',
+  'card_group_assignments',
   'card_assignments',
   'card_leader_assignments',
   'card_boundaries',
@@ -222,8 +225,17 @@ async function main() {
   let skipped = 0
   let failed = 0
 
+  // Parents and group links must come from one database snapshot, not separate REST pages.
+  const ownerEnv = ownerConnection(DB_URL, SUPABASE_URL)
+  const present = JSON.parse(runOwnerSql(`set transaction read only;
+    select coalesce(jsonb_agg(tablename),'[]') from pg_tables where schemaname='public'
+    and tablename in ('service_groups','app_users','app_settings','cards','card_group_assignments');`, ownerEnv))
+  const snapshot = JSON.parse(runOwnerSql(snapshotSql(present), ownerEnv))
+
   for (const t of TABLES) {
-    const result = await dumpTable(t)
+    const result = GROUP_BACKUP_TABLES.includes(t)
+      ? (snapshot[t] ? { status: 'ok', rows: snapshot[t] } : { status: 'skipped' })
+      : await dumpTable(t)
     if (result.status === 'skipped') {
       skipped++
       console.log(`⏭  ${t.padEnd(32)} 테이블 없음 (스킵)`)
@@ -257,6 +269,7 @@ async function main() {
     tablesFailed: failed,
     totalRows: total,
     privateAuditBackedUp: privateAudit.status === 'ok',
+    groupSnapshotTables: present,
   }
   writeFileSync(join(dir, '_meta.json'), JSON.stringify(meta, null, 2), 'utf-8')
 

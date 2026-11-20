@@ -10,8 +10,11 @@ const followup = 'supabase/migrations/20261120_1700_territory_group_review.sql'
 try {
   for (const path of ['src', 'package.json', 'vitest.config.ts', 'tsconfig.json', 'tsconfig.app.json', 'tsconfig.node.json']) cpSync(path, join(directory, path), { recursive: true })
   mkdirSync(join(directory, 'scripts')); cpSync('scripts/testEnvGuard.js', join(directory, 'scripts/testEnvGuard.js'))
+  for (const path of ['scripts/groupTerritoryBackup.mjs', 'scripts/backup.js', 'scripts/restore.js']) cpSync(path, join(directory,path))
+  mkdirSync(join(directory,'scripts/fixtures'))
+  cpSync('scripts/fixtures/groupTerritoryRestoreFixture.mjs',join(directory,'scripts/fixtures/groupTerritoryRestoreFixture.mjs'))
   mkdirSync(join(directory, 'supabase/migrations'), { recursive: true })
-  for (const path of ['supabase/migrations/20261120_1600_territory_group_assignments.sql', followup]) cpSync(path, join(directory, path))
+  for (const path of ['supabase/migrations/20261118_2300_service_group_directory.sql', 'supabase/migrations/20261120_1600_territory_group_assignments.sql', followup]) cpSync(path, join(directory, path))
   symlinkSync(join(root, 'node_modules'), join(directory, 'node_modules'), 'dir')
   const run = () => spawnSync(process.execPath, [join(root, 'node_modules/vitest/vitest.mjs'), 'run', 'src/features/groupTerritory', 'src/components/MobileMap.chineseFilter.test.tsx', 'src/components/MobileHome.eventNavigation.test.tsx', '--reporter=json'], { cwd: directory, encoding: 'utf8', timeout: 120000, maxBuffer: 16 * 1024 * 1024 })
   const baseline = run(); assert.equal(baseline.status, 0, baseline.stdout + baseline.stderr)
