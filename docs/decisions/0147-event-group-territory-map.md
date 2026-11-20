@@ -1,6 +1,6 @@
 # 집단 일정의 구역 범위와 지도 선택
 
-- 상태: 데모 검증, 운영 미적용
+- 상태: 데모 적용 완료, 운영 미적용
 - 결정일: 2026-11-20
 - 선행: 0141 집단 구역, 0145 운영 전환, 0146 모바일 헤더
 
@@ -76,3 +76,13 @@ ON에는 집단 선택칸을 표시한다. 긴 이름은 한 줄 안에서 줄�
 
 검증한 산출물만 0138의 단일 배포 경로로 데모에 반영한다.
 운영 코드/환경변수/DB와 운영 배포는 이 작업에서 변경하지 않는다.
+
+- 코드: `2c30e0e`
+- 최종 산출물: `scratch/group-territory-release-eventscopefinal`
+- 데모 배포: `dpl_3prWKubNBBDNr4GaggHbn1rB3AF8` (1회)
+- 주소: https://chinese-territory-app-demo.vercel.app
+- 배포 후 실제 데모에서도 WebKit/Chromium의 같은 검사를 통과했다.
+  헤더 높이 ON/OFF 동일, 긴 이름/팀원 이름에도 높이 유지, 실제 구역선 클릭,
+  지도/목록 선택 유지, 동탄 일정의 제목/구역 범위, 추가 REST 요청 0건 확인.
+- 기록: `scratch/event-group-map-release.json`, `scratch/event-group-map-deployed.json`.
+- 이 배포 기록만 추가한 커밋으로는 재배포하지 않는다.
