@@ -45,6 +45,26 @@ test('map removal and search can only select currently visible territories', asy
   await waitFor(() => expect(save).toHaveBeenCalledWith('a', [cards[0]], 'remove'))
   expect(cards[0].assignedGroupCodes).toEqual(['a', 'b'])
 })
+test('an out-of-scope boundary callback cannot leave a hidden selection when ownership later changes', async () => {
+  const save = vi.fn(async () => {})
+  const element = (items: typeof cards) => <GroupTerritoryContext.Provider value={{ enabled: true, canManage: true, ownCode: 'a', groups: [{ code: 'a', name: '东滩', active: true }], save }}>
+    <GroupTerritoryAssignment cards={items} cardBoundaries={boundaries} />
+  </GroupTerritoryContext.Provider>
+  const { rerender } = render(element(cards))
+  fireEvent.click(screen.getByRole('button', { name: '지도', exact: true }))
+  expect(screen.getByTestId('map-ids')).toHaveTextContent(/^1$/)
+  fireEvent.click(screen.getByText('boundary 2'))
+  const updated = cards.map(card => card.id === 2 ? { ...card, assignedGroupCodes: ['a', 'b'], groupAssignmentRevision: '5' } : card)
+  rerender(element(updated))
+  expect(screen.getByTestId('map-ids')).toHaveTextContent(/^1,2$/)
+  expect(screen.getByText('0개 선택')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '목록', exact: true }))
+  expect(screen.getByLabelText(/B only/)).not.toBeChecked()
+  // A valid new click still selects and saves; rejecting every click cannot pass.
+  fireEvent.click(screen.getByLabelText(/B only/))
+  fireEvent.click(screen.getByRole('button', { name: '배정 해제' }))
+  await waitFor(() => expect(save).toHaveBeenCalledExactlyOnceWith('a', [updated[1]], 'remove'))
+})
 test('switching groups clears selection; boundaryless cards remain selectable in the list', () => {
   mount(); fireEvent.click(screen.getByRole('button', { name: '지도', exact: true }))
   fireEvent.click(screen.getByText('boundary 1'))
