@@ -62,6 +62,23 @@ test('group map scopes cards, buildings and boundaries together; all restores th
   fireEvent.click(screen.getByRole('button', { name: '집단 구역만 보기' }))
   expect(screen.getByTestId('scope').textContent).toBe('[[1,2,3],[1,2,3],[1,2,3]]')
 })
+test('group map uses the land plot icon and a transient hint without changing the filter', () => {
+  vi.useFakeTimers()
+  render(<MemoryRouter><GroupTerritoryContext.Provider value={value}><MapProbe /></GroupTerritoryContext.Provider></MemoryRouter>)
+  const button = screen.getByRole('button', { name: '집단 구역만 보기' })
+  expect(Array.from(button.querySelectorAll('path'), path => path.getAttribute('d'))).toEqual([
+    'm12 8 6-3-6-3v10',
+    'm8 11.99-5.5 3.14a1 1 0 0 0 0 1.74l8.5 4.86a2 2 0 0 0 2 0l8.5-4.86a1 1 0 0 0 0-1.74L16 12',
+    'm6.49 12.85 11.02 6.3',
+    'M17.51 12.85 6.5 19.15',
+  ])
+  fireEvent.click(button)
+  expect(screen.getByRole('tooltip').textContent).toBe('집단 구역만 보기')
+  act(() => vi.advanceTimersByTime(1800))
+  expect(screen.queryByRole('tooltip')).toBeNull()
+  expect(button.getAttribute('aria-pressed')).toBe('true')
+  expect(screen.getByTestId('scope').textContent).toBe('[[1],[1],[1]]')
+})
 test.each([{ role: 'user' as const, restricted: false }, { role: 'leader' as const, restricted: true }])('personal or event maps cannot acquire group-wide scope: %j', props => {
   render(<MemoryRouter><GroupTerritoryContext.Provider value={value}><MapProbe {...props} /></GroupTerritoryContext.Provider></MemoryRouter>)
   expect(screen.queryByRole('button')).toBeNull()

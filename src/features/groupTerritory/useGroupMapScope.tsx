@@ -22,7 +22,13 @@ export function useGroupMapScope(source: { cards: TerritoryCard[]; buildings: Bu
   const viewport = useRef<MapViewportMemory['current']>(null)
   const controls = available ? <div className="group-map-controls">
     <MapFilterButton label={msg('집단 구역만 보기')} pressed={active} onClick={() => setOn(value => !value)}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Z M9 3v16 M15 5v16" /></svg>
+      {/* Lucide land-plot, ISC licensed. */}
+      <svg viewBox="0 0 24 24" aria-hidden="true" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m12 8 6-3-6-3v10" />
+        <path d="m8 11.99-5.5 3.14a1 1 0 0 0 0 1.74l8.5 4.86a2 2 0 0 0 2 0l8.5-4.86a1 1 0 0 0 0-1.74L16 12" />
+        <path d="m6.49 12.85 11.02 6.3" />
+        <path d="M17.51 12.85 6.5 19.15" />
+      </svg>
     </MapFilterButton>
   </div> : null
   const selector = active ? <div className="group-map-selector"><GroupScopeSelect value={code ?? 'all'} onChange={value => {
