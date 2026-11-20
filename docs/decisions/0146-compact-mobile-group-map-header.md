@@ -1,6 +1,6 @@
 # 모바일 집단 지도 헤더 축소
 
-- 상태: 데모 검증, 운영 미적용
+- 상태: 데모 적용 완료, 운영 미적용
 - 결정일: 2026-11-20
 - 선행: 0141 집단 구역, 0145 운영 전환
 
@@ -36,3 +36,12 @@
 - 비교 기록: `scratch/compact-map-before.json`, `scratch/compact-map-after.json`
 - 검증 산출물: `scratch/group-territory-release-compactheader2`
 - 데모 배포는 0138의 단일 배포 경로만 사용한다. 운영 배포/DB 변경은 하지 않는다.
+
+## 데모 배포 결과
+
+- 코드: `fb798ac`
+- 배포: `dpl_Ax2hsjHrvUso9YkvRRtNBFgRRuo4` (1회)
+- 주소: https://chinese-territory-app-demo.vercel.app
+- 배포 후 같은 네 화면 조건을 실제 데모에서 재검증했다. 높이는 위 측정과
+  동일했고 지도 표시, 집단 전환/전체 보기, 페이지 오류 0개를 확인했다.
+- 기록: `scratch/compact-map-deployed.json`
