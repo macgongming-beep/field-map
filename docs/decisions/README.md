@@ -13,6 +13,8 @@
 
 ## 목록
 
+운영 백업 복구 준비: [0142 격리 복구 리허설과 남은 중단 지점](0142-offline-production-backup-rehearsal.md).
+
 데모 주요 화면 속도 개선: [0140 모바일 주요 화면의 조회와 대기 개선](0140-demo-section-loading.md).
 
 최신 운영 반영: [0067 달 이동 복구와 홈 재사용](0067-production-navigation-home-reads.md)
