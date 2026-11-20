@@ -15,6 +15,7 @@
 
 운영 백업 복구 준비: [0142 격리 복구 리허설과 남은 중단 지점](0142-offline-production-backup-rehearsal.md).
 후속 보완: [0143 원자적 복원·누락 업무 백업·중간 실패와 재시도](0143-atomic-restore-rehearsal.md).
+실제 누락 자료 확보: [0144 운영 읽기 전용 재백업과 파일 검증](0144-production-readonly-business-rebackup.md).
 
 데모 주요 화면 속도 개선: [0140 모바일 주요 화면의 조회와 대기 개선](0140-demo-section-loading.md).
 
