@@ -3,9 +3,15 @@ import { groupOwnsCard, groupTerritoryEnabled, ownTerritoryGroup, territoryGroup
 import { cardReadProjection } from '../../hooks/cardReadProjection'
 import { toCard } from '../../hooks/storeTransforms'
 import type { TerritoryCard } from '../../types'
+import { serviceGroupOptions } from '../groupService/model'
 afterEach(() => vi.unstubAllEnvs())
 const card = { id: 1, assignedGroupCodes: ['a', 'b'], assignedLeader: 'Old leader' } as TerritoryCard
 const groups = [{ code: 'a', name: '第一组', active: true }, { code: 'b', name: '第二组', active: true }]
+test.each(['ko', 'zh', 'en'] as const)('own group identity survives translated fallback directory in %s', language => {
+  const fallback = serviceGroupOptions({}, language)
+  for (const name of ['dongtan', '동탄', '东滩', 'Dongtan']) expect(ownTerritoryGroup(fallback, name)).toBe('dongtan')
+  expect(ownTerritoryGroup([{ code: 'dongtan', name: 'Renamed', active: false }], '东滩')).toBeNull()
+})
 test('codes, not translated group labels or legacy names, determine shared ownership', () => {
   expect(groupOwnsCard(card, 'a')).toBe(true); expect(groupOwnsCard(card, 'b')).toBe(true)
   expect(groupOwnsCard(card, '第一组')).toBe(false); expect(groupOwnsCard(card, null)).toBe(false)

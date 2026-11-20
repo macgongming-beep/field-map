@@ -105,6 +105,14 @@ try {
         await page.getByRole('button', { name: '집단 구역만 보기' }).waitFor(); await settle()
         assert.equal(await page.getByRole('combobox', { name: '집단 구역 보기' }).inputValue(), seed.groups[4].code)
         await shot('empty-map')
+        if (width < 980) {
+          await page.locator('.mm-back-btn').click()
+          await page.getByRole('combobox', { name: '집단 구역 보기' }).waitFor(); await settle()
+          assert.equal(new URL(page.url()).searchParams.get('groupCode'), seed.groups[4].code)
+          assert.equal(await page.getByRole('combobox', { name: '집단 구역 보기' }).inputValue(), seed.groups[4].code)
+          await page.getByRole('button', { name: '지도', exact: true }).first().click()
+          await page.getByRole('button', { name: '집단 구역만 보기' }).waitFor(); await settle()
+        }
         const start = reads.length
         await page.getByRole('combobox', { name: '집단 구역 보기' }).selectOption(seed.groups[0].code)
         await settle()
@@ -113,6 +121,27 @@ try {
         await settle(); await shot('group-map')
         const filteredReads = reads.slice(start)
         assert.ok(!filteredReads.some(r => ['buildings', 'units', 'cards', 'visit_histories'].includes(r.path)), 'Filter should not refetch full territory tables')
+        if (width < 980) {
+          await page.getByRole('combobox', { name: '집단 구역 보기' }).selectOption(seed.groups[1].code)
+          await page.getByRole('button', { name: '통합 검색' }).click()
+          await page.getByPlaceholder('구역, 건물, 주소, 식당 검색').fill(seed.cards[2].name)
+          await page.getByRole('button').filter({ has: page.locator('.kind-card') }).filter({ hasText: seed.cards[2].name }).click()
+          await settle()
+          assert.equal(new URL(page.url()).searchParams.get('groupCode'), seed.groups[1].code)
+          assert.equal(await page.getByRole('button', { name: '집단 구역만 보기' }).getAttribute('aria-pressed'), 'true')
+          await shot('search-keeps-group')
+          await page.getByRole('button', { name: '통합 검색' }).click()
+          await page.getByPlaceholder('구역, 건물, 주소, 식당 검색').fill(seed.cards[1].name)
+          await page.getByRole('button').filter({ has: page.locator('.kind-card') }).filter({ hasText: seed.cards[1].name }).click()
+          await settle()
+          assert.equal(new URL(page.url()).searchParams.get('groupCode'), seed.groups[1].code)
+          assert.equal(await page.getByRole('button', { name: '집단 구역만 보기' }).getAttribute('aria-pressed'), 'false')
+          await page.getByRole('button', { name: '집단 구역만 보기' }).click()
+          await settle()
+          assert.equal(await page.getByRole('combobox', { name: '집단 구역 보기' }).inputValue(), seed.groups[1].code)
+          assert.ok(!(await page.locator('.mobile-map-title-copy h1').innerText()).includes(seed.cards[1].name))
+          await shot('search-restore-group')
+        }
         results.push({ role, width, filterReads: filteredReads, testedWrites: role === 'admin' && width === 390 && process.env.WRITE_TEST !== 'false' })
       } else {
         assert.equal(await page.getByRole('button', { name: '집단 구역만 보기' }).count(), 0)

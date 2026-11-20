@@ -31,7 +31,7 @@
 - `card_group_assignments(card_id, group_code)` 복합 PK, 역방향 인덱스.
 - `cards.group_assignment_revision`: 각 구역의 집단 연결 변경마다 증가.
 - `set_territory_group_assignments_tx`: 활성/승인 관리자 또는 개발자만 실행.
-  1~500개 구역을 오름차순 잠근 뒤 화면의 리비전을 전부 대조한다. 하나라도 오래됐거나
+  최초 1600은 1~500개, 리뷰 후 1700은 1~1,000개 구역을 오름차순 잠근 뒤 화면의 리비전을 전부 대조한다. 하나라도 오래됐거나
   구역이 없으면 전부 실패한다. 선택한 집단만 추가/해제한다.
 - 집단 관리와 같은 advisory lock으로 집단 비활성화/이름 변경과 순서를 맞춘다.
 - 직접 INSERT/UPDATE/DELETE는 anon/authenticated 모두 차단한다.
@@ -84,6 +84,8 @@
 
 ## 데모 배포 기록
 
+아래 v5는 최초 검증 기록이다. 리뷰 보완판은 문서 끝의 기록을 따른다.
+
 - 최종 artifact: `scratch/group-territory-release-v5`
 - SHA-256: `fb01f34125d0a36fe57124f43beb79d8e3ae60bebe97dafaf18c360e24328d99`
 - 데모 deployment: `dpl_7gHvnYDtZp4FS7gNGz6LDWri72gF`
@@ -97,6 +99,7 @@
 ```sh
 node scripts/groupTerritoryDemo.mjs inspect
 node scripts/groupTerritoryDemo.mjs apply --confirm-demo
+node scripts/groupTerritoryDemo.mjs apply-review --confirm-demo
 node scripts/groupTerritoryDemo.mjs seed --confirm-demo
 node scripts/groupTerritoryDemo.mjs audit
 DEMO_ARTIFACT=scratch/group-territory-release-new node scripts/groupTerritoryDemo.mjs build
@@ -115,3 +118,75 @@ build는 새 artifact 경로만 허용하며 그 자체로 배포하지 않는�
 데모를 되돌릴 때는 이전 검증 artifact 또는 플래그 false 빌드를 배포하고 PWA를 업데이트한다.
 추가한 표/열은 남겨 집단 담당 이력을 보존한다. 새 클라이언트가 남아 있을 때 표나 RPC를
 삭제하지 않는다. 예전 개인 담당 자료를 집단 배정으로 자동 덮어쓰지 않는다.
+
+## cdd2a6d 리뷰 보완 (2026-11-20)
+
+### 화면과 계약
+
+- 모바일 구역의 집단/전체 선택은 `scope`와 `groupCode` URL에서 읽고 쓴다.
+  관리자(소속 없음)와 인도자 모두 목록 → 지도 → 뒤로 복귀하면 같은 집단이다.
+  오래된 `scope=mine` 링크에 집단도 소속도 없으면 전체 구역을 보여 준다.
+- 지도에서 고른 집단도 URL에 남긴다. 내부 주소/구역 검색은 `groupCode`를 지우지 않는다.
+  검색은 이미 이 사용자에게 제공된 원본 자료에서 수행한다. 새로운 조회나 권한 확대는 없다.
+  같은 집단 결과는 필터 유지, 다른 집단 결과는 집단 필터만 해제하고 기억한 코드는 유지한다.
+  필터를 다시 켜면 호환되지 않는 검색 카드 선택을 해제한다. GPS/확대 코드는 바꾸지 않는다.
+- 외부 주소 검색의 기존 건물 판정도 집단 필터 전 자료를 사용한다. 숨은 기존 건물을
+  새 건물로 오인하거나 저장 후 찾지 못하는 일을 방지한다.
+- 디렉터리 이름/코드 정확 일치를 우선한다. 기존 네 집단은 한국어/중국어/영어 별칭도
+  코드에 연결하므로 디렉터리가 없는 번역별 대체 경로에서도 본인 집단을 찾는다.
+- 인도자의 상시 담당 구역 목록은 집단 담당으로 전환한다. 예전 개인 담당을 자동 합치지 않는다.
+  일반 봉사자의 개인 구역, 당일 일정/팀 배정, 활성 봉사 세션 경로는 기존대로다.
+- 계정 전환 중 저장 응답은 성공/실패를 단정하지 않고 원래 계정에서 결과 확인을 안내한다.
+
+### 서버 보완
+
+- 이미 설치한 1600을 고치지 않고 `20261120_1700_territory_group_review.sql`을 추가했다.
+- 609개 전체 선택을 나눠 저장하지 않는다. 최대 1,000개를 같은 잠금/트랜잭션에서 처리한다.
+  1,001개 이상은 화면/API에서 이유를 알리고 쓰기 전에 멈추며 서버도 거부한다.
+- cards의 버전 직접 변경/0이 아닌 초기 버전 삽입을 트리거로 막는다. 정상 연결 변경 트리거만
+  트랜잭션 한정 표시를 켜고 1씩 올린 뒤 원래 표시로 복원한다. 표시만으로는 부족하며
+  중첩 트리거 조건도 검사한다. private 함수 실행은 공개하지 않는다.
+- 일반 카드 수정, 작성자 삭제의 attribution 정리, 카드 FK 삭제는 그대로 허용한다.
+- 데모에만 백업 → 단일 트랜잭션 적용 → 기존 11개 표/연결/버전 대조를 수행했다.
+  적용 직후 자료와 버전 모두 동일. 백업: `backups/group-territory-demo-review/before.dump`.
+  다른 기기 즉시 갱신용 채널은 추가하지 않았다. 새로고침으로 반영한다.
+
+### 검증과 한계
+
+- 전체 285개 파일 / 2,852개 시험 통과. lint와 TypeScript/빌드 통과.
+- 새 시험: 실제 모바일 검색, 관리자/인도자 목록-지도-뒤로, 소속 없는 관리자,
+  609/1,000/1,001개 경계, 해제 뒤 오래된 추가, 버전 직접 조작 차단,
+  홈/구역 인도자 집단 기본값, PC 건물·식당 집계, 배정 지도/주소 핀 예외.
+- PC 건물 행만 보면 두 번째 카드 필터가 첫 필터 제거를 가렸다. 식당 집계도 검증해
+  첫 건물 필터를 빼는 변이가 실제로 실패하도록 보강했다.
+- 분리 복사본 변이 12개 모두 검출. 기록: `scratch/group-territory-review-mutations.json`.
+  작업 폴더의 앱 코드/DB에 변이를 넣지 않았다.
+- 실제 로컬 PostgreSQL 17.6, 독립 연결 둘: 같은 버전 동시 추가는 첫 저장만 성공,
+  비활성화 중 추가는 대기 후 거절, 구역 삭제 중 추가는 대기 후 PT409.
+  권한/세션 함수는 이 격리 DB에서 fixture이며, 실제 역할 검사는 별도 데모 API 감사로 확인한다.
+  잠금 제거 변이 둘도 실패: advisory 제거 시 대기 없이 추가, row lock 제거 시 FK 오류.
+  테스트 클러스터는 종료·삭제했고 운영/데모 자료에 동시성 시험을 하지 않았다.
+- 실행 도구: `scripts/testGroupTerritoryConcurrency.mjs` (완전한 PostgreSQL 바이너리 필요),
+  `scripts/mutateGroupTerritoryReview.mjs`, `scripts/smokeGroupTerritory.mjs`.
+- 실제 데모 API 감사: 기존 배정 definer 13개 유지, 인도자 조회/쓰기 거부,
+  일반 성원·익명 집단 연결 조회 0행. 기존 11개 자료 표의 해시 동일.
+  데모 DB에서도 직접 버전 수정 거부/guard 실행권한 폐쇄를 확인하고 시도는 롤백했다.
+- WebKit 모바일 관리자/인도자/일반 성원: 목록 왕복·검색·필터 복구 통과.
+  관리자 공동 담당 한 집단 해제/나머지 유지/복원도 실제 RPC로 확인했다.
+  Chromium 인도자 1440px/관리자 390px도 통과했다.
+- 필터 전환 사용량: 모바일 기존 2건/응답 원문 36바이트, PC 0건.
+  구역·건물·세대·방문 이력 전체 재조회 없음. 헤더·소켓·지도 타일은 제외한다.
+  앱 전체 시작 성능이나 운영 자료 규모 측정을 새로 한 것은 아니다.
+- 첫 브라우저 실행의 검색 단계 실패는 검사 도구의 존재하지 않는 CSS 선택자였다.
+  도구를 고쳐 같은 실제 버튼으로 다시 검사했다. 실패 로그도 scratch에 남겼다.
+- 실물 휴대폰 조작과 운영 적용은 아직 하지 않았다.
+
+### 리뷰 보완판 배포
+
+- 검증 artifact: `scratch/group-territory-release-review3`
+- SHA-256: `70f012b5bc953b9b86c0f416e6eb6a06929d4b340072d20ad268a7210565a820`
+- 로컬 review1/2/3 빌드는 배포가 아니다. 검증한 review3만 데모에 1회 배포했다.
+- 데모 deployment: `dpl_4buX96ZjPksFhF9nstBBDynjr4Zu`
+- 배포 후 데모 주소에서 WebKit 관리자 390px/인도자 1440px/일반 성원 390px 재검사 통과.
+  실제 지도 타일과 검색 후 집단 복구 화면도 확인했다. 결과: `scratch/group-review-deployed.json`.
+- 운영 DB/설정/배포/main 병합은 하지 않는다.

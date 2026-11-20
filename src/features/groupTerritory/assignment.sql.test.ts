@@ -32,6 +32,7 @@ beforeAll(async () => {
     create table visit_histories(id integer primary key,card_id integer);
     insert into visit_histories values(1,10);
     ${readFileSync('supabase/migrations/20261120_1600_territory_group_assignments.sql', 'utf8')}
+    ${readFileSync('supabase/migrations/20261120_1700_territory_group_review.sql', 'utf8')}
   `)
 }, 30000)
 beforeEach(async () => { await db.exec('rollback;begin') })
@@ -84,4 +85,37 @@ test('actor cleanup and card deletion keep existing maintenance paths working', 
   expect((await db.query('select group_code,assigned_by from card_group_assignments')).rows).toEqual([{ group_code: 'a', assigned_by: null }])
   await db.exec('delete from cards where id=10')
   expect((await db.query('select * from card_group_assignments')).rows).toEqual([])
+})
+
+test('removing ownership invalidates an old add, and idempotent changes do not advance the revision', async () => {
+  await assign('a', [10])
+  await assign('a', [10])
+  expect((await db.query('select group_assignment_revision::text as rev from cards where id=10')).rows).toEqual([{ rev: '1' }])
+  await assign('a', [10], 'remove')
+  await rejects(() => assign('b', [10], 'add', 1, { 10: '1' }), 'Territory assignments changed')
+  expect((await db.query('select * from card_group_assignments')).rows).toEqual([])
+})
+
+test('609 and 1000 territories save atomically; 1001 are refused without partial changes', async () => {
+  await db.exec('insert into cards(id) select generate_series(100,1100)')
+  const ids = Array.from({ length: 1001 }, (_, index) => index + 100)
+  await assign('a', ids.slice(0, 609))
+  expect((await db.query('select * from card_group_assignments')).rows).toHaveLength(609)
+  await assign('b', ids.slice(0, 1000))
+  await rejects(() => assign('a', ids), 'Invalid territory assignment input')
+  expect((await db.query("select * from card_group_assignments where group_code='a'")).rows).toHaveLength(609)
+})
+
+test('direct revision tampering is denied even with table UPDATE rights; ordinary edits and RPC still work', async () => {
+  await db.exec('grant select,insert,update on cards to anon;set local role anon')
+  await rejects(() => db.exec('update cards set group_assignment_revision=100 where id=10'), 'Group revision is server managed')
+  await rejects(() => db.exec('insert into cards(id,group_assignment_revision) values(99,4)'), 'Group revision is server managed')
+  await db.exec("update cards set status='완료' where id=10")
+  await assign('a', [10])
+  await assign('a', [10], 'remove')
+  await rejects(() => db.exec('update cards set group_assignment_revision=3 where id=10'), 'Group revision is server managed')
+  // The private flag alone is insufficient, including after legitimate writes.
+  await db.exec("set local app.territory_group_revision_write='on'")
+  await rejects(() => db.exec('update cards set group_assignment_revision=3 where id=10'), 'Group revision is server managed')
+  await db.exec('reset role')
 })

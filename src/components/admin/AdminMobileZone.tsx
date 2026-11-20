@@ -171,19 +171,23 @@ export function AdminMobileZone({
   const urlDong = searchParams.get('dong') ?? ''
   const groupTerritory = useGroupTerritory()
   const useGroups = groupTerritory.enabled && role !== 'user'
-  const [chosenGroup, setChosenGroup] = useState<string | null>(null)
-  const groupCode = chosenGroup ?? groupTerritory.ownCode
+  const groupCode = searchParams.get('groupCode') ?? groupTerritory.ownCode
   const defaultScope: Scope = role === 'admin' || (useGroups && !groupTerritory.ownCode) ? 'all' : 'mine'
-  const urlScope: Scope = (searchParams.get('scope') === 'all' || searchParams.get('scope') === 'mine')
+  const requestedScope: Scope = (searchParams.get('scope') === 'all' || searchParams.get('scope') === 'mine')
     ? (searchParams.get('scope') as Scope)
-    : defaultScope
+    : useGroups && searchParams.has('groupCode') ? 'mine' : defaultScope
+  const scope: Scope = useGroups && requestedScope === 'mine' && !groupCode ? 'all' : requestedScope
+  const setScope = (value: Scope) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous)
+    next.set('scope', value)
+    return next
+  }, { replace: true })
   const urlZoneKind: ZoneKind = searchParams.get('tab') === 'informal'
     ? 'informal'
     : searchParams.get('tab') === 'restaurant'
       ? 'restaurant'
       : 'territory'
 
-  const [scope, setScope] = useState<Scope>(urlScope)
   const [view, setView] = useState<ViewMode>('list')
   const [level, setLevel] = useState<Level>(urlLevel)
   const [selectedRegion, setSelectedRegion] = useState(urlRegion)
@@ -208,8 +212,6 @@ export function AdminMobileZone({
     if (level === 'regions') next.delete('level'); else next.set('level', level)
     if (selectedRegion) next.set('region', selectedRegion); else next.delete('region')
     if (selectedDong) next.set('dong', selectedDong); else next.delete('dong')
-    // scope 는 default 와 같으면 키 제거
-    if (scope === defaultScope) next.delete('scope'); else next.set('scope', scope)
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true })
     }
@@ -221,9 +223,8 @@ export function AdminMobileZone({
     if (urlLevel !== level) setLevel(urlLevel)
     if (urlRegion !== selectedRegion) setSelectedRegion(urlRegion)
     if (urlDong !== selectedDong) setSelectedDong(urlDong)
-    if (urlScope !== scope) setScope(urlScope)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlLevel, urlRegion, urlDong, urlScope])
+  }, [urlLevel, urlRegion, urlDong])
 
   const informalCount = countInformalCards(informalAssets)
   const restaurantCount = buildings.reduce((acc, b) => {
@@ -506,13 +507,18 @@ export function AdminMobileZone({
         <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
           {/* user 는 본인 담당만 고정 — segmented 숨김 */}
           {role !== 'user' && (useGroups ? <GroupScopeSelect value={scope === 'all' ? 'all' : groupCode ?? 'all'} onChange={value => {
-            setScope(value === 'all' ? 'all' : 'mine'); if (value !== 'all') setChosenGroup(value)
+            setSearchParams(previous => {
+              const next = new URLSearchParams(previous)
+              next.set('scope', value === 'all' ? 'all' : 'mine')
+              if (value === 'all') next.delete('groupCode'); else next.set('groupCode', value)
+              return next
+            }, { replace: true })
           }} /> : <SegmentedScope language={language} value={scope} onChange={setScope} />)}
           <ViewToggle language={language} value={view} onChange={(next) => {
             setView(next)
             if (next === 'map') {
               if (scope === 'mine') {
-                onOpenAssignedMap(baseCards.map((c) => c.id), { scope, groupCode: useGroups ? groupCode ?? undefined : undefined })
+                onOpenAssignedMap(baseCards.map((c) => c.id), { scope, groupCode: useGroups && scope === 'mine' ? groupCode ?? undefined : undefined })
               } else {
                 onShowMapView()
               }

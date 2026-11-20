@@ -295,6 +295,14 @@ export function MobileMap({
   const [collapsedStatusGroups, setCollapsedStatusGroups] = useState<Set<PinGroup>>(new Set(['완료']))
   const [hiddenMapStatuses, setHiddenMapStatuses] = useState<Set<PinGroup>>(new Set())
   const [fullScreenUnit, setFullScreenUnit] = useState<{ unit: Unit; building: Building; unitHistories: VisitHistory[] } | null>(null)
+  useEffect(() => {
+    if (!groupMap.active || selectedCardId == null || cards.some(card => card.id === selectedCardId)) return
+    // An explicit group change must not retain an incompatible search selection.
+    setSelectedCardId(null)
+    setSelectedBuildingId(null)
+    setExpandedBuildingIds(new Set())
+    setFullScreenUnit(null)
+  }, [groupMap.active, cards, selectedCardId])
   // buildings가 fetchAll 후 업데이트될 때 스냅샷이 아닌 최신 unit 사용
   // 비공식 봉사 장소 — PC 와 같은 규칙이다.
   // 기본은 감추고, 비공식 화면에서 '지도에서 보기' 로 들어왔을 때만 보인다.
@@ -665,10 +673,10 @@ export function MobileMap({
   const isViewingActiveCard = !!activeSessionCard && selectedCardId === activeSessionCard.id
   const mapSearchResults = useMemo(() => searchMapData({
     query: cardSearch,
-    cards,
-    buildings,
+    cards: sourceCards,
+    buildings: sourceBuildings,
     informalAssets,
-  }), [buildings, cardSearch, cards, informalAssets])
+  }), [sourceBuildings, cardSearch, sourceCards, informalAssets])
   const bareUnitSearch = isBareUnitSearch(cardSearch)
   const visibleAddressSearchResults = useMemo(() => {
     const visibleBuildingIds = new Set(
@@ -1489,15 +1497,16 @@ export function MobileMap({
 
     const building = result.buildingId == null
       ? null
-      : buildings.find((item) => item.id === result.buildingId) ?? null
-    const card = cards.find((item) => item.id === (result.cardId ?? building?.cardId)) ?? null
+      : sourceBuildings.find((item) => item.id === result.buildingId) ?? null
+    const card = sourceCards.find((item) => item.id === (result.cardId ?? building?.cardId)) ?? null
     if (!card) return
+    groupMap.revealSearchCard(card)
 
     // 검색 결과는 현재 지역·상태 필터 밖에 있어도 보여야 한다.
     // 단 배정 지도의 범위(배정 일정·카드 → 봉사 유형)는 필터가 아니라 이 지도 자체다.
     // 지우면 주택·상가 봉사 지도가 일반 카드 지도로 바뀐다 (건물 추가 직후 실제로 그랬다).
     const next = new URLSearchParams()
-    for (const key of ['return', 'assignmentMap', 'assignmentCard', 'scope', 'cardIds']) {
+    for (const key of ['return', 'assignmentMap', 'assignmentCard', 'scope', 'cardIds', 'groupCode']) {
       const value = searchParams.get(key)
       if (value) next.set(key, value)
     }
@@ -1563,7 +1572,7 @@ export function MobileMap({
     if (!pendingCreatedBuilding) return
     // 서버가 정한 건물 ID 로 찾는다. 예전에는 카드+주소 문자열로 찾아서, 서버가 표기가 다른
     // 기존 건물을 돌려주면 끝내 못 찾고 멈췄다.
-    const building = buildings.find((item) => item.id === pendingCreatedBuilding.buildingId)
+    const building = sourceBuildings.find((item) => item.id === pendingCreatedBuilding.buildingId)
     if (!building) {
       // 목록은 저장 직후 이미 새로 받아 둔 상태다. 그래도 없다면 이 지도의 범위(배정 카드·봉사 유형)
       // 밖이라는 뜻이다. 조용히 기다리게 두면 사용자는 다시 등록하다 "이미 있습니다" 에 갇힌다.
@@ -1606,7 +1615,7 @@ export function MobileMap({
     })
   // selectMapSearchResult intentionally uses the latest map and sheet state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildings, pendingCreatedBuilding])
+  }, [sourceBuildings, pendingCreatedBuilding])
 
   const searchAddressCandidates = async () => {
     const query = cardSearch.trim()
@@ -1620,7 +1629,7 @@ export function MobileMap({
         setAddressSearchResults([])
         return
       }
-      setAddressSearchResults(classifyRestaurantPlaces(result.places, buildings, cardBoundaries))
+      setAddressSearchResults(classifyRestaurantPlaces(result.places, sourceBuildings, sourceBoundaries))
     } finally {
       setAddressSearching(false)
     }
@@ -1632,7 +1641,7 @@ export function MobileMap({
   ) => {
     if (candidate.status === 'existing-building' || candidate.status === 'registered') {
       if (candidate.buildingId != null) {
-        const building = buildings.find((item) => item.id === candidate.buildingId)
+        const building = sourceBuildings.find((item) => item.id === candidate.buildingId)
         if (building) {
           const type = candidateBuildingType(candidate) ?? building.type
           selectMapSearchResult({

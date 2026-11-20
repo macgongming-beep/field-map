@@ -4,7 +4,7 @@ import { msg } from '../../lib/msg'
 import { showToast } from '../../lib/toast'
 import { confirmDialog } from '../../lib/confirm'
 import { useGroupTerritory } from './context'
-import { groupOwnsCard, territoryGroupNames } from './model'
+import { GROUP_TERRITORY_BATCH_LIMIT, groupOwnsCard, territoryGroupNames } from './model'
 import './groupTerritory.css'
 
 export function GroupTerritoryAssignment({ cards }: { cards: TerritoryCard[] }) {
@@ -24,6 +24,10 @@ export function GroupTerritoryAssignment({ cards }: { cards: TerritoryCard[] }) 
     if (!canSave || (action === 'add' && !group?.active)) return
     const changes = targets.filter(card => groupOwnsCard(card, code) === (action === 'remove'))
     if (!changes.length) return
+    if (changes.length > GROUP_TERRITORY_BATCH_LIMIT) {
+      showToast(msg('한 번에 {n}개까지 선택해 주세요.', { n: GROUP_TERRITORY_BATCH_LIMIT }), 'error')
+      return
+    }
     if (action === 'remove' && !await confirmDialog({ message: msg('{group}의 구역 {n}개 배정을 해제할까요?', { group: group!.name, n: changes.length }) })) return
     setSaving(true)
     try {

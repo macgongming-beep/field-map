@@ -1,4 +1,6 @@
 export const groupTerritoryZh: Record<string, string> = {
+  '한 번에 {n}개까지 선택해 주세요.': '一次最多请选择{n}个。',
+  '계정이 변경되었습니다. 저장 결과는 원래 계정에서 확인해 주세요.': '账号已更改。请使用原账号确认保存结果。',
   '집단 구역 배정': '分配小组地区',
   '집단 구역': '小组地区',
   '전체 구역': '全部地区',
@@ -17,6 +19,8 @@ export const groupTerritoryZh: Record<string, string> = {
   '비활성': '已停用',
 }
 export const groupTerritoryEn: Record<string, string> = {
+  '한 번에 {n}개까지 선택해 주세요.': 'Select up to {n} at a time.',
+  '계정이 변경되었습니다. 저장 결과는 원래 계정에서 확인해 주세요.': 'Your account changed. Check the save result in the original account.',
   '집단 구역 배정': 'Assign group territories',
   '집단 구역': 'Group territories',
   '전체 구역': 'All territories',

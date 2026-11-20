@@ -7,7 +7,7 @@ import { DEMO_PROJECT, TEAM } from './deployDemo.mjs'
 import { assignmentInventorySql, assertAssignmentInventory } from './assignmentDefinerInventory.mjs'
 
 const mode = process.argv[2]
-assert.ok(['inspect', 'apply', 'seed', 'audit', 'build'].includes(mode))
+assert.ok(['inspect', 'apply', 'apply-review', 'seed', 'audit', 'build'].includes(mode))
 const origin = 'https://itjlykpjmlcvanqpmkmc.supabase.co'
 const config = parseEnv(readFileSync(process.env.DEMO_ENV_FILE ?? '../chinese-territory-app/.env.test.local', 'utf8'))
 assert.equal(config.VITE_SUPABASE_URL, origin)
@@ -42,6 +42,24 @@ if (mode === 'inspect') {
   run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-c', "set local lock_timeout='5s';set local statement_timeout='60s'", '-f', migration])
   assert.deepEqual(snapshot(), before, 'Existing data changed')
   console.log(JSON.stringify({ demo: true, installed: true, existingDataUnchanged: true, backup: `${directory}/before.dump` }))
+} else if (mode === 'apply-review') {
+  assert.ok(process.argv.includes('--confirm-demo'))
+  assert.equal(sql("select to_regprocedure('private.guard_territory_group_revision()') is not null"), 'f', 'Already installed')
+  const reviewBackup = 'backups/group-territory-demo-review'
+  mkdirSync(reviewBackup, { recursive: true, mode: 0o700 })
+  assert.ok(!existsSync(`${reviewBackup}/before.dump`), 'Do not overwrite backup')
+  run('pg_dump', ['--format=custom', '--no-owner', '--schema=public', '--schema=private', '--file', `${reviewBackup}/before.dump`])
+  chmodSync(`${reviewBackup}/before.dump`, 0o600)
+  run('pg_restore', ['--list', `${reviewBackup}/before.dump`])
+  const before = snapshot()
+  const links = sql("select md5(jsonb_agg(to_jsonb(t) order by card_id,group_code)::text) from card_group_assignments t")
+  const revisions = sql("select md5(jsonb_agg(jsonb_build_array(id,group_assignment_revision) order by id)::text) from cards")
+  writeFileSync(`${reviewBackup}/before.json`, JSON.stringify({ before, links, revisions }), { mode: 0o600 })
+  run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-c', "set local lock_timeout='5s';set local statement_timeout='60s'", '-f', 'supabase/migrations/20261120_1700_territory_group_review.sql'])
+  assert.deepEqual(snapshot(), before)
+  assert.equal(sql("select md5(jsonb_agg(to_jsonb(t) order by card_id,group_code)::text) from card_group_assignments t"), links)
+  assert.equal(sql("select md5(jsonb_agg(jsonb_build_array(id,group_assignment_revision) order by id)::text) from cards"), revisions)
+  console.log(JSON.stringify({ demo: true, followupInstalled: true, existingDataAndRevisionsUnchanged: true, backup: `${reviewBackup}/before.dump` }))
 } else if (mode === 'seed') {
   assert.ok(process.argv.includes('--confirm-demo'))
   const unwrap = result => { assert.equal(result.error, null, JSON.stringify(result.error)); return result.data }
@@ -68,6 +86,14 @@ if (mode === 'inspect') {
   console.log(JSON.stringify(result))
 } else if (mode === 'audit') {
   assert.deepEqual(snapshot(), JSON.parse(readFileSync(`${directory}/before.json`, 'utf8')), 'Existing territory, visits or event data changed')
+  // Even the DB owner cannot tamper through ordinary DML; always roll back this probe.
+  sql(`begin;do $$begin
+    begin
+      update public.cards set group_assignment_revision=group_assignment_revision+1 where id=(select min(id) from public.cards);
+      raise exception 'Revision guard did not reject direct update';
+    exception when insufficient_privilege then null;end;
+  end $$;rollback;`)
+  assert.equal(sql("select has_function_privilege('anon','private.guard_territory_group_revision()','execute')"), 'f')
   const inventory = assertAssignmentInventory(JSON.parse(sql(assignmentInventorySql)))
   const audit = run('psql', ['-X', '-v', 'ON_ERROR_STOP=1', '-f', 'supabase/tools/_AUDIT_anon이_부를수있는_definer.sql'])
   writeFileSync('scratch/group-territory-definers.txt', audit)
@@ -94,7 +120,7 @@ if (mode === 'inspect') {
   }
   const anonymous = await createClient(origin,config.VITE_SUPABASE_ANON_KEY,{auth}).from('card_group_assignments').select('card_id')
   assert.equal(anonymous.error,null);assert.deepEqual(anonymous.data,[])
-  const result={demo:true,legacyDataUnchanged:true,assignmentDefiners:inventory.length,privileges,roles,anonymousLinks:0}
+  const result={demo:true,legacyDataUnchanged:true,directRevisionDenied:true,assignmentDefiners:inventory.length,privileges,roles,anonymousLinks:0}
   writeFileSync('scratch/group-territory-db-audit.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result))
 } else {
   const flags = { ...JSON.parse(readFileSync('scratch/sections-matched-nov20/build-env.json', 'utf8')), VITE_GROUP_TERRITORY_ENABLED: 'true' }

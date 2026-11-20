@@ -10,10 +10,9 @@ import { msg } from '../../lib/msg'
 
 export function useGroupMapScope(source: { cards: TerritoryCard[]; buildings: Building[]; cardBoundaries: CardBoundary[] }, role: Role, restricted = false) {
   const context = useGroupTerritory()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const available = context.enabled && role !== 'user' && !restricted && !params.has('assignmentMap') && !params.has('addr') && !params.has('informalId')
-  const [selected, setSelected] = useState<string | null>(null)
-  const code = selected ?? params.get('groupCode') ?? context.ownCode ?? context.groups.find(group => group.active)?.code ?? null
+  const code = params.get('groupCode') ?? context.ownCode ?? context.groups.find(group => group.active)?.code ?? null
   const [on, setOn] = useState(params.has('groupCode'))
   const active = available && on
   const cards = useMemo(() => active ? source.cards.filter(card => groupOwnsCard(card, code)) : source.cards, [source.cards, active, code])
@@ -26,6 +25,13 @@ export function useGroupMapScope(source: { cards: TerritoryCard[]; buildings: Bu
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Z M9 3v16 M15 5v16" /></svg>
     </MapFilterButton>
   </div> : null
-  const selector = active ? <div className="group-map-selector"><GroupScopeSelect value={code ?? 'all'} onChange={value => { if (value === 'all') setOn(false); else setSelected(value) }} /></div> : null
-  return { cards, buildings, cardBoundaries, controls, selector, active, code, viewportMemory: available ? viewport : undefined }
+  const selector = active ? <div className="group-map-selector"><GroupScopeSelect value={code ?? 'all'} onChange={value => {
+    if (value === 'all') setOn(false)
+    else setParams(previous => { const next = new URLSearchParams(previous); next.set('groupCode', value); return next }, { replace: true })
+  }} /></div> : null
+  const revealSearchCard = (card: TerritoryCard) => {
+    // Search may reveal another authorized card without changing the remembered group.
+    if (active && !groupOwnsCard(card, code)) setOn(false)
+  }
+  return { cards, buildings, cardBoundaries, controls, selector, active, code, revealSearchCard, viewportMemory: available ? viewport : undefined }
 }

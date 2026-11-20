@@ -8,6 +8,7 @@ import { testBuilding, testCard, testUnit, territoryProps } from '../test/territ
 import { getPinGroup } from '../utils/buildingPin'
 import { getLocalDateString } from '../utils/dateUtils'
 import type { Building, VisitHistory } from '../types'
+import { GroupTerritoryContext } from '../features/groupTerritory/context'
 
 vi.mock('../hooks/useTerritoryRealtime', () => ({ useTerritoryRealtime: vi.fn() }))
 vi.mock('./MapCanvas', () => ({ MapCanvas: (props: {
@@ -50,6 +51,29 @@ function propsForMap() {
   }) as unknown as ComponentProps<typeof MobileMap>
 }
 function Location() { return <output data-testid="route">{useLocation().search}</output> }
+test.each([['B territory', 'true'], ['A territory', 'false']])('search %s preserves selected group B and reveals the authorized result', async (name, pressed) => {
+  const props = propsForMap()
+  props.actualRole = 'leader'; props.assignmentServiceMap = false; props.focusedCardIds = []; props.focusedScopeLabel = undefined
+  props.cards = [testCard(1, 'A territory'), testCard(2, 'B territory')].map((card, index) => ({ ...card, assignedGroupCodes: [index === 0 ? 'a' : 'b'] }))
+  props.buildings = [testBuilding(1, 1, 'A building', [testUnit(1, '101')]), testBuilding(2, 2, 'B building', [testUnit(2, '201')])]
+  render(<GroupTerritoryContext.Provider value={{ enabled: true, canManage: false, ownCode: 'a', groups: [{ code: 'a', name: 'A', active: true }, { code: 'b', name: 'B', active: true }], save: vi.fn() }}>
+    {view(props, '/map?groupCode=b')}
+  </GroupTerritoryContext.Provider>)
+  fireEvent.click(screen.getByRole('button', { name: 'zoom close' }))
+  expect(screen.getByTestId('pins')).toHaveTextContent('2:')
+  expect(screen.getByTestId('pins')).not.toHaveTextContent('1:')
+  fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+  fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), { target: { value: name } })
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^구역\\s*${name}`) }))
+  await waitFor(() => expect(screen.getByTestId('route')).toHaveTextContent('groupCode=b'))
+  expect(screen.getByRole('button', { name: '집단 구역만 보기' })).toHaveAttribute('aria-pressed', pressed)
+  expect(screen.getByTestId('pins')).toHaveTextContent(name.startsWith('B') ? '2:' : '1:')
+  if (name.startsWith('A')) {
+    fireEvent.click(screen.getByRole('button', { name: '집단 구역만 보기' }))
+    expect(screen.getByTestId('pins')).toHaveTextContent('2:')
+    expect(screen.getByTestId('pins')).not.toHaveTextContent('1:')
+  }
+})
 function view(props: ComponentProps<typeof MobileMap>, url = '/map?assignmentMap=7&scope=house') {
   return <MemoryRouter initialEntries={[url]}><MobileMap {...props} /><Location /></MemoryRouter>
 }
