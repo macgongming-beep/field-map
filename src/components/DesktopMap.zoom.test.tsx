@@ -5,10 +5,12 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, test, vi } from 'vitest'
 import { testBuilding, testCard, territoryProps } from '../test/territoryFixture'
 import { DesktopMap } from './DesktopMap'
+import { GroupTerritoryContext } from '../features/groupTerritory/context'
 
 vi.mock('./MapCanvas', () => ({
   MapCanvas: (props: any) => (
     <div>
+      <output data-testid="boundary-options">{JSON.stringify({ outline: props.showTerritoryBoundary, minZoom: props.boundaryViewportMinZoom, cards: props.cardBoundaries.map((b: { cardId: number }) => b.cardId) })}</output>
       <button type="button" onClick={() => props.onZoomChange?.(14)}>zoom middle</button>
       <button type="button" onClick={() => props.onZoomChange?.(16)}>zoom close</button>
       <button type="button" onClick={() => props.onZoomChange?.(10)}>zoom far</button>
@@ -48,6 +50,22 @@ function mapProps() {
 }
 
 describe('PC 지도 확대 단계', () => {
+  test('PC group/all maps forward outline visibility and dong viewport threshold without changing scope', () => {
+    const props = mapProps()
+    props.actualRole = 'leader'
+    props.cards = props.cards.map((card, i) => ({ ...card, assignedGroupCodes: [i ? 'b' : 'a'] }))
+    props.cardBoundaries = props.cards.map(card => ({ cardId: card.id, points: [] }))
+    render(<MemoryRouter initialEntries={['/map?groupCode=a']}><GroupTerritoryContext.Provider value={{ enabled: true, canManage: false, ownCode: 'a', groups: [{ code: 'a', name: 'A', active: true }], save: vi.fn() }}>
+      <DesktopMap {...props as never} />
+    </GroupTerritoryContext.Provider></MemoryRouter>)
+    const options = () => JSON.parse(screen.getByTestId('boundary-options').textContent!)
+    expect(options()).toEqual({ outline: false, minZoom: 13, cards: [1] })
+    fireEvent.click(screen.getByRole('button', { name: '집단 구역만 보기' }))
+    expect(options()).toEqual({ outline: true, minZoom: 13, cards: [1, 2] })
+    fireEvent.click(screen.getByRole('button', { name: '집단 구역만 보기' }))
+    expect(options()).toEqual({ outline: false, minZoom: 13, cards: [1] })
+  })
+
   test('긴 구역 목록은 평소에 지도 폭을 차지하지 않고 필요할 때만 연다', () => {
     render(<MemoryRouter><DesktopMap {...(mapProps() as never)} /></MemoryRouter>)
 

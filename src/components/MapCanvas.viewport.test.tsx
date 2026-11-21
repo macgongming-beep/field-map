@@ -78,6 +78,7 @@ test('group filter hides and restores the congregation outline without moving th
   const view = render(<MapCanvas {...props} viewportMemory={memory} showTerritoryBoundary={false} />)
   const outline = polygons.find(polygon => polygon.options.fillOpacity === 0.05)!
   expect(outline).toBeTruthy()
+  expect(outline.options.map).toBeNull()
   expect(outline.getMap()).toBeNull()
   view.rerender(<MapCanvas {...props} viewportMemory={memory} showTerritoryBoundary />)
   expect(outline.getMap()).toBe(maps[0])

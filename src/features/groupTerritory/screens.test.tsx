@@ -11,8 +11,8 @@ import { authFixture } from '../../test/authFixture'
 const context = { enabled: true, canManage: false, ownCode: 'a', groups: [{ code: 'a', name: 'A', active: true }, { code: 'b', name: 'B', active: true }], save: vi.fn() }
 const cards = [testCard(1, '기흥구 Shared 1', { assignedGroupCodes: ['a', 'b'] }), testCard(2, '기흥구 Legacy 2', { assignedGroupCodes: ['b'], assignedLeader: 'Me' })]
 
-test('PC building list is scoped with cards, and all restores both groups without writes', () => {
-  const props = territoryProps({ role: 'leader', currentVisitor: 'Me', cards, buildings: [testBuilding(1, 1, 'OwnBuilding'), { ...testBuilding(2, 2, 'OtherBuilding'), isRestaurant: true }] })
+test.each([undefined, 'b'])('PC leader initialGroupCode=%s stays own-group; all restores both groups without writes', initialGroupCode => {
+  const props = territoryProps({ role: 'leader', currentVisitor: 'Me', initialGroupCode, cards, buildings: [testBuilding(1, 1, 'OwnBuilding'), { ...testBuilding(2, 2, 'OtherBuilding'), isRestaurant: true }] })
   render(<MemoryRouter><AuthContext.Provider value={authFixture()}><GroupTerritoryContext.Provider value={context}><DesktopTerritory {...props as never} /></GroupTerritoryContext.Provider></AuthContext.Provider></MemoryRouter>)
   fireEvent.click(screen.getByRole('button', { name: '건물 관리' }))
   const table = screen.getByRole('table', { name: '건물 관리 목록' })

@@ -101,6 +101,30 @@ test.each([['B territory', 'true'], ['A territory', 'false']])('search %s preser
     expect(screen.getByTestId('pins')).not.toHaveTextContent('1:')
   }
 })
+test('searching an own-group card after switching to all does not silently enable the group filter', async () => {
+  const props = propsForMap()
+  props.actualRole = 'leader'; props.assignmentServiceMap = false; props.focusedCardIds = []; props.focusedScopeLabel = undefined
+  props.cards = [testCard(1, 'A territory'), testCard(2, 'B territory')].map((card, i) => ({ ...card, assignedGroupCodes: [i ? 'b' : 'a'] }))
+  props.buildings = [testBuilding(1, 1, 'A building'), testBuilding(2, 2, 'B building')]
+  render(<GroupTerritoryContext.Provider value={{ enabled: true, canManage: false, ownCode: 'a', groups: [{ code: 'a', name: 'A', active: true }], save: vi.fn() }}>
+    {view(props, '/map?groupCode=a')}
+  </GroupTerritoryContext.Provider>)
+  const toggle = screen.getByRole('button', { name: '집단 구역만 보기' })
+  fireEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  fireEvent.click(screen.getByRole('button', { name: 'zoom close' }))
+  expect(screen.getByTestId('pins')).toHaveTextContent('2:')
+  fireEvent.click(screen.getByRole('button', { name: '통합 검색' }))
+  fireEvent.change(screen.getByPlaceholderText('구역, 건물, 주소, 식당 검색'), { target: { value: 'A territory' } })
+  fireEvent.click(screen.getByRole('button', { name: /^구역\s*A territory/ }))
+  await waitFor(() => expect(screen.getByTestId('route')).toHaveTextContent('groupView=all'))
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.getByTestId('pins')).toHaveTextContent('1:')
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+  expect(screen.getByTestId('pins')).toHaveTextContent('2:')
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+})
+
 function view(props: ComponentProps<typeof MobileMap>, url = '/map?assignmentMap=7&scope=house') {
   return <MemoryRouter initialEntries={[url]}><MobileMap {...props} /><Location /></MemoryRouter>
 }

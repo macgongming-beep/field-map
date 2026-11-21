@@ -138,6 +138,16 @@ test.each(['assignmentMap=9', 'addr=Somewhere', 'informalId=4'])('explicit map r
   expect(screen.getByTestId('scope').textContent).toBe('[[1,2,3],[1,2,3],[1,2,3]]')
 })
 
+test.each(['mine', 'all'])('mobile leader drill breadcrumb names its %s scope', scope => {
+  render(<MemoryRouter initialEntries={[`/zone?scope=${scope}&level=dongs&region=${encodeURIComponent('기흥구')}`]}><GroupTerritoryContext.Provider value={value}>
+    <AdminMobileZone language="ko" role="leader" currentVisitor="Leader" cards={cards} buildings={[]}
+      onOpenMap={vi.fn()} onOpenAssignedMap={vi.fn()} onShowMapView={vi.fn()} />
+  </GroupTerritoryContext.Provider></MemoryRouter>)
+  expect(screen.getByText(scope === 'mine' ? '第一组 집단 구역' : '전체 구역')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '第一组 집단 구역' })).toBeNull()
+  if (scope === 'mine') expect(screen.queryByText('전체 구역')).toBeNull()
+})
+
 function ZoneRoundTrip({ role = 'admin' }: { role?: 'admin' | 'leader' }) {
   const navigate = useNavigate(), location = useLocation()
   return <><output data-testid="url">{location.pathname}{location.search}</output><Routes>
