@@ -1704,6 +1704,11 @@ export function MobileMap({
   }
 
   const hasAreaChips = !isUserMap && !enteredDirectly && areas.length > 1
+  const selectedMapTitle = assignmentServiceMap
+    ? focusedScopeLabel
+    : selectedCardId != null
+      ? translateKoreanAddress(cards.find(card => card.id === selectedCardId)?.name ?? t(language, 'map.zoneMap'), language, translatePlaceNames)
+      : selectedRegion ? placeLabel(selectedRegion) : selectedArea ? placeLabel(selectedArea) : null
   return (
     <main
       className={`mobile-map-shell${navLevel === 'map' ? ' mobile-map-shell--map' : ''}${navLevel === 'map' && hasMapHeaderFilters ? ' mobile-map-shell--chinese-filter' : ''}`}
@@ -1725,7 +1730,7 @@ export function MobileMap({
                 <><h1>{selectedInformal.name}</h1><span className="mm-stats-sub">{msg('장소 {n}개', { n: informalChildren.length })}</span></>
               ) : navLevel === 'map' ? (
                 <>
-                  {groupMap.selector ?? <h1>{assignmentServiceMap ? focusedScopeLabel : selectedCardId ? translateKoreanAddress(cards.find(c => c.id === selectedCardId)?.name ?? t(language, 'map.zoneMap'), language, translatePlaceNames) : t(language, 'map.zoneMap')}</h1>}
+                  {selectedMapTitle ? <h1>{selectedMapTitle}</h1> : groupMap.selector ?? <h1>{t(language, 'map.zoneMap')}</h1>}
                   {assignmentServiceMap ? <span className="mm-stats-sub">{msg('카드 {n}개', { n: displayedCardCount })} · {showChineseOnly ? `${t(language, 'map.chinese')} ` : ''}{typeCounts.전체}{msg('세대')}</span> : <span className="mm-stats-sub" role="tablist">
                     <button
                       type="button"

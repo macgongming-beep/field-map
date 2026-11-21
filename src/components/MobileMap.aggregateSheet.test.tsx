@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { testBuilding, testCard, territoryProps } from '../test/territoryFixture'
 import { MobileMap } from './MobileMap'
 import { getMobileMapPinPanOffset, getMobileMapSelectedPeekHeight } from '../utils/mobileMapViewport'
@@ -12,6 +12,9 @@ import { getLocalDateString } from '../utils/dateUtils'
 import { registerToastListener } from '../lib/toast'
 import { BuildingDetailContext } from '../hooks/buildingDemand'
 import { GroupTerritoryContext } from '../features/groupTerritory/context'
+import { setCurrentLang } from '../i18n'
+
+afterEach(() => setCurrentLang('ko'))
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
@@ -160,6 +163,38 @@ describe('모바일 지도 하단 시트', () => {
     expect(screen.getByTestId('boundary-ids').textContent).toBe('')
     fireEvent.click(screen.getByRole('button', { name: '집단 구역만 보기' }))
     expect(screen.getByTestId('boundary-ids')).toHaveTextContent(/^1$/)
+  })
+
+  test.each(['ko', 'zh'] as const)('map heading follows district and dong, then restores group/all heading (%s)', language => {
+    setCurrentLang(language)
+    const props = { ...mapProps(), language, actualRole: 'leader', cards: [
+      { ...testCard(1, '기흥구 배분테스트동 1'), assignedGroupCodes: ['a'] },
+      { ...testCard(2, '수지구 죽전동 1'), assignedGroupCodes: ['b'] },
+    ] }
+    render(<MemoryRouter initialEntries={['/map?groupCode=a']}><GroupTerritoryContext.Provider value={{ enabled: true, ownCode: 'a', canManage: false, groups: [{ code: 'a', name: '新葛', active: true }], save: vi.fn() }}>
+      <MobileMap {...(props as never)} />
+    </GroupTerritoryContext.Provider></MemoryRouter>)
+    const heading = () => document.querySelector('.mobile-map-header h1')?.textContent
+    const groupTitle = language === 'zh' ? '新葛小组地区' : '新葛 집단 구역'
+    const toggle = screen.getByRole('button', { name: language === 'zh' ? '只显示小组地区' : '집단 구역만 보기' })
+    const back = () => fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(heading()).toBe(groupTitle)
+    for (const grouped of [true, false]) {
+      if (!grouped) fireEvent.click(toggle)
+      const rootTitle = heading()
+      expect(rootTitle).toBe(grouped ? groupTitle : language === 'zh' ? '区域地图' : '구역-지도')
+      fireEvent.click(screen.getByRole('button', { name: '지도 집계 기흥구' }))
+      expect(heading()).toBe('기흥구')
+      expect(toggle).toHaveAttribute('aria-pressed', String(grouped))
+      fireEvent.click(screen.getByRole('button', { name: '지도 집계 배분테스트동' }))
+      expect(heading()).toBe('배분테스트동')
+      expect(screen.getByTestId('highlighted-scope')).toHaveTextContent(/^1$/)
+      back()
+      expect(heading()).toBe('기흥구')
+      back()
+      expect(heading()).toBe(rootTitle)
+    }
+    expect(props.onBack).not.toHaveBeenCalled()
   })
 
   test('비공식 카드는 일반 구역 핀을 숨기고 선택한 카드의 장소만 보여 준다', () => {
