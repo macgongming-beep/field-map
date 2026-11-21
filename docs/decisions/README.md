@@ -13,6 +13,8 @@
 
 ## 목록
 
+인도자 구역·지도 운영 반영: [0152 검토한 인도자 구역 탐색 운영 배포](0152-leader-territory-production-release.md).
+
 인도자 구역 탐색: [0151 내 집단·전체 구역과 지도 경계선](0151-leader-own-group-territory-browse.md).
 
 집단 지도·배정 운영 반영: [0149 검토한 집단 지도 화면 운영 배포](0149-reviewed-group-map-production-release.md).
