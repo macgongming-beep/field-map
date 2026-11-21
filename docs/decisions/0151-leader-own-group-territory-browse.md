@@ -29,3 +29,10 @@
 - 로컬 기록: `scratch/leader-browse-tests.json`, `scratch/leader-browse-mutations.json`, `scratch/leader-browse-visual.json` 및 스크린샷.
 - 0150에서 맞춘 운영과 동일한 기능 설정으로 데모를 빌드한다. DB·푸시·지도 키는 데모 전용이며 운영 배포/환경변수는 변경하지 않는다.
 - 실물 아이폰에서 `내 집단 목록 → 지도 → 전체 전환 → 확대 → 뒤로` 확인은 사용자 확인으로 남긴다.
+
+## 데모 배포 결과
+
+- 앱 소스 `7e3b177`, 데모 배포 `dpl_Ad1G6zSvZc1BPfXwtqicrCLn4PeH`.
+- 단일 업로드 경로로 1회 배포했다. 공개 데모의 HTML·서비스워커·매니페스트·JS/CSS 25개 파일이 로컬 산출물과 일치한다.
+- 운영 배포 `dpl_HR3WdWpVoxvmY2KYnS72HWszcG56` 유지, 양쪽 원격 환경변수 변경 없음.
+- 데모 업무 DB 쓰기, 운영 DB 접근/쓰기, 운영 배포 없음.
