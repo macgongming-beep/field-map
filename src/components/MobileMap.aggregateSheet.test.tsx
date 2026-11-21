@@ -197,6 +197,25 @@ describe('모바일 지도 하단 시트', () => {
     expect(props.onBack).not.toHaveBeenCalled()
   })
 
+  test('assignment scope heading stays above district and dong drill selections', () => {
+    const props = { ...mapProps(), assignmentServiceMap: true, focusedCardIds: [1, 2], focusedScopeLabel: '동탄 집단 · 주택 봉사' }
+    render(<MemoryRouter initialEntries={['/map?assignmentMap=7&region=%EA%B8%B0%ED%9D%A5%EA%B5%AC']}>
+      <MobileMap {...props as never} />
+    </MemoryRouter>)
+    const heading = () => document.querySelector('.mobile-map-header h1')?.textContent
+    expect(screen.getByRole('button', { name: '지도 집계 영덕동' })).toBeVisible()
+    expect(screen.queryByRole('button', { name: '지도 집계 죽전동' })).not.toBeInTheDocument()
+    expect(heading()).toBe(props.focusedScopeLabel)
+    fireEvent.click(screen.getByRole('button', { name: '지도 집계 영덕동' }))
+    expect(screen.getByText('건물 포인트 1개')).toBeVisible()
+    expect(screen.getByTestId('highlighted-scope')).toHaveTextContent(/^1$/)
+    expect(heading()).toBe(props.focusedScopeLabel)
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('button', { name: '지도 집계 영덕동' })).toBeVisible()
+    expect(heading()).toBe(props.focusedScopeLabel)
+    expect(props.onBack).not.toHaveBeenCalled()
+  })
+
   test('비공식 카드는 일반 구역 핀을 숨기고 선택한 카드의 장소만 보여 준다', () => {
     const informalAsset = (
       id: number,
