@@ -442,6 +442,8 @@ function markerHtml(
 // ── Naver Map Canvas ───────────────────────────────────────────────────────
 
 function NaverMapCanvas({
+  showTerritoryBoundary = true,
+  boundaryViewportMinZoom = 15,
   viewportMemory,
   toolbarAction,
   buildings,
@@ -492,6 +494,8 @@ function NaverMapCanvas({
   cardColorMap,
   hideBuildingMarkers = false,
 }: {
+  showTerritoryBoundary?: boolean
+  boundaryViewportMinZoom?: number
   viewportMemory?: MapViewportMemory
   toolbarAction?: ReactNode
   buildings: Building[]
@@ -923,6 +927,10 @@ function NaverMapCanvas({
   // 카드 라벨 줌 토글용 stable ref (정의는 아래, 할당은 매 렌더)
   const updateCardLabelVisibilityRef = useRef<() => void>(() => {})
   const syncCardBoundariesRef = useRef<() => void>(() => {})
+  const boundaryViewportDirtyRef = useRef(false)
+  const boundaryZoomDirtyRef = useRef(false)
+  const boundaryViewportMinZoomRef = useRef(boundaryViewportMinZoom)
+  boundaryViewportMinZoomRef.current = boundaryViewportMinZoom
 
   const rebuildMarkers = () => rebuildMarkersCallbackRef.current()
  
@@ -1269,7 +1277,7 @@ function NaverMapCanvas({
     const zoom = mapInstanceRef.current.getZoom()
     // 가까이 확대했을 때는 모바일과 PC 모두 화면 주변 구역선만 유지한다.
     // PC만 600여 폴리곤을 계속 그리던 탓에 줌·팬마다 SVG 갱신이 끊겼다.
-    const rawBounds = zoom >= 15
+    const rawBounds = zoom >= boundaryViewportMinZoom
       ? mapInstanceRef.current.getBounds?.()
       : null
     const visibleBoundaries = rawBounds?.getSW && rawBounds?.getNE
@@ -1543,7 +1551,7 @@ function NaverMapCanvas({
       const territoryBoundary = getTerritoryBoundary()
       if (territoryBoundary.length >= 3) {
         boundaryRef.current = new naver.maps.Polygon({
-          map: mapInstanceRef.current,
+          map: showTerritoryBoundary ? mapInstanceRef.current : null,
           paths: territoryBoundary.map(([lng, lat]) => new naver.maps.LatLng(lat, lng)),
           fillColor: getMapPalette().brand,
           fillOpacity: 0.05,
@@ -1619,6 +1627,8 @@ function NaverMapCanvas({
 
       // Re-cluster when zoom changes
       naver.maps.Event.addListener(mapInstanceRef.current, 'zoom_changed', () => {
+        boundaryViewportDirtyRef.current = true
+        boundaryZoomDirtyRef.current = true
         if (rebuildTimerRef.current !== null) {
           window.clearTimeout(rebuildTimerRef.current)
           rebuildTimerRef.current = null
@@ -1629,9 +1639,14 @@ function NaverMapCanvas({
       })
       onZoomChangeRef.current?.(mapInstanceRef.current.getZoom())
 
+      naver.maps.Event.addListener(mapInstanceRef.current, 'center_changed', () => {
+        boundaryViewportDirtyRef.current = true
+      })
+
       // 성능: 드래그 중엔 카드 라벨 숨김 → 멈추면(idle) 다시 표시.
       // (안드로이드에서 라벨 오버레이 리페인트가 드래그를 느리게 하는 것 방지)
       naver.maps.Event.addListener(mapInstanceRef.current, 'dragstart', () => {
+        boundaryViewportDirtyRef.current = true
         if (rebuildTimerRef.current !== null) {
           window.clearTimeout(rebuildTimerRef.current)
           rebuildTimerRef.current = null
@@ -1649,7 +1664,12 @@ function NaverMapCanvas({
           hasAggregates: aggregateMarkersRef.current.length > 0,
         })) {
           scheduleRebuildMarkersRef.current()
+        } else if (boundaryViewportDirtyRef.current && (boundaryZoomDirtyRef.current || mapInstanceRef.current.getZoom() >= boundaryViewportMinZoomRef.current)) {
+          // Dong aggregates stay fixed while the visible card outlines follow a pan.
+          syncCardBoundariesRef.current()
         }
+        boundaryViewportDirtyRef.current = false
+        boundaryZoomDirtyRef.current = false
       })
     }
 
@@ -1761,6 +1781,10 @@ function NaverMapCanvas({
 
   const focusPointRef = useRef(focusPoint)
   focusPointRef.current = focusPoint
+
+  useEffect(() => {
+    if (mapReady) boundaryRef.current?.setMap(showTerritoryBoundary ? mapInstanceRef.current : null)
+  }, [mapReady, showTerritoryBoundary])
 
   // 좌표가 바뀐 순간에만 옮긴다. 매 렌더마다 옮기면 사용자가 지도를 만질 수 없다.
   const lastFocusPointRef = useRef<string>('')
@@ -2003,6 +2027,8 @@ function NaverMapCanvas({
 // ── Public MapCanvas ───────────────────────────────────────────────────────
 
 export function MapCanvas({
+  showTerritoryBoundary = true,
+  boundaryViewportMinZoom = 15,
   viewportMemory,
   toolbarAction,
   buildings,
@@ -2052,6 +2078,8 @@ export function MapCanvas({
   informalShape,
   focusPoint,
 }: {
+  showTerritoryBoundary?: boolean
+  boundaryViewportMinZoom?: number
   viewportMemory?: MapViewportMemory
   toolbarAction?: ReactNode
   buildings: Building[]
@@ -2117,6 +2145,8 @@ export function MapCanvas({
     return (
       <div className="map-canvas-container" style={{ width: '100%', height: '100%' }}>
         <NaverMapCanvas
+          showTerritoryBoundary={showTerritoryBoundary}
+          boundaryViewportMinZoom={boundaryViewportMinZoom}
           viewportMemory={viewportMemory}
           toolbarAction={toolbarAction}
           buildings={validBuildings}
@@ -2191,7 +2221,7 @@ export function MapCanvas({
       <div className="mock-map-grid" />
       {toolbarAction && <div className="map-toolbar-overlay" style={{ position: 'absolute', right: 12, top: 100, zIndex: 40 }}>{toolbarAction}</div>}
       <svg className="mock-boundary-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        <polygon points={getMockBoundaryPoints()} />
+        {showTerritoryBoundary && <polygon points={getMockBoundaryPoints()} />}
         {cardBoundaries
           .filter((boundary) => !(drawingBoundary && boundary.cardId === selectedCardId))
           .map((boundary) => {

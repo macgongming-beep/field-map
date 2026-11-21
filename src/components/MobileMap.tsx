@@ -1501,16 +1501,17 @@ export function MobileMap({
       : sourceBuildings.find((item) => item.id === result.buildingId) ?? null
     const card = sourceCards.find((item) => item.id === (result.cardId ?? building?.cardId)) ?? null
     if (!card) return
-    groupMap.revealSearchCard(card)
+    const revealsOtherGroup = groupMap.revealSearchCard(card)
 
     // 검색 결과는 현재 지역·상태 필터 밖에 있어도 보여야 한다.
     // 단 배정 지도의 범위(배정 일정·카드 → 봉사 유형)는 필터가 아니라 이 지도 자체다.
     // 지우면 주택·상가 봉사 지도가 일반 카드 지도로 바뀐다 (건물 추가 직후 실제로 그랬다).
     const next = new URLSearchParams()
-    for (const key of ['return', 'assignmentMap', 'assignmentCard', 'scope', 'cardIds', 'groupCode']) {
+    for (const key of ['return', 'assignmentMap', 'assignmentCard', 'scope', 'cardIds', 'groupCode', 'groupView']) {
       const value = searchParams.get(key)
       if (value) next.set(key, value)
     }
+    if (revealsOtherGroup) next.set('groupView', 'all')
     setSearchParams(next, { replace: true })
     setSelectedArea(null)
     setSelectedRegion(null)
@@ -2101,7 +2102,9 @@ export function MobileMap({
               buildings={showInformal || mapAggregateMarkers.length > 0 ? [] : mapBuildings}
               viewportMemory={groupMap.viewportMemory}
               aggregateMarkers={showInformal ? [] : mapAggregateMarkers}
-              cardBoundaries={showInformal || mapAggregateMarkers.length > 0 ? [] : mapBoundaries}
+              cardBoundaries={showInformal || (mapAggregateMarkers.length > 0 && mapDetailLevel === 'region' && !groupMap.active) ? [] : mapBoundaries}
+              showTerritoryBoundary={!groupMap.active}
+              boundaryViewportMinZoom={13}
               cards={cards}
               selectedCardId={mapSelectedCardId}
               highlightedCardIds={scopedCardIds}

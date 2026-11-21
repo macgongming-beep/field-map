@@ -30,6 +30,8 @@ type ZoneKind = 'territory' | 'informal' | 'restaurant'
 import { useGroupTerritory } from '../../features/groupTerritory/context'
 import { groupOwnsCard, territoryGroupNames } from '../../features/groupTerritory/model'
 import { GroupScopeSelect } from '../../features/groupTerritory/GroupScopeSelect'
+import { LeaderTerritoryScope } from '../../features/groupTerritory/LeaderTerritoryScope'
+import { useOwnTerritoryLabel } from '../../features/groupTerritory/useOwnTerritoryLabel'
 type Scope = 'mine' | 'all'
 type ViewMode = 'list' | 'map'
 type Level = 'regions' | 'dongs' | 'cards'
@@ -171,7 +173,8 @@ export function AdminMobileZone({
   const urlDong = searchParams.get('dong') ?? ''
   const groupTerritory = useGroupTerritory()
   const useGroups = groupTerritory.enabled && role !== 'user'
-  const groupCode = searchParams.get('groupCode') ?? groupTerritory.ownCode
+  const groupCode = role === 'leader' ? groupTerritory.ownCode : searchParams.get('groupCode') ?? groupTerritory.ownCode
+  const ownTerritoryLabel = useOwnTerritoryLabel()
   const defaultScope: Scope = role === 'admin' || (useGroups && !groupTerritory.ownCode) ? 'all' : 'mine'
   const requestedScope: Scope = (searchParams.get('scope') === 'all' || searchParams.get('scope') === 'mine')
     ? (searchParams.get('scope') as Scope)
@@ -180,6 +183,10 @@ export function AdminMobileZone({
   const setScope = (value: Scope) => setSearchParams(previous => {
     const next = new URLSearchParams(previous)
     next.set('scope', value)
+    if (useGroups && role === 'leader') {
+      if (value === 'mine' && groupCode) next.set('groupCode', groupCode)
+      else next.delete('groupCode')
+    }
     return next
   }, { replace: true })
   const urlZoneKind: ZoneKind = searchParams.get('tab') === 'informal'
@@ -506,7 +513,7 @@ export function AdminMobileZone({
       {level === 'regions' ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
           {/* user 는 본인 담당만 고정 — segmented 숨김 */}
-          {role !== 'user' && (useGroups ? <GroupScopeSelect value={scope === 'all' ? 'all' : groupCode ?? 'all'} onChange={value => {
+          {role !== 'user' && (useGroups && role === 'leader' ? <LeaderTerritoryScope value={scope} onChange={setScope} /> : useGroups ? <GroupScopeSelect value={scope === 'all' ? 'all' : groupCode ?? 'all'} onChange={value => {
             setSearchParams(previous => {
               const next = new URLSearchParams(previous)
               next.set('scope', value === 'all' ? 'all' : 'mine')
@@ -546,7 +553,7 @@ export function AdminMobileZone({
             fontSize: 12.5, color: 'var(--muted)',
             flexWrap: 'wrap', lineHeight: 1.4, flex: 1, minWidth: 0,
           }}>
-            <span style={{ color: level === 'dongs' && !selectedDong ? 'var(--muted)' : 'var(--muted)' }}>{t(language, 'territory.allZone')}</span>
+            <span>{useGroups && role === 'leader' && scope === 'mine' ? ownTerritoryLabel : t(language, 'territory.allZone')}</span>
             {selectedRegion && (
               <>
                 <span style={{ color: 'var(--muted-3)' }}>›</span>

@@ -19,7 +19,7 @@ test('PC building list is scoped with cards, and all restores both groups withou
   expect(within(table).getByText('OwnBuilding')).toBeTruthy()
   expect(within(table).queryByText('OtherBuilding')).toBeNull()
   expect(screen.getByRole('tab', { name: /식당/ }).textContent).toBe('식당0')
-  fireEvent.change(screen.getByRole('combobox', { name: '집단 구역 보기' }), { target: { value: 'all' } })
+  fireEvent.click(screen.getByRole('button', { name: '전체 구역' }))
   expect(within(table).getByText('OtherBuilding')).toBeTruthy()
   expect(screen.getByRole('tab', { name: /식당/ }).textContent).toBe('식당1')
   expect(context.save).not.toHaveBeenCalled()

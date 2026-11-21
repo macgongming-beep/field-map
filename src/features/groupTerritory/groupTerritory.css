@@ -35,6 +35,11 @@
 .group-territory-scope { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: fit-content; max-width: 100%; }
 .group-territory-scope select { max-width: 100%; min-height: 36px; border: 1px solid var(--border-default); border-radius: 6px; padding: 8px; background: var(--surface, #fff); color: var(--ink); font: inherit; }
 .group-map-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.leader-territory-scope { display: flex; flex: 1; min-width: 0; max-width: 460px; border-bottom: 1px solid var(--border-default); }
+.leader-territory-scope button { flex: 1; min-width: 0; min-height: 40px; padding: 6px; border: 0; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; overflow-wrap: anywhere; }
+.leader-territory-scope button[aria-pressed="true"] { border-bottom-color: var(--ink); color: var(--ink); font-weight: 700; }
+.leader-territory-scope button:disabled { opacity: .45; }
+.leader-group-map-title { min-width: 0; margin: 0; font-size: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .group-map-selector select { max-width: 180px; font-size: 13px; }
 .group-territory-select select, .group-territory-scope select { appearance: none; -webkit-appearance: none; padding-right: 32px; }
 .mobile-map-title-copy > .group-map-selector { grid-column: 1; grid-row: 1; align-self: center; min-width: 0; }

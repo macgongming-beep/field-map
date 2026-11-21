@@ -51,7 +51,7 @@ function propsForMap() {
   }) as unknown as ComponentProps<typeof MobileMap>
 }
 function Location() { return <output data-testid="route">{useLocation().search}</output> }
-test.each(['admin', 'leader'] as const)('%s group selector replaces the title without adding a header row and keeps filtering/navigation', role => {
+test.each(['admin'] as const)('%s group selector replaces the title without adding a header row and keeps filtering/navigation', role => {
   const props = propsForMap()
   props.actualRole = role; props.assignmentServiceMap = false; props.focusedCardIds = []; props.focusedScopeLabel = undefined
   props.cards = [testCard(1, 'A territory'), testCard(2, 'B territory')].map((card, index) => ({ ...card, assignedGroupCodes: [index === 0 ? 'a' : 'b'] }))
@@ -80,7 +80,7 @@ test.each(['admin', 'leader'] as const)('%s group selector replaces the title wi
 })
 test.each([['B territory', 'true'], ['A territory', 'false']])('search %s preserves selected group B and reveals the authorized result', async (name, pressed) => {
   const props = propsForMap()
-  props.actualRole = 'leader'; props.assignmentServiceMap = false; props.focusedCardIds = []; props.focusedScopeLabel = undefined
+  props.actualRole = 'admin'; props.assignmentServiceMap = false; props.focusedCardIds = []; props.focusedScopeLabel = undefined
   props.cards = [testCard(1, 'A territory'), testCard(2, 'B territory')].map((card, index) => ({ ...card, assignedGroupCodes: [index === 0 ? 'a' : 'b'] }))
   props.buildings = [testBuilding(1, 1, 'A building', [testUnit(1, '101')]), testBuilding(2, 2, 'B building', [testUnit(2, '201')])]
   render(<GroupTerritoryContext.Provider value={{ enabled: true, canManage: false, ownCode: 'a', groups: [{ code: 'a', name: 'A', active: true }, { code: 'b', name: 'B', active: true }], save: vi.fn() }}>

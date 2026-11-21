@@ -11,6 +11,7 @@ import type { InformalAsset } from '../types'
 import { getLocalDateString } from '../utils/dateUtils'
 import { registerToastListener } from '../lib/toast'
 import { BuildingDetailContext } from '../hooks/buildingDemand'
+import { GroupTerritoryContext } from '../features/groupTerritory/context'
 
 const confirmDialog = vi.hoisted(() => vi.fn().mockResolvedValue(true))
 const searchPlacesAndAddressesForCongregation = vi.hoisted(() => vi.fn())
@@ -28,6 +29,9 @@ vi.mock('./MapCanvas', () => ({
     <div>
       <button type="button" onClick={() => props.onZoomChange?.(14)}>zoom middle</button>
       <button type="button" onClick={() => props.onZoomChange?.(16)}>zoom close</button>
+      <button type="button" onClick={() => props.onZoomChange?.(10)}>zoom wide</button>
+      <output data-testid="boundary-ids">{props.cardBoundaries.map((b: { cardId: number }) => b.cardId).join(',')}</output>
+      <output data-testid="congregation-outline">{String(props.showTerritoryBoundary)}</output>
       <button type="button" onClick={() => props.onToggleAddingBuilding?.(true)}>start add building</button>
       <button type="button" aria-label="map actions" className="map-action-trigger" onClick={() => props.onOpenActionMenu?.()}>map actions</button>
       <button type="button">map layer</button>
@@ -133,6 +137,29 @@ describe('모바일 지도 하단 시트', () => {
     fireEvent.click(screen.getByRole('button', { name: 'zoom close' }))
     expect(await screen.findByText('건물 포인트 2개')).toBeVisible()
     expect(screen.getByTestId('highlighted-scope')).toHaveTextContent('1,2')
+  })
+
+  test('own group entry draws only group boundaries immediately; all shows card boundaries from the dong level', () => {
+    const props = mapProps()
+    props.actualRole = 'leader'
+    props.cards = props.cards.map((card, index) => ({ ...card, assignedGroupCodes: [index ? 'b' : 'a'] }))
+    props.cardBoundaries = props.cards.map(card => ({ cardId: card.id, points: [{ lat: 37.2, lng: 127.1 }, { lat: 37.3, lng: 127.2 }, { lat: 37.4, lng: 127.1 }] }))
+    render(<MemoryRouter initialEntries={['/map?groupCode=a']}><GroupTerritoryContext.Provider value={{ enabled: true, ownCode: 'a', canManage: false, groups: [{ code: 'a', name: '东柏', active: true }], save: vi.fn() }}>
+      <MobileMap {...(props as never)} />
+    </GroupTerritoryContext.Provider></MemoryRouter>)
+    expect(screen.getByTestId('boundary-ids')).toHaveTextContent(/^1$/)
+    expect(screen.getByTestId('congregation-outline')).toHaveTextContent('false')
+    expect(screen.getByRole('heading', { name: '东柏 집단 구역' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'zoom middle' }))
+    expect(screen.getByTestId('boundary-ids')).toHaveTextContent(/^1$/)
+    fireEvent.click(screen.getByRole('button', { name: '집단 구역만 보기' }))
+    expect(screen.getByTestId('boundary-ids')).toHaveTextContent('1,2')
+    expect(screen.getByTestId('congregation-outline')).toHaveTextContent('true')
+    expect(screen.getByText('지도 집계 영덕동')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'zoom wide' }))
+    expect(screen.getByTestId('boundary-ids').textContent).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: '집단 구역만 보기' }))
+    expect(screen.getByTestId('boundary-ids')).toHaveTextContent(/^1$/)
   })
 
   test('비공식 카드는 일반 구역 핀을 숨기고 선택한 카드의 장소만 보여 준다', () => {

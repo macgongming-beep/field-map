@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useGroupTerritory } from '../features/groupTerritory/context'
 import { groupOwnsCard } from '../features/groupTerritory/model'
 import { GroupScopeSelect } from '../features/groupTerritory/GroupScopeSelect'
+import { LeaderTerritoryScope } from '../features/groupTerritory/LeaderTerritoryScope'
 import { GroupCardOwners } from '../features/groupTerritory/GroupCardOwners'
 import { kindToFilters, filtersToKind, type BuildingKind } from '../utils/buildingKindFilter'
 import { canEditVisitor, visitorOptionsFrom } from '../utils/visitorPicker'
@@ -282,7 +283,8 @@ export function DesktopTerritory({
   const groupTerritory = useGroupTerritory()
   const useGroups = groupTerritory.enabled && role !== 'user'
   const [groupScope, setGroupScope] = useState<string | null>(null)
-  const selectedGroup = groupScope ?? initialGroupCode ?? (role === 'leader' ? groupTerritory.ownCode ?? 'all' : 'all')
+  const requestedGroup = groupScope ?? initialGroupCode ?? (role === 'leader' ? groupTerritory.ownCode ?? 'all' : 'all')
+  const selectedGroup = role === 'leader' && requestedGroup !== 'all' ? groupTerritory.ownCode ?? 'all' : requestedGroup
   const cards = useMemo(() => useGroups && selectedGroup !== 'all' ? sourceCards.filter(card => groupOwnsCard(card, selectedGroup)) : sourceCards, [sourceCards, selectedGroup, useGroups])
   const groupCardIds = useMemo(() => new Set(cards.map(card => card.id)), [cards])
   const buildings = useMemo(() => useGroups && selectedGroup !== 'all' ? sourceBuildings.filter(building => groupCardIds.has(building.cardId)) : sourceBuildings, [sourceBuildings, useGroups, selectedGroup, groupCardIds])
@@ -1471,7 +1473,7 @@ export function DesktopTerritory({
       <div className="territory-main">
         {/* ── 페이지 헤더: 종류 탭이 곧 제목 (구역 카드 / 비공식 카드 / 식당) ── */}
         <header className="page-header">
-          {useGroups && <GroupScopeSelect value={selectedGroup} onChange={setGroupScope} />}
+          {useGroups && (role === 'leader' ? <LeaderTerritoryScope value={selectedGroup === 'all' ? 'all' : 'mine'} onChange={value => setGroupScope(value === 'all' ? 'all' : groupTerritory.ownCode)} /> : <GroupScopeSelect value={selectedGroup} onChange={setGroupScope} />)}
           <div className="page-header-text">
             <div className="zone-kind-tabs" role="tablist" aria-label="구역 종류">
               {[

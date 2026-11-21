@@ -48,12 +48,12 @@ test('tooltip disappears after tap while the filter remains active', () => {
   expect(screen.getByRole('button').hasAttribute('title')).toBe(false)
   expect(click).toHaveBeenCalledTimes(1)
 })
-function MapProbe({ role = 'leader', restricted = false }: { role?: 'leader' | 'user'; restricted?: boolean }) {
+function MapProbe({ role = 'leader', restricted = false }: { role?: 'leader' | 'user' | 'admin'; restricted?: boolean }) {
   const map = useGroupMapScope({ cards, buildings: cards.map(card => ({ id: card.id, cardId: card.id } as Building)), cardBoundaries: cards.map(card => ({ cardId: card.id, points: [] })) }, role, restricted)
   return <>{map.controls}{map.selector}<output data-testid="scope">{JSON.stringify([map.cards.map(card => card.id), map.buildings.map(building => building.id), map.cardBoundaries.map(boundary => boundary.cardId)])}</output></>
 }
 test('group map scopes cards, buildings and boundaries together; all restores the same original data', () => {
-  render(<MemoryRouter><GroupTerritoryContext.Provider value={value}><MapProbe /></GroupTerritoryContext.Provider></MemoryRouter>)
+  render(<MemoryRouter><GroupTerritoryContext.Provider value={value}><MapProbe role="admin" /></GroupTerritoryContext.Provider></MemoryRouter>)
   expect(screen.getByTestId('scope').textContent).toBe('[[1,2,3],[1,2,3],[1,2,3]]')
   fireEvent.click(screen.getByRole('button', { name: '집단 구역만 보기' }))
   expect(screen.getByTestId('scope').textContent).toBe('[[1],[1],[1]]')
@@ -79,12 +79,33 @@ test('group map uses the land plot icon and a transient hint without changing th
   expect(button.getAttribute('aria-pressed')).toBe('true')
   expect(screen.getByTestId('scope').textContent).toBe('[[1],[1],[1]]')
 })
+test('leader map ignores another group URL, displays own group, and toggles to all without a group selector', () => {
+  render(<MemoryRouter initialEntries={['/map?groupCode=b']}><GroupTerritoryContext.Provider value={value}><MapProbe /></GroupTerritoryContext.Provider></MemoryRouter>)
+  expect(screen.getByTestId('scope').textContent).toBe('[[1],[1],[1]]')
+  expect(screen.getByRole('heading', { name: '第一组 집단 구역' })).toBeTruthy()
+  expect(screen.queryByRole('combobox')).toBeNull()
+  const toggle = screen.getByRole('button', { name: '집단 구역만 보기' })
+  expect(toggle.getAttribute('aria-pressed')).toBe('true')
+  fireEvent.click(toggle)
+  expect(screen.getByTestId('scope').textContent).toBe('[[1,2,3],[1,2,3],[1,2,3]]')
+  fireEvent.click(toggle)
+  expect(screen.getByTestId('scope').textContent).toBe('[[1],[1],[1]]')
+})
+test('an explicit all-map route stays all after remount; a memberless leader has no arbitrary group fallback', () => {
+  const tree = (ownCode: string | null) => <MemoryRouter initialEntries={['/map?groupCode=a&groupView=all']}><GroupTerritoryContext.Provider value={{ ...value, ownCode }}><MapProbe /></GroupTerritoryContext.Provider></MemoryRouter>
+  const view = render(tree('a'))
+  expect(screen.getByRole('button', { name: '집단 구역만 보기' }).getAttribute('aria-pressed')).toBe('false')
+  expect(screen.getByTestId('scope').textContent).toBe('[[1,2,3],[1,2,3],[1,2,3]]')
+  view.rerender(tree(null))
+  expect(screen.queryByRole('button')).toBeNull()
+  expect(screen.getByTestId('scope').textContent).toBe('[[1,2,3],[1,2,3],[1,2,3]]')
+})
 test.each([{ role: 'user' as const, restricted: false }, { role: 'leader' as const, restricted: true }])('personal or event maps cannot acquire group-wide scope: %j', props => {
   render(<MemoryRouter><GroupTerritoryContext.Provider value={value}><MapProbe {...props} /></GroupTerritoryContext.Provider></MemoryRouter>)
   expect(screen.queryByRole('button')).toBeNull()
 })
 test('opening an empty group from the territory list does not fall back to all territories', () => {
-  render(<MemoryRouter initialEntries={['/map?groupCode=empty']}><GroupTerritoryContext.Provider value={{ ...value, groups: [...value.groups, { code: 'empty', name: 'Empty', active: true }] }}><MapProbe /></GroupTerritoryContext.Provider></MemoryRouter>)
+  render(<MemoryRouter initialEntries={['/map?groupCode=empty']}><GroupTerritoryContext.Provider value={{ ...value, groups: [...value.groups, { code: 'empty', name: 'Empty', active: true }] }}><MapProbe role="admin" /></GroupTerritoryContext.Provider></MemoryRouter>)
   expect(screen.getByTestId('scope').textContent).toBe('[[],[],[]]')
   expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('empty')
   fireEvent.click(screen.getByRole('button', { name: '집단 구역만 보기' }))
@@ -100,13 +121,15 @@ test('leader zone switches between own group and congregation; a leader without 
   const zone = <AdminMobileZone language="ko" role="leader" currentVisitor="Leader" cards={cards} buildings={[]} cardBoundaries={[]} visitHistories={[]}
     onOpenMap={vi.fn()} onOpenAssignedMap={openMap} onShowMapView={vi.fn()} />
   const { rerender } = render(<MemoryRouter><GroupTerritoryContext.Provider value={value}>{zone}</GroupTerritoryContext.Provider></MemoryRouter>)
-  expect((screen.getByRole('combobox', { name: '집단 구역 보기' }) as HTMLSelectElement).value).toBe('a')
+  expect(screen.getByRole('button', { name: '第一组 집단 구역' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.queryByRole('combobox', { name: '집단 구역 보기' })).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /지도/ }))
   expect(openMap).toHaveBeenCalledWith([1], { scope: 'mine', groupCode: 'a' })
-  fireEvent.change(screen.getByRole('combobox', { name: '집단 구역 보기' }), { target: { value: 'all' } })
-  expect((screen.getByRole('combobox', { name: '집단 구역 보기' }) as HTMLSelectElement).value).toBe('all')
+  fireEvent.click(screen.getByRole('button', { name: '전체 구역' }))
+  expect(screen.getByRole('button', { name: '전체 구역' }).getAttribute('aria-pressed')).toBe('true')
   rerender(<MemoryRouter><GroupTerritoryContext.Provider value={{ ...value, ownCode: null }}>{zone}</GroupTerritoryContext.Provider></MemoryRouter>)
-  expect((screen.getByRole('combobox', { name: '집단 구역 보기' }) as HTMLSelectElement).value).toBe('all')
+  expect(screen.getByRole('button', { name: '전체 구역' }).getAttribute('aria-pressed')).toBe('true')
+  expect((screen.getByRole('button', { name: '내 집단 구역' }) as HTMLButtonElement).disabled).toBe(true)
 })
 
 test.each(['assignmentMap=9', 'addr=Somewhere', 'informalId=4'])('explicit map route %s is not narrowed by group selection', query => {
@@ -123,7 +146,7 @@ function ZoneRoundTrip({ role = 'admin' }: { role?: 'admin' | 'leader' }) {
     <Route path="/map" element={<button onClick={() => navigate(-1)}>Back</button>} />
   </Routes></>
 }
-test.each(['admin', 'leader'] as const)('selected group survives real list/map/back navigation for %s', role => {
+test.each(['admin'] as const)('selected group survives real list/map/back navigation for %s', role => {
   render(<MemoryRouter initialEntries={['/zone']}><GroupTerritoryContext.Provider value={{ ...value, ownCode: role === 'admin' ? null : 'a' }}><ZoneRoundTrip role={role} /></GroupTerritoryContext.Provider></MemoryRouter>)
   fireEvent.change(screen.getByRole('combobox', { name: '집단 구역 보기' }), { target: { value: 'b' } })
   expect(screen.getByTestId('url').textContent).toContain('groupCode=b')
@@ -133,6 +156,19 @@ test.each(['admin', 'leader'] as const)('selected group survives real list/map/b
   expect((screen.getByRole('combobox', { name: '집단 구역 보기' }) as HTMLSelectElement).value).toBe('b')
   expect(screen.getByTestId('url').textContent).toContain('groupCode=b')
   expect(screen.queryByText('담당 구역이 없습니다')).toBeNull()
+})
+test('leader own/all tabs survive map round trip and never offer another group', () => {
+  render(<MemoryRouter initialEntries={['/zone?groupCode=b']}><GroupTerritoryContext.Provider value={value}><ZoneRoundTrip role="leader" /></GroupTerritoryContext.Provider></MemoryRouter>)
+  expect(screen.getByRole('button', { name: '第一组 집단 구역' }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.queryByRole('combobox', { name: '집단 구역 보기' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /지도/ }))
+  expect(screen.getByTestId('url').textContent).toBe('/map?groupCode=a')
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+  fireEvent.click(screen.getByRole('button', { name: '전체 구역' }))
+  expect(screen.getByTestId('url').textContent).toContain('scope=all')
+  expect(screen.getByTestId('url').textContent).not.toContain('groupCode=')
+  fireEvent.click(screen.getByRole('button', { name: '第一组 집단 구역' }))
+  expect(screen.getByTestId('url').textContent).toContain('groupCode=a')
 })
 test('a memberless administrator returning to an old mine URL sees all, not an empty list', () => {
   render(<MemoryRouter initialEntries={['/zone?scope=mine']}><GroupTerritoryContext.Provider value={{ ...value, ownCode: null }}><ZoneRoundTrip /></GroupTerritoryContext.Provider></MemoryRouter>)

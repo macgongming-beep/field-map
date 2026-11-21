@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { MapCanvas, type MapViewportMemory } from './MapCanvas'
 import { testBoundary, testBuilding } from '../test/territoryFixture'
+import { applyCongregationSettings } from '../lib/congregationProfile'
 
 class LatLng {
   constructor(private latitude: number, private longitude: number) {}
@@ -24,6 +25,13 @@ class Overlay {
   setOptions() {}
   setPosition() {}
 }
+const polygons: Polygon[] = []
+class Polygon extends Overlay {
+  constructor(public options: { map?: unknown; strokeStyle?: string; fillOpacity?: number; paths?: LatLng[] }) {
+    super(options)
+    polygons.push(this)
+  }
+}
 const maps: FakeMap[] = []
 class FakeMap {
   center: LatLng
@@ -43,11 +51,13 @@ class FakeMap {
 let listeners = new WeakMap<object, Map<string, (() => void)[]>>()
 function emit(target: object, name: string) { listeners.get(target)?.get(name)?.forEach(callback => callback()) }
 beforeEach(() => {
+  applyCongregationSettings({ congregation_profile: JSON.stringify({ territoryBoundary: [[127, 37], [128, 37], [128, 38], [127, 38]] }) })
   maps.length = 0
+  polygons.length = 0
   listeners = new WeakMap()
   vi.stubEnv('VITE_NAVER_MAP_CLIENT_ID', 'test-key')
   vi.stubGlobal('ResizeObserver', class { observe() {}; disconnect() {} })
-  vi.stubGlobal('naver', { maps: { Map: FakeMap, LatLng, LatLngBounds: Bounds, Polygon: Overlay, Polyline: Overlay, Marker: Overlay,
+  vi.stubGlobal('naver', { maps: { Map: FakeMap, LatLng, LatLngBounds: Bounds, Polygon, Polyline: Overlay, Marker: Overlay,
     Point: LatLng, Size: LatLng, Event: {
       addListener(target: object, name: string, callback: () => void) {
         const events = listeners.get(target) ?? new Map()
@@ -59,9 +69,43 @@ beforeEach(() => {
   } })
   const script = document.createElement('script'); script.id = 'naver-map-script'; document.head.appendChild(script)
 })
-afterEach(() => { cleanup(); document.getElementById('naver-map-script')?.remove(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); applyCongregationSettings({}); document.getElementById('naver-map-script')?.remove(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 const boundaries = [testBoundary(1, [37.1, 127.1, 37.2, 127.2]), testBoundary(2, [37.3, 127.3, 37.4, 127.4])]
 const props = { buildings: [], cards: [], cardBoundaries: boundaries, selectedBuildingId: 0, selectedCardId: '전체' as const, onSelectBuilding: vi.fn() }
+
+test('group filter hides and restores the congregation outline without moving the camera', () => {
+  const memory: MapViewportMemory = { current: { lat: 37.2, lng: 127.2, zoom: 14 } }
+  const view = render(<MapCanvas {...props} viewportMemory={memory} showTerritoryBoundary={false} />)
+  const outline = polygons.find(polygon => polygon.options.fillOpacity === 0.05)!
+  expect(outline).toBeTruthy()
+  expect(outline.getMap()).toBeNull()
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} showTerritoryBoundary />)
+  expect(outline.getMap()).toBe(maps[0])
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} showTerritoryBoundary={false} />)
+  expect(outline.getMap()).toBeNull()
+  expect(maps[0].fitBounds).not.toHaveBeenCalled()
+  expect(maps[0].getZoom()).toBe(14)
+})
+
+test('dong-level view culls 609 boundaries to the visible area and adds them on pan', () => {
+  const getBounds = vi.spyOn(FakeMap.prototype, 'getBounds').mockReturnValue(new Bounds(new LatLng(37.09, 127.09), new LatLng(37.21, 127.21)))
+  const many = [boundaries[0], ...Array.from({ length: 608 }, (_, i) => testBoundary(i + 2, [37.7, 127.7, 37.71, 127.71]))]
+  render(<MapCanvas {...props} cardBoundaries={many} boundaryViewportMinZoom={13} viewportMemory={{ current: { lat: 37.15, lng: 127.15, zoom: 14 } }} />)
+  const cardPolygons = () => polygons.filter(p => p.options.fillOpacity === 0.08 && p.getMap() === maps[0])
+  expect(cardPolygons()).toHaveLength(1)
+  getBounds.mockReturnValue(new Bounds(new LatLng(37.69, 127.69), new LatLng(37.72, 127.72)))
+  act(() => { emit(maps[0], 'dragstart'); emit(maps[0], 'idle') })
+  expect(cardPolygons().length).toBeGreaterThan(0)
+  expect(cardPolygons().every(p => p.options.paths?.[0].lat() === 37.7)).toBe(true)
+  expect(maps[0].getZoom()).toBe(14)
+  getBounds.mockReturnValue(new Bounds(new LatLng(37.09, 127.09), new LatLng(37.21, 127.21)))
+  act(() => { emit(maps[0], 'center_changed'); emit(maps[0], 'idle') })
+  expect(cardPolygons()).toHaveLength(1)
+  expect(cardPolygons()[0].options.paths?.[0].lat()).toBe(37.1)
+  act(() => { maps[0].setZoom(12); emit(maps[0], 'zoom_changed'); emit(maps[0], 'idle') })
+  expect(cardPolygons().length).toBeGreaterThan(1)
+  getBounds.mockRestore()
+})
 
 test('assignment camera survives scope changes, remount and late idle from the old map', () => {
   const memory: MapViewportMemory = { current: null }

@@ -2002,6 +2002,8 @@ export function DesktopMap({
                 setAutomaticMapDetail((current) => getNextMobileMapDetailLevel(current, zoom))
               }}
               cardBoundaries={informalOnlyBoundaries ? [] : cardBoundaries}
+              showTerritoryBoundary={!groupMap.active}
+              boundaryViewportMinZoom={13}
               highlightedCardIds={highlightedCardIds}
               selectedCardIds={boundaryMultiSelectMode ? selectedBoundaryCardIds : undefined}
               cards={cards}
