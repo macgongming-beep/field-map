@@ -113,6 +113,54 @@ export { getLocalDateString } from '../utils/dateUtils'
 
 // PostgREST 는 한 번에 최대 1,000행만 준다. 통계용 데이터는 끝까지 받아야
 // 숫자가 조용히 줄어들지 않는다.
+// Building pages are read together when the previous read showed more than one
+// page; otherwise one after another. The row count is remembered per device so the
+// next read can start every expected page at once. Stale hints stay safe: a full
+// last page keeps reading, and repeated rows are kept once.
+const BUILDING_TOTAL_HINT = 'fieldmap:buildingTotal'
+function buildingTotalHint() {
+  try { const value = Number(window.localStorage.getItem(BUILDING_TOTAL_HINT)); return Number.isSafeInteger(value) && value > 0 ? value : 0 }
+  catch { return 0 }
+}
+async function readBuildingPages(columns: string, pageSize: number): Promise<RawBuilding[]> {
+  const readPage = async (from: number, count = false) => {
+    const res = await supabase.from('buildings').select(columns, count ? { count: 'exact' } : undefined).order('id').range(from, from + pageSize - 1)
+    if (res.error) throw new Error('Building data load failed', { cause: res.error })
+    return { page: (res.data ?? []) as unknown as RawBuilding[], total: res.count }
+  }
+  const settle = async (offsets: number[], countFirst: boolean) => {
+    const results = await Promise.allSettled(offsets.map((from, index) => readPage(from, countFirst && index === 0)))
+    for (const result of results) if (result.status === 'rejected') throw result.reason
+    return results.map(result => (result as PromiseFulfilledResult<Awaited<ReturnType<typeof readPage>>>).value)
+  }
+  const offsetsUpTo = (total: number, start: number) => {
+    const offsets: number[] = []
+    for (let from = start; from < total; from += pageSize) offsets.push(from)
+    return offsets
+  }
+  const hint = buildingTotalHint()
+  // With a multi-page hint, start every expected page with the first one.
+  let pages = await settle(hint > pageSize ? offsetsUpTo(hint, 0) : [0], true)
+  let lastOffset = (pages.length - 1) * pageSize
+  const total = pages[0].total
+  if (pages.at(-1)!.page.length === pageSize && typeof total === 'number' && total > lastOffset + pageSize) {
+    // The first page reported more pages than the hint covered: read those together.
+    const more = await settle(offsetsUpTo(total, lastOffset + pageSize), false)
+    pages = [...pages, ...more]
+    lastOffset += more.length * pageSize
+  }
+  // Rows added meanwhile, or no total reported: keep reading until a short page.
+  while (pages.at(-1)!.page.length === pageSize) {
+    lastOffset += pageSize
+    pages = [...pages, await readPage(lastOffset)]
+  }
+  const seen = new Set<number>()
+  const rows: RawBuilding[] = []
+  for (const { page } of pages) for (const row of page) if (!seen.has(row.id)) { seen.add(row.id); rows.push(row) }
+  try { window.localStorage.setItem(BUILDING_TOTAL_HINT, String(rows.length)) } catch { /* hint only */ }
+  return rows
+}
+
 async function fetchAllPages<T>(
   query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
 ): Promise<{ data: T[]; error: unknown }> {
@@ -362,20 +410,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const buildingColumns: string = demandBuildings && readMode === 'calendar' ? CALENDAR_BUILDING_COLUMNS
           : demandBuildings && readMode === 'zone' ? ZONE_BUILDING_COLUMNS
           : demandBuildings && readMode === 'map' ? MAP_BUILDING_COLUMNS : 'id, card_id, name, address, type, lat, lng, warning, access_status, memo, is_restaurant, units_surveyed, building_access_events(id, action, visitor_name, visited_at, time_slot, memo, created_at), units(id, building_id, number, status, is_chinese, is_restaurant, usage_type, memo, regular_visits(visitor_name, registered_at))'
-        for (let from = 0; ; from += pageSize) {
-          const buildingsRes = await supabase
-            .from('buildings')
-            .select(buildingColumns)
-            .order('id')
-            .range(from, from + pageSize - 1)
-
-          if (buildingsRes.error) {
-            throw new Error('Building data load failed', { cause: buildingsRes.error })
-          }
-          const page = (buildingsRes.data ?? []) as unknown as RawBuilding[]
-          buildingRows.push(...page)
-          if (page.length < pageSize) break
-        }
+        buildingRows.push(...await readBuildingPages(buildingColumns, pageSize))
         measure(buildingRows)
         if (((import.meta.env.VITE_BUILDING_MOVE_REFRESH_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true' || demandBuildings)
           && (fullVersion !== buildingFullReadVersion.current || (demandBuildings && (readGeneration !== buildingModeGeneration.current || !historyStoreActive.current)))) {
