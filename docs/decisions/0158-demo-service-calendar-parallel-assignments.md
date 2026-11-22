@@ -107,3 +107,11 @@
 - 배포 도구는 Codex의 `scratch/release-service-entry-nov22.mjs`에서 경로만 바꾼 로컬 사본이다.
   - 사본과 기록은 scratchpad의 `release-nov23*`, Git 제외.
 - 이 기록 커밋으로 재배포하지 않는다.
+
+## 보완 반영 (`3b60b37`)
+
+- 같은 방식으로 따로 꺼내 빌드했다.
+  - 정상 경로 요청 수를 다시 확인했다: 봉사자 18건 / 6KB / 직렬 7단계, 인도자 10건으로 이전과 같다.
+  - 사전 검사 뒤 1회 배포했다: `dpl_FXLAJD4feWqkCx9XauVVHjZ1pmhL`.
+- 공개 파일 25개가 해시 일치했다. 운영 배포와 환경변수는 그대로였다.
+- 직전 데모는 `dpl_2W9pWuLxCQXixYmK9NCKeWyfr3NA`(`f51096e`)다.
