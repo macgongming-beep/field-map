@@ -51,6 +51,14 @@ export function calendarReadScope(path: string, search: string, month: string, f
   return `window:${start}:${end}`
 }
 
+// Like Promise.all, but never rejects while a sibling read is still running.
+// Callers may retry on failure; a retry must not overlap requests still in flight.
+async function settleAll<T extends readonly unknown[]>(reads: { [K in keyof T]: Promise<T[K]> }): Promise<T> {
+  const results = await Promise.allSettled(reads)
+  for (const result of results) if (result.status === 'rejected') throw result.reason
+  return results.map(result => (result as PromiseFulfilledResult<unknown>).value) as unknown as T
+}
+
 async function pages<T>(query: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
   const rows: T[] = []
   for (let from = 0; ; from += 1000) {
@@ -88,7 +96,7 @@ async function readCalendarAssignments(eventIds: number[]) {
   const ids = [...new Set(eventIds)]
   for (let start = 0; start < ids.length; start += 100) {
     const batch = ids.slice(start, start + 100)
-    const [base, cards] = await Promise.all([
+    const [base, cards] = await settleAll<[RawEventCardAssignment[], RawEventCardAssignmentCard[]]>([
       pages<RawEventCardAssignment>((from, to) => supabase.from('event_card_assignments').select('*').in('event_id', batch).order('id').range(from, to)),
       pages<RawEventCardAssignmentCard>((from, to) => supabase.from('event_card_assignment_cards').select('*').in('event_id', batch).order('id').range(from, to)),
     ])
@@ -103,7 +111,7 @@ async function readServiceCalendar(scope: string) {
   const parsed = parseServiceCalendarScope(scope)
   if (!parsed) throw new Error('Invalid service calendar scope')
   const { user: userName, date: today, target } = parsed
-  const [todayRows, mine, restaurants] = await Promise.all([
+  const [todayRows, mine, restaurants] = await settleAll<[{ id: number; event_date: string }[], { event_id: number; user_name: string }[], { event_id: number }[]]>([
     pages<{ id: number; event_date: string }>((from, to) => supabase.from('calendar_events')
       .select('id,event_date').eq('event_date', today).order('id').range(from, to)),
     pages<{ event_id: number; user_name: string }>((from, to) => supabase.from('event_card_assignments')
@@ -130,11 +138,10 @@ async function readServiceCalendar(scope: string) {
   }
   // Assignments depend only on the indexed IDs, not on the event bodies, so both
   // reads start together. Settle both before failing so a retry never overlaps.
+  // Cost: an indexed ID with no event body (deleted event, stale deep-link target)
+  // or a failed event read still pays for its two assignment reads.
   // Never filter these rows by user: shared assignments need every team in the event.
-  const [eventRead, assignmentRead] = await Promise.allSettled([readEvents(), readCalendarAssignments(ids)])
-  if (eventRead.status === 'rejected') throw eventRead.reason
-  if (assignmentRead.status === 'rejected') throw assignmentRead.reason
-  const merged = assignmentRead.value
-  return eventRead.value.map(event => toCalendarEvent(event, merged.filter(a => a.eventId === event.id)))
+  const [events, merged] = await settleAll<[RawCalendarEvent[], ReturnType<typeof mergeEventCardAssignments>]>([readEvents(), readCalendarAssignments(ids)])
+  return events.map(event => toCalendarEvent(event, merged.filter(a => a.eventId === event.id)))
     .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
 }

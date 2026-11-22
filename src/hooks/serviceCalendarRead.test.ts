@@ -153,6 +153,74 @@ test.each([
   expect(heldDone).toBe(true)
 })
 
+// Both assignment tables and all three index reads must finish before a failure
+// surfaces; otherwise a retry can overlap requests that are still in flight.
+test.each([
+  ['event_card_assignments', 'event_card_assignment_cards'],
+  ['event_card_assignment_cards', 'event_card_assignments'],
+  ['event_card_assignments', 'calendar_events'],
+  ['event_card_assignment_cards', 'calendar_events'],
+])('a failed %s read drains the held %s read first', async (failed, held) => {
+  const original = state.query.getMockImplementation()!
+  let release!: () => void
+  const hold = new Promise<void>(resolve => { release = resolve })
+  let heldDone = false
+  const isBody = (call: { table: string; columns: string }) => call.table !== 'calendar_events' ? call.columns === '*' : call.columns !== 'id,event_date'
+  state.query.mockImplementation(async call => {
+    if (!isBody(call)) return original(call)
+    if (call.table === failed) return { data: [], error: new Error('offline') }
+    if (call.table === held) { await hold; heldDone = true }
+    return original(call)
+  })
+  let settled = false
+  const read = readScopedCalendar(scope).finally(() => { settled = true })
+  try {
+    await vi.waitFor(() => expect(state.calls.some(call => call.table === held && isBody(call))).toBe(true))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+  } finally { release() }
+  await expect(read).rejects.toThrow('offline')
+  expect(heldDone).toBe(true)
+})
+
+test.each([
+  ['id,event_date', 'event_id,user_name'],
+  ['event_id,user_name', 'event_id'],
+  ['event_id', 'id,event_date'],
+])('a failed %s index read drains the held %s index read first', async (failed, held) => {
+  const original = state.query.getMockImplementation()!
+  let release!: () => void
+  const hold = new Promise<void>(resolve => { release = resolve })
+  let heldDone = false
+  state.query.mockImplementation(async call => {
+    if (call.columns === failed) return { data: [], error: new Error('offline') }
+    if (call.columns === held) { await hold; heldDone = true }
+    return original(call)
+  })
+  let settled = false
+  const read = readScopedCalendar(scope).finally(() => { settled = true })
+  try {
+    await vi.waitFor(() => expect(state.calls.some(call => call.columns === held)).toBe(true))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(settled).toBe(false)
+  } finally { release() }
+  await expect(read).rejects.toThrow('offline')
+  expect(heldDone).toBe(true)
+  // Nothing past the index starts once an index read has failed.
+  expect(state.calls.some(call => call.columns === '*' || (call.table === 'calendar_events' && call.columns !== 'id,event_date'))).toBe(false)
+})
+
+// Usage contract. Normal paths keep the serial request count; an indexed ID with
+// no event body now also pays for both assignment tables (4 -> 6 requests).
+test('a deleted deep-link target returns nothing but still reads both assignment tables', async () => {
+  state.query.mockResolvedValue({ data: [], error: null })
+  const target = calendarReadScope('/map', '?assignmentMap=999', '', false, 'true', now, 'user', 'Me')
+  expect(await readScopedCalendar(target)).toEqual([])
+  expect(state.calls).toHaveLength(6)
+  expect(state.calls.filter(call => call.columns === '*').map(call => call.table).sort())
+    .toEqual(['event_card_assignment_cards', 'event_card_assignments'])
+})
+
 test('empty indexes never turn into an unfiltered event or assignment read', async () => {
   state.query.mockResolvedValue({ data: [], error: null })
   expect(await readScopedCalendar(scope)).toEqual([])
