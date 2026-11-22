@@ -478,7 +478,20 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           return withLeader
         })()
 
-        const [regionsRes, cardsRes] = await Promise.all([regionsQuery, cardsQueryPromise])
+        // A scoped recipient already knows its card IDs, so the authoritative
+        // summaries start with the cards instead of after them. Same request.
+        const earlySummaries = scope != null && recipientReader?.scoped
+          ? fetchCardSummaries(scope).then(value => ({ value }), (error: unknown) => ({ error }))
+          : null
+        let regionsRes: Awaited<typeof regionsQuery>
+        let cardsRes: Awaited<typeof cardsQueryPromise>
+        try {
+          [regionsRes, cardsRes] = await Promise.all([regionsQuery, cardsQueryPromise])
+        } catch (failure) {
+          await earlySummaries
+          throw failure
+        }
+        if (cardsRes.error) await earlySummaries
         if (!regionsRes.error && regionsRes.data) {
           setRegionsFromDatabase(regionsRes.data.map((r) => ({
             id: r.id,
@@ -499,7 +512,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const transformedCards = (cardsRes.data as unknown as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
         if (recipientReader?.scoped || (demandBuildings && needsBuildingSummaries(buildingModeRef.current))) {
           recipientReader?.validateCards(transformedCards.map((card) => card.id))
-          const summaries = await fetchCardSummaries(transformedCards.map((card) => card.id))
+          // validateCards above makes the cards equal to the scope; the size check
+          // below still rejects any summary set that does not match them.
+          const early = earlySummaries ? await earlySummaries : null
+          if (early && 'error' in early) throw early.error
+          const summaries = early ? early.value : await fetchCardSummaries(transformedCards.map((card) => card.id))
           const byId = new Map(summaries.map((card) => [card.id, card]))
           if (byId.size !== transformedCards.length) throw new Error('Missing recipient card summary')
           if (demandBuildings && buildingGeneration !== buildingModeGeneration.current) throw new SupersededReadError('Card summary superseded')

@@ -28,7 +28,7 @@ const state = vi.hoisted(() => ({
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
   sessionCutoffs: [] as (string | undefined)[],
   failedSessionPage: -1,
-  buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
+  buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), cardHold: null as Promise<void> | null, refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
 }))
 vi.mock('../lib/recipientStore', async importOriginal => ({ ...await importOriginal<typeof import('../lib/recipientStore')>(), createRecipientStoreReader: () => ({
   resume: vi.fn(), dispose: vi.fn(), refresh: state.refresh,
@@ -89,6 +89,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
         return resolve(await state.calendarResponses.shift())
       }
       if (table === 'cards' && !lookup) state.cardFilters.push(filters)
+      if (table === 'cards' && !lookup && state.cardHold) await state.cardHold
       if (table === 'visit_histories' && !writing) {
         state.historyFilters.push([...filters])
         if (state.historyResponse) { const pending = state.historyResponse; state.historyResponse = null; return resolve(await pending) }
@@ -1480,6 +1481,56 @@ test.each([false, true])('production scoped cards retain empty assigned cards an
   expect(state.cardFilters).toHaveLength(count)
 })
 
+test('scoped recipient summaries start together with the card read, not after it', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
+  state.summaries.mockResolvedValue([{ id: 1, units: 1, completed: 0, progress: 0 }])
+  let release!: () => void
+  state.cardHold = new Promise<void>(resolve => { release = resolve })
+  try {
+    const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+    // The card response is still held, yet the summaries for the verified scope were requested.
+    await waitFor(() => expect(state.summaries).toHaveBeenCalledWith(state.allowed))
+    expect(result.current.loading).toBe(true)
+    release()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.error).toBeNull()
+    expect(state.summaries).toHaveBeenCalledTimes(1)
+    expect(result.current.cards.map(card => card.id)).toEqual(state.allowed)
+  } finally { release(); state.cardHold = null }
+})
+
+test('a failed early summary read fails the load and applies no cards', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
+  state.summaries.mockRejectedValue(new Error('summary offline'))
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).not.toBeNull()
+  expect(result.current.cards).toEqual([])
+})
+
+test('a rejected card read waits for the early summary request before failing', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
+  state.ignoreCardFilter = true
+  let release!: () => void
+  let summaryDone = false
+  state.summaries.mockImplementation(async () => {
+    await new Promise<void>(resolve => { release = resolve })
+    summaryDone = true
+    return [{ id: 1, units: 1, completed: 0, progress: 0 }]
+  })
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  await waitFor(() => expect(state.summaries).toHaveBeenCalled())
+  await new Promise(resolve => setTimeout(resolve, 30))
+  expect(result.current.loading).toBe(true)
+  release()
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(summaryDone).toBe(true)
+  expect(result.current.error).not.toBeNull()
+  expect(result.current.cards).toEqual([])
+})
+
 test('scoped cards reject foreign response rows rather than trusting the server filter', async () => {
   vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
   state.ignoreCardFilter = true
@@ -1487,7 +1538,8 @@ test('scoped cards reject foreign response rows rather than trusting the server 
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(result.current.error).not.toBeNull()
   expect(result.current.cards).toEqual([])
-  expect(state.summaries).not.toHaveBeenCalled()
+  // Summaries may start early, but only for the verified scope, and are never applied.
+  for (const [ids] of state.summaries.mock.calls) expect(ids).toEqual(state.allowed)
 })
 
 test.each(['true', undefined].flatMap(demo =>
