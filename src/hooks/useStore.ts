@@ -115,44 +115,53 @@ export { getLocalDateString } from '../utils/dateUtils'
 // 숫자가 조용히 줄어들지 않는다.
 // Building pages are read together when the previous read showed more than one
 // page; otherwise one after another. The row count is remembered per device so the
-// next read can start every expected page at once. Stale hints stay safe: a full
-// last page keeps reading, and repeated rows are kept once.
+// next read can start the expected pages at once. A stale hint is bounded: at most
+// BUILDING_HINT_PAGES pages are started from it (so at most two empty pages), and
+// the first page's reported total decides the rest, BUILDING_PAGE_WAVE at a time.
+// A full last page keeps reading; a row seen twice is kept once. Offset pages are
+// not a snapshot: a row deleted between pages can shift another row past a page
+// boundary unseen. The earlier serial read had the same limitation.
 const BUILDING_TOTAL_HINT = 'fieldmap:buildingTotal'
+const BUILDING_HINT_PAGES = 3
+const BUILDING_PAGE_WAVE = 4
 function buildingTotalHint() {
   try { const value = Number(window.localStorage.getItem(BUILDING_TOTAL_HINT)); return Number.isSafeInteger(value) && value > 0 ? value : 0 }
   catch { return 0 }
 }
 async function readBuildingPages(columns: string, pageSize: number): Promise<RawBuilding[]> {
-  const readPage = async (from: number, count = false) => {
+  type Page = { page: RawBuilding[]; total: number | null }
+  const readPage = async (from: number, count = false): Promise<Page> => {
     const res = await supabase.from('buildings').select(columns, count ? { count: 'exact' } : undefined).order('id').range(from, from + pageSize - 1)
     if (res.error) throw new Error('Building data load failed', { cause: res.error })
-    return { page: (res.data ?? []) as unknown as RawBuilding[], total: res.count }
+    return { page: (res.data ?? []) as unknown as RawBuilding[], total: res.count ?? null }
   }
   const settle = async (offsets: number[], countFirst: boolean) => {
     const results = await Promise.allSettled(offsets.map((from, index) => readPage(from, countFirst && index === 0)))
     for (const result of results) if (result.status === 'rejected') throw result.reason
-    return results.map(result => (result as PromiseFulfilledResult<Awaited<ReturnType<typeof readPage>>>).value)
+    return results.map(result => (result as PromiseFulfilledResult<Page>).value)
   }
-  const offsetsUpTo = (total: number, start: number) => {
-    const offsets: number[] = []
-    for (let from = start; from < total; from += pageSize) offsets.push(from)
-    return offsets
+  const offsets = (start: number, end: number, limit: number) => {
+    const list: number[] = []
+    for (let from = start; from < end && list.length < limit; from += pageSize) list.push(from)
+    return list
   }
   const hint = buildingTotalHint()
-  // With a multi-page hint, start every expected page with the first one.
-  let pages = await settle(hint > pageSize ? offsetsUpTo(hint, 0) : [0], true)
-  let lastOffset = (pages.length - 1) * pageSize
+  // With a multi-page hint, start up to BUILDING_HINT_PAGES expected pages with the first.
+  const pages = await settle(hint > pageSize ? offsets(0, hint, BUILDING_HINT_PAGES) : [0], true)
   const total = pages[0].total
-  if (pages.at(-1)!.page.length === pageSize && typeof total === 'number' && total > lastOffset + pageSize) {
-    // The first page reported more pages than the hint covered: read those together.
-    const more = await settle(offsetsUpTo(total, lastOffset + pageSize), false)
-    pages = [...pages, ...more]
-    lastOffset += more.length * pageSize
+  let next = pages.length * pageSize
+  if (typeof total === 'number') {
+    // The first page's total decides the remaining pages, read in bounded waves.
+    while (pages.at(-1)!.page.length === pageSize && next < total) {
+      const wave = offsets(next, total, BUILDING_PAGE_WAVE)
+      pages.push(...await settle(wave, false))
+      next = wave.at(-1)! + pageSize
+    }
   }
   // Rows added meanwhile, or no total reported: keep reading until a short page.
   while (pages.at(-1)!.page.length === pageSize) {
-    lastOffset += pageSize
-    pages = [...pages, await readPage(lastOffset)]
+    pages.push(await readPage(next))
+    next += pageSize
   }
   const seen = new Set<number>()
   const rows: RawBuilding[] = []
@@ -483,46 +492,45 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         const earlySummaries = scope != null && recipientReader?.scoped
           ? fetchCardSummaries(scope).then(value => ({ value }), (error: unknown) => ({ error }))
           : null
-        let regionsRes: Awaited<typeof regionsQuery>
-        let cardsRes: Awaited<typeof cardsQueryPromise>
-        try {
-          [regionsRes, cardsRes] = await Promise.all([regionsQuery, cardsQueryPromise])
-        } catch (failure) {
-          await earlySummaries
-          throw failure
+        // Every exit below settles the early summary request first, so a failure
+        // (card error, missing or foreign card, summary mismatch) never leaves it
+        // running when the caller retries. earlySummaries itself never rejects.
+        const finishCards = async () => {
+          const [regionsRes, cardsRes] = await Promise.all([regionsQuery, cardsQueryPromise])
+          if (!regionsRes.error && regionsRes.data) {
+            setRegionsFromDatabase(regionsRes.data.map((r) => ({
+              id: r.id,
+              name: r.name,
+              city: r.city ?? '',
+              sortOrder: r.sort_order ?? 0,
+              nameZh: r.name_zh ?? '',
+              nameEn: r.name_en ?? '',
+            })))
+          }
+          if (cardsRes.error) {
+            throw new Error('Card data load failed', { cause: cardsRes.error })
+          }
+          measure(cardsRes.data)
+          // Network reads may overlap, but totals must use the completed building snapshot.
+          await buildingsReady
+          // cards transform은 buildings 의존 — buildingsRef로 항상 최신 buildings 사용
+          const transformedCards = (cardsRes.data as unknown as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
+          if (recipientReader?.scoped || (demandBuildings && needsBuildingSummaries(buildingModeRef.current))) {
+            recipientReader?.validateCards(transformedCards.map((card) => card.id))
+            // validateCards above makes the cards equal to the scope; the size check
+            // below still rejects any summary set that does not match them.
+            const early = earlySummaries ? await earlySummaries : null
+            if (early && 'error' in early) throw early.error
+            const summaries = early ? early.value : await fetchCardSummaries(transformedCards.map((card) => card.id))
+            const byId = new Map(summaries.map((card) => [card.id, card]))
+            if (byId.size !== transformedCards.length) throw new Error('Missing recipient card summary')
+            if (demandBuildings && buildingGeneration !== buildingModeGeneration.current) throw new SupersededReadError('Card summary superseded')
+            setCards(transformedCards.map((card) => ({ ...card, ...byId.get(card.id)! })))
+          } else setCards(transformedCards)
+          return approxBytes
         }
-        if (cardsRes.error) await earlySummaries
-        if (!regionsRes.error && regionsRes.data) {
-          setRegionsFromDatabase(regionsRes.data.map((r) => ({
-            id: r.id,
-            name: r.name,
-            city: r.city ?? '',
-            sortOrder: r.sort_order ?? 0,
-            nameZh: r.name_zh ?? '',
-            nameEn: r.name_en ?? '',
-          })))
-        }
-        if (cardsRes.error) {
-          throw new Error('Card data load failed', { cause: cardsRes.error })
-        }
-        measure(cardsRes.data)
-        // Network reads may overlap, but totals must use the completed building snapshot.
-        await buildingsReady
-        // cards transform은 buildings 의존 — buildingsRef로 항상 최신 buildings 사용
-        const transformedCards = (cardsRes.data as unknown as RawCard[]).map((raw) => toCard(raw, buildingsRef.current))
-        if (recipientReader?.scoped || (demandBuildings && needsBuildingSummaries(buildingModeRef.current))) {
-          recipientReader?.validateCards(transformedCards.map((card) => card.id))
-          // validateCards above makes the cards equal to the scope; the size check
-          // below still rejects any summary set that does not match them.
-          const early = earlySummaries ? await earlySummaries : null
-          if (early && 'error' in early) throw early.error
-          const summaries = early ? early.value : await fetchCardSummaries(transformedCards.map((card) => card.id))
-          const byId = new Map(summaries.map((card) => [card.id, card]))
-          if (byId.size !== transformedCards.length) throw new Error('Missing recipient card summary')
-          if (demandBuildings && buildingGeneration !== buildingModeGeneration.current) throw new SupersededReadError('Card summary superseded')
-          setCards(transformedCards.map((card) => ({ ...card, ...byId.get(card.id)! })))
-        } else setCards(transformedCards)
-        return approxBytes
+        try { return await finishCards() }
+        catch (failure) { await earlySummaries; throw failure }
       }
 
       case 'cardBoundaries': {

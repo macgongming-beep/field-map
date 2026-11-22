@@ -10,6 +10,9 @@ const state = vi.hoisted(() => ({
   settled: [] as number[],
   startedBeforeFirstAnswered: [] as number[],
   settledAtStart: new Map<number, number[]>(),
+  pageOverrides: new Map<number, { id: number }[]>(),
+  inFlight: 0,
+  maxInFlight: 0,
   failFrom: null as number | null,
 }))
 
@@ -29,12 +32,13 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       state.calls.push({ from, count })
       if (from > 0 && !state.settled.includes(0)) state.startedBeforeFirstAnswered.push(from)
       state.settledAtStart.set(from, [...state.settled])
+      state.inFlight++; state.maxInFlight = Math.max(state.maxInFlight, state.inFlight)
       const respond = async () => {
         // The first page answers last, so only concurrent requests can start before it.
         await new Promise(r => setTimeout(r, from === state.failFrom ? 5 : state.failFrom !== null ? 200 : from === 0 ? 40 : 20))
-        state.settled.push(from)
+        state.settled.push(from); state.inFlight--
         if (from === state.failFrom) return { data: null, error: { message: 'page failed' }, count: null }
-        return { data: state.rows.slice(from, to + 1), error: null, count: count && state.reportTotal ? state.rows.length : null }
+        return { data: state.pageOverrides.get(from) ?? state.rows.slice(from, to + 1), error: null, count: count && state.reportTotal ? state.rows.length : null }
       }
       return respond().then(resolve, reject)
     }
@@ -47,7 +51,7 @@ const building = (id: number) => ({ id, card_id: 1, name: `B${id}`, address: '',
 const seed = (total: number) => { state.rows = Array.from({ length: total }, (_, i) => building(i + 1)) }
 
 beforeEach(() => {
-  state.calls = []; state.settled = []; state.settledAtStart = new Map(); state.startedBeforeFirstAnswered = []; state.failFrom = null; state.reportTotal = true
+  state.calls = []; state.settled = []; state.pageOverrides.clear(); state.inFlight = 0; state.maxInFlight = 0; state.settledAtStart = new Map(); state.startedBeforeFirstAnswered = []; state.failFrom = null; state.reportTotal = true
   window.localStorage.clear()
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
@@ -141,4 +145,34 @@ test('unavailable storage falls back to the serial read', async () => {
   expect(store.buildings).toHaveLength(1271)
   expect(state.calls.map(call => call.from)).toEqual([0, 1000])
   expect(state.startedBeforeFirstAnswered).toEqual([])
+})
+
+// Codex review: an unbounded stale hint started one request per remembered page.
+test('a huge stale hint starts at most three pages, then follows the reported total', async () => {
+  seed(45)
+  window.localStorage.setItem(HINT, '10001')
+  const store = await load()
+  expect(store.buildings).toHaveLength(45)
+  expect(state.calls.map(call => call.from)).toEqual([0, 1000, 2000])
+  expect(window.localStorage.getItem(HINT)).toBe('45')
+})
+
+test('a large reported total is read in waves of at most four concurrent pages', async () => {
+  seed(9500)
+  const store = await load()
+  expect(store.buildings).toHaveLength(9500)
+  expect(state.calls.map(call => call.from)).toEqual([0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000])
+  expect(state.maxInFlight).toBeLessThanOrEqual(4)
+  expect(state.settledAtStart.get(5000)).toEqual(expect.arrayContaining([1000, 2000, 3000, 4000]))
+})
+
+// Known limitation shared with the earlier serial read: offset pages are not a snapshot.
+// Deleting a row between page reads shifts the next row past the page boundary unseen.
+test('known limitation: a row deleted between page reads can hide another building', async () => {
+  seed(1500)
+  state.pageOverrides.set(1000, state.rows.filter(row => row.id !== 1).slice(1000, 2000))
+  const store = await load()
+  expect(store.error).toBeNull()
+  expect(store.buildings.some(row => row.id === 1001)).toBe(false)
+  expect(store.buildings.some(row => row.id === 1)).toBe(true)
 })

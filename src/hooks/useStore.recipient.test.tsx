@@ -1531,6 +1531,29 @@ test('a rejected card read waits for the early summary request before failing', 
   expect(result.current.cards).toEqual([])
 })
 
+// Codex review reproduction: a missing allowed card fails in validateCards, after the
+// card read itself succeeded. That exit must also settle the early summary request.
+test('a missing scoped card settles the early summary request before failing', async () => {
+  vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
+  state.allowed = [1, 3]
+  let release!: () => void
+  const held = new Promise<void>(resolve => { release = resolve })
+  state.summaries.mockImplementation(async () => {
+    await held
+    return [{ id: 1 }, { id: 3 }]
+  })
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))
+  try {
+    await waitFor(() => expect(state.summaries).toHaveBeenCalledWith([1, 3]))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
+    expect(result.current.loading).toBe(true)
+  } finally { release() }
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.error).not.toBeNull()
+  expect(result.current.cards).toEqual([])
+})
+
 test('scoped cards reject foreign response rows rather than trusting the server filter', async () => {
   vi.stubEnv('VITE_DEMO_MODE', 'true'); vi.stubEnv('VITE_RECIPIENT_CARD_SCOPE_ENABLED', 'true')
   state.ignoreCardFilter = true
