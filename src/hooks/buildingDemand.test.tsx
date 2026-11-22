@@ -468,7 +468,8 @@ test.each([['false', undefined, false], ['true', undefined, true], ['false', 'tr
       }
       expect(buildingDemandForRoute(role, '/zone', '?level=cards&region=R&dong=D&scope=mine', false)).toBe(enabled ? 'zone' : 'full')
       expect(buildingDemandForRoute(role, '/zone', '?tab=informal', false)).toBe(enabled ? 'zone' : 'full')
-      for (const search of ['?tab=restaurant', '?view=map', '?unknown=1']) expect(buildingDemandForRoute(role, '/zone', search, false)).toBe('full')
+      expect(buildingDemandForRoute(role, '/zone', '?scope=mine&groupCode=dongtan', false)).toBe(enabled ? 'zone' : 'full')
+      for (const search of ['?groupCode=a&groupCode=b', '?scope=mine&scope=all', '?groupCode=a&openEvent=7', '?tab=restaurant', '?view=map', '?unknown=1']) expect(buildingDemandForRoute(role, '/zone', search, false)).toBe('full')
       expect(buildingDemandForRoute(role, '/zone', '', true)).toBe('full')
     }
     for (const role of ['user', 'developer'] as const) expect(buildingDemandForRoute(role, '/calendar', '', false)).toBeUndefined()

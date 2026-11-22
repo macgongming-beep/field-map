@@ -32,7 +32,7 @@ export function calendarReadScope(path: string, search: string, month: string, f
   const adminNonCalendar = import.meta.env.VITE_ROUTE_LIGHTWEIGHT_ENABLED === 'true'
     && (role === 'admin' || role === 'developer')
     && (isLightweightManagementRoute(path, search) || (path === '/zone'
-      && [...params.keys()].every(key => ['level', 'region', 'dong', 'scope', 'tab'].includes(key) && params.getAll(key).length === 1)
+      && [...params.keys()].every(key => ['level', 'region', 'dong', 'scope', 'tab', 'groupCode'].includes(key) && params.getAll(key).length === 1)
       && [null, 'territory', 'informal', 'restaurant'].includes(params.get('tab'))))
   const homeDetail = homeEventDetailId(path, search) !== null
   if (featureFlag !== 'true' || ((path === '/calendar' || homeDetail) && full) || (!adminAssignment && !adminNonCalendar && !['/', '/home', '/calendar'].includes(path))) return 'full'

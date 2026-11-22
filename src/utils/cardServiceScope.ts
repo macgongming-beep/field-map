@@ -5,7 +5,7 @@ import { scopeBuildingToUsage, unitsForUsage, type UnitUsageFilter } from './uni
 export const cardServiceLabel = (scope: UnitUsageFilter) => scope === '주택'
   ? msg('주택 봉사') : scope === '상가' ? msg('상가 봉사') : msg('주택·상가 전체')
 
-export function assignedServiceScope(event: CalendarEvent | undefined, userName: string, requestedCardId?: number) {
+export function assignedServiceScope(event: Pick<CalendarEvent, 'cardAssignments'> | undefined, userName: string, requestedCardId?: number) {
   const assignment = event?.cardAssignments.find((a) => a.userName === userName)
   const ids = assignment?.assignedCardIds?.length ? assignment.assignedCardIds
     : assignment?.assignedCardId != null ? [assignment.assignedCardId] : []

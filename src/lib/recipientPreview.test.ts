@@ -49,6 +49,78 @@ function discoveryFixture() {
 }
 
 describe('recipient preview isolation', () => {
+  it('scope-only discovery retains all dates and fresh links, reuses only known event existence', async () => {
+    const f = discoveryFixture()
+    f.rows.event_card_assignments.push(
+      { id: 2, event_id: 20, user_name: 'Volunteer', assigned_card_id: 3 },
+      { id: 3, event_id: 30, user_name: 'Volunteer', assigned_card_id: 4 },
+      { id: 4, event_id: 10, user_name: 'Other', assigned_card_id: 99 },
+    )
+    f.rows.calendar_events.push({ id: 20, event_date: '2030-01-01', time: '10:00' })
+    const api = createRecipientPreview('Volunteer')
+    expect(await api.assignmentCardIds([10, 999])).toEqual([2, 3])
+    expect(f.calls.find(call => call.table === 'calendar_events')).toMatchObject({ columns: 'id', filters: [['id', [20, 30]]] })
+    // A previous known event must not become a persistent authorization cache.
+    f.calls.length = 0
+    f.rows.calendar_events = []
+    expect(await api.assignmentCardIds()).toEqual([])
+    expect(f.calls.find(call => call.table === 'calendar_events')?.filters).toEqual([['id', [10, 20, 30]]])
+    f.rows.event_card_assignments = []
+    expect(await api.assignmentCardIds([10, 20])).toEqual([])
+  })
+
+  it('fully covered events omit the redundant event request, but not fresh personal assignments and links', async () => {
+    const f = discoveryFixture()
+    const api = createRecipientPreview('Volunteer')
+    expect(await api.assignmentCardIds([10])).toEqual([2])
+    expect(f.calls.map(call => call.table)).toEqual(['event_card_assignments', 'event_card_assignment_cards'])
+    f.rows.event_card_assignment_cards[0].card_id = 8
+    expect(await api.assignmentCardIds([10])).toEqual([8])
+    f.rows.event_card_assignments = []
+    expect(await api.assignmentCardIds([10])).toEqual([])
+  })
+
+  it('scope-only and full discovery produce the same IDs with no known calendar', async () => {
+    const f = discoveryFixture()
+    f.rows.event_card_assignments.push({ id: 2, event_id: 20, user_name: 'Volunteer', assigned_card_id: 3 })
+    f.rows.calendar_events.push({ id: 20, event_date: '2030-01-01', time: '10:00' })
+    const api = createRecipientPreview('Volunteer')
+    const full = await api.assignments()
+    const ids = await api.assignmentCardIds()
+    expect(ids.sort()).toEqual(full.flatMap(event => event.cardAssignments.flatMap(row => row.assignedCardIds ?? [])).sort())
+  })
+
+  it('scope-only discovery preserves pagination, missing events, and multi-card assignment limits', async () => {
+    const f = discoveryFixture()
+    f.rows.event_card_assignments = Array.from({ length: 1001 }, (_, i) => ({ id: i + 1, event_id: i % 101 + 1, user_name: 'Volunteer', assigned_card_id: i + 1 }))
+    f.rows.event_card_assignment_cards = Array.from({ length: 1001 }, (_, i) => ({ id: i + 1, event_id: 1, user_name: 'Volunteer', card_id: i + 2001 }))
+    f.rows.calendar_events = Array.from({ length: 100 }, (_, i) => ({ id: i + 1, event_date: '2020-01-01', time: '10:00' }))
+    const api = createRecipientPreview('Volunteer')
+    const full = await api.assignments()
+    f.calls.length = 0
+    const ids = await api.assignmentCardIds([1])
+    const expected = full.flatMap(event => {
+      const row = event.cardAssignments.find(a => a.userName === 'Volunteer')
+      return row?.assignedCardIds?.length ? row.assignedCardIds : row?.assignedCardId == null ? [] : [row.assignedCardId]
+    })
+    expect(ids.sort((a,b)=>a-b)).toEqual(expected.sort((a,b)=>a-b))
+    expect(ids).not.toContain(101)
+    expect(f.calls.filter(call => call.table === 'event_card_assignments')).toHaveLength(2)
+    expect(f.calls.filter(call => call.table === 'event_card_assignment_cards')).toHaveLength(3)
+    expect(f.calls.filter(call => call.table === 'calendar_events').every(call => call.columns === 'id')).toBe(true)
+  })
+
+  it('scope-only discovery rejects missing-event read errors and changed sessions', async () => {
+    const f = discoveryFixture()
+    f.response.mockImplementation(async (table, data) => table === 'calendar_events' ? { data: null, error: new Error('scope unavailable') } : { data, error: null })
+    const api = createRecipientPreview('Volunteer')
+    await expect(api.assignmentCardIds()).rejects.toThrow('scope unavailable')
+    f.response.mockImplementation(async (_table, data) => ({ data, error: null }))
+    expect(await api.assignmentCardIds()).toEqual([2])
+    mocks.token.mockReturnValue('another-account')
+    await expect(api.assignmentCardIds([10])).rejects.toThrow('session changed')
+  })
+
   it.each(['event_card_assignment_cards', 'calendar_events'])('overlaps the same scoped reads while %s is pending', async (slowTable) => {
     const f = discoveryFixture()
     const gate = deferred<Response>()

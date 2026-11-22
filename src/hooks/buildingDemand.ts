@@ -38,7 +38,7 @@ export function buildingDemandForRoute(role: Role, pathname: string, search: str
     // Unknown/deep-link query modes remain full. Restaurant editors need complete data.
     const params = new URLSearchParams(search)
     if (!desktop && pathname === '/zone'
-      && [...params.keys()].every(key => ['level', 'region', 'dong', 'scope', 'tab'].includes(key))
+      && [...params.keys()].every(key => ['level', 'region', 'dong', 'scope', 'tab', 'groupCode'].includes(key) && params.getAll(key).length === 1)
       && [null, 'territory', 'informal'].includes(params.get('tab'))) return 'zone'
   }
   if (!desktop && pathname === '/map') return 'map'

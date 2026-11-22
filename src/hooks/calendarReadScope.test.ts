@@ -41,10 +41,10 @@ test.each(['admin', 'developer'] as const)('opt-in %s management and zone share 
     }
     expect(calendarReadScope(path + '/edit', '', '', false, 'true', now, role)).toBe('full')
   }
-  for (const search of ['?scope=all', '?level=cards&region=R&dong=D&scope=mine', '?tab=territory', '?tab=informal', '?tab=restaurant']) {
+  for (const search of ['?scope=all', '?scope=mine&groupCode=dongtan', '?level=cards&region=R&dong=D&scope=mine', '?tab=territory', '?tab=informal', '?tab=restaurant']) {
     expect(calendarReadScope('/zone', search, '', false, 'true', now, role)).toBe(home)
   }
-  for (const search of ['?tab=unknown', '?view=map', '?tab=territory&openEvent=7', '?tab=territory&tab=unknown', '?scope=all&scope=mine']) {
+  for (const search of ['?groupCode=a&groupCode=b', '?groupCode=a&openEvent=7', '?tab=unknown', '?view=map', '?tab=territory&openEvent=7', '?tab=territory&tab=unknown', '?scope=all&scope=mine']) {
     expect(calendarReadScope('/zone', search, '', false, 'true', now, role)).toBe('full')
   }
   for (const path of ['/settings/unknown', '/settings/data-management', '/settings/territory-regions',

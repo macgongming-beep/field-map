@@ -407,6 +407,22 @@ test('demo calendar navigation rechecks assignments and recovers changes without
   expect(result.current.visitHistories).toEqual([])
 })
 
+test('navigation shares only IDs from the just-completed window, not a complete personal scope', async () => {
+  enableHistoryRecovery()
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'true')
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.unchanged.mockClear()
+  state.calendarResponses.push(Promise.resolve({ data: [{ id: 17, event_date: '2026-10-12', time: '10:00', title: 'Window event' }], error: null }))
+  await act(async () => { await result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }) })
+  expect(result.current.calendarEvents.map(event => event.id)).toEqual([17])
+  expect(state.unchanged).toHaveBeenCalledExactlyOnceWith(undefined, [17])
+  state.unchanged.mockClear()
+  await act(async () => { await result.current.refetchSlices(['buildings'], { triggeredBy: 'foreground' }) })
+  expect(state.unchanged).toHaveBeenCalledExactlyOnceWith(undefined)
+})
+
 test.each(['reassigned', 'revoked', 'scope failure', 'delta failure'] as const)('demo navigation falls back safely on %s', async reason => {
   enableHistoryRecovery()
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))

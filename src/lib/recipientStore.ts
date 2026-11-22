@@ -46,10 +46,12 @@ export function createRecipientStoreReader(userName: string) {
       if (response.data.length < 1000) return result
     }
   }
-  async function scopeIds(calendar?: CalendarEvent[]) {
+  async function scopeIds(calendar?: CalendarEvent[], knownEventIds?: readonly number[]) {
     check()
-    const [events, assigned, sessions, returnVisitScope, restaurantBuildings, restaurantUnits, restaurantAssignments] = await Promise.all([
-      calendar ?? api.assignments(),
+    const [eventCardIds, assigned, sessions, returnVisitScope, restaurantBuildings, restaurantUnits, restaurantAssignments] = await Promise.all([
+      calendar ? calendar.flatMap(event => assignedServiceScope(event, userName).ids)
+        : import.meta.env.VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED === 'true' ? api.assignmentCardIds(knownEventIds)
+          : api.assignments().then(events => events.flatMap(event => assignedServiceScope(event, userName).ids)),
       pages<{ card_id: number }>((from, to) => supabase.from('card_assignments').select('card_id').eq('user_name', userName).order('card_id').range(from, to)),
       pages<{ primary_card_id: number | null }>((from, to) => supabase.from('service_sessions').select('primary_card_id').eq('user_name', userName).eq('status', 'active').is('ended_at', null).order('id').range(from, to)),
       supabase.rpc('get_recipient_return_visit_card_ids', { p_token: token }),
@@ -70,7 +72,7 @@ export function createRecipientStoreReader(userName: string) {
       restaurantCardIds.push(...rows.map((row) => row.card_id))
     }
     const ids = [...new Set([
-      ...events.flatMap((event) => assignedServiceScope(event, userName).ids),
+      ...eventCardIds,
       ...assigned.map((row) => row.card_id), ...sessions.flatMap((row) => row.primary_card_id == null ? [] : [row.primary_card_id]),
       ...restaurantCardIds,
       ...returnVisitScope.data as number[],
@@ -91,8 +93,8 @@ export function createRecipientStoreReader(userName: string) {
   }
   return {
     read() { return pending ??= load() },
-    async unchangedScope(calendar?: CalendarEvent[]) {
-      const ids = await scopeIds(calendar)
+    async unchangedScope(calendar?: CalendarEvent[], knownEventIds?: readonly number[]) {
+      const ids = await scopeIds(calendar, knownEventIds)
       check()
       return allowed != null && ids.length === allowed.size && ids.every((id) => allowed!.has(id)) ? ids : null
     },

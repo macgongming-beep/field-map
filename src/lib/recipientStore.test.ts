@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-const state = vi.hoisted(() => ({ token: 'session', rows: {} as Record<string, Record<string, unknown>[]>, prefetch: vi.fn(), assignments: vi.fn(), invalidate: vi.fn(), rpc: vi.fn(), previewOptions: [] as unknown[] }))
+const state = vi.hoisted(() => ({ token: 'session', rows: {} as Record<string, Record<string, unknown>[]>, prefetch: vi.fn(), assignments: vi.fn(), scopeIds: vi.fn(), invalidate: vi.fn(), rpc: vi.fn(), previewOptions: [] as unknown[] }))
 vi.mock('./authToken', () => ({ getAuthToken: () => state.token }))
 vi.mock('./recipientPreview', () => ({ createRecipientPreview: (_name: string, options: unknown) => { state.previewOptions.push(options); return ({
-  assignments: state.assignments, reader: { prefetch: state.prefetch, invalidate: state.invalidate }, dispose: vi.fn(),
+  assignments: state.assignments,
+  assignmentCardIds: async (knownIds?: readonly number[]) => {
+    state.scopeIds(knownIds)
+    return (await state.assignments()).flatMap((event: CalendarEvent) => event.cardAssignments.flatMap(row => row.assignedCardIds ?? (row.assignedCardId == null ? [] : [row.assignedCardId])))
+  },
+  reader: { prefetch: state.prefetch, invalidate: state.invalidate }, dispose: vi.fn(),
 }) } }))
 vi.mock('./supabase', () => ({ supabase: { rpc: state.rpc, from: (table: string) => {
   let rows = state.rows[table] ?? []
@@ -213,6 +218,21 @@ test('unassignment refresh removes old scope, including the last card', async ()
   expect((await reader.read())?.buildings).toEqual([])
   expect(reader.allowsCard(1)).toBe(false)
   expect(reader.scoped).toBe(true)
+})
+
+test('ID-only navigation discovery uses fresh window hints but does not retain them after refresh', async () => {
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'true')
+  state.assignments.mockResolvedValue([{ cardAssignments: [{ userName: 'me', assignedCardIds: [1] }] }])
+  const reader = createRecipientStoreReader('me')
+  await reader.read()
+  expect(state.scopeIds).toHaveBeenLastCalledWith(undefined)
+  expect(await reader.unchangedScope(undefined, [17])).toEqual([1])
+  expect(state.scopeIds).toHaveBeenLastCalledWith([17])
+  state.assignments.mockResolvedValue([])
+  reader.refresh()
+  await reader.read()
+  expect(state.scopeIds).toHaveBeenLastCalledWith(undefined)
+  expect(reader.cardIds()).toEqual([])
 })
 
 test('fresh calendar sharing skips personal queries, filters the recipient, and never reuses stale scope', async () => {

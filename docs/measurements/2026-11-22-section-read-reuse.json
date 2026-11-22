@@ -1,0 +1,724 @@
+{
+  "baseline": "e12dee0",
+  "productionTouched": false,
+  "database": "demo",
+  "mobileViewport": "390x844",
+  "serviceWorkers": "blocked",
+  "chromiumCpuSlowdown": 4,
+  "localAssets": true,
+  "timing": "Fresh contexts with a valid demo session; sequential alternating before/after; real demo DB, optional 120ms per DB request delay",
+  "safeWrites": "Table and storage writes blocked; automatic cleanup stubbed; demo auth login/verify/auto-login session and log writes allowed",
+  "bytes": "Decoded response bodies, not compressed transfer or billed egress",
+  "measurements": [
+    {
+      "build": "before",
+      "run": 0,
+      "delay": 0,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 1165,
+      "codeStart": 452,
+      "codeEnd": 476,
+      "summaryEnd": 1166,
+      "dbRequests": 39,
+      "dbBytes": 46489,
+      "appRequests": 18,
+      "appBytes": 2662673,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 203,
+          "requests": 17,
+          "bytes": 19090,
+          "dataReadyMs": 771
+        },
+        {
+          "section": "service",
+          "readyMs": 256,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 710
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 0,
+      "delay": 0,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 784,
+      "codeStart": 439,
+      "codeEnd": 472,
+      "summaryEnd": 760,
+      "dbRequests": 38,
+      "dbBytes": 45365,
+      "appRequests": 18,
+      "appBytes": 2663836,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 291,
+          "requests": 16,
+          "bytes": 17987,
+          "dataReadyMs": 846
+        },
+        {
+          "section": "service",
+          "readyMs": 257,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 694
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 1,
+      "delay": 0,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 898,
+      "codeStart": 520,
+      "codeEnd": 547,
+      "summaryEnd": 899,
+      "dbRequests": 38,
+      "dbBytes": 45365,
+      "appRequests": 18,
+      "appBytes": 2663836,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 212,
+          "requests": 16,
+          "bytes": 17987,
+          "dataReadyMs": 696
+        },
+        {
+          "section": "service",
+          "readyMs": 289,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 723
+        }
+      ]
+    },
+    {
+      "build": "before",
+      "run": 1,
+      "delay": 0,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 887,
+      "codeStart": 430,
+      "codeEnd": 462,
+      "summaryEnd": 888,
+      "dbRequests": 39,
+      "dbBytes": 46489,
+      "appRequests": 18,
+      "appBytes": 2662673,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 217,
+          "requests": 17,
+          "bytes": 19090,
+          "dataReadyMs": 754
+        },
+        {
+          "section": "service",
+          "readyMs": 269,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 672
+        }
+      ]
+    },
+    {
+      "build": "before",
+      "run": 2,
+      "delay": 0,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 937,
+      "codeStart": 446,
+      "codeEnd": 473,
+      "summaryEnd": 938,
+      "dbRequests": 39,
+      "dbBytes": 46490,
+      "appRequests": 18,
+      "appBytes": 2662673,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 204,
+          "requests": 17,
+          "bytes": 19090,
+          "dataReadyMs": 729
+        },
+        {
+          "section": "service",
+          "readyMs": 280,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 699
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 2,
+      "delay": 0,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 862,
+      "codeStart": 458,
+      "codeEnd": 486,
+      "summaryEnd": 862,
+      "dbRequests": 38,
+      "dbBytes": 45365,
+      "appRequests": 18,
+      "appBytes": 2663836,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 202,
+          "requests": 16,
+          "bytes": 17987,
+          "dataReadyMs": 860
+        },
+        {
+          "section": "service",
+          "readyMs": 340,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 786
+        }
+      ]
+    },
+    {
+      "build": "before",
+      "run": 0,
+      "delay": 0,
+      "restDelay": 120,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 2154,
+      "codeStart": 827,
+      "codeEnd": 855,
+      "summaryEnd": 2155,
+      "dbRequests": 39,
+      "dbBytes": 46489,
+      "appRequests": 18,
+      "appBytes": 2662673,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 460,
+          "requests": 17,
+          "bytes": 19089,
+          "dataReadyMs": 2117
+        },
+        {
+          "section": "service",
+          "readyMs": 722,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 2021
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 0,
+      "delay": 0,
+      "restDelay": 120,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 1815,
+      "codeStart": 827,
+      "codeEnd": 854,
+      "summaryEnd": 1793,
+      "dbRequests": 38,
+      "dbBytes": 45365,
+      "appRequests": 18,
+      "appBytes": 2663836,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 508,
+          "requests": 16,
+          "bytes": 17987,
+          "dataReadyMs": 2016
+        },
+        {
+          "section": "service",
+          "readyMs": 640,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 2106
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 1,
+      "delay": 0,
+      "restDelay": 120,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 1744,
+      "codeStart": 803,
+      "codeEnd": 827,
+      "summaryEnd": 1745,
+      "dbRequests": 38,
+      "dbBytes": 45365,
+      "appRequests": 18,
+      "appBytes": 2663836,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 456,
+          "requests": 16,
+          "bytes": 17987,
+          "dataReadyMs": 1904
+        },
+        {
+          "section": "service",
+          "readyMs": 645,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 1936
+        }
+      ]
+    },
+    {
+      "build": "before",
+      "run": 1,
+      "delay": 0,
+      "restDelay": 120,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 2408,
+      "codeStart": 1090,
+      "codeEnd": 1119,
+      "summaryEnd": 2383,
+      "dbRequests": 39,
+      "dbBytes": 46490,
+      "appRequests": 18,
+      "appBytes": 2662673,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 468,
+          "requests": 17,
+          "bytes": 19090,
+          "dataReadyMs": 2290
+        },
+        {
+          "section": "service",
+          "readyMs": 642,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 1937
+        }
+      ]
+    },
+    {
+      "build": "before",
+      "run": 2,
+      "delay": 0,
+      "restDelay": 120,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 2113,
+      "codeStart": 808,
+      "codeEnd": 834,
+      "summaryEnd": 2114,
+      "dbRequests": 39,
+      "dbBytes": 46490,
+      "appRequests": 18,
+      "appBytes": 2662673,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 457,
+          "requests": 17,
+          "bytes": 19090,
+          "dataReadyMs": 2114
+        },
+        {
+          "section": "service",
+          "readyMs": 634,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 1974
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 2,
+      "delay": 0,
+      "restDelay": 120,
+      "engine": "chromium",
+      "role": "user",
+      "width": 390,
+      "homeMs": 1744,
+      "codeStart": 787,
+      "codeEnd": 816,
+      "summaryEnd": 1720,
+      "dbRequests": 38,
+      "dbBytes": 45365,
+      "appRequests": 18,
+      "appBytes": 2663836,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 484,
+          "requests": 16,
+          "bytes": 17987,
+          "dataReadyMs": 2055
+        },
+        {
+          "section": "service",
+          "readyMs": 771,
+          "requests": 18,
+          "bytes": 6194,
+          "dataReadyMs": 2077
+        }
+      ]
+    },
+    {
+      "build": "before",
+      "run": 0,
+      "delay": 0,
+      "restDelay": 0,
+      "engine": "chromium",
+      "role": "admin",
+      "width": 390,
+      "homeMs": 1042,
+      "codeStart": 738,
+      "codeEnd": 768,
+      "summaryEnd": 723,
+      "dbRequests": 29,
+      "dbBytes": 54591,
+      "appRequests": 18,
+      "appBytes": 2662673,
+      "sections": [
+        {
+          "section": "settings",
+          "readyMs": 134,
+          "requests": 2,
+          "bytes": 939,
+          "dataReadyMs": 153
+        },
+        {
+          "section": "users",
+          "readyMs": 335,
+          "requests": 11,
+          "bytes": 72773,
+          "dataReadyMs": 533
+        },
+        {
+          "section": "zone",
+          "readyMs": 278,
+          "requests": 10,
+          "bytes": 64661,
+          "dataReadyMs": 341
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 0,
+      "delay": 0,
+      "restDelay": 0,
+      "engine": "chromium",
+      "role": "admin",
+      "width": 390,
+      "homeMs": 874,
+      "codeStart": 568,
+      "codeEnd": 596,
+      "summaryEnd": 546,
+      "dbRequests": 29,
+      "dbBytes": 54591,
+      "appRequests": 18,
+      "appBytes": 2663836,
+      "sections": [
+        {
+          "section": "settings",
+          "readyMs": 135,
+          "requests": 2,
+          "bytes": 939,
+          "dataReadyMs": 192
+        },
+        {
+          "section": "users",
+          "readyMs": 147,
+          "requests": 2,
+          "bytes": 1467,
+          "dataReadyMs": 221
+        },
+        {
+          "section": "zone",
+          "readyMs": 261,
+          "requests": 7,
+          "bytes": 32294,
+          "dataReadyMs": 330
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 1,
+      "delay": 0,
+      "restDelay": 0,
+      "engine": "chromium",
+      "role": "admin",
+      "width": 390,
+      "homeMs": 890,
+      "codeStart": 586,
+      "codeEnd": 611,
+      "summaryEnd": 551,
+      "dbRequests": 29,
+      "dbBytes": 54591,
+      "appRequests": 18,
+      "appBytes": 2663836,
+      "sections": [
+        {
+          "section": "settings",
+          "readyMs": 132,
+          "requests": 2,
+          "bytes": 939,
+          "dataReadyMs": 138
+        },
+        {
+          "section": "users",
+          "readyMs": 158,
+          "requests": 2,
+          "bytes": 1467,
+          "dataReadyMs": 244
+        },
+        {
+          "section": "zone",
+          "readyMs": 301,
+          "requests": 7,
+          "bytes": 32294,
+          "dataReadyMs": 382
+        }
+      ]
+    },
+    {
+      "build": "before",
+      "run": 1,
+      "delay": 0,
+      "restDelay": 0,
+      "engine": "chromium",
+      "role": "admin",
+      "width": 390,
+      "homeMs": 891,
+      "codeStart": 587,
+      "codeEnd": 614,
+      "summaryEnd": 593,
+      "dbRequests": 29,
+      "dbBytes": 54591,
+      "appRequests": 18,
+      "appBytes": 2662673,
+      "sections": [
+        {
+          "section": "settings",
+          "readyMs": 135,
+          "requests": 2,
+          "bytes": 939,
+          "dataReadyMs": 191
+        },
+        {
+          "section": "users",
+          "readyMs": 353,
+          "requests": 11,
+          "bytes": 72773,
+          "dataReadyMs": 465
+        },
+        {
+          "section": "zone",
+          "readyMs": 272,
+          "requests": 10,
+          "bytes": 64661,
+          "dataReadyMs": 337
+        }
+      ]
+    },
+    {
+      "build": "before",
+      "run": 2,
+      "delay": 0,
+      "restDelay": 0,
+      "engine": "chromium",
+      "role": "admin",
+      "width": 390,
+      "homeMs": 854,
+      "codeStart": 549,
+      "codeEnd": 575,
+      "summaryEnd": 523,
+      "dbRequests": 29,
+      "dbBytes": 54591,
+      "appRequests": 18,
+      "appBytes": 2662673,
+      "sections": [
+        {
+          "section": "settings",
+          "readyMs": 130,
+          "requests": 2,
+          "bytes": 939,
+          "dataReadyMs": 135
+        },
+        {
+          "section": "users",
+          "readyMs": 336,
+          "requests": 11,
+          "bytes": 72773,
+          "dataReadyMs": 454
+        },
+        {
+          "section": "zone",
+          "readyMs": 274,
+          "requests": 10,
+          "bytes": 64661,
+          "dataReadyMs": 338
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 2,
+      "delay": 0,
+      "restDelay": 0,
+      "engine": "chromium",
+      "role": "admin",
+      "width": 390,
+      "homeMs": 932,
+      "codeStart": 628,
+      "codeEnd": 655,
+      "summaryEnd": 581,
+      "dbRequests": 29,
+      "dbBytes": 54591,
+      "appRequests": 18,
+      "appBytes": 2663836,
+      "sections": [
+        {
+          "section": "settings",
+          "readyMs": 128,
+          "requests": 2,
+          "bytes": 939,
+          "dataReadyMs": 133
+        },
+        {
+          "section": "users",
+          "readyMs": 165,
+          "requests": 2,
+          "bytes": 1467,
+          "dataReadyMs": 248
+        },
+        {
+          "section": "zone",
+          "readyMs": 292,
+          "requests": 7,
+          "bytes": 32294,
+          "dataReadyMs": 356
+        }
+      ]
+    },
+    {
+      "build": "before",
+      "run": 0,
+      "delay": 0,
+      "restDelay": 0,
+      "engine": "webkit",
+      "role": "leader",
+      "width": 390,
+      "homeMs": 899,
+      "codeStart": 591,
+      "codeEnd": 615,
+      "summaryEnd": 601,
+      "dbRequests": 29,
+      "dbBytes": 53256,
+      "appRequests": 19,
+      "appBytes": 2663187,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 234,
+          "requests": 5,
+          "bytes": 29281,
+          "dataReadyMs": 222
+        },
+        {
+          "section": "service",
+          "readyMs": 347,
+          "requests": 10,
+          "bytes": 39200,
+          "dataReadyMs": 410
+        },
+        {
+          "section": "zone",
+          "readyMs": 325,
+          "requests": 10,
+          "bytes": 31616,
+          "dataReadyMs": 386
+        }
+      ]
+    },
+    {
+      "build": "after",
+      "run": 0,
+      "delay": 0,
+      "restDelay": 0,
+      "engine": "webkit",
+      "role": "leader",
+      "width": 390,
+      "homeMs": 788,
+      "codeStart": 481,
+      "codeEnd": 506,
+      "summaryEnd": 492,
+      "dbRequests": 29,
+      "dbBytes": 53256,
+      "appRequests": 19,
+      "appBytes": 2664350,
+      "sections": [
+        {
+          "section": "calendar",
+          "readyMs": 221,
+          "requests": 5,
+          "bytes": 29281,
+          "dataReadyMs": 204
+        },
+        {
+          "section": "service",
+          "readyMs": 301,
+          "requests": 10,
+          "bytes": 39200,
+          "dataReadyMs": 365
+        },
+        {
+          "section": "zone",
+          "readyMs": 346,
+          "requests": 10,
+          "bytes": 31616,
+          "dataReadyMs": 406
+        }
+      ]
+    }
+  ]
+}

@@ -871,10 +871,14 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         }
         // Reuse only this operation's complete calendar; stale state could retain revoked cards.
         let freshCalendar: CalendarEvent[] | undefined
+        let freshEventIds: number[] | undefined
         if (requested.has('calendar')) {
           const previous = calendarEventsRef.current
           await fetchSlice('calendar')
           freshCalendar = recipientCalendarRef.current
+          if (import.meta.env.VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED === 'true') {
+            freshEventIds = calendarEventsRef.current.map(event => event.id)
+          }
           requested.delete('calendar')
           if (canKeepTerritory && onlyCalendarPresentationChanged(previous, calendarEventsRef.current, options?.updatedEventIds)) {
             recipientTerritoryReady.current = true
@@ -890,7 +894,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         if (refreshTerritory && (recovery || navigationRecovery) && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
           && territoryCheckpoint.baseline && syncBuildingsRef.current) {
           try {
-            const ids = await recipientReader.unchangedScope(freshCalendar)
+            const ids = freshEventIds === undefined ? await recipientReader.unchangedScope(freshCalendar)
+              : await recipientReader.unchangedScope(freshCalendar, freshEventIds)
             if (ids != null) {
               const completeBefore = historyRecovery && !historyReadsPending.current && !historySyncsPending.current
                 && historyCoverage.canReuse(historyScope(buildingsRef.current))
