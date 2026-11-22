@@ -13,6 +13,8 @@
 
 ## 목록
 
+속도 개선 운영 반영: [0159 검토 완료 개선과 조회 최적화 설정 운영 적용](0159-reviewed-performance-production-release.md).
+
 리뷰와 후속 작업 인계: [2026-11-22 클로드 속도 개선 리뷰 인계](../performance-review-handoff-2026-11-22.md).
 
 홈 현황/제안 지연 읽기: [0156 홈 구역 진행률 제거와 제안 열 때 읽기](0156-demo-home-progress-and-suggestion-demand.md).
