@@ -98,20 +98,61 @@ test.each(['pending', 'blocked'])('%s correct-password response retains approval
   expect(localStorage.getItem('auth_session')).toBeNull()
 })
 
-test('a remembered live session is verified before the directory request and does not call login again', async () => {
+function rememberSession() {
   localStorage.setItem('auth_token', 'test-token')
-  localStorage.setItem('auth_session', JSON.stringify({ id: 7, name: 'Member', role: 'user', authToken: 'test-token' }))
-  api.rpc.mockResolvedValue({ data: 7, error: null })
-  const single = vi.fn().mockImplementation(async () => {
-    expect(api.rpc).toHaveBeenCalledWith('verify_session', { p_token: 'test-token' })
-    expect(localStorage.getItem('auth_token')).toBe('test-token')
-    return { data: row, error: null }
+  localStorage.setItem('auth_session', JSON.stringify({ id: 7, name: 'Stored', role: 'user', authToken: 'test-token' }))
+}
+
+test('a remembered session sends the user lookup with verification, but applies it only after the token passes', async () => {
+  rememberSession()
+  let releaseVerify!: () => void
+  const verifyHeld = new Promise<void>(resolve => { releaseVerify = resolve })
+  api.rpc.mockImplementation(async (name: string) => {
+    if (name === 'verify_session') { await verifyHeld; return { data: 7, error: null } }
+    return { data: [], error: null }
   })
+  const single = vi.fn().mockResolvedValue({ data: row, error: null })
   api.from.mockReturnValue({ select: () => ({
     eq: () => ({ maybeSingle: single }), order: async () => ({ data: [], error: null }),
   }) })
   const hook = renderHook(() => useAuth())
-  await waitFor(() => expect(hook.result.current.user?.id).toBe(7))
-  expect(single).toHaveBeenCalledTimes(1)
+  // The lookup is already in flight while verification is still pending.
+  await waitFor(() => expect(single).toHaveBeenCalledTimes(1))
+  expect(api.rpc).toHaveBeenCalledWith('verify_session', { p_token: 'test-token' })
+  expect(hook.result.current.user).toBeNull()
+  expect(hook.result.current.loading).toBe(true)
+  releaseVerify()
+  await waitFor(() => expect(hook.result.current.user).toMatchObject({ id: 7, name: 'Member' }))
   expect(api.rpc.mock.calls.some(([name]) => name === 'auth_login')).toBe(false)
+})
+
+test('an expired token discards a successful concurrent user lookup and shows login', async () => {
+  rememberSession()
+  api.rpc.mockImplementation(async (name: string) => name === 'verify_session'
+    ? { data: null, error: { code: 'P0001', message: 'session expired' } }
+    : { data: [], error: null })
+  const single = vi.fn().mockResolvedValue({ data: row, error: null })
+  api.from.mockReturnValue({ select: () => ({
+    eq: () => ({ maybeSingle: single }), order: async () => ({ data: [], error: null }),
+  }) })
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  try {
+    const hook = renderHook(() => useAuth())
+    await waitFor(() => expect(hook.result.current.loading).toBe(false))
+    expect(hook.result.current.user).toBeNull()
+    expect(localStorage.getItem('auth_token')).toBeNull()
+  } finally { warn.mockRestore() }
+})
+
+test('a failed concurrent user lookup still restores the stored user once the token passes', async () => {
+  rememberSession()
+  api.rpc.mockImplementation(async (name: string) => name === 'verify_session' ? { data: 7, error: null } : { data: [], error: null })
+  api.from.mockReturnValue({ select: () => ({
+    eq: () => ({ maybeSingle: vi.fn().mockRejectedValue(new Error('offline')) }), order: async () => ({ data: [], error: null }),
+  }) })
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  try {
+    const hook = renderHook(() => useAuth())
+    await waitFor(() => expect(hook.result.current.user).toMatchObject({ id: 7, name: 'Stored' }))
+  } finally { warn.mockRestore() }
 })

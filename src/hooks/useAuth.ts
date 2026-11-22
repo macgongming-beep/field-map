@@ -183,6 +183,14 @@ export function useAuth() {
         if (!cancelled) setLoading(false)
         return
       }
+      // ②의 사용자 조회는 ①과 **동시에 보내되**, 결과는 ① 판정 뒤에만 쓴다.
+      // 토큰이 무효면 조회 결과를 버리고 로그인 화면으로 간다 (순서 규칙은 그대로).
+      // 사용자 행은 원래 공개 읽기라 먼저 보내도 새로 드러나는 정보는 없다.
+      const userRead = Promise.resolve(supabase
+        .from('app_users')
+        .select('id, name, phone, login_id, role')
+        .eq('id', parsed.id)
+        .maybeSingle()).then(result => ({ result }), (thrown: unknown) => ({ thrown }))
       const { error: verifyError } = await supabase.rpc('verify_session', { p_token: restoredToken })
       if (verifyError) console.warn('[auth] verify_session:', verifyError.code ?? '(네트워크)', verifyError.message)
       if (shouldForceRelogin(verifyError)) {
@@ -195,11 +203,9 @@ export function useAuth() {
       // ═══ ② 최신 사용자 정보 — 못 받아도 저장된 것으로 이어간다 ═══
       let fresh: AuthUser | null = null
       try {
-        const { data, error } = await supabase
-          .from('app_users')
-          .select('id, name, phone, login_id, role')
-          .eq('id', parsed.id)
-          .maybeSingle()
+        const settled = await userRead
+        if ('thrown' in settled) throw settled.thrown
+        const { data, error } = settled.result
         if (error && !error.message?.includes('phone')) throw error
         if (data) fresh = { ...toAuthUser(data), authToken: restoredToken }
       } catch (e) {
