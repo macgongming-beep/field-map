@@ -1,7 +1,8 @@
 # 봉사자 모바일 홈 코드 선로딩
 
 - 날짜: 2026-11-22
-- 상태: 로컬 검증 완료 후 데모만 반영. 운영 미적용.
+- 상태: 데모 반영 완료. 운영 미적용.
+- 데모 소스: `c4d401d5da325e852dc6c259406ca5d1ae1fb930`.
 - 변경 전 기준: `4775877` (0153 지도 개선 포함).
 - 범위: App의 MobileHome 코드 로딩. 자료 조회, 권한, 저장, 개인 구역 판정, 기능 설정은 변경하지 않는다.
 
@@ -91,4 +92,18 @@ import만 미리 받은 중간안은 `import-only-chromium.json`에 따로 남�
   실행 자체가 exit 1이다. verbose 출력에서 실제 `code unavailable` 오류를 확인했다.
 - 첫 두 변이 실행은 JSON reporter가 전역 오류 내용을 생략해 하네스의 추가 판정에서
   중단됐다. verbose 재확인을 추가하고 9개 전체를 다시 통과했다. 앱 문제로 세지 않는다.
-- 배포 결과는 완료 후 아래에 기록한다.
+
+## 데모 반영 확인
+
+- 검증 커밋을 별도 폴더로 추출해 `npm run build`(TypeScript + Vite/PWA)를 통과했다.
+  측정 빌드와 배포 HTML/SW/매니페스트/JS/CSS 25개가 바이트 단위로 일치했다.
+- `deploy:demo` 한 번으로 `dpl_HCN7NPV1WD35HaCuQC56X39stLXh`를 배포했다.
+  공개 데모 파일 25개의 해시도 동일했다. 직전 데모는 `dpl_J18eRiGqXY4WkUHizhwYv7qrF72W`다.
+- 공개 데모 WebKit 390px에서 로그인, 재실행, 홈/캘린더/홈 왕복이 정상이고
+  페이지 오류/막힌 업무 쓰기 0건, 홈 코드 재요청 0건이었다. 공개 URL 한 번의
+  재실행은 2,436ms로 로컬 전후 측정과 조건이 다르므로 성능 개선 비율에 쓰지 않는다.
+- 운영 활성 배포 `dpl_BAhZZ37sfWNcbJR7XWUWmZu7VyVH`, 운영/데모 환경변수는
+  전후 동일했다. 운영 DB에는 접속하지 않았으며 운영 코드를 배포하지 않았다.
+- 기록: `backups/home-preload-20261122/verified.json`,
+  `scratch/home-preload-nov22/live-smoke-webkit.json`과 화면 PNG.
+  이 문서 갱신은 추가 배포하지 않는다. 실물 아이폰/PWA 캐시 조건은 사용자가 확인한다.
