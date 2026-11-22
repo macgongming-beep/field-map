@@ -27,9 +27,18 @@ class Overlay {
 }
 const polygons: Polygon[] = []
 class Polygon extends Overlay {
+  setOptions = vi.fn()
   constructor(public options: { map?: unknown; strokeStyle?: string; fillOpacity?: number; paths?: LatLng[] }) {
     super(options)
     polygons.push(this)
+  }
+}
+const markers: Marker[] = []
+class Marker extends Overlay {
+  setMap = vi.fn((map: unknown) => { this.map = map })
+  constructor(public options: { map?: unknown; title?: string }) {
+    super(options)
+    markers.push(this)
   }
 }
 const maps: FakeMap[] = []
@@ -54,10 +63,11 @@ beforeEach(() => {
   applyCongregationSettings({ congregation_profile: JSON.stringify({ territoryBoundary: [[127, 37], [128, 37], [128, 38], [127, 38]] }) })
   maps.length = 0
   polygons.length = 0
+  markers.length = 0
   listeners = new WeakMap()
   vi.stubEnv('VITE_NAVER_MAP_CLIENT_ID', 'test-key')
   vi.stubGlobal('ResizeObserver', class { observe() {}; disconnect() {} })
-  vi.stubGlobal('naver', { maps: { Map: FakeMap, LatLng, LatLngBounds: Bounds, Polygon, Polyline: Overlay, Marker: Overlay,
+  vi.stubGlobal('naver', { maps: { Map: FakeMap, LatLng, LatLngBounds: Bounds, Polygon, Polyline: Overlay, Marker,
     Point: LatLng, Size: LatLng, Event: {
       addListener(target: object, name: string, callback: () => void) {
         const events = listeners.get(target) ?? new Map()
@@ -69,9 +79,70 @@ beforeEach(() => {
   } })
   const script = document.createElement('script'); script.id = 'naver-map-script'; document.head.appendChild(script)
 })
-afterEach(() => { cleanup(); applyCongregationSettings({}); document.getElementById('naver-map-script')?.remove(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+afterEach(() => { cleanup(); vi.useRealTimers(); applyCongregationSettings({}); document.getElementById('naver-map-script')?.remove(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 const boundaries = [testBoundary(1, [37.1, 127.1, 37.2, 127.2]), testBoundary(2, [37.3, 127.3, 37.4, 127.4])]
 const props = { buildings: [], cards: [], cardBoundaries: boundaries, selectedBuildingId: 0, selectedCardId: '전체' as const, onSelectBuilding: vi.fn() }
+
+test('a queued idle must not build intermediate markers when the SDK starts another zoom before zoom_changed', () => {
+  vi.useFakeTimers()
+  const buildings = [testBuilding(1, 1, 'one'), { ...testBuilding(2, 1, 'two'), lat: 37.5001 }]
+  render(<MapCanvas {...props} cardBoundaries={[]} buildings={buildings}
+    viewportMemory={{ current: { lat: 37.5, lng: 127.1, zoom: 17 } }} />)
+  const map = maps[0]
+  expect(markers).toHaveLength(2)
+  act(() => { map.setZoom(15); emit(map, 'zoom_changed'); emit(map, 'idle') })
+  // Naver starts animating/getZoom changes before its next zoom_changed event.
+  act(() => { map.setZoom(14); vi.advanceTimersByTime(121) })
+  expect(markers).toHaveLength(2)
+  expect(markers.every(marker => marker.setMap.mock.calls.length === 0)).toBe(true)
+  act(() => { map.setZoom(14); emit(map, 'zoom_changed'); emit(map, 'idle'); vi.advanceTimersByTime(121) })
+  expect(markers).toHaveLength(3)
+  expect(markers.filter(marker => marker.getMap() === map)).toHaveLength(1)
+  expect(markers[0].setMap).toHaveBeenCalledWith(null)
+  expect(map.getZoom()).toBe(14)
+})
+
+test('unchanged polygon styles are not reapplied, but selections, team colors and drawing remain live', () => {
+  const memory: MapViewportMemory = { current: { lat: 37.2, lng: 127.2, zoom: 14 } }
+  const view = render(<MapCanvas {...props} viewportMemory={memory} />)
+  const one = polygons.find(p => p.options.fillOpacity === 0.08 && p.options.paths?.[0].lat() === 37.1)!
+  const two = polygons.find(p => p.options.fillOpacity === 0.08 && p.options.paths?.[0].lat() === 37.3)!
+  expect(one.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ strokeStyle: 'shortdash', map: maps[0], clickable: true }))
+  one.setOptions.mockClear(); two.setOptions.mockClear()
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} highlightedCardIds={new Set()} />)
+  act(() => { emit(maps[0], 'center_changed'); emit(maps[0], 'idle') })
+  expect(one.setOptions).not.toHaveBeenCalled()
+  expect(two.setOptions).not.toHaveBeenCalled()
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} selectedCardId={1} />)
+  expect(one.setOptions).toHaveBeenCalledTimes(1)
+  expect(one.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ strokeStyle: 'solid', zIndex: 20 }))
+  expect(two.setOptions).not.toHaveBeenCalled()
+  const colors = new Map([[2, '#123456']])
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} cardColorMap={colors} />)
+  expect(one.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ fillColor: '#5b6b7c', zIndex: 8 }))
+  expect(two.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ fillColor: '#123456', zIndex: 25 }))
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} selectedCardId={1} drawingBoundary cardColorMap={colors} />)
+  expect(one.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ map: null, clickable: true }))
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} selectedCardId={1} drawingBoundary addingBuilding cardColorMap={colors} />)
+  expect(one.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ map: null, clickable: false }))
+  expect(two.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ map: maps[0], clickable: false }))
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} cardColorMap={colors} />)
+  expect(one.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ map: maps[0], clickable: true }))
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} />)
+  expect(two.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ strokeStyle: 'shortdash', zIndex: 5 }))
+})
+
+test('a boundary removed by a filter receives its style again when it returns', () => {
+  const memory: MapViewportMemory = { current: { lat: 37.2, lng: 127.2, zoom: 14 } }
+  const view = render(<MapCanvas {...props} viewportMemory={memory} highlightedCardIds={new Set([1])} />)
+  const original = polygons.find(p => p.options.fillOpacity === 0.08 && p.options.paths?.[0].lat() === 37.1)!
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} cardBoundaries={[]} highlightedCardIds={new Set([1])} />)
+  expect(original.getMap()).toBeNull()
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} highlightedCardIds={new Set([1])} />)
+  const recreated = polygons.find(p => p.options.fillOpacity === 0.08 && p.options.paths?.[0].lat() === 37.1 && p.getMap() === maps[0])!
+  expect(recreated).not.toBe(original)
+  expect(recreated.setOptions).toHaveBeenCalledWith(expect.objectContaining({ strokeStyle: 'solid', zIndex: 20 }))
+})
 
 test('group filter hides and restores the congregation outline without moving the camera', () => {
   const memory: MapViewportMemory = { current: { lat: 37.2, lng: 127.2, zoom: 14 } }
@@ -89,6 +160,7 @@ test('group filter hides and restores the congregation outline without moving th
 })
 
 test('dong-level view culls 609 boundaries to the visible area and adds them on pan', () => {
+  vi.useFakeTimers()
   const getBounds = vi.spyOn(FakeMap.prototype, 'getBounds').mockReturnValue(new Bounds(new LatLng(37.09, 127.09), new LatLng(37.21, 127.21)))
   const many = [boundaries[0], ...Array.from({ length: 608 }, (_, i) => testBoundary(i + 2, [37.7, 127.7, 37.71, 127.71]))]
   render(<MapCanvas {...props} cardBoundaries={many} boundaryViewportMinZoom={13} viewportMemory={{ current: { lat: 37.15, lng: 127.15, zoom: 14 } }} />)
@@ -103,7 +175,7 @@ test('dong-level view culls 609 boundaries to the visible area and adds them on 
   act(() => { emit(maps[0], 'center_changed'); emit(maps[0], 'idle') })
   expect(cardPolygons()).toHaveLength(1)
   expect(cardPolygons()[0].options.paths?.[0].lat()).toBe(37.1)
-  act(() => { maps[0].setZoom(12); emit(maps[0], 'zoom_changed'); emit(maps[0], 'idle') })
+  act(() => { maps[0].setZoom(12); emit(maps[0], 'zoom_changed'); emit(maps[0], 'idle'); vi.advanceTimersByTime(121) })
   expect(cardPolygons().length).toBeGreaterThan(1)
   getBounds.mockRestore()
 })

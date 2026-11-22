@@ -13,6 +13,8 @@
 
 ## 목록
 
+지도 축소 성능 데모 검증: [0153 중간 배율 표시 생성과 동일 스타일 갱신 절감](0153-demo-map-zoom-reconciliation.md).
+
 인도자 구역·지도 운영 반영: [0152 검토한 인도자 구역 탐색 운영 배포](0152-leader-territory-production-release.md).
 
 인도자 구역 탐색: [0151 내 집단·전체 구역과 지도 경계선](0151-leader-own-group-territory-browse.md).

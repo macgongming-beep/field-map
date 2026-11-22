@@ -94,6 +94,11 @@ describe('clusterByGrid', () => {
 })
 
 describe('shouldRebuildMapMarkersOnIdle', () => {
+  it('reclusters after a zoom below the viewport-culling threshold, but not for a low-zoom pan', () => {
+    expect(shouldRebuildMapMarkersOnIdle({ dirty: true, zoom: 13, hasAggregates: false, zoomChanged: true })).toBe(true)
+    expect(shouldRebuildMapMarkersOnIdle({ dirty: true, zoom: 13, hasAggregates: false, zoomChanged: false })).toBe(false)
+    expect(shouldRebuildMapMarkersOnIdle({ dirty: true, zoom: 13, hasAggregates: true, zoomChanged: true })).toBe(false)
+  })
   it('가까운 건물 단계에서 카메라가 실제로 움직였을 때만 갱신한다', () => {
     expect(shouldRebuildMapMarkersOnIdle({ dirty: true, zoom: 16, hasAggregates: false })).toBe(true)
     expect(shouldRebuildMapMarkersOnIdle({ dirty: false, zoom: 16, hasAggregates: false })).toBe(false)

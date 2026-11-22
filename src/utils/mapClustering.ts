@@ -51,12 +51,14 @@ export function shouldRebuildMapMarkersOnIdle({
   dirty,
   zoom,
   hasAggregates,
+  zoomChanged = false,
 }: {
   dirty: boolean
   zoom: number
   hasAggregates: boolean
+  zoomChanged?: boolean
 }): boolean {
-  return dirty && zoom >= 15 && !hasAggregates
+  return dirty && !hasAggregates && (zoomChanged || zoom >= 15)
 }
 
 /** 지도 화면과 구역선의 경계 상자가 겹치는지 확인한다. */

@@ -577,6 +577,7 @@ function NaverMapCanvas({
   const viewportMarkersDirtyRef = useRef(false)
   const boundaryRef = useRef<any>(null)
   const cardPolygonsRef = useRef<Map<number, any>>(new Map())
+  const polygonStylesRef = useRef(new WeakMap<object, Record<string, unknown>>())
   const cardLabelsRef = useRef<Map<number, any>>(new Map())  // 구역선 중앙 카드 라벨
   const draftBoundaryRef = useRef<any>(null)
   const draftPointMarkerRefs = useRef<any[]>([])
@@ -913,8 +914,12 @@ function NaverMapCanvas({
   const rebuildTimerRef = useRef<number | null>(null)
   const scheduleRebuildMarkers = () => {
     if (rebuildTimerRef.current !== null) window.clearTimeout(rebuildTimerRef.current)
+    const settledZoom = mapInstanceRef.current?.getZoom()
     rebuildTimerRef.current = window.setTimeout(() => {
       rebuildTimerRef.current = null
+      // The SDK can start the next zoom before emitting zoom_changed. Keep the
+      // dirty state for its next idle instead of clustering a transient viewport.
+      if (mapInstanceRef.current?.getZoom() !== settledZoom) return
       rebuildMarkersCallbackRef.current()
       syncCardBoundariesRef.current()
     }, 120)
@@ -1125,13 +1130,19 @@ function NaverMapCanvas({
 
     cardPolygonsRef.current.forEach((polygon, cardId) => {
       const isVisible = !(drawingBoundary && cardId === currentCardId)
+      const applyStyle = (options: Record<string, unknown>) => {
+        const previous = polygonStylesRef.current.get(polygon)
+        if (previous && Object.entries(options).every(([key, value]) => previous[key] === value)) return
+        polygon.setOptions(options)
+        polygonStylesRef.current.set(polygon, options)
+      }
 
       // ── 배정 색칠 모드 (cardColorMap 있으면 우선) ──
       if (colorMap) {
         const teamColor = colorMap.get(cardId)
         if (teamColor) {
           // 팀 배정된 구역 — 팀색으로 채움 (파스텔이라 채도 보강)
-          polygon.setOptions({
+          applyStyle({
             fillColor: teamColor,
             fillOpacity: 0.45,
             strokeColor: teamColor,
@@ -1144,7 +1155,7 @@ function NaverMapCanvas({
           })
         } else {
           // 미배정 담당 구역 — 잘 보이게 (연한 채움 + 또렷한 실선 테두리)
-          polygon.setOptions({
+          applyStyle({
             fillColor: '#5b6b7c',
             fillOpacity: 0.10,
             strokeColor: '#5b6b7c',
@@ -1167,7 +1178,7 @@ function NaverMapCanvas({
           ? hIds.has(cardId)
           : cardId === currentCardId
 
-      polygon.setOptions({
+      applyStyle({
         fillColor: isSelected ? '#5D5B54' : palette.cardDraft,
         fillOpacity: isSelected ? 0.10 : 0.05,
         strokeColor: isSelected ? '#5D5B54' : palette.cardDraft,
@@ -1662,6 +1673,7 @@ function NaverMapCanvas({
           dirty: viewportMarkersDirtyRef.current,
           zoom: mapInstanceRef.current.getZoom(),
           hasAggregates: aggregateMarkersRef.current.length > 0,
+          zoomChanged: boundaryZoomDirtyRef.current,
         })) {
           scheduleRebuildMarkersRef.current()
         } else if (boundaryViewportDirtyRef.current && (boundaryZoomDirtyRef.current || mapInstanceRef.current.getZoom() >= boundaryViewportMinZoomRef.current)) {
