@@ -40,13 +40,26 @@ import { GroupTerritoryContext } from './features/groupTerritory/context'
 import { groupTerritoryEnabled, ownTerritoryGroup } from './features/groupTerritory/model'
 import { serviceGroupOptions } from './features/groupService/model'
 import { saveTerritoryGroups } from './features/groupTerritory/api'
+import { createSharedModuleLoader } from './lib/sharedModuleLoader'
+import type { ComponentProps } from 'react'
 
 const DesktopApp = lazy(() =>
   import('./components/DesktopApp').then((module) => ({ default: module.DesktopApp }))
 )
-const MobileHome = lazy(() =>
-  import('./components/MobileHome').then((module) => ({ default: module.MobileHome }))
+type HomeComponent = typeof import('./components/MobileHome').MobileHome
+let readyMobileHome: HomeComponent | undefined
+const loadMobileHome = createSharedModuleLoader(() =>
+  import('./components/MobileHome').then((module) => {
+    readyMobileHome = module.MobileHome
+    return { default: module.MobileHome }
+  })
 )
+const LazyMobileHome = lazy(loadMobileHome)
+function MobileHome(props: ComponentProps<HomeComponent>) {
+  // A resolved import should not suspend again; keep the chosen component stable after mount.
+  const [Home] = useState(() => readyMobileHome ?? LazyMobileHome)
+  return <Home {...props} />
+}
 const Login = lazy(() =>
   import('./components/Login').then((module) => ({ default: module.Login }))
 )
@@ -117,6 +130,11 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
   // 푸시 알림은 서비스 워커가 그린다 — 워커도 언어를 알아야 번역할 수 있다
   syncLanguageToServiceWorker(language)
   const [isDesktop, setIsDesktop] = useState<boolean>(getInitialDesktopMode)
+  useEffect(() => {
+    if (authLoading || !user || user.role !== 'user' || isDesktop || recipientPreview || location.pathname !== '/') return
+    // Fetch code during the existing data wait, without mounting any consumers.
+    void loadMobileHome().catch(() => {})
+  }, [authLoading, user, isDesktop, recipientPreview, location.pathname])
   const [calendarDemand, setCalendarDemand] = useState({ month: '', full: false })
   const selectCalendarDemand = useCallback((month: string, full: boolean) => {
     setCalendarDemand(previous => previous.month === month && previous.full === full ? previous : { month, full })

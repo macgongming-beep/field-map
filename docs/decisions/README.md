@@ -13,6 +13,8 @@
 
 ## 목록
 
+봉사자 홈 코드 데모 선로딩: [0154 자료 대기와 홈 코드 로딩 병렬화](0154-demo-volunteer-home-code-preload.md).
+
 지도 축소 성능 데모 검증: [0153 중간 배율 표시 생성과 동일 스타일 갱신 절감](0153-demo-map-zoom-reconciliation.md).
 
 인도자 구역·지도 운영 반영: [0152 검토한 인도자 구역 탐색 운영 배포](0152-leader-territory-production-release.md).

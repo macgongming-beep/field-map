@@ -8,9 +8,20 @@ import { RouteReadGate } from './hooks/RouteReadGate'
 
 const state = vi.hoisted(() => ({
   ready: true, scope: '', sessionUser: undefined as string | undefined, role: '', mounts: 0, shellMounts: 0, noticeMounts: 0,
+  moduleRequests: 0, moduleReady: 0, moduleReject: false, storeLoading: false,
   buildingReady: true, buildingError: false, buildingScope: undefined as string | undefined, retryBuilding: vi.fn(async () => {}),
   auth: { user: { id: 1, name: 'Admin', role: 'admin' } as { id: number; name: string; role: string } | null, allUsers: [], loading: false },
 }))
+vi.mock('./lib/sharedModuleLoader', async importOriginal => {
+  const { createSharedModuleLoader } = await importOriginal<typeof import('./lib/sharedModuleLoader')>()
+  return { createSharedModuleLoader: <T,>(importModule: () => Promise<T>) => {
+    const load = createSharedModuleLoader(importModule)
+    return () => {
+      state.moduleRequests++
+      return state.moduleReject ? Promise.reject(new Error('code unavailable')) : load().then(module => { state.moduleReady++; return module })
+    }
+  } }
+})
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => state.auth }))
 vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string, _user: string, scope: string, sessionUser?: string, buildingScope?: string) => {
   useState(() => { state.mounts += 1; return null })
@@ -18,7 +29,7 @@ vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string,
   state.sessionUser = sessionUser
   state.role = role
   state.buildingScope = buildingScope
-  return { loading: false, error: null, calendarScopeReady: state.ready, calendarReadError: false,
+  return { loading: state.storeLoading, error: null, calendarScopeReady: state.ready, calendarReadError: false,
     buildingScopeReady: state.buildingReady, buildingReadError: state.buildingError, retryBuildingRead: state.retryBuilding }
 } }))
 vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: () => {} }))
@@ -56,6 +67,7 @@ function CalendarConsumer() {
 }
 beforeEach(() => {
   state.ready = true
+  state.moduleRequests = 0; state.moduleReady = 0; state.moduleReject = false; state.storeLoading = false
   state.buildingReady = true; state.buildingError = false; state.retryBuilding.mockClear()
   state.mounts = 0
   state.shellMounts = 0; state.noticeMounts = 0
@@ -63,6 +75,53 @@ beforeEach(() => {
   state.auth.loading = false
   window.localStorage.clear()
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+})
+
+test('mobile volunteer code starts during data loading, without mounting the home or its providers', async () => {
+  state.auth.user = { id: 2, name: 'Volunteer', role: 'user' }
+  state.storeLoading = true
+  const view = render(<MemoryRouter><App /></MemoryRouter>)
+  await waitFor(() => expect(state.moduleReady).toBe(1))
+  expect(state.moduleRequests).toBe(1)
+  expect(screen.getByText('app loading')).toBeTruthy()
+  expect(state.shellMounts).toBe(0)
+  expect(state.noticeMounts).toBe(0)
+  state.storeLoading = false
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  expect(screen.getByText('detail mounted')).toBeTruthy()
+  expect(screen.queryByText('app loading')).toBeNull()
+  expect(state.shellMounts).toBe(1)
+})
+
+test.each([
+  { role: 'user', path: '/', desktop: true, authLoading: false, signedIn: true },
+  { role: 'leader', path: '/', desktop: false, authLoading: false, signedIn: true },
+  { role: 'admin', path: '/', desktop: false, authLoading: false, signedIn: true },
+  { role: 'developer', path: '/', desktop: false, authLoading: false, signedIn: true },
+  { role: 'user', path: '/calendar', desktop: false, authLoading: false, signedIn: true },
+  { role: 'user', path: '/', desktop: false, authLoading: true, signedIn: true },
+  { role: 'user', path: '/', desktop: false, authLoading: true, signedIn: false },
+])('does not preload outside the authenticated mobile volunteer home: %j', async ({ role, path, desktop, authLoading, signedIn }) => {
+  state.auth.user = signedIn ? { id: 2, name: 'Visitor', role } : null
+  state.auth.loading = authLoading
+  state.storeLoading = true
+  vi.stubGlobal('matchMedia', () => ({ matches: desktop, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+  render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(screen.getByText('app loading')).toBeTruthy()
+  expect(state.moduleRequests).toBe(0)
+  expect(state.shellMounts).toBe(0)
+})
+
+test('failed speculative code loading does not replace the data gate or expose an unhandled rejection', async () => {
+  state.auth.user = { id: 2, name: 'Volunteer', role: 'user' }
+  state.storeLoading = true; state.moduleReject = true
+  const view = render(<MemoryRouter><App /></MemoryRouter>)
+  await waitFor(() => expect(state.moduleRequests).toBe(1))
+  expect(screen.getByText('app loading')).toBeTruthy()
+  expect(state.shellMounts).toBe(0)
+  state.moduleReject = false; state.storeLoading = false
+  view.rerender(<MemoryRouter><App /></MemoryRouter>)
+  expect(await screen.findByText('detail mounted')).toBeTruthy()
 })
 
 test.each([['/', 'home'], ['/map', 'map'], ['/stats', 'full'], ['/?openEvent=17', 'calendar'], ['/calendar', 'calendar'], ['/zone', 'zone'], ['/zone?tab=restaurant', 'full']])('App wires building scope for %s and blocks incomplete consumers', async (path, expected) => {
