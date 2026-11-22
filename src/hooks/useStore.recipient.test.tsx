@@ -390,6 +390,52 @@ function enableHistoryRecovery() {
   state.unchanged.mockResolvedValue([1])
 }
 
+test('service entry reads boundaries alongside recovery but publishes only after both finish', async () => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'service:["Volunteer","2026-10-05",null]'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear(); state.reads = []
+  let release!: () => void
+  state.recover.mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve }))
+  const boundaries = [{ cardId: 1, points: [{ lat: 3, lng: 3 }, { lat: 4, lng: 3 }, { lat: 4, lng: 4 }] }]
+  state.boundaries.mockResolvedValueOnce(boundaries)
+  let pending!: Promise<void>
+  await act(async () => { pending = result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }) })
+  await waitFor(() => expect(state.recover).toHaveBeenCalledTimes(1))
+  expect(state.boundaries).toHaveBeenCalledExactlyOnceWith([1])
+  expect(result.current.cardBoundaries).not.toEqual(boundaries)
+  expect(state.reads).not.toContain('cards')
+  await act(async () => { release(); await pending })
+  expect(result.current.cardBoundaries).toEqual(boundaries)
+  expect(state.reads).toContain('cards')
+  expect(state.refresh).not.toHaveBeenCalled()
+})
+
+test.each(['boundaries', 'recovery'] as const)('service entry drains the other read after %s fails, then restores a scoped snapshot', async failed => {
+  enableHistoryRecovery()
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'service:["Volunteer","2026-10-05",null]'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.refresh.mockClear()
+  let release!: () => void
+  if (failed === 'boundaries') {
+    state.boundaries.mockRejectedValueOnce(new Error('offline'))
+    state.recover.mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve }))
+  } else {
+    state.recover.mockRejectedValueOnce(new Error('offline'))
+    state.boundaries.mockImplementationOnce(() => new Promise<never[]>(resolve => { release = () => resolve([]) }))
+  }
+  const settled = vi.fn()
+  let pending!: Promise<void>
+  await act(async () => { pending = result.current.refetchSlices(['calendar'], { triggeredBy: 'navigation:calendar' }).then(settled) })
+  await waitFor(() => expect(state.boundaries).toHaveBeenCalledTimes(1))
+  expect(state.refresh).not.toHaveBeenCalled(); expect(settled).not.toHaveBeenCalled()
+  await act(async () => { release(); await pending })
+  expect(state.refresh).toHaveBeenCalledTimes(1)
+  expect(settled).toHaveBeenCalledTimes(1)
+  expect(result.current.buildings.map(row => row.id)).toEqual([10])
+  expect(result.current.visitHistories.map(row => row.id)).toEqual([901])
+})
+
 test('demo calendar navigation rechecks assignments and recovers changes without a full scoped reload', async () => {
   enableHistoryRecovery()
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer'))

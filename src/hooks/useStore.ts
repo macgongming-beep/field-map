@@ -901,8 +901,14 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
             if (ids != null) {
               const completeBefore = historyRecovery && !historyReadsPending.current && !historySyncsPending.current
                 && historyCoverage.canReuse(historyScope(buildingsRef.current))
-              await recoverRecipientBuildings(ids, buildingsRef.current.map((b) => b.id), territoryCheckpoint, syncBuildingsRef.current)
-              if (requested.has('cardBoundaries')) setCardBoundaries(await readRecipientBoundaries(ids))
+              // Boundaries use the verified card scope, not building changes. Keep
+              // fallback behind both reads so a late recovery cannot overwrite it.
+              const results = await Promise.allSettled([
+                recoverRecipientBuildings(ids, buildingsRef.current.map((b) => b.id), territoryCheckpoint, syncBuildingsRef.current),
+                requested.has('cardBoundaries') ? readRecipientBoundaries(ids) : Promise.resolve(null),
+              ])
+              for (const result of results) if (result.status === 'rejected') throw result.reason
+              if (results[1].status === 'fulfilled' && results[1].value !== null) setCardBoundaries(results[1].value)
               requested.delete('buildings')
               requested.delete('cardBoundaries')
               const reuseHistories = completeBefore && !historyReadsPending.current && !historySyncsPending.current
