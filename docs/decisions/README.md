@@ -13,6 +13,8 @@
 
 ## 목록
 
+리뷰와 후속 작업 인계: [2026-11-22 클로드 속도 개선 리뷰 인계](../performance-review-handoff-2026-11-22.md).
+
 홈 현황/제안 지연 읽기: [0156 홈 구역 진행률 제거와 제안 열 때 읽기](0156-demo-home-progress-and-suggestion-demand.md).
 
 나의 봉사 첫 진입: [0157 개인 구역 복구 조회 대기 단축](0157-demo-my-service-entry-recovery.md).
