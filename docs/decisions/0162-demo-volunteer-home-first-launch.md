@@ -104,3 +104,12 @@
 - `deploy:demo`로 1회 배포했다: `dpl_6se6k8x7Gew6fLATczvGGhnCew7D`.
 - 공개 25파일 해시가 일치했고, 운영 배포(`dpl_3C6VVRWfujqAvaC9Y8rEm9Jffxug`)와 환경변수는 전후 동일했다.
 - 직전 데모는 `dpl_9xFurTDe1S7t9obYhXJPzWUSspKN`(`f8678f6`)다.
+
+## 리뷰 보완 반영 (`0d9de48`)
+
+- 0161·0162의 Codex 리뷰 보완(모든 카드 실패 경로의 요약 대기, 건물 기억값 상한)을 같은 방식으로 빌드했다.
+  - 세 역할 화면 23개의 표시 글자와 화면별 요청 수가 직전 데모(`b1a9ef0`)와 동일했다.
+  - 47배 인도자 나의 봉사(기억값 있음)는 12건 / 1,681KB로 같았다.
+- `deploy:demo`로 1회 배포했다: `dpl_61z7b4ovojsKBci2pnrMnibiPTVk`.
+- 공개 25파일 해시가 일치했고, 운영 배포와 환경변수는 전후 동일했다.
+- 직전 데모는 `dpl_6se6k8x7Gew6fLATczvGGhnCew7D`(`b1a9ef0`)다.
