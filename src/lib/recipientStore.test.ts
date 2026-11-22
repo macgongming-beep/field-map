@@ -220,6 +220,31 @@ test('unassignment refresh removes old scope, including the last card', async ()
   expect(reader.scoped).toBe(true)
 })
 
+test.each([
+  ['false', 'false'], ['false', undefined], ['true', 'false'], ['true', undefined],
+])('discovery opt-out uses legacy assignments for initial, navigation and refresh reads (demo=%s, flag=%s)', async (demo, flag) => {
+  vi.stubEnv('VITE_DEMO_MODE', demo)
+  vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', flag)
+  state.assignments.mockResolvedValue([{ cardAssignments: [{ userName: 'me', assignedCardIds: [1] }] }])
+  const reader = createRecipientStoreReader('me')
+  await reader.read()
+  expect(state.assignments).toHaveBeenCalledExactlyOnceWith()
+  expect(state.scopeIds).not.toHaveBeenCalled()
+  expect(reader.cardIds()).toEqual([1])
+
+  expect(await reader.unchangedScope(undefined, [17])).toEqual([1])
+  expect(state.assignments).toHaveBeenCalledTimes(2)
+  expect(state.scopeIds).not.toHaveBeenCalled()
+
+  state.assignments.mockResolvedValue([{ cardAssignments: [{ userName: 'me', assignedCardIds: [2] }] }])
+  reader.refresh()
+  await reader.read()
+  expect(state.assignments).toHaveBeenCalledTimes(3)
+  expect(state.scopeIds).not.toHaveBeenCalled()
+  expect(reader.cardIds()).toEqual([2])
+  expect(state.prefetch).toHaveBeenLastCalledWith([2])
+})
+
 test('ID-only navigation discovery uses fresh window hints but does not retain them after refresh', async () => {
   vi.stubEnv('VITE_RECIPIENT_DISCOVERY_REUSE_ENABLED', 'true')
   state.assignments.mockResolvedValue([{ cardAssignments: [{ userName: 'me', assignedCardIds: [1] }] }])
