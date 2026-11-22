@@ -24,6 +24,7 @@
 모바일 캘린더 첫 진입: [0160 달력은 구역 자료를 기다리지 않음](0160-demo-calendar-month-without-territory-wait.md).
 건물 전체 읽기: [0161 페이지 동시 읽기](0161-demo-concurrent-building-pages.md).
 봉사자 홈 첫 실행: [0162 사용자 조회·카드 요약 앞당김](0162-demo-volunteer-home-first-launch.md).
+0160~0162 운영 반영: [0163](0163-demo-perf-0160-0162-production-release.md).
 
 봉사자·관리 화면 조회 데모 재검증: [0155 개인 구역 ID 재사용과 경량 관리 조회](0155-demo-section-read-reuse.md).
 
