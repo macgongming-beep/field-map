@@ -81,6 +81,74 @@ afterEach(() => {
   state.reads = []; state.buildingResponse = null; state.historyResponse = null; state.regionResponse = null; state.cardError = false
 })
 
+test.each((['admin', 'leader'] as const).flatMap(role => (['home', 'calendar'] as const).map(target => ({ role, target }))))('$role home defers progress but $target, territory and statistics restore required data', async ({ role, target }) => {
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  expect(buildingDemandForRoute(role, '/', '', false)).toBe('landing')
+  expect(buildingDemandForRoute(role, '/settings', '', false)).toBe('landing')
+  expect(buildingDemandForRoute(role, '/stats', '', true)).toBe('full')
+  expect(buildingDemandForRoute(role, '/', '?openEvent=17', false)).toBe('calendar')
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, role, undefined, undefined, 'tester', mode), { initialProps: { mode: 'landing' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.buildingScopeReady).toBe(true)
+  expect(buildingReads()).toEqual([])
+  expect(result.current.cards).toEqual([])
+  expect(state.reads.filter(read => (read.table === 'cards' && read.columns !== 'id') || read.table === 'territory_regions')).toEqual([])
+  expect(state.reads.filter(read => read.table === 'visit_histories')).toEqual([])
+  expect(state.summaries).not.toHaveBeenCalled()
+  await act(async () => { await result.current.refetchAll(); await result.current.syncChangedBuildings([1]); await result.current.syncCreatedUnits([10]) })
+  expect(state.summaries).not.toHaveBeenCalled()
+  expect(buildingReads()).toEqual([])
+  expect(state.reads.filter(read => read.table === 'visit_histories')).toEqual([])
+
+  let release!: (rows: { id: number; units: number }[]) => void
+  const sessionReads = state.reads.filter(read => read.table === 'service_sessions').length
+  state.summaries.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+  rerender({ mode: target })
+  await waitFor(() => expect(state.summaries).toHaveBeenCalledOnce())
+  expect(result.current.buildingScopeReady).toBe(false)
+  await act(async () => release([{ id: 1, units: 73 }, { id: 2, units: 12 }]))
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(result.current.cards.map(card => card.units)).toEqual([73, 12])
+  expect(state.reads.some(read => read.table === 'visit_histories')).toBe(true)
+  expect(state.reads.filter(read => read.table === 'service_sessions')).toHaveLength(sessionReads)
+  rerender({ mode: 'zone' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(result.current.cards.map(card => card.units)).toEqual([1, 1])
+  rerender({ mode: 'full' })
+  await waitFor(() => expect(result.current.fullBuildingReader?.ready).toBe(true))
+  expect(result.current.buildings[0].memo).toBe('building private memo')
+  const count = state.reads.length
+  rerender({ mode: 'landing' })
+  expect(result.current.buildingScopeReady).toBe(true)
+  expect(result.current.buildings[0].memo).toBe('building private memo')
+  expect(state.reads).toHaveLength(count)
+})
+
+test('home promotion failure stays gated until the full statistics retry succeeds', async () => {
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, 'admin', undefined, undefined, 'tester', mode), { initialProps: { mode: 'landing' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.cardError = true
+  rerender({ mode: 'full' })
+  await waitFor(() => expect(result.current.buildingReadError).toBe(true))
+  expect(result.current.buildingScopeReady).toBe(false)
+  expect(result.current.fullBuildingReader?.ready).toBe(false)
+  state.cardError = false
+  await act(async () => { await result.current.retryBuildingRead() })
+  expect(result.current.buildingScopeReady).toBe(true)
+  expect(result.current.fullBuildingReader?.ready).toBe(true)
+  expect(result.current.cards.map(card => card.units)).toEqual([1, 1])
+})
+
+test.each(['false', undefined])('home deferral stays off without lightweight opt-in (%s)', flag => {
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', flag)
+  expect(buildingDemandForRoute('admin', '/', '', false)).toBe('home')
+  expect(buildingDemandForRoute('leader', '/home', '', true)).toBe('home')
+  expect(buildingDemandForRoute('user', '/', '', false)).toBeUndefined()
+  expect(buildingDemandForRoute('developer', '/', '', true)).toBeUndefined()
+})
+
 test.each(['admin', 'leader'] as const)('%s calendar preserves all team restaurant names and server progress without full details', async role => {
   const { result } = renderHook(() => useStore(true, role, undefined, undefined, 'tester', 'calendar'))
   await waitFor(() => expect(result.current.loading).toBe(false))
@@ -166,7 +234,7 @@ test.each(['true', 'false', undefined])('opt-in management and assignment buildi
     vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', flag)
     for (const desktop of [false, true]) {
       for (const path of management) {
-        expect(buildingDemandForRoute('admin', path, '', desktop)).toBe(flag === 'true' ? 'home' : 'full')
+        expect(buildingDemandForRoute('admin', path, '', desktop)).toBe(flag === 'true' ? 'landing' : 'full')
       }
       expect(buildingDemandForRoute('admin', '/assignment', '', desktop))
         .toBe(flag === 'true' ? desktop ? 'home' : 'zone' : 'full')
@@ -205,9 +273,10 @@ test.each([false, true])('opt-in assignment desktop=%s promotes from management 
   { initialProps: { path: '/users' } })
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(buildingReads()).toEqual([])
-  expect(result.current.cards.map(card => card.units)).toEqual([1, 1])
+  expect(result.current.cards).toEqual([])
   rerender({ path: '/assignment' })
   await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(result.current.cards.map(card => card.units)).toEqual([1, 1])
   expect(buildingReads().map(read => read.columns)).toEqual(desktop ? [] : [ZONE_BUILDING_COLUMNS])
   expect(result.current.fullBuildingReader!.ready).toBe(false)
   if (!desktop) {

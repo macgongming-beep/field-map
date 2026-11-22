@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { t } from '../../i18n'
 import type { AppLanguage } from '../../i18n'
@@ -26,7 +26,6 @@ export function MeetingHome({ language, position }: { language: AppLanguage; pos
 }
 
 export function MeetingSuggestions({ language, children }: { language: AppLanguage; children: ReactNode }) {
-  const context = useMeetingHome()
-  const collapse = context?.data.collections.some(c => c.collapseSuggestions && homeCollectionVisible(c) && context.data.notes.some(n => n.collectionId === c.id))
-  return <details key={String(Boolean(collapse))} open={!collapse} className="meeting-suggestions"><summary>{t(language, 'suggestion.sectionTitle')}</summary>{children}</details>
+  const [open, setOpen] = useState(false)
+  return <details open={open} onToggle={event => setOpen(event.currentTarget.open)} className="meeting-suggestions"><summary>{t(language, 'suggestion.sectionTitle')}</summary>{open ? children : null}</details>
 }

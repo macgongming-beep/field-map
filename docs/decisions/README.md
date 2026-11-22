@@ -13,6 +13,8 @@
 
 ## 목록
 
+홈 현황/제안 지연 읽기: [0156 홈 구역 진행률 제거와 제안 열 때 읽기](0156-demo-home-progress-and-suggestion-demand.md).
+
 봉사자·관리 화면 조회 데모 재검증: [0155 개인 구역 ID 재사용과 경량 관리 조회](0155-demo-section-read-reuse.md).
 
 봉사자 홈 코드 데모 선로딩: [0154 자료 대기와 홈 코드 로딩 병렬화](0154-demo-volunteer-home-code-preload.md).

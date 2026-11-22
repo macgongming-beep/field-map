@@ -4,14 +4,14 @@ import { homeEventDetailId } from '../lib/eventDetailNavigation'
 import { isLightweightManagementRoute, isPersonalSettingsRoute } from '../utils/personalSettingsRoute'
 import { toBuilding, type RawBuilding, type RawUnit } from './storeTransforms'
 
-export type BuildingDemand = 'home' | 'calendar' | 'zone' | 'map' | 'full'
-export const buildingDemandRank = { home: 0, calendar: 1, zone: 2, map: 3, full: 4 } as const
+export type BuildingDemand = 'landing' | 'home' | 'calendar' | 'zone' | 'map' | 'full'
+export const buildingDemandRank = { landing: -1, home: 0, calendar: 1, zone: 2, map: 3, full: 4 } as const
 
 export function calendarZoneBuildingDemandEnabled() {
   return (import.meta.env.VITE_CALENDAR_ZONE_BUILDING_DEMAND_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
 }
 
-export const needsBuildingSummaries = (mode: BuildingDemand) => buildingDemandRank[mode] < buildingDemandRank.zone
+export const needsBuildingSummaries = (mode: BuildingDemand) => mode === 'home' || mode === 'calendar'
 
 export function buildingDemandEnabled(role: Role) {
   return (role === 'admin' || role === 'leader')
@@ -20,13 +20,14 @@ export function buildingDemandEnabled(role: Role) {
 
 export function buildingDemandForRoute(role: Role, pathname: string, search: string, desktop: boolean): BuildingDemand | undefined {
   if (!buildingDemandEnabled(role)) return undefined
+  const entryMode = import.meta.env.VITE_ROUTE_LIGHTWEIGHT_ENABLED === 'true' ? 'landing' : 'home'
   // Unknown consumers stay full. Assignment editors independently request full data.
-  if ((pathname === '/' || pathname === '/home') && !search) return 'home'
+  if ((pathname === '/' || pathname === '/home') && !search) return entryMode
   // Personal settings consume no building details. The store retains any richer snapshot.
   // Unknown query modes and administrative editors remain full consumers.
-  if (!search && isPersonalSettingsRoute(pathname, search)) return 'home'
+  if (!search && isPersonalSettingsRoute(pathname, search)) return entryMode
   if (import.meta.env.VITE_ROUTE_LIGHTWEIGHT_ENABLED === 'true' && role === 'admin') {
-    if (isLightweightManagementRoute(pathname, search)) return 'home'
+    if (isLightweightManagementRoute(pathname, search)) return entryMode
     // Mobile allocation counts usage; desktop allocation only consumes cards.
     if (pathname === '/assignment' && !search) {
       if (desktop) return 'home'

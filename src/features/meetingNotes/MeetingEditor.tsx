@@ -116,7 +116,6 @@ export function CollectionEditor({ language, collections, onSaved }: { language:
     <label className="meeting-checkbox"><input role="switch" type="checkbox" disabled={busy} checked={draft.homeEnabled !== false} onChange={e => void toggleHome(e.target.checked)} />{t(language, 'meeting.homeEnabled')}</label>
     <p className="meeting-meta">{t(language, 'meeting.toggleHelp')}</p>
     <label>{t(language, 'meeting.position')}<select disabled={busy} value={draft.homePosition} onChange={e => setDraft({ ...draft, homePosition: e.target.value as MeetingCollection['homePosition'] })}><option value="after_service">{t(language, 'meeting.after')}</option><option value="top">{t(language, 'meeting.top')}</option></select></label>
-    <label className="meeting-checkbox"><input type="checkbox" disabled={busy} checked={draft.collapseSuggestions} onChange={e => setDraft({ ...draft, collapseSuggestions: e.target.checked })} />{t(language, 'meeting.collapse')}</label>
     {error && <p role="alert">{error}</p>}<div className="meeting-actions"><button type="submit" disabled={busy}>{t(language, 'meeting.save')}</button></div>
   </form>
 }

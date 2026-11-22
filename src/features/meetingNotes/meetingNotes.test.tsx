@@ -56,11 +56,12 @@ describe('meeting contracts', () => {
     expect(container.querySelector('script,img')).toBe(null)
     expect(screen.getByText('<script>alert(1)</script>')).toBeTruthy()
   })
-  it('positions populated collections and collapses suggestions only when a note exists', () => {
+  it('positions populated collections without automatically opening suggestion bodies', () => {
     const renderHome = (notes: MeetingNoteMeta[]) => <MemoryRouter><MeetingContext.Provider value={{ userId: 7, canManage: false, refresh: () => {}, data: { collections: [group], notes } }}><MeetingHome language="ko" position="top" /><span>오늘 봉사</span><MeetingHome language="ko" position="after_service" /><MeetingSuggestions language="ko"><p>제안 본문</p></MeetingSuggestions></MeetingContext.Provider></MemoryRouter>
     const { container, rerender } = render(renderHome([]))
     expect(screen.queryByText('순회방문')).toBe(null)
-    expect(container.querySelector('details')?.open).toBe(true)
+    expect(container.querySelector('details')?.open).toBe(false)
+    expect(screen.queryByText('제안 본문')).toBeNull()
     rerender(renderHome([note]))
     expect(screen.getAllByText('순회방문')).toHaveLength(1)
     expect(screen.queryByText('따뜻한 대화')).toBe(null)

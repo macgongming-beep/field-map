@@ -523,7 +523,6 @@ export function MobileHome({
   }, [])
   const todayLabel = useMemo(() => formatHomeDate(new Date(), language), [language])
   const groupTerritory = useGroupTerritory()
-  const leaderCards = useMemo(() => cards.filter((c) => groupTerritory.enabled ? groupOwnsCard(c, groupTerritory.ownCode) : c.assignedLeader === currentVisitor), [cards, currentVisitor, groupTerritory.enabled, groupTerritory.ownCode])
 
   const todayEvents = useMemo(() =>
     calendarEvents.filter((e) => e.date === today).sort((a, b) => a.time.localeCompare(b.time)),
@@ -943,12 +942,10 @@ export function MobileHome({
                     
                     
                     
-                    leaderCards={leaderCards}
                     role={role}
                     
                     
                     onOpenEventDetail={openHomeEvent}
-                    onOpenZone={() => navigate('/zone')}
                     globalSettings={globalSettings}
                   />
                 )}

@@ -12,8 +12,8 @@ vi.mock('./AppHeader', () => ({ AppHeader: () => null }))
 const attention = vi.hoisted(() => vi.fn(() => ({})))
 vi.mock('../hooks/useAdminAttentionCounts', () => ({ useAdminAttentionCounts: attention }))
 vi.mock('../lib/pwa', () => ({ isUpdateAvailable: () => false, onUpdateAvailable: () => () => {}, checkForUpdate: vi.fn(), applyUpdate: vi.fn(), isPWAInstalled: () => false, isMobile: () => true, isIOS: () => false, isAndroid: () => false }))
-vi.mock('./UserMobileHome', () => ({ UserMobileHome: ({ onOpenEventDetail, leaderCards }: { onOpenEventDetail: (id: number) => void; leaderCards: { id: number }[] }) =>
-  <><output data-testid="home-group-cards">{leaderCards.map(card => card.id).join(',')}</output><button onClick={() => onOpenEventDetail(17)}>open home event</button></> }))
+vi.mock('./UserMobileHome', () => ({ UserMobileHome: ({ onOpenEventDetail, leaderCards }: { onOpenEventDetail: (id: number) => void; leaderCards?: { id: number }[] }) =>
+  <><output data-testid="home-group-cards">{leaderCards === undefined ? 'not requested' : leaderCards.map(card => card.id).join(',')}</output><button onClick={() => onOpenEventDetail(17)}>open home event</button></> }))
 vi.mock('./admin/AdminMobileHome', () => ({ AdminMobileHome: ({ onOpenEventDetail }: { onOpenEventDetail: (id: number) => void }) =>
   <button onClick={() => onOpenEventDetail(17)}>open home event</button> }))
 vi.mock('./admin/AdminMobileCalendar', () => ({ AdminMobileCalendar: ({ detailOnly }: { detailOnly: boolean }) =>
@@ -26,12 +26,12 @@ function Location() {
 
 afterEach(() => { cleanup(); vi.unstubAllEnvs(); attention.mockClear() })
 
-test('leader home passes shared own-group cards, not legacy individual ownership', () => {
+test('leader home no longer prepares group progress cards', () => {
   const cards = [testCard(1, 'Shared', { assignedGroupCodes: ['a', 'b'] }), testCard(2, 'Other', { assignedGroupCodes: ['b'], assignedLeader: 'Me' })]
   const props = { language: 'ko', actualRole: 'leader', viewMode: 'leader', currentVisitor: 'Me', currentUser: { id: 1, name: 'Me', role: 'leader' }, allUsers: [],
     cards, buildings: [], calendarEvents: [], serviceSessions: [], visitHistories: [], cardBoundaries: [], notices: [], territoryRegions: [], returnVisits: [] } as unknown as ComponentProps<typeof MobileHome>
   render(<MemoryRouter><GroupTerritoryContext.Provider value={{ enabled: true, canManage: false, ownCode: 'a', groups: [], save: vi.fn() }}><MobileHome {...props} /></GroupTerritoryContext.Provider></MemoryRouter>)
-  expect(screen.getByTestId('home-group-cards').textContent).toBe('1')
+  expect(screen.getByTestId('home-group-cards').textContent).toBe('not requested')
 })
 
 test('route data waits keep the real mobile navigation usable without mounting incomplete screens', () => {

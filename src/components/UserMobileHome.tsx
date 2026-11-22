@@ -1,9 +1,7 @@
-import { useNavigate } from 'react-router-dom'
-import type { TerritoryCard, CalendarEvent, Role } from '../types'
+import type { CalendarEvent, Role } from '../types'
 import type { AppLanguage } from '../i18n'
 import { t, formatPeriod, formatLeadSub, formatLeaderOf, formatApplied } from '../i18n'
 
-import { compareTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
 import { ServiceSuggestionsSection } from './ServiceSuggestionsSection'
 import { MeetingHome } from '../features/meetingNotes/MeetingHome'
 import { groupServiceEnabled, visibleServiceEventCount } from '../features/groupService/model'
@@ -12,25 +10,18 @@ import { ServiceEventList } from '../features/groupService/ServiceEventList'
 export function UserMobileHome({
   language,
   myTodayEvents,
-  leaderCards,
   role,
   onOpenEventDetail,
-  onOpenZone,
   globalSettings = {},
   groupName,
 }: {
   language: AppLanguage
   myTodayEvents: Array<{ event: CalendarEvent; kind: 'lead' | 'join' | 'avail' }>
-  leaderCards: TerritoryCard[]
   role: Role
   onOpenEventDetail: (eventId: number) => void
-  onOpenZone: () => void
   globalSettings?: Record<string, string>
   groupName?: string
 }) {
-  const navigate = useNavigate()
-
-
   return (
     <div className="mh-page">
       <MeetingHome language={language} position="top" />
@@ -113,49 +104,6 @@ export function UserMobileHome({
       <MeetingHome language={language} position="after_service" />
       <ServiceSuggestionsSection language={language} />
 
-      {/* ─── 인도자 전용 — 담당 카드 진행 (미니 카드 그리드) ─── */}
-      {role === 'leader' && leaderCards.length > 0 && (
-        <section className="mobile-home-section">
-          <div className="mh-sec-head">
-            <h2>
-              {t(language, 'home.assignedCards')}
-              <span className="mh-cnt">{leaderCards.length}</span>
-            </h2>
-            {leaderCards.length > 8 && (
-              <button className="mh-all" onClick={() => {
-                navigate('/zone?reset=true')
-                onOpenZone()
-              }} type="button">
-                {t(language, 'home.viewAllBtn')}
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden><polyline points="9 6 15 12 9 18"/></svg>
-              </button>
-            )}
-          </div>
-          <div className="mh-card-grid">
-            {[...leaderCards].sort(compareTerritoryCardsByOperationalPriority).slice(0, 8).map((card) => {
-              const pct = Math.min(100, Math.max(0, card.progress ?? 0))
-              const colorClass = pct >= 70 ? 'high' : pct >= 30 ? 'mid' : 'low'
-              return (
-                <button
-                  key={card.id}
-                  type="button"
-                  className="mh-card-tile"
-                  onClick={() => {
-                    navigate(`/zone?region=${encodeURIComponent(card.region)}&dong=${encodeURIComponent(card.area)}`)
-                    onOpenZone()
-                  }}
-                >
-                  <span className="mh-card-tile-name">{card.name}</span>
-                  <span className="mh-card-tile-bottom">
-                    <span className={`mh-card-tile-pct ${colorClass}`}>{pct}%</span>
-                    <span className="mh-card-tile-meta">{card.completed}/{card.units}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-      )}
     </div>
   )
 }

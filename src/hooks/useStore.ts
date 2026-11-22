@@ -152,8 +152,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // App keys this store by account/read mode. Never mix partial and full snapshots.
   const [recipientReader] = useState(() => recipientUser ? createRecipientStoreReader(recipientUser) : null)
   const demandBuildings = buildingDemandEnabled(role) && !recipientReader && requestedBuildingDemand !== undefined
-  const acquiredBuildingMode = useRef<BuildingDemand>('home')
-  const buildingSnapshotMode = useRef<BuildingDemand>('home')
+  const acquiredBuildingMode = useRef<BuildingDemand>(requestedBuildingDemand === 'landing' ? 'landing' : 'home')
+  const buildingSnapshotMode = useRef<BuildingDemand>(requestedBuildingDemand === 'landing' ? 'landing' : 'home')
   const [fullBuildingRequested, setFullBuildingRequested] = useState(false)
   const requestFullBuildings = useCallback(() => { setFullBuildingRequested(true) }, [])
   const routeBuildingMode = demandBuildings
@@ -330,8 +330,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       case 'buildings': {
         const readMode = buildingModeRef.current
         const readGeneration = buildingModeGeneration.current
-        if (demandBuildings && readMode === 'home') {
-          setLoadedBuildingMode('home')
+        if (demandBuildings && buildingDemandRank[readMode] <= buildingDemandRank.home) {
+          buildingSnapshotMode.current = readMode
           return 0
         }
         if (historyRecovery) historyCoverage.invalidate()
@@ -402,6 +402,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       }
 
       case 'cards': {
+        if (demandBuildings && buildingModeRef.current === 'landing') return 0
         const buildingGeneration = buildingModeGeneration.current
         // 지역 목록도 여기서 받는다 — 카드의 region 값을 해석하는 재료라 늘 함께 쓰인다.
         // 표가 아직 없거나 실패하면 lib/regions 의 기본값이 그대로 남는다 (화면이 비지 않는다).
@@ -488,6 +489,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       case 'visits': {
         const sessionsOnly = slice === 'serviceSessions'
         const historiesOnly = slice === 'visitHistories'
+        const deferHistories = demandBuildings && buildingModeRef.current === 'landing'
         const coverageRead = historyRecovery && !sessionsOnly && !historiesRecovered
           ? historyCoverage.begin(historyScope(buildingsRef.current)) : null
         if (historyRecovery && !sessionsOnly) ++historyReadsPending.current
@@ -502,7 +504,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           //   숫자가 조용히 줄어든다. 반드시 끝까지 받는다.
           //   (예전에는 봉사 세션을 100개만 받아 누적 시간이 절반만 나왔다)
           const [visitsRes, sessionsRes] = await Promise.all([
-            sessionsOnly || historiesRecovered ? Promise.resolve({ data: [], error: null })
+            sessionsOnly || historiesRecovered || deferHistories ? Promise.resolve({ data: [], error: null })
               : scopedHistories ? readScopedVisitHistories(buildingsRef.current.flatMap(building => building.units.map(unit => unit.id)), oneYearAgo)
                 .then(data => ({ data, error: null }))
               : fetchAllPages((from, to) => supabase
@@ -954,7 +956,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         })
       }
       const canRecoverBuildings = slice === 'buildings' && recovery
-        && (!demandBuildings || (!needsBuildingSummaries(buildingModeRef.current) && acquiredBuildingMode.current === buildingModeRef.current))
+        && (!demandBuildings || (buildingDemandRank[buildingModeRef.current] >= buildingDemandRank.zone && acquiredBuildingMode.current === buildingModeRef.current))
         && import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
         && territoryCheckpoint.baseline && syncBuildingsRef.current
       if (canRecoverBuildings) reusedTerritoryRead = true
@@ -985,7 +987,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       let totalBytes = 0
       // Capture BEFORE the reads, not after: changes during the snapshot must be recovered.
       const baseline = import.meta.env.VITE_TERRITORY_REALTIME_ENABLED === 'true'
-        && (!demandBuildings || !needsBuildingSummaries(buildingModeRef.current))
+        && (!demandBuildings || buildingDemandRank[buildingModeRef.current] >= buildingDemandRank.zone)
         && slices.includes('buildings') && slices.includes('visits')
         ? await fetchTerritoryClock().catch(() => {
           // Optional realtime metadata must never block the ordinary data load.
@@ -1171,13 +1173,14 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     const next = update(buildingsRef.current)
     buildingsRef.current = next
     setBuildings(next)
-    if (demandBuildings && needsBuildingSummaries(buildingModeRef.current)) return
+    if (demandBuildings && buildingDemandRank[buildingModeRef.current] < buildingDemandRank.zone) return
     setCards(prevCards => prevCards.map(card => recipientReader && !recipientReader.allowsCard(card.id)
       ? card : recomputeCardStats(card, next)))
   }, [recipientReader, demandBuildings])
 
   // Realtime updates only the affected buildings and their visit histories.
   const readChangedBuildings = useCallback(async (buildingIds: number[], requireFresh = false, canApply: () => boolean = () => true) => {
+    if (demandBuildings && buildingModeRef.current === 'landing') return true
     if (demandBuildings && buildingModeRef.current === 'home') {
       await fetchSlice('cards')
       return true
@@ -1330,6 +1333,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   // 다른 기기에서 새로 만든 세대만 가져온다. 전체 buildings slice는 400KB가 넘어
   // 일괄 추가 때마다 다시 받지 않는다. 신호보다 건물이 늦게 보인 경우에만 전체 복구한다.
   const syncCreatedUnits = useCallback(async (unitIds: number[]): Promise<void> => {
+    if (demandBuildings && buildingModeRef.current === 'landing') return
     if (demandBuildings && buildingModeRef.current === 'home') {
       await fetchSlice('cards')
       return
@@ -1446,10 +1450,11 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       try {
         for (let attempt = 0; ; attempt++) {
           try {
-            // Home and calendar both use authoritative card summaries. Adding names
-            // needs no new card totals or histories; richer consumers still read both.
+            // A summary-ready home only needs names. A deferred home must also read
+            // cards/history, but its already-loaded sessions need no duplicate read.
             const slices: Slice[] = acquiredBuildingMode.current === 'home' && buildingModeRef.current === 'calendar'
-              ? ['buildings'] : ['buildings', 'cards', 'visits']
+              ? ['buildings'] : acquiredBuildingMode.current === 'landing' && needsBuildingSummaries(buildingModeRef.current)
+                ? ['buildings', 'cards', 'visitHistories'] : ['buildings', 'cards', 'visits']
             await withLoadDeadline(fetchSlices(slices, { triggeredBy: 'navigation:building-demand' }))
             return
           } catch (failure) {

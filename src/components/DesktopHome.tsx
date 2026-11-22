@@ -1,6 +1,4 @@
 import { useMemo } from 'react'
-import { useGroupTerritory } from '../features/groupTerritory/context'
-import { groupOwnsCard } from '../features/groupTerritory/model'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { CalendarEvent, Notice, ReturnVisit, ReturnVisitLog, Role, ServiceSession, SpecialPeriod, TerritoryCard, TimeSlot } from '../types'
 import type { AppLanguage } from '../i18n'
@@ -12,7 +10,6 @@ import { eventDetailNavigationState } from '../lib/eventDetailNavigation'
 export function DesktopHome({
   language,
   calendarEvents,
-  cards,
   currentVisitor,
   role,
   specialPeriods,
@@ -81,8 +78,6 @@ export function DesktopHome({
     })
   }, [todayEvents, currentVisitor])
 
-  const groupTerritory = useGroupTerritory()
-  const leaderCards = useMemo(() => cards.filter((c) => groupTerritory.enabled ? groupOwnsCard(c, groupTerritory.ownCode) : c.assignedLeader === currentVisitor), [cards, currentVisitor, groupTerritory.enabled, groupTerritory.ownCode])
 
   return (
     <section className="la-page">
@@ -109,12 +104,10 @@ export function DesktopHome({
             language={language}
             myTodayEvents={myTodayEvents}
             groupName={groupName}
-            leaderCards={leaderCards}
             role={role}
             onOpenEventDetail={(id) => navigate(`/calendar?openEvent=${id}`, {
               state: eventDetailNavigationState(location),
             })}
-            onOpenZone={() => navigate('/zone')}
             globalSettings={globalSettings}
           />
         )}

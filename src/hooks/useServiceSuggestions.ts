@@ -8,9 +8,12 @@ import { getAuthToken } from '../lib/authToken'
 export function useServiceSuggestions(home = false) {
   const [suggestions, setSuggestions] = useState<ServiceSuggestion[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const generation = useRef(0)
 
   const fetchSuggestions = useCallback(async () => {
+    setLoading(true)
+    setError(false)
     const version = ++generation.current
     const token = getAuthToken()
     const current = () => version === generation.current && token === getAuthToken()
@@ -29,6 +32,7 @@ export function useServiceSuggestions(home = false) {
         setSuggestions(data.map(toServiceSuggestion))
       }
     } catch (err) {
+      if (current()) setError(true)
       console.error('Failed to fetch service suggestions:', err)
     } finally {
       if (current()) setLoading(false)
@@ -41,5 +45,5 @@ export function useServiceSuggestions(home = false) {
     return () => { ++requests.current }
   }, [fetchSuggestions])
 
-  return { suggestions, loading, fetchSuggestions }
+  return { suggestions, loading, error, fetchSuggestions }
 }

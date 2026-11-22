@@ -1,8 +1,7 @@
 import { useServiceSuggestions } from '../hooks/useServiceSuggestions'
-import { useState, useEffect } from 'react'
 import type { AppLanguage } from '../i18n'
 import { t } from '../i18n'
-import type { ServiceSuggestion, SuggestionBlock } from '../types'
+import type { SuggestionBlock } from '../types'
 import { sanitizeRichText } from '../lib/richText'
 import { MeetingSuggestions } from '../features/meetingNotes/MeetingHome'
 
@@ -28,33 +27,24 @@ function translateBlockType(type: string, language: AppLanguage): string {
 }
 
 export function ServiceSuggestionsSection({ language = 'ko' }: { language?: AppLanguage }) {
-  const { suggestions, loading } = useServiceSuggestions(true)
-  const [currentSuggestion, setCurrentSuggestion] = useState<ServiceSuggestion | null>(null)
+  return <MeetingSuggestions language={language}><SuggestionContent language={language} /></MeetingSuggestions>
+}
 
-  useEffect(() => {
-    if (loading || !suggestions.length) return
-    
-    // Find all visible suggestions
-    const visibleOnes = suggestions.filter(s => s.is_visible)
-    if (visibleOnes.length === 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- suggestions에서 현재 추천 파생(의도적)
-      setCurrentSuggestion(null)
-      return
-    }
+function SuggestionContent({ language }: { language: AppLanguage }) {
+  const { suggestions, loading, error, fetchSuggestions } = useServiceSuggestions(true)
+  const currentSuggestion = suggestions.filter(s => s.is_visible).sort((a, b) => {
+    const timeA = a.last_used_at ? new Date(a.last_used_at).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0)
+    const timeB = b.last_used_at ? new Date(b.last_used_at).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0)
+    return timeB - timeA
+  })[0]
 
-    // Sort by last_used_at descending, fallback to created_at
-    visibleOnes.sort((a, b) => {
-      const timeA = a.last_used_at ? new Date(a.last_used_at).getTime() : (a.created_at ? new Date(a.created_at).getTime() : 0)
-      const timeB = b.last_used_at ? new Date(b.last_used_at).getTime() : (b.created_at ? new Date(b.created_at).getTime() : 0)
-      return timeB - timeA
-    })
-    
-    setCurrentSuggestion(visibleOnes[0])
-  }, [suggestions, loading])
-
+  if (loading) return <p>{t(language, 'meeting.loading')}</p>
+  if (error) return <div role="alert">
+    <p>{t(language, 'meeting.failed')}</p>
+    <button type="button" onClick={() => void fetchSuggestions()}>{t(language, 'meeting.retry')}</button>
+  </div>
+  if (!currentSuggestion?.content.length) return <p>{t(language, 'suggestion.empty')}</p>
   return (
-    <MeetingSuggestions language={language}>
-    {loading ? <p>{t(language, 'meeting.loading')}</p> : !currentSuggestion || currentSuggestion.content.length === 0 ? <p>{t(language, 'suggestion.empty')}</p> :
     <section className="mobile-home-section" style={{ marginTop: 24 }}>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -62,8 +52,7 @@ export function ServiceSuggestionsSection({ language = 'ko' }: { language?: AppL
           <SuggestionCard key={idx} block={block} language={language} />
         ))}
       </div>
-    </section>}
-    </MeetingSuggestions>
+    </section>
   )
 }
 
