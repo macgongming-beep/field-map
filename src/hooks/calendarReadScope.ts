@@ -77,9 +77,15 @@ export async function readScopedCalendar(scope: string) {
 }
 
 async function hydrateCalendarAssignments(events: RawCalendarEvent[]) {
+  const merged = await readCalendarAssignments(events.map(e => e.id))
+  return events.map(event => toCalendarEvent(event, merged.filter(a => a.eventId === event.id)))
+}
+
+// Every team of each requested event, never filtered by user.
+async function readCalendarAssignments(eventIds: number[]) {
   const assignments: RawEventCardAssignment[] = []
   const linked: RawEventCardAssignmentCard[] = []
-  const ids = [...new Set(events.map(e => e.id))]
+  const ids = [...new Set(eventIds)]
   for (let start = 0; start < ids.length; start += 100) {
     const batch = ids.slice(start, start + 100)
     const [base, cards] = await Promise.all([
@@ -90,8 +96,7 @@ async function hydrateCalendarAssignments(events: RawCalendarEvent[]) {
     assignments.push(...base)
     linked.push(...cards)
   }
-  const merged = mergeEventCardAssignments(assignments.map(toEventCardAssignment), linked)
-  return events.map(event => toCalendarEvent(event, merged.filter(a => a.eventId === event.id)))
+  return mergeEventCardAssignments(assignments.map(toEventCardAssignment), linked)
 }
 
 async function readServiceCalendar(scope: string) {
@@ -112,14 +117,24 @@ async function readServiceCalendar(scope: string) {
   const ids = [...new Set([...todayRows.map(row => row.id), ...mine.map(row => row.event_id),
     ...restaurants.map(row => row.event_id), ...(target == null ? [] : [target])])]
   if (ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid service calendar event id')
-  const events: RawCalendarEvent[] = []
-  for (let start = 0; start < ids.length; start += 100) {
-    const batch = ids.slice(start, start + 100)
-    const rows = await pages<RawCalendarEvent>((from, to) => supabase.from('calendar_events')
-      .select(CALENDAR_EVENT_COLUMNS).in('id', batch).order('id').range(from, to))
-    if (rows.some(row => !batch.includes(row.id))) throw new Error('Invalid service calendar event')
-    events.push(...rows)
+  const readEvents = async () => {
+    const events: RawCalendarEvent[] = []
+    for (let start = 0; start < ids.length; start += 100) {
+      const batch = ids.slice(start, start + 100)
+      const rows = await pages<RawCalendarEvent>((from, to) => supabase.from('calendar_events')
+        .select(CALENDAR_EVENT_COLUMNS).in('id', batch).order('id').range(from, to))
+      if (rows.some(row => !batch.includes(row.id))) throw new Error('Invalid service calendar event')
+      events.push(...rows)
+    }
+    return events
   }
+  // Assignments depend only on the indexed IDs, not on the event bodies, so both
+  // reads start together. Settle both before failing so a retry never overlaps.
   // Never filter these rows by user: shared assignments need every team in the event.
-  return (await hydrateCalendarAssignments(events)).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
+  const [eventRead, assignmentRead] = await Promise.allSettled([readEvents(), readCalendarAssignments(ids)])
+  if (eventRead.status === 'rejected') throw eventRead.reason
+  if (assignmentRead.status === 'rejected') throw assignmentRead.reason
+  const merged = assignmentRead.value
+  return eventRead.value.map(event => toCalendarEvent(event, merged.filter(a => a.eventId === event.id)))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
 }

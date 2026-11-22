@@ -18,6 +18,7 @@
 홈 현황/제안 지연 읽기: [0156 홈 구역 진행률 제거와 제안 열 때 읽기](0156-demo-home-progress-and-suggestion-demand.md).
 
 나의 봉사 첫 진입: [0157 개인 구역 복구 조회 대기 단축](0157-demo-my-service-entry-recovery.md).
+나의 봉사 일정 읽기: [0158 공유 팀 배정 병렬화](0158-demo-service-calendar-parallel-assignments.md).
 
 봉사자·관리 화면 조회 데모 재검증: [0155 개인 구역 ID 재사용과 경량 관리 조회](0155-demo-section-read-reuse.md).
 

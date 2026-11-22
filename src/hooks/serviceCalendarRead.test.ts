@@ -106,6 +106,53 @@ test('leader without a personal card assignment keeps today meeting participants
   expect(rows[0]).toMatchObject({ leaders: ['Me'], applicants: ['Guest'], cardAssignments: [{ userName: 'Other team', assignedCardId: 90 }] })
 })
 
+test('shared team assignments start with the event bodies instead of waiting for them', async () => {
+  const original = state.query.getMockImplementation()!
+  let releaseEvents!: () => void
+  const eventsHeld = new Promise<void>(resolve => { releaseEvents = resolve })
+  state.query.mockImplementation(async call => {
+    if (call.table === 'calendar_events' && call.columns !== 'id,event_date') await eventsHeld
+    return original(call)
+  })
+  const read = readScopedCalendar(scope)
+  await vi.waitFor(() => expect(state.calls.filter(call => call.columns === '*').map(call => call.table).sort())
+    .toEqual(['event_card_assignment_cards', 'event_card_assignments']))
+  expect(state.calls.filter(call => call.table === 'calendar_events' && call.columns !== 'id,event_date')).toHaveLength(1)
+  releaseEvents()
+  const rows = await read
+  // Same requests and the same merged result as the serial read.
+  expect(state.calls).toHaveLength(6)
+  expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
+  expect(rows[0].cardAssignments).toEqual(expect.arrayContaining([
+    expect.objectContaining({ userName: 'Me', assignedCardId: 10, teamKey: 'mine' }),
+    expect.objectContaining({ userName: 'Other', assignedCardIds: [21], teamKey: 'other' }),
+  ]))
+})
+
+test.each([
+  ['calendar_events', 'event_card_assignments'],
+  ['event_card_assignments', 'calendar_events'],
+])('a failed %s read waits for the concurrent %s read before rejecting', async (failing, held) => {
+  const original = state.query.getMockImplementation()!
+  let releaseHeld!: () => void
+  const heldRead = new Promise<void>(resolve => { releaseHeld = resolve })
+  let heldDone = false
+  state.query.mockImplementation(async call => {
+    if (call.columns === 'id,event_date' || call.columns === 'event_id,user_name' || call.table === 'event_restaurant_assignments') return original(call)
+    if (call.table === failing) return { data: [], error: new Error('offline') }
+    if (call.table === held) { await heldRead; heldDone = true }
+    return original(call)
+  })
+  let settled = false
+  const read = readScopedCalendar(scope).finally(() => { settled = true })
+  await vi.waitFor(() => expect(state.calls.some(call => call.table === held && call.columns !== 'id,event_date')).toBe(true))
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(settled).toBe(false)
+  releaseHeld()
+  await expect(read).rejects.toThrow('offline')
+  expect(heldDone).toBe(true)
+})
+
 test('empty indexes never turn into an unfiltered event or assignment read', async () => {
   state.query.mockResolvedValue({ data: [], error: null })
   expect(await readScopedCalendar(scope)).toEqual([])
