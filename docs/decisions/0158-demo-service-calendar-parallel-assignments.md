@@ -70,3 +70,17 @@
   - 47배 확대 자료 측정에서 건물 첫 페이지가 1,482KB였다.
   - 1,000행 페이지와 방문 기록이 직렬로 이어진다.
   - 다음 단계로, 소비자별로 필요한 열과 범위를 나누는 조사를 한다.
+
+## 데모 반영
+
+- 소스 `f51096e`를 `git archive`로 따로 꺼내 위 데모 프로필로 빌드했다.
+  - 측정한 빌드와 배포 산출물의 `dist`가 바이트 단위로 같다.
+  - 운영 DB 주소가 산출물에 없고, 데모 DB 주소만 있음을 확인했다.
+- `deploy:demo` 공식 경로를 썼다. 사전 검사를 통과한 뒤 1회 배포했다: `dpl_2W9pWuLxCQXixYmK9NCKeWyfr3NA`.
+- 공개 데모의 HTML/SW/매니페스트/JS/CSS 25개가 산출물과 해시 일치했다.
+  - 운영 활성 배포(`dpl_BAhZZ37sfWNcbJR7XWUWmZu7VyVH`)와 운영·데모 환경변수는 배포 전후 동일했다.
+  - 공개 데모 WebKit 390px 로그인 화면 표시와 페이지 오류 0건을 확인했다.
+- 직전 데모 배포는 `dpl_FvGcCGSBThJMjaausJRCUYWtNRsA`(`9317ee2`)이며, DB 복원 없이 앱만 되돌릴 수 있다.
+- 배포 도구는 Codex의 `scratch/release-service-entry-nov22.mjs`에서 경로만 바꾼 로컬 사본이다.
+  - 사본과 기록은 scratchpad의 `release-nov23*`, Git 제외.
+- 이 기록 커밋으로 재배포하지 않는다.
