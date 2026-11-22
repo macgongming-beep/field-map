@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CalendarEvent } from '../../types'
 import { AdminMobileCalendar } from './AdminMobileCalendar'
 import { CalendarReadContext } from '../../hooks/CalendarReadContext'
+import { TerritoryReadContext } from '../../hooks/RouteReadContext'
 import type { ReactNode } from 'react'
 
 vi.mock('../CommentSection', () => ({
@@ -272,5 +273,55 @@ describe('모바일 일정 상세 뒤로가기', () => {
     expect(screen.getByText('둘째')).toBeTruthy()
     expect(screen.getByRole('link', { name: '첫째에게 전화' }).getAttribute('href')).toBe('tel:01012345678')
     expect(screen.queryByRole('link', { name: '둘째에게 전화' })).toBeNull()
+  })
+})
+
+describe('territory data gate inside the mobile calendar', () => {
+  const pending = { ready: false, error: false, retry: vi.fn() }
+  it.each([
+    ['plain detail', {} as Partial<CalendarEvent>, false],
+    ['group service detail', { serviceKind: 'group', groupServiceScope: true } as Partial<CalendarEvent>, true],
+  ])('%s waits for cards and buildings, then opens', async (_label, extra, groupService) => {
+    if (groupService) { vi.stubEnv('VITE_GROUP_SERVICE_ENABLED', 'true'); vi.stubEnv('VITE_ASSIGNMENT_REVISION_ENABLED', 'true') }
+    const view = (value: typeof pending) => <MemoryRouter initialEntries={['/calendar?openEvent=17']}>
+      <TerritoryReadContext.Provider value={value}>
+        <AdminMobileCalendar language="ko" currentVisitor="봉사자" role="user" events={[{ ...event, ...extra }]} />
+      </TerritoryReadContext.Provider>
+    </MemoryRouter>
+    const rendered = render(view(pending))
+    const detail = () => groupService ? document.querySelector('.gs-tab-body') : screen.queryByText('comment area')
+    expect(await screen.findByText('데이터 불러오는 중...')).toBeTruthy()
+    expect(detail()).toBeNull()
+    rendered.rerender(view({ ...pending, error: true }))
+    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
+    expect(pending.retry).toHaveBeenCalled()
+    expect(detail()).toBeNull()
+    rendered.rerender(view({ ...pending, ready: true }))
+    await waitFor(() => expect(detail()).not.toBeNull())
+  })
+
+  it('the assignment editor never renders from a pending territory snapshot', async () => {
+    const groupEvent = event
+    const view = (value: typeof pending) => <MemoryRouter initialEntries={['/calendar?openEvent=17']}>
+      <TerritoryReadContext.Provider value={value}>
+        <AdminMobileCalendar language="ko" currentVisitor="인도자" role="admin" events={[groupEvent]} onAssignCardsToEventParticipantsBulk={vi.fn()} />
+      </TerritoryReadContext.Provider>
+    </MemoryRouter>
+    const rendered = render(view({ ...pending, ready: true }))
+    fireEvent.click(await screen.findByText(/팀 구성/))
+    await waitFor(() => expect(document.querySelector('.asg-editor')).not.toBeNull())
+    rendered.rerender(view(pending))
+    expect(document.querySelector('.asg-editor')).toBeNull()
+    expect(screen.getByText('데이터 불러오는 중...')).toBeTruthy()
+  })
+
+  it('the month view itself renders while territory data is pending', async () => {
+    render(<MemoryRouter initialEntries={['/calendar']}>
+      <TerritoryReadContext.Provider value={pending}>
+        <AdminMobileCalendar language="ko" currentVisitor="봉사자" role="user" events={[event]} />
+      </TerritoryReadContext.Provider>
+    </MemoryRouter>)
+    expect(document.querySelector('.mobile-calendar-day')).not.toBeNull()
+    expect(screen.queryByText('데이터 불러오는 중...')).toBeNull()
   })
 })

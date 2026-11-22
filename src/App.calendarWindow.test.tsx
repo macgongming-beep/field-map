@@ -4,7 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import App from './App'
 import { CalendarReadContext } from './hooks/CalendarReadContext'
-import { RouteReadGate } from './hooks/RouteReadGate'
+import { RouteReadGate, TerritoryReadGate } from './hooks/RouteReadGate'
+import { routeSkipsTerritory } from './hooks/RouteReadContext'
 
 const state = vi.hoisted(() => ({
   ready: true, scope: '', sessionUser: undefined as string | undefined, role: '', mounts: 0, shellMounts: 0, noticeMounts: 0,
@@ -38,7 +39,8 @@ vi.mock('./hooks/useUnitCreationRealtime', () => ({ useUnitCreationRealtime: () 
 vi.mock('./lib/pwa', () => ({ applyUpdate: vi.fn() }))
 vi.mock('./components/MobileHome', () => ({ MobileHome: () => {
   useState(() => { state.shellMounts++; return null })
-  return <><button>navigation</button><RouteReadGate><CalendarConsumer /></RouteReadGate></>
+  // Like the real calendar: territory consumers live inside the route.
+  return <><button>navigation</button><RouteReadGate><CalendarConsumer /><TerritoryReadGate><div>territory detail</div></TerritoryReadGate></RouteReadGate></>
 } }))
 vi.mock('./components/Login', () => ({ Login: () => <div>login screen</div> }))
 vi.mock('./components/Toast', () => ({ Toast: () => null }))
@@ -255,6 +257,42 @@ test('production home detail keeps its editor mounted while complete history loa
   state.ready = true
   view.rerender(<MemoryRouter initialEntries={['/?openEvent=17']}><App /></MemoryRouter>)
   expect(screen.getByText('editor mounted')).toBeTruthy()
+})
+
+test('mobile calendar month renders while territory data loads; only territory consumers wait', async () => {
+  const view = render(<MemoryRouter initialEntries={['/calendar']}><App /></MemoryRouter>)
+  await screen.findByText('territory detail')
+  state.buildingReady = false
+  view.rerender(<MemoryRouter initialEntries={['/calendar']}><App /></MemoryRouter>)
+  expect(screen.getByText('detail mounted')).toBeTruthy()
+  expect(screen.queryByText('territory detail')).toBeNull()
+  expect(screen.getByText('데이터 불러오는 중...')).toBeTruthy()
+  state.buildingError = true
+  view.rerender(<MemoryRouter initialEntries={['/calendar']}><App /></MemoryRouter>)
+  expect(screen.getByText('detail mounted')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
+  expect(state.retryBuilding).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText('territory detail')).toBeNull()
+  state.buildingError = false
+  state.buildingReady = true
+  view.rerender(<MemoryRouter initialEntries={['/calendar']}><App /></MemoryRouter>)
+  expect(await screen.findByText('territory detail')).toBeTruthy()
+})
+
+test.each(['/', '/zone', '/map'])('%s still blocks the whole route while territory data loads', async path => {
+  const view = render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  await screen.findByText('territory detail')
+  state.buildingReady = false
+  view.rerender(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(screen.queryByText('detail mounted')).toBeNull()
+  expect(screen.queryByText('territory detail')).toBeNull()
+})
+
+test('only the mobile month calendar skips the whole-route territory gate', () => {
+  expect(routeSkipsTerritory(false, '/calendar')).toBe(true)
+  for (const [desktop, path] of [[true, '/calendar'], [false, '/'], [false, '/zone'], [false, '/map'], [false, '/territory'], [false, '/calendarx']] as const) {
+    expect(routeSkipsTerritory(desktop, path)).toBe(false)
+  }
 })
 
 test('calendar requests its initial month even while buildings block the calendar component', () => {

@@ -1,5 +1,6 @@
 // 관리자 모바일 캘린더 — design_handoff 02 / 02b / 03 화면
 import { t, weekdayShortLabels } from '../../i18n'
+import { TerritoryReadGate } from '../../hooks/RouteReadGate'
 import { confirmDialog } from '../../lib/confirm'
 import { pushBackHandler, requestBackHandler } from '../../lib/backStack'
 import { showToast } from '../../lib/toast'
@@ -641,7 +642,7 @@ export function AdminMobileCalendar({
       )}
 
       {/* ── 일정 상세 시트 ─────────────── */}
-      {detailEvent && assignEventId === null && editingEventId === null && !scopeAction && groupServiceEnabled() && detailEvent.groupServiceScope && <GroupServiceDetail
+      {detailEvent && assignEventId === null && editingEventId === null && !scopeAction && groupServiceEnabled() && detailEvent.groupServiceScope && <TerritoryReadGate onClose={returnFromDetail}><GroupServiceDetail
         globalSettings={globalSettings}
         key={`${detailEvent.date}:${detailEvent.time}:${detailEvent.endTime}`} mobile event={detailEvent} events={events} language={language} currentVisitor={currentVisitor}
         onClose={returnFromDetail} onApply={onApplyToEvent}
@@ -655,10 +656,10 @@ export function AdminMobileCalendar({
           if(target.seriesId&&onDeleteEventSeries){setScopeAction({kind:'delete',event:target});closeDetail()}
           else if(await confirmDialog({message:t(language,'calendar.deleteConfirm'),danger:true,confirmLabel:msg('삭제')})){onDeleteEvent(id);closeDetail()}
         }:undefined}
-        onEdit={onUpdateEvent?id=>{setDetailEventId(id);setEditingEventId(id)}:undefined}/>
+        onEdit={onUpdateEvent?id=>{setDetailEventId(id);setEditingEventId(id)}:undefined}/></TerritoryReadGate>
       }
       {detailEvent && assignEventId === null && editingEventId === null && !scopeAction && !(groupServiceEnabled() && detailEvent.groupServiceScope) && (
-        <AdminEventDetailSheet
+        <TerritoryReadGate onClose={returnFromDetail}><AdminEventDetailSheet
             buildings={buildings}
             informalAssets={informalAssets}
             eventInformalAssignments={eventInformalAssignments}
@@ -708,7 +709,7 @@ export function AdminMobileCalendar({
                 }
               : undefined
           }
-        />
+        /></TerritoryReadGate>
       )}
 
       {/* 배정 에디터 (풀스크린) — 인도자/관리자 */}
@@ -721,7 +722,7 @@ export function AdminMobileCalendar({
           : cards.filter((c) => c.assignedLeader === currentVisitor || c.assignedLeaders?.includes(currentVisitor))
         const canEdit = canArrangeService(role,assignEvent,currentVisitor)
         return (
-          <AssignmentEditor
+          <TerritoryReadGate onClose={() => setAssignEventId(null)}><AssignmentEditor
             event={assignEvent}
             cards={myCards}
             buildings={buildings}
@@ -747,7 +748,7 @@ export function AdminMobileCalendar({
                 onConflict: opts.onConflict,
               })
             }
-          />
+          /></TerritoryReadGate>
         )
       })()}
 

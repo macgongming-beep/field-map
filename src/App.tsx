@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { calendarReadScope, calendarWindowEnabled } from './hooks/calendarReadScope'
 import { useSettingsCalendarScope } from './hooks/useSettingsCalendarScope'
 import { CalendarReadContext } from './hooks/CalendarReadContext'
-import { RouteReadContext } from './hooks/RouteReadContext'
+import { RouteReadContext, TerritoryReadContext, routeSkipsTerritory } from './hooks/RouteReadContext'
 import { homeEventDetailId } from './lib/eventDetailNavigation'
 import { Toast } from './components/Toast'
 import { MeetingProvider } from './features/meetingNotes/MeetingProvider'
@@ -436,6 +436,9 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
   // Home detail owns CalendarReadGate too: keep its editor mounted while loading history.
   const homeCalendarDetail = !isDesktop && homeEventDetailId(location.pathname, location.search) !== null
   const needsBuildings = buildingScopeReady === false
+  // The mobile month view renders from events alone. Territory data keeps loading;
+  // its detail and assignment editors wait behind TerritoryReadGate instead.
+  const routeNeedsBuildings = needsBuildings && !routeSkipsTerritory(isDesktop, location.pathname)
   const needsCalendar = windowedCalendar && location.pathname !== '/calendar' && !homeCalendarDetail && !calendarScopeReady
   if (startup && needsBuildings) {
     return buildingReadError
@@ -488,9 +491,14 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
           retry: () => { void retryCalendarRead().catch(() => {}) },
         } : null}>
         <RouteReadContext.Provider value={{
-          ready: !needsBuildings && !needsCalendar,
-          error: needsBuildings ? buildingReadError : needsCalendar && calendarReadError,
-          retry: () => { void (needsBuildings ? retryBuildingRead() : retryCalendarRead()).catch(() => {}) },
+          ready: !routeNeedsBuildings && !needsCalendar,
+          error: routeNeedsBuildings ? buildingReadError : needsCalendar && calendarReadError,
+          retry: () => { void (routeNeedsBuildings ? retryBuildingRead() : retryCalendarRead()).catch(() => {}) },
+        }}>
+        <TerritoryReadContext.Provider value={{
+          ready: !needsBuildings,
+          error: needsBuildings && buildingReadError,
+          retry: () => { void retryBuildingRead().catch(() => {}) },
         }}>
         {isDesktop ? (
           <DesktopApp
@@ -717,6 +725,7 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
             />
           </div>
         )}
+        </TerritoryReadContext.Provider>
         </RouteReadContext.Provider>
         </CalendarReadContext.Provider>
         </TerritoryRealtimeContext.Provider>
