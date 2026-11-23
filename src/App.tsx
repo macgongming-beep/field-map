@@ -16,6 +16,7 @@ import { PwaInstallBanner } from './components/PwaInstall'
 import { PullToRefresh } from './components/PullToRefresh'
 import { useStore } from './hooks/useStore'
 import { buildingDemandForRoute, BuildingDetailContext, FullBuildingContext } from './hooks/buildingDemand'
+import { ServiceLabelContext } from './hooks/useServiceLabels'
 import { msg } from './lib/msg'
 import { recentSessionsEnabled } from './hooks/serviceSessionReadScope'
 import { useCalendarRealtime } from './hooks/useCalendarRealtime'
@@ -145,7 +146,7 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
   const calendarScope = useSettingsCalendarScope(requestedScope, location.pathname, location.search, homeScope, windowedCalendar)
 
   const {
-    buildingScopeReady, buildingReadError, retryBuildingRead, buildingDetailReader, fullBuildingReader,
+    buildingScopeReady, buildingReadError, retryBuildingRead, buildingDetailReader, fullBuildingReader, serviceLabelSource,
     calendarScopeReady, calendarReadError, retryCalendarRead, invalidateCalendarCache, refreshCalendarParticipants,
     cards,
     buildings,
@@ -485,6 +486,7 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
         <ScopedCardContext.Provider value={recipientCardScopeEnabled(actualRole, Boolean(recipientUser))}>
         <BuildingDetailContext.Provider value={buildingDetailReader ?? null}>
         <FullBuildingContext.Provider value={fullBuildingReader ?? null}>
+        <ServiceLabelContext.Provider value={serviceLabelSource}>
         <TerritoryRealtimeContext.Provider value={territoryRealtime}>
         <CalendarReadContext.Provider value={windowedCalendar ? {
           ...calendarDemand, ready: calendarScopeReady, error: calendarReadError, select: selectCalendarDemand,
@@ -729,6 +731,7 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
         </RouteReadContext.Provider>
         </CalendarReadContext.Provider>
         </TerritoryRealtimeContext.Provider>
+        </ServiceLabelContext.Provider>
         </FullBuildingContext.Provider>
         </BuildingDetailContext.Provider>
         </ScopedCardContext.Provider>

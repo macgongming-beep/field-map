@@ -212,6 +212,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const acquiredBuildingMode = useRef<BuildingDemand>(requestedBuildingDemand === 'landing' ? 'landing' : 'home')
   const buildingSnapshotMode = useRef<BuildingDemand>(requestedBuildingDemand === 'landing' ? 'landing' : 'home')
   const [fullBuildingRequested, setFullBuildingRequested] = useState(false)
+  // 0170: display labels read outside the store follow every later successful territory refresh.
+  const [labelRevision, setLabelRevision] = useState(0)
   const requestFullBuildings = useCallback(() => { setFullBuildingRequested(true) }, [])
   const routeBuildingMode = demandBuildings
     && (!(requestedBuildingDemand === 'calendar' || requestedBuildingDemand === 'zone') || calendarZoneBuildingDemandEnabled())
@@ -885,7 +887,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     if (invalidatesCalendar) clearCalendarWindows()
     const trackRefresh = invalidatesCalendar && calendarNavigationReuseEnabled()
     if (trackRefresh) ++calendarRefreshesPending.current
+    // The first snapshot is not newer than a label read it raced with; later
+    // refreshes (pull, foreground, recovery, writes) are, even when a light tier
+    // skipped the buildings/cards bodies. A failed refresh keeps the old labels.
+    const refreshesLabels = loadedOnceRef.current && slices.some(slice => slice === 'buildings' || slice === 'cards')
     const track = (promise: Promise<void>) => {
+      if (refreshesLabels) void promise.then(() => setLabelRevision(value => value + 1), () => {})
       if (trackRefresh) {
         const done = () => { --calendarRefreshesPending.current }
         void promise.then(done, done)
@@ -1884,6 +1891,10 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     return true
   }
 
+  // Calendar/zone tiers carry placeholder coordinates; only map/full (or eager) buildings are real places.
+  const storePlaces = !demandBuildings || (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank.map)
+  const serviceLabelSource = useMemo(() => ({ revision: labelRevision, storePlaces }), [labelRevision, storePlaces])
+
   return {
     // Local editor promotion must not unmount its parent calendar and lose its open state.
     buildingScopeReady: !demandBuildings || (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank[routeBuildingMode]),
@@ -1891,6 +1902,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       ready: loadedBuildingMode === 'full', error: buildingReadError,
       request: requestFullBuildings, retry: retryBuildingRead,
     } : null,
+    serviceLabelSource,
     buildingReadError,
     retryBuildingRead,
     buildingDetailReader,

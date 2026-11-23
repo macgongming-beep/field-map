@@ -775,3 +775,41 @@ test('detail editor never mounts a blank memo while its read is pending, support
   ready = true; rerender(view())
   expect(screen.getByRole('textbox').getAttribute('value')).toBe('saved')
 })
+
+// 0170 Codex review: 나의 봉사 labels learn which store buildings are real places and when to refresh.
+test.each([['calendar', false], ['zone', false], ['map', true], ['full', true]] as const)('leader %s -> light 나의 봉사: store places usable=%s', async (tier, usable) => {
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, 'leader', undefined, undefined, 'tester', mode), { initialProps: { mode: 'landing' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.serviceLabelSource.storePlaces).toBe(false)
+  rerender({ mode: tier })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  rerender({ mode: buildingDemandForRoute('leader', '/territory', '', false)! })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  expect(result.current.serviceLabelSource.storePlaces).toBe(usable)
+  if (tier === 'calendar' || tier === 'zone') expect(result.current.buildings[0]).toMatchObject({ lat: 0, lng: 0 })
+})
+
+test('label revision moves after later successful territory refreshes only', async () => {
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  const { result, rerender } = renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, 'leader', undefined, undefined, 'tester', mode), { initialProps: { mode: 'landing' as BuildingDemand } })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  const first = result.current.serviceLabelSource
+  expect(first.revision).toBe(0)
+  await act(async () => { await result.current.refetchAll() })
+  expect(result.current.serviceLabelSource.revision).toBe(1)
+  await act(async () => { await result.current.refetchSlices(['calendar']) })
+  expect(result.current.serviceLabelSource.revision).toBe(1)
+  // A map tier really reads cards; its failure must not claim fresher labels.
+  rerender({ mode: 'map' })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  const afterMap = result.current.serviceLabelSource.revision
+  state.cardError = true
+  await act(async () => { await result.current.refetchSlices(['cards']).catch(() => {}) })
+  expect(result.current.serviceLabelSource.revision).toBe(afterMap)
+  state.cardError = false
+  await act(async () => { await result.current.refetchSlices(['buildings', 'cards'], { triggeredBy: 'realtime:unit-created-recovery' }) })
+  expect(result.current.serviceLabelSource.revision).toBe(afterMap + 1)
+})
