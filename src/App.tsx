@@ -146,7 +146,7 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
   const calendarScope = useSettingsCalendarScope(requestedScope, location.pathname, location.search, homeScope, windowedCalendar)
 
   const {
-    buildingScopeReady, buildingReadError, retryBuildingRead, buildingDetailReader, fullBuildingReader, serviceLabelSource,
+    buildingScopeReady, buildingReadError, retryBuildingRead, buildingDetailReader, fullBuildingReader, serviceLabelSource, recipientBaseReady,
     calendarScopeReady, calendarReadError, retryCalendarRead, invalidateCalendarCache, refreshCalendarParticipants,
     cards,
     buildings,
@@ -386,8 +386,14 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
     }
   }
 
+  // 0173: a volunteer's mobile home and month view render from schedules alone. Their first
+  // screen opens once the non-territory part of the snapshot is in; personal territory keeps
+  // loading. Event details wait behind TerritoryReadGate; other routes keep the full wait.
+  const recipientEarlyRoute = Boolean(recipientUser) && !isDesktop
+    && ((location.pathname === '/' && !location.search) || location.pathname === '/calendar')
+  const storeLoading = loading && !(recipientBaseReady && recipientEarlyRoute)
   // 무엇을 그릴지는 utils/appScreen 이 정한다 (순서가 미묘해 시험을 붙였다).
-  const screen = chooseAppScreen({ user, authLoading, loading: recipientPreview ? false : loading, error: recipientPreview ? null : error })
+  const screen = chooseAppScreen({ user, authLoading, loading: recipientPreview ? false : storeLoading, error: recipientPreview ? null : error })
 
   if (screen === 'login') {
     return (
@@ -439,9 +445,9 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
   const needsBuildings = buildingScopeReady === false
   // The mobile month view renders from events alone. Territory data keeps loading;
   // its detail and assignment editors wait behind TerritoryReadGate instead.
-  const routeNeedsBuildings = needsBuildings && !routeSkipsTerritory(isDesktop, location.pathname)
+  const routeNeedsBuildings = needsBuildings && !routeSkipsTerritory(isDesktop, location.pathname) && !recipientEarlyRoute
   const needsCalendar = windowedCalendar && location.pathname !== '/calendar' && !homeCalendarDetail && !calendarScopeReady
-  if (startup && needsBuildings) {
+  if (startup && needsBuildings && !recipientEarlyRoute) {
     return buildingReadError
       ? <div role="alert"><AppScreenReady onReady={onScreenReady} />{msg('자료를 불러오지 못했습니다.')}<button type="button" onClick={() => { void retryBuildingRead().catch(() => {}) }}>{msg('다시 시도')}</button></div>
       : <AppLoading startup={startup} />

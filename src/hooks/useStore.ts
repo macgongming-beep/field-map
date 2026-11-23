@@ -213,6 +213,13 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const buildingSnapshotMode = useRef<BuildingDemand>(requestedBuildingDemand === 'landing' ? 'landing' : 'home')
   // A tool's request lasts for this store: once asked, later refreshes keep that tier.
   const [toolBuildingTier, setToolBuildingTier] = useState<'map' | 'full' | null>(null)
+  // 0173: a volunteer's first snapshot lands in two parts. Schedules and other non-territory
+  // slices (base) let home and the mobile month view render; personal territory (buildings,
+  // cards, summaries, histories) keeps loading and gates its consumers via buildingScopeReady.
+  const [recipientBaseReady, setRecipientBaseReady] = useState(false)
+  const [recipientTerritoryLoaded, setRecipientTerritoryLoaded] = useState(false)
+  // Bumped on sign-out so a late first-snapshot part can never mark a later session ready.
+  const recipientSnapshotSession = useRef(0)
   // 0170: display labels read outside the store follow every later successful territory refresh.
   const [labelRevision, setLabelRevision] = useState(0)
   const requestFullBuildings = useCallback(() => { setToolBuildingTier('full') }, [])
@@ -926,6 +933,13 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
           const reads = [...requested].map(slice => slice === 'buildings' ? buildingsRead
             : afterBuildings.has(slice) ? buildingsRead.then(() => fetchSlice(slice, false, false, options?.strictGroups))
               : fetchSlice(slice, false, false, options?.strictGroups))
+          const territorySlices = new Set<Slice>(['buildings', 'cardBoundaries', ...afterBuildings])
+          const baseReads = [...requested].flatMap((slice, index) => territorySlices.has(slice) ? [] : [reads[index]])
+          const session = recipientSnapshotSession.current
+          void Promise.all(baseReads).then(() => {
+            // This path runs only for the first snapshot; ignore a part from an earlier session.
+            if (session === recipientSnapshotSession.current) setRecipientBaseReady(true)
+          }, () => {})
           try {
             await readSnapshotParts(reads)
           } catch (error) {
@@ -1149,6 +1163,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         }
       }
       loadedOnceRef.current = true
+      if (recipientReader) setRecipientTerritoryLoaded(true)
     } catch (error) {
       // Only a complete existing snapshot makes cancellation safe to leave on screen.
       if (error instanceof SupersededReadError && loadedOnceRef.current) throw error
@@ -1175,6 +1190,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
       // 안 그러면 로그인 화면이 '데이터 불러오는 중' 에서 멈춘다 (App.tsx)
       fetchStartedRef.current = false
       loadedOnceRef.current = false
+      recipientSnapshotSession.current += 1
+      setRecipientBaseReady(false)
+      setRecipientTerritoryLoaded(false)
       territoryCheckpoint.baseline = null
       territoryCheckpoint.buildingsThrough = null
       territoryCheckpoint.cards.clear()
@@ -1900,7 +1918,9 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
   return {
     // Local editor promotion must not unmount its parent calendar and lose its open state.
-    buildingScopeReady: !demandBuildings || (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank[routeBuildingMode]),
+    buildingScopeReady: recipientReader ? recipientTerritoryLoaded
+      : !demandBuildings || (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank[routeBuildingMode]),
+    recipientBaseReady: Boolean(recipientReader) && recipientBaseReady,
     fullBuildingReader: demandBuildings ? {
       ready: loadedBuildingMode === 'full', error: buildingReadError,
       request: requestFullBuildings, retry: retryBuildingRead,

@@ -1,3 +1,4 @@
+import "@testing-library/jest-dom/vitest"
 import { useContext, useState, type ReactNode } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
@@ -9,7 +10,7 @@ import { routeSkipsTerritory } from './hooks/RouteReadContext'
 
 const state = vi.hoisted(() => ({
   ready: true, scope: '', sessionUser: undefined as string | undefined, role: '', mounts: 0, shellMounts: 0, noticeMounts: 0,
-  moduleRequests: 0, moduleReady: 0, moduleReject: false, storeLoading: false,
+  moduleRequests: 0, moduleReady: 0, moduleReject: false, storeLoading: false, recipientBaseReady: false,
   buildingReady: true, buildingError: false, buildingScope: undefined as string | undefined, retryBuilding: vi.fn(async () => {}),
   auth: { user: { id: 1, name: 'Admin', role: 'admin' } as { id: number; name: string; role: string } | null, allUsers: [], loading: false },
 }))
@@ -31,7 +32,8 @@ vi.mock('./hooks/useStore', () => ({ useStore: (_enabled: boolean, role: string,
   state.role = role
   state.buildingScope = buildingScope
   return { loading: state.storeLoading, error: null, calendarScopeReady: state.ready, calendarReadError: false,
-    buildingScopeReady: state.buildingReady, buildingReadError: state.buildingError, retryBuildingRead: state.retryBuilding }
+    buildingScopeReady: state.buildingReady, buildingReadError: state.buildingError, retryBuildingRead: state.retryBuilding,
+    recipientBaseReady: state.recipientBaseReady }
 } }))
 vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: () => {} }))
 vi.mock('./hooks/usePlaceDeletionRealtime', () => ({ usePlaceDeletionRealtime: () => {} }))
@@ -44,6 +46,7 @@ vi.mock('./components/MobileHome', () => ({ MobileHome: ({ onChangeViewMode }: {
     {['admin', 'leader', 'user'].map(view => <button key={view} onClick={() => onChangeViewMode?.(view)}>{`view:${view}`}</button>)}<RouteReadGate><CalendarConsumer /><TerritoryReadGate><div>territory detail</div></TerritoryReadGate></RouteReadGate></>
 } }))
 vi.mock('./components/Login', () => ({ Login: () => <div>login screen</div> }))
+vi.mock('./components/DesktopApp', () => ({ DesktopApp: () => <div>desktop shell</div> }))
 vi.mock('./components/Toast', () => ({ Toast: () => null }))
 vi.mock('./components/ConfirmDialog', () => ({ ConfirmDialog: () => null }))
 vi.mock('./components/AppUpdateNotice', () => ({ AppUpdateNotice: () => null }))
@@ -70,7 +73,7 @@ function CalendarConsumer() {
 }
 beforeEach(() => {
   state.ready = true
-  state.moduleRequests = 0; state.moduleReady = 0; state.moduleReject = false; state.storeLoading = false
+  state.moduleRequests = 0; state.moduleReady = 0; state.moduleReject = false; state.storeLoading = false; state.recipientBaseReady = false
   state.buildingReady = true; state.buildingError = false; state.retryBuilding.mockClear()
   state.mounts = 0
   state.shellMounts = 0; state.noticeMounts = 0
@@ -348,4 +351,60 @@ test('switching the view in the app moves 나의 봉사 demand and switching bac
   await waitFor(() => expect(state.buildingScope).toBe('full'))
   expect(state.role).toBe('admin')
   expect(state.sessionUser).toBe('Admin')
+})
+
+// 0173: a volunteer's mobile home and month view open on the base part of the first snapshot.
+const volunteerBase = () => {
+  vi.stubEnv('VITE_RECIPIENT_STORE_ENABLED', 'true')
+  state.auth.user = { id: 7, name: 'Volunteer', role: 'user' }
+  state.storeLoading = true; state.recipientBaseReady = true; state.buildingReady = false
+}
+test.each(['/', '/calendar'])('volunteer %s opens on the base part while territory details stay gated', async path => {
+  volunteerBase()
+  render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(await screen.findByRole('button', { name: 'navigation' })).toBeInTheDocument()
+  expect(state.sessionUser).toBe('Volunteer')
+  expect(screen.queryByText('app loading')).not.toBeInTheDocument()
+  // The route itself renders; only the territory consumer inside it waits.
+  expect(screen.getByText('detail mounted')).toBeInTheDocument()
+  expect(screen.queryByText('territory detail')).not.toBeInTheDocument()
+  expect(screen.getByText('데이터 불러오는 중...')).toBeInTheDocument()
+})
+test.each(['/territory', '/map', '/?openEvent=5', '/settings'])('volunteer %s keeps the full first wait', async path => {
+  volunteerBase()
+  render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
+  expect(await screen.findByText('app loading')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'navigation' })).not.toBeInTheDocument()
+})
+test('volunteer home waits until the base part is in, and desktop keeps the full wait', async () => {
+  volunteerBase(); state.recipientBaseReady = false
+  const first = render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+  expect(await screen.findByText('app loading')).toBeInTheDocument()
+  first.unmount()
+  volunteerBase()
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+  render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+  expect(await screen.findByText('app loading')).toBeInTheDocument()
+  // Not a lazy-screen fallback: the desktop shell (about 0.5s to load here) must not arrive either.
+  await new Promise(resolve => setTimeout(resolve, 1500))
+  expect(screen.queryByText('desktop shell')).not.toBeInTheDocument()
+  expect(screen.getByText('app loading')).toBeInTheDocument()
+}, 10000)
+
+test('control: a loaded desktop volunteer does reach the desktop shell in this harness', async () => {
+  vi.stubEnv('VITE_RECIPIENT_STORE_ENABLED', 'true')
+  state.auth.user = { id: 7, name: 'Volunteer', role: 'user' }
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+  render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+  expect(await screen.findByText('desktop shell', undefined, { timeout: 3000 })).toBeInTheDocument()
+})
+test('leaders and administrators never take the volunteer early screen', async () => {
+  vi.stubEnv('VITE_RECIPIENT_STORE_ENABLED', 'true')
+  for (const role of ['leader', 'admin']) {
+    state.auth.user = { id: 8, name: 'Other', role }
+    state.storeLoading = true; state.recipientBaseReady = true
+    const view = render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>)
+    expect(await screen.findByText('app loading')).toBeInTheDocument()
+    view.unmount()
+  }
 })

@@ -2229,3 +2229,64 @@ test('a moved-out building disappears without dropping its globally retained his
   expect(result.current.visitHistories.map((h) => h.id)).toEqual(expect.arrayContaining([1, 900]))
   expect(result.current.cards.find((card) => card.id === 2)?.units).toBe(50)
 })
+
+// 0173: the first snapshot lands in two parts; the base part alone opens volunteer home.
+test('base part is ready before personal territory; territory readiness follows the complete snapshot', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  let releaseBuildings!: () => void
+  state.recipientDetails = new Promise(resolve => { releaseBuildings = resolve })
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(result.current.recipientBaseReady).toBe(true))
+  // Schedules are in, personal territory is not: consumers of buildings stay gated.
+  expect(result.current.loading).toBe(true)
+  expect(result.current.buildingScopeReady).toBe(false)
+  expect(result.current.buildings).toEqual([])
+  expect(state.reads).not.toContain('cards')
+  await act(async () => { releaseBuildings() })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.buildingScopeReady).toBe(true)
+  expect(result.current.buildings.map(b => b.id)).toEqual([10])
+  // A later refresh never closes the gate again.
+  await act(async () => { await result.current.refetchAll() })
+  expect(result.current.buildingScopeReady).toBe(true)
+})
+
+test('base part stays closed while a base slice is pending, and a disabled store resets both parts', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  let releaseCalendar!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.calendarResponses.push(new Promise(resolve => { releaseCalendar = resolve }))
+  const { result, rerender } = renderHook(({ enabled }) => useStore(enabled, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'), { initialProps: { enabled: true } })
+  await waitFor(() => expect(state.reads).toContain('app_settings'))
+  await act(async () => {})
+  expect(result.current.recipientBaseReady).toBe(false)
+  await act(async () => { releaseCalendar({ data: [], error: null }) })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.recipientBaseReady).toBe(true)
+  rerender({ enabled: false })
+  await waitFor(() => expect(result.current.recipientBaseReady).toBe(false))
+  expect(result.current.buildingScopeReady).toBe(false)
+})
+
+test('non-volunteer stores never report a base part', async () => {
+  const { result } = renderHook(() => useStore(true, 'leader', undefined, 'window:2026-10-01:2026-10-31'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.recipientBaseReady).toBe(false)
+})
+
+test('a base part that answers after sign-out never marks the signed-out store ready', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  let releaseCalendar!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.calendarResponses.push(new Promise(resolve => { releaseCalendar = resolve }))
+  const { result, rerender } = renderHook(({ enabled }) => useStore(enabled, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'), { initialProps: { enabled: true } })
+  await waitFor(() => expect(state.reads).toContain('app_settings'))
+  rerender({ enabled: false })
+  await act(async () => { releaseCalendar({ data: [], error: null }) })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  expect(result.current.recipientBaseReady).toBe(false)
+})
