@@ -25,6 +25,8 @@
 건물 전체 읽기: [0161 페이지 동시 읽기](0161-demo-concurrent-building-pages.md).
 봉사자 홈 첫 실행: [0162 사용자 조회·카드 요약 앞당김](0162-demo-volunteer-home-first-launch.md).
 0160~0162 운영 반영: [0163](0163-demo-perf-0160-0162-production-release.md).
+나의 봉사 식당 색인: [0164 오늘 이후 일정만](0164-demo-service-restaurant-index-from-today.md).
+인도자 나의 봉사 건물 전체 조회: [0165 분리 보류](0165-leader-my-service-full-buildings-deferred.md).
 
 봉사자·관리 화면 조회 데모 재검증: [0155 개인 구역 ID 재사용과 경량 관리 조회](0155-demo-section-read-reuse.md).
 

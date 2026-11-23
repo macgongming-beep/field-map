@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { calendarReadScope, readScopedCalendar } from './calendarReadScope'
+import { getCurrentRestaurantAssignmentsForUnit } from '../utils/restaurantAssignments'
+import type { EventRestaurantAssignment } from '../types'
 
 const state = vi.hoisted(() => ({ calls: [] as { table: string; columns: string; filters: [string, unknown][]; from: number }[], query: vi.fn() }))
 vi.mock('../lib/supabase', () => ({ supabase: { from: (table: string) => {
@@ -325,4 +327,41 @@ test('a past restaurant-only event is no longer hydrated, but a past personal ev
   const bodyIds = state.calls.filter(call => call.table === 'calendar_events' && call.columns !== 'id,event_date').flatMap(call => call.filters[0][1] as number[])
   expect(bodyIds).not.toContain(6)
   expect(bodyIds).toContain(1)
+})
+
+// 0164 regression: the unit-detail consumer sees exactly what the old complete index gave it.
+test('unit detail restaurant assignments are unchanged: today and future kept, past-only dropped', async () => {
+  const original = state.query.getMockImplementation()!
+  const restaurantEvents = [{ id: 6, date: '2026-09-01' }, { id: 3, date: '2026-10-23' }, { id: 4, date: '2027-05-01' }, { id: 1, date: '2026-08-02' }]
+  const bodies = [...events, { id: 6, event_date: '2026-09-01', time: '12:00', title: 'Past restaurant only' }]
+  state.query.mockImplementation(call => {
+    if (call.table === 'event_restaurant_assignments') return { data: restaurantEvents.filter(row => row.date >= (call.filters[0][1] as string))
+      .map(row => ({ event_id: row.id, calendar_events: { event_date: row.date } })), error: null }
+    if (call.table === 'calendar_events' && call.columns !== 'id,event_date') {
+      const ids = call.filters[0][1] as number[]
+      return { data: bodies.filter(event => ids.includes(event.id)), error: null }
+    }
+    return original(call)
+  })
+  const rows = await readScopedCalendar(scope)
+  const assignments = restaurantEvents.map((row, i) => ({ id: i + 1, eventId: row.id, unitId: 100, userName: 'Other' }) as EventRestaurantAssignment)
+  const shown = getCurrentRestaurantAssignmentsForUnit(assignments, rows, 100, '2026-10-23').map(a => a.eventId)
+  // The old complete index hydrated event 6 too; the consumer filtered it out anyway.
+  const allBodies = bodies.map(event => ({ id: event.id, date: event.event_date }))
+  const before = getCurrentRestaurantAssignmentsForUnit(assignments, allBodies as never, 100, '2026-10-23').map(a => a.eventId)
+  expect(shown).toEqual([3, 4])
+  expect(shown).toEqual(before)
+  // Past event 1 stays because it is the user's own card assignment, not because of restaurants.
+  expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
+})
+
+test('the restaurant date boundary is the scope day in local time, and a stale scope only widens it', async () => {
+  const justAfterMidnight = calendarReadScope('/territory', '', '', false, 'true', new Date('2026-10-23T00:30:00'), 'user', 'Me')
+  expect(justAfterMidnight).toBe(scope)
+  const lastNight = calendarReadScope('/territory', '', '', false, 'true', new Date('2026-10-22T23:59:00'), 'user', 'Me')
+  state.query.mockResolvedValue({ data: [], error: null })
+  expect(await readScopedCalendar(lastNight)).toEqual([])
+  const index = state.calls.find(call => call.table === 'event_restaurant_assignments')!
+  // Opened yesterday and still showing: the filter starts a day earlier, never later.
+  expect(index.filters).toEqual([['gte:calendar_events.event_date', '2026-10-22']])
 })
