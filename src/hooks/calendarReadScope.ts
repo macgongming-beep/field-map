@@ -111,17 +111,21 @@ async function readServiceCalendar(scope: string) {
   const parsed = parseServiceCalendarScope(scope)
   if (!parsed) throw new Error('Invalid service calendar scope')
   const { user: userName, date: today, target } = parsed
-  const [todayRows, mine, restaurants] = await settleAll<[{ id: number; event_date: string }[], { event_id: number; user_name: string }[], { event_id: number }[]]>([
+  type RestaurantIndexRow = { event_id: number; calendar_events: { event_date: string } | null }
+  const [todayRows, mine, restaurants] = await settleAll<[{ id: number; event_date: string }[], { event_id: number; user_name: string }[], RestaurantIndexRow[]]>([
     pages<{ id: number; event_date: string }>((from, to) => supabase.from('calendar_events')
       .select('id,event_date').eq('event_date', today).order('id').range(from, to)),
     pages<{ event_id: number; user_name: string }>((from, to) => supabase.from('event_card_assignments')
       .select('event_id,user_name').eq('user_name', userName).order('id').range(from, to)),
-    // Map unit details display other people's restaurant assignment dates too.
-    // Keep this small index complete rather than silently hiding those dates.
-    pages<{ event_id: number }>((from, to) => supabase.from('event_restaurant_assignments')
-      .select('event_id').order('id').range(from, to)),
+    // Map unit details display everyone's restaurant assignments, but only for events
+    // dated today or later (getCurrentRestaurantAssignmentsForUnit). No service screen
+    // shows a past restaurant-only event, so the index covers every user's restaurant
+    // events from today on. Past ones the user is card-assigned to still come from `mine`.
+    pages<RestaurantIndexRow>((from, to) => supabase.from('event_restaurant_assignments')
+      .select('event_id,calendar_events!inner(event_date)').gte('calendar_events.event_date', today).order('id').range(from, to)),
   ])
-  if (todayRows.some(row => row.event_date !== today) || mine.some(row => row.user_name !== userName)) throw new Error('Invalid service calendar index')
+  if (todayRows.some(row => row.event_date !== today) || mine.some(row => row.user_name !== userName)
+    || restaurants.some(row => typeof row.calendar_events?.event_date !== 'string' || row.calendar_events.event_date < today)) throw new Error('Invalid service calendar index')
   const ids = [...new Set([...todayRows.map(row => row.id), ...mine.map(row => row.event_id),
     ...restaurants.map(row => row.event_id), ...(target == null ? [] : [target])])]
   if (ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid service calendar event id')

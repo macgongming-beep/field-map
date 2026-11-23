@@ -9,6 +9,7 @@ vi.mock('../lib/supabase', () => ({ supabase: { from: (table: string) => {
     select: (value: string) => { columns = value; return q }, order: () => q,
     eq: (key: string, value: unknown) => { filters.push([key, value]); return q },
     in: (key: string, value: unknown) => { filters.push([key, value]); return q },
+    gte: (key: string, value: unknown) => { filters.push([`gte:${key}`, value]); return q },
     range: (from: number) => { const call = { table, columns, filters, from }; state.calls.push(call); return state.query(call) },
   }
   return q
@@ -28,7 +29,7 @@ beforeEach(() => {
   state.query.mockReset().mockImplementation(async ({ table, columns, filters }) => {
     if (columns === 'id,event_date') return { data: [{ id: 3, event_date: '2026-10-23' }], error: null }
     if (columns === 'event_id,user_name') return { data: [{ event_id: 1, user_name: 'Me' }, { event_id: 2, user_name: 'Me' }], error: null }
-    if (table === 'event_restaurant_assignments') return { data: [{ event_id: 4 }], error: null }
+    if (table === 'event_restaurant_assignments') return { data: [{ event_id: 4, calendar_events: { event_date: '2027-05-01' } }], error: null }
     const ids = filters[0][1] as number[]
     if (table === 'calendar_events') return { data: events.filter(event => ids.includes(event.id)), error: null }
     if (table === 'event_card_assignments') return { data: [
@@ -185,8 +186,8 @@ test.each([
 
 test.each([
   ['id,event_date', 'event_id,user_name'],
-  ['event_id,user_name', 'event_id'],
-  ['event_id', 'id,event_date'],
+  ['event_id,user_name', 'event_id,calendar_events!inner(event_date)'],
+  ['event_id,calendar_events!inner(event_date)', 'id,event_date'],
 ])('a failed %s index read drains the held %s index read first', async (failed, held) => {
   const original = state.query.getMockImplementation()!
   let release!: () => void
@@ -236,7 +237,10 @@ test.each(['calendar_events', 'event_card_assignments', 'event_restaurant_assign
 test.each([
   ['id,event_date', [{ id: 3, event_date: '2000-01-01' }]],
   ['event_id,user_name', [{ event_id: 1, user_name: 'Foreign' }]],
-  ['event_id', [{ event_id: -1 }]],
+  ['event_id,calendar_events!inner(event_date)', [{ event_id: -1, calendar_events: { event_date: '2027-05-01' } }]],
+  // The server must honour the date filter; a past or missing date is not trusted.
+  ['event_id,calendar_events!inner(event_date)', [{ event_id: 4, calendar_events: { event_date: '2026-10-22' } }]],
+  ['event_id,calendar_events!inner(event_date)', [{ event_id: 4, calendar_events: null }]],
 ])('rejects invalid index %s', async (columns, data) => {
   const original = state.query.getMockImplementation()!
   state.query.mockImplementation(call => call.columns === columns ? { data, error: null } : original(call))
@@ -298,4 +302,27 @@ test('read reuse never narrows admin, developer, statistics or invalid deep link
 test.each(['service:["Me","2026-10-23",null,"bad"]', 'service:["Me","2026-10-23",null,"overview"]'])('unsupported service modes fail closed: %s', async invalid => {
   await expect(readScopedCalendar(invalid)).rejects.toThrow('Invalid service calendar scope')
   expect(state.calls).toEqual([])
+})
+
+// 0164: restaurant events before today are never displayed by a service screen.
+test('the restaurant index asks only for restaurant events dated today or later', async () => {
+  await readScopedCalendar(scope)
+  const index = state.calls.filter(call => call.table === 'event_restaurant_assignments')
+  expect(index).toHaveLength(1)
+  expect(index[0].columns).toBe('event_id,calendar_events!inner(event_date)')
+  expect(index[0].filters).toEqual([['gte:calendar_events.event_date', '2026-10-23']])
+})
+
+test('a past restaurant-only event is no longer hydrated, but a past personal event still is', async () => {
+  const original = state.query.getMockImplementation()!
+  // The server applies the date filter: event 6 (past, restaurant only) is not returned.
+  const restaurantRows = [{ event_id: 6, date: '2026-09-01' }, { event_id: 4, date: '2027-05-01' }]
+  state.query.mockImplementation(call => call.table === 'event_restaurant_assignments'
+    ? { data: restaurantRows.filter(row => row.date >= (call.filters[0][1] as string)).map(row => ({ event_id: row.event_id, calendar_events: { event_date: row.date } })), error: null }
+    : original(call))
+  const rows = await readScopedCalendar(scope)
+  expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
+  const bodyIds = state.calls.filter(call => call.table === 'calendar_events' && call.columns !== 'id,event_date').flatMap(call => call.filters[0][1] as number[])
+  expect(bodyIds).not.toContain(6)
+  expect(bodyIds).toContain(1)
 })
