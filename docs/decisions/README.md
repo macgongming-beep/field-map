@@ -31,6 +31,7 @@
 0164+0167 운영 반영: [0168](0168-calendar-service-reads-production-release.md).
 나의 봉사 오늘 배정 이름표: [0169 카드·식당 이름표 분리](0169-demo-my-service-display-labels.md).
 인도자 모바일 나의 봉사 대기 분리: [0170 전체 건물 대기 분리](0170-demo-leader-my-service-light-entry.md).
+식당 시트 지도 자료 재사용: [0171 지도 → 식당 중복 조회 제거](0171-demo-restaurant-sheet-map-snapshot.md).
 
 봉사자·관리 화면 조회 데모 재검증: [0155 개인 구역 ID 재사용과 경량 관리 조회](0155-demo-section-read-reuse.md).
 
