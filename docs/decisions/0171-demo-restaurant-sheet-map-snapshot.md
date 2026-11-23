@@ -1,6 +1,6 @@
 # 인도자 나의 봉사: 식당 시트가 지도 자료를 다시 쓴다 (지도 → 식당 중복 조회)
 
-- 상태: 데모 반영 완료(`dpl_B37GQyuNsh1Hfafc8eK57veQAod3`). 운영 미적용, 리뷰 대기.
+- 상태: 데모 반영 완료(`dpl_B37GQyuNsh1Hfafc8eK57veQAod3`). 운영 반영 완료(0174, `dpl_H7wMsUL5f24exPULyyqK7nrGk3dU`).
 - 날짜: 2026-11-23
 - 브랜치: `claude/perf-progressive-nov23`(앞선 기록: 0170)
 - 커밋

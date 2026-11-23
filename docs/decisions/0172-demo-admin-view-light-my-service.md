@@ -1,6 +1,6 @@
 # 관리자 보기 전환의 나의 봉사: 인도자와 같은 가벼운 진입
 
-- 상태: 데모 반영 완료(`dpl_ALJPbPW5vcdwVxE3nzPsgjuvmfpX`). 운영 미적용, 리뷰 대기.
+- 상태: 데모 반영 완료(`dpl_ALJPbPW5vcdwVxE3nzPsgjuvmfpX`). 운영 반영 완료(0174, `dpl_H7wMsUL5f24exPULyyqK7nrGk3dU`).
 - 날짜: 2026-11-23
 - 브랜치: `claude/perf-progressive-nov23`(앞선 기록: 0170, 0171)
 - 커밋: `dbaff1a`

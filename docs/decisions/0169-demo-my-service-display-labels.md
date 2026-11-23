@@ -1,6 +1,6 @@
 # 나의 봉사 오늘 배정: 카드·식당 이름표 분리 (B 첫 묶음)
 
-- 상태: 데모 반영 대상. 운영 미적용.
+- 상태: 데모 반영 완료. 운영 반영 완료(0174, `dpl_H7wMsUL5f24exPULyyqK7nrGk3dU`).
 - 날짜: 2026-11-23
 - 브랜치: `claude/perf-progressive-nov23` (기준 main `7ae1d57`)
 - 커밋: `a4bfeb2`

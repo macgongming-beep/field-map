@@ -1,6 +1,6 @@
 # 인도자 모바일 나의 봉사: 전체 건물 대기 분리 (B 둘째 묶음)
 
-- 상태: 데모 반영 완료(`dpl_GvBtGmKpM4qbLJrnjVnodSoKVBYf`). 운영 보류(아래 '검토와 운영 보류').
+- 상태: 데모 반영 완료(`dpl_GvBtGmKpM4qbLJrnjVnodSoKVBYf`). 운영 반영 완료(0174, `dpl_H7wMsUL5f24exPULyyqK7nrGk3dU`). 보류 이유였던 지도 → 식당 중복 조회는 0171에서 줄였다.
 - 날짜: 2026-11-23
 - 브랜치: `claude/perf-progressive-nov23`
 - 커밋

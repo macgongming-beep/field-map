@@ -1,6 +1,6 @@
 # 봉사자 앱 시작: 기본 자료로 홈·달력·나의 봉사를 먼저 연다
 
-- 상태: 데모 반영 완료(`dpl_34wC7cUtTreq3B82BiT7oZkNj9ho`). 운영 미적용, 리뷰 대기.
+- 상태: 데모 반영 완료(`dpl_34wC7cUtTreq3B82BiT7oZkNj9ho`). 운영 반영 완료(0174, `dpl_H7wMsUL5f24exPULyyqK7nrGk3dU`).
 - 날짜: 2026-11-24
 - 브랜치: `claude/perf-progressive-nov23`(앞선 기록: 0170~0172)
 - 커밋
