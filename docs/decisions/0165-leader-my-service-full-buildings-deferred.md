@@ -29,7 +29,7 @@
 
 ## 측정 (데모, 읽기 전용, 직접 실행)
 
-같은 데모 자료로 두 열 목록의 응답(압축 전)을 비교했다. 도구: `scratchpad/demo-building-cols.mjs`.
+같은 데모 자료로 두 열 목록의 응답(압축 전)을 비교했다. 도구: `scratch/perf-0164-0166/demo-building-cols.mjs`.
 
 | | 건물 | 세대 | 응답 |
 |---|---|---|---|
@@ -55,4 +55,4 @@
 - 여러 건물 상세를 한 요청으로 받는 API(`ensureBuildingDetails(ids)`)가 생겨, 정기방문 화면이 1건으로 끝날 때.
 - 그때도 지도 세대 상세의 대기 추가는 따로 재야 한다.
 
-운영 집계에 쓸 읽기 전용 SQL(숫자만 출력): `scratchpad/prod-restaurant.sql`의 `buildings`/`units` 줄.
+운영 집계에 쓸 읽기 전용 SQL(숫자만 출력, 실행하지 않음): `scratch/perf-0164-0166/prod-restaurant.sql`의 `buildings`/`units` 줄.

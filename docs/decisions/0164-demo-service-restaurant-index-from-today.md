@@ -74,7 +74,7 @@
 ## 측정 (직접 실행)
 
 조건: Chromium 390px, CPU 4배 감속, 데모 프로필 빌드(`81c9a17` 대 `b3f1f6b`), 교차 3쌍, 중앙값.
-도구: `scratchpad/perf-harness164.mjs`, `run-164a.sh`, `sum164.mjs`. 원자료: `scratchpad/n164/` (Git 제외).
+도구: `scratch/perf-0164-0166/perf-harness164.mjs`, `run-164a.sh`, `sum164.mjs`. 원자료: `scratch/perf-0164-0166/raw/` (작업 폴더의 Git 제외 영역).
 
 데모에는 식당 배정이 0건이다. 그래서 두 조건을 쟀다.
 
@@ -103,7 +103,7 @@
   - 인도자 120ms 조건은 첫 표시를 다른 조회가 정하므로 시간 차이가 없다.
   - RESTO=0의 인도자 지연 없음(316 → 356)도 회차 편차다. 요청과 크기는 같다.
 - 정상 경로(RESTO=0)의 요청 수와 응답 크기는 같다. 재진입(나의 봉사 repeat, 홈 복귀)은 0~2건으로 전후 같다.
-- 시간 측정이 겹친 한 쌍(RESTO=20 지연 없음 2번째 쌍, 타입 검사와 동시 실행)은 `n164/contended/`로 빼고 다시 쟀다.
+- 시간 측정이 겹친 한 쌍(RESTO=20 지연 없음 2번째 쌍, 타입 검사와 동시 실행)은 `scratch/perf-0164-0166/raw/contended/`로 빼고 다시 쟀다.
 
 ## 사용량
 
@@ -128,8 +128,32 @@
   - 첫 변이 묶음 중 2개는 옛 백업이 복원돼 무효였다. 백업 이름을 바꿔 다시 돌린 결과만 적었다.
 - 데모 PostgREST에서 새 조회가 200으로 받아들여지는 것을 확인했다(행 0건).
 
+## 화면·실패 검사 (직접 실행)
+
+- 세 역할 화면 비교(`compare` 경로, 변경 전 `81c9a17` 대 최종 `a9ce3ad`):
+  - 봉사자 5개, 인도자 7개, 관리자 11개 화면의 표시 글자가 같았다.
+  - 화면별 요청 수도 같았다. 쓰기 차단 0건.
+- 실패 주입(`failzone`, `event_restaurant_assignments` 첫 요청 503):
+  - 최종 빌드는 새 색인 요청에 실패가 걸렸고, 변경 전 빌드는 옛 색인에 걸렸다.
+  - 두 빌드 모두 같은 화면(나의 봉사 내용)을 보였다. 실패 처리 동작이 바뀌지 않았다.
+- 원자료: `scratch/perf-0164-0166/raw/cmp-*`, `fail-*`.
+
+## 전체 검증 (최종 `a9ce3ad`, 측정과 겹치지 않게 실행)
+
+- 295파일 3,010개 시험, `tsc -b`, `npm run lint`(supabase allowlist 9/9) 통과.
+- 데모 프로필 빌드(`release-nov23g.mjs build`) 통과. 데모 DB 주소만 포함, 운영 DB 주소 미포함.
+
+## 데모 반영
+
+- 소스 `a9ce3ad`를 `git archive`로 따로 꺼내 데모 프로필로 빌드했다.
+- `deploy:demo --publish`로 1회 배포했다: `dpl_DUxKt1zLt4dWxjRMQMRQG3sCNZ8k`.
+- 공개 25파일의 SHA-256이 산출물과 같았다.
+- 운영 활성 배포(`dpl_Fr74EmmtvZAhLDiNoJhHCoJazfRB`)와 운영·데모 환경설정은 전후 같았다. 자동 배포는 꺼져 있다.
+- 직전 데모는 `dpl_61z7b4ovojsKBci2pnrMnibiPTVk`(`0d9de48`)다.
+- 기록: `scratch/perf-0164-0166/demo-verified.json`.
+
 ## 미검증
 
 - 운영 식당 배정 건수와 지난/앞으로 비율. 운영 읽기 전용 집계는 이번 작업에서 권한 판단 단계에서 거부돼 실행하지 않았다.
-  - 집계 SQL(숫자만): `scratchpad/prod-restaurant.sql`
+  - 집계 SQL(읽기 전용, 숫자만, 실행하지 않음): `scratch/perf-0164-0166/prod-restaurant.sql`
 - 실물 아이폰, 운영 규모, 동시 접속, 과금량.
