@@ -28,6 +28,7 @@ const state = vi.hoisted(() => ({
   sessions: [] as Record<string, unknown>[], sessionFilters: [] as unknown[][],
   sessionCutoffs: [] as (string | undefined)[],
   failedSessionPage: -1,
+  returnHold: null as Promise<void> | null,
   buildings: [] as unknown[], reads: [] as string[], allowed: [1], changed: vi.fn(), summaries: vi.fn(), cardHold: null as Promise<void> | null, refresh: vi.fn(), unchanged: vi.fn(), recover: vi.fn(), boundaries: vi.fn(),
 }))
 vi.mock('../lib/recipientStore', async importOriginal => ({ ...await importOriginal<typeof import('../lib/recipientStore')>(), createRecipientStoreReader: () => ({
@@ -92,6 +93,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
         return resolve(embeds.length && Array.isArray(response.data)
           ? { ...response, data: response.data.map(row => Object.fromEntries([...embeds.map(key => [key, []]), ...Object.entries(row)])) } : response)
       }
+      if (table === 'return_visits' && !writing && state.returnHold) await state.returnHold
       if (table === 'cards' && !lookup) state.cardFilters.push(filters)
       if (table === 'cards' && !lookup && state.cardHold) await state.cardHold
       if (table === 'visit_histories' && !writing) {
@@ -132,7 +134,7 @@ beforeEach(() => {
   state.cardColumns = []
   state.cardFilters = []; state.ignoreCardFilter = false
   state.missingLeaderTable = false
-  state.returnRows = []; state.returnLogs = []
+  state.returnRows = []; state.returnLogs = []; state.returnHold = null
   state.failedTable = ''
   state.requests = []
   state.requestFilters = []
@@ -2295,4 +2297,67 @@ test('a base part that answers after sign-out never marks the signed-out store r
   await act(async () => { releaseCalendar({ data: [], error: null }) })
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   expect(result.current.recipientBaseReady).toBe(false)
+})
+
+// 0173: a first snapshot whose discovery waits for the service calendar (나의 봉사 start)
+// still starts its non-territory slices right after the calendar.
+test.each([undefined, 'full'])('sequential first snapshot (scope %s) opens its base part before personal territory', async scope => {
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  let releaseBuildings!: () => void
+  state.recipientDetails = new Promise(resolve => { releaseBuildings = resolve })
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', scope))
+  await waitFor(() => expect(result.current.recipientBaseReady).toBe(true))
+  expect(state.reads).toContain('return_visits')
+  expect(state.reads).toContain('app_settings')
+  expect(state.reads).not.toContain('cards')
+  expect(result.current.loading).toBe(true)
+  expect(result.current.buildingScopeReady).toBe(false)
+  await act(async () => { releaseBuildings() })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.buildingScopeReady).toBe(true)
+  // Every slice is still read exactly once.
+  for (const table of ['return_visits', 'app_settings', 'calendar_events']) expect(state.reads.filter(name => name === table)).toHaveLength(1)
+})
+
+test('a later full refresh keeps the old order: no base part, no early slices', async () => {
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'full'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let releaseBuildings!: () => void
+  state.recipientDetails = new Promise(resolve => { releaseBuildings = resolve })
+  state.reads = []
+  const refresh = act(async () => { await result.current.refetchAll() })
+  await waitFor(() => expect(state.reads).toContain('calendar_events'))
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  expect(state.reads).not.toContain('return_visits')
+  releaseBuildings()
+  await refresh
+  expect(state.reads).toContain('return_visits')
+})
+
+test.each([undefined, 'window:2026-10-01:2026-10-31'])('base part waits for every base slice, not only the calendar (scope %s)', async scope => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  let releaseReturns!: () => void
+  state.returnHold = new Promise(resolve => { releaseReturns = resolve })
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', scope))
+  await waitFor(() => expect(state.reads).toContain('return_visits'))
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  expect(result.current.recipientBaseReady).toBe(false)
+  await act(async () => { releaseReturns() })
+  await waitFor(() => expect(result.current.recipientBaseReady || !result.current.loading).toBe(true))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+})
+
+test('the first snapshot is complete only after its early base slices, even when territory finishes first', async () => {
+  let releaseReturns!: () => void
+  state.returnHold = new Promise(resolve => { releaseReturns = resolve })
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'full'))
+  await waitFor(() => expect(state.reads).toContain('cards'))
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  expect(result.current.loading).toBe(true)
+  expect(result.current.buildingScopeReady).toBe(false)
+  await act(async () => { releaseReturns() })
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(result.current.buildingScopeReady).toBe(true)
 })

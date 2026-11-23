@@ -1006,13 +1006,34 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
             // Scope/metadata/delta failures fall back to a fresh scoped snapshot, never all buildings.
           }
         }
-        // Calendar changes include unassignment/cancellation, not only newly granted cards.
-        if (refreshTerritory) {
-          recipientReader.refresh(freshCalendar)
-          await fetchSlice('buildings')
-          requested.delete('buildings')
+        // 0173: on the first snapshot (e.g. a 나의 봉사 start, whose discovery reuses the
+        // service calendar above) the non-territory slices need not wait behind personal
+        // territory. Start them now; their completion lets the volunteer screen open.
+        const earlyBase: Promise<number>[] = []
+        if (!loadedOnceRef.current && (options?.triggeredBy === 'fetchAll' || options?.triggeredBy === 'initial:calendar-scope-retry')) {
+          const territorySlices = new Set<Slice>(['buildings', 'cards', 'cardBoundaries', 'visits', 'visitHistories'])
+          for (const slice of [...requested].filter(slice => !territorySlices.has(slice))) {
+            requested.delete(slice)
+            earlyBase.push(fetchSlice(slice, false, false, options?.strictGroups))
+          }
+          const session = recipientSnapshotSession.current
+          void Promise.all(earlyBase).then(() => {
+            if (session === recipientSnapshotSession.current) setRecipientBaseReady(true)
+          }, () => {})
         }
-        await Promise.all([...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups)))
+        try {
+          // Calendar changes include unassignment/cancellation, not only newly granted cards.
+          if (refreshTerritory) {
+            recipientReader.refresh(freshCalendar)
+            await fetchSlice('buildings')
+            requested.delete('buildings')
+          }
+          await Promise.all([...earlyBase, ...[...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups))])
+        } catch (error) {
+          // A retry must not race unfinished writes from this failed snapshot.
+          await Promise.allSettled(earlyBase)
+          throw error
+        }
         if (baseline && slices.includes('buildings')) {
           territoryCheckpoint.baseline = baseline
           territoryCheckpoint.cards.clear()
