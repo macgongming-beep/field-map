@@ -8,6 +8,7 @@ import { getTerritoryCardOperationalState, sortTerritoryCardsByOperationalPriori
 import { findReturnVisitBuilding, getUserReturnVisits, normalizeVisitorName } from '../utils/returnVisits'
 import { RestaurantServiceSheet } from './RestaurantServiceSheet'
 import { useAssignmentCardLabels, usePlaceLabels } from '../hooks/useServiceLabels'
+import { FullBuildingGate } from './FullBuildingGate'
 import { msg } from '../lib/msg'
 import { showToast } from '../lib/toast'
 import { useGroupTerritory } from '../features/groupTerritory/context'
@@ -724,6 +725,7 @@ export function MobileTerritory({
             <h2>{t(language, 'territory.regularVisitManage')}</h2>
           </div>
         </div>
+        <FullBuildingGate>
         <section className="mobile-regular-section detail" aria-label={t(language, 'territory.regularVisitManage')}>
           <div className="mobile-section-title">
             <h2>{t(language, 'territory.regularVisit')} ({myRegularVisits.length}{t(language, 'calendar.countSuffix')})</h2>
@@ -750,6 +752,7 @@ export function MobileTerritory({
             </div>
           )}
         </section>
+        </FullBuildingGate>
       </div>
     )
   }
@@ -1067,7 +1070,7 @@ export function MobileTerritory({
                 <span>{t(language, 'territory.regularEmptyDesc')}</span>
               </div>
             ) : (
-              <div className="rv-list">
+              <FullBuildingGate><div className="rv-list">
                 {myReturnVisits.map((rv) => {
                   const building = findReturnVisitBuilding(rv, buildings)
                   const label = rv.nickname || rv.displayName
@@ -1293,7 +1296,7 @@ export function MobileTerritory({
                     </div>
                   )
                 })}
-              </div>
+              </div></FullBuildingGate>
             ))}
           </section>
           )}
@@ -1418,6 +1421,7 @@ export function MobileTerritory({
 
         {/* ── 수동 추가 시트 ── */}
         {showAddSheet && (
+          <FullBuildingGate sheet onClose={() => setShowAddSheet(false)}>
           <div className="rv-log-backdrop" onClick={() => setShowAddSheet(false)}>
             <div className="rv-log-sheet rv-add-sheet" onClick={(e) => e.stopPropagation()}>
               <div className="rv-log-header">
@@ -1737,6 +1741,7 @@ export function MobileTerritory({
               </div>
             </div>
           </div>
+          </FullBuildingGate>
         )}
 
         {/* ── 기록 시트 ── */}
@@ -2058,7 +2063,7 @@ export function MobileTerritory({
 
     {/* 식당봉사 시트 */}
     {showRestaurantSheet && onSubmitRestaurantRequest && (
-      <RestaurantServiceSheet
+      <FullBuildingGate sheet onClose={() => setShowRestaurantSheet(false)}><RestaurantServiceSheet
         role={role}
         language={language}
         translatePlaceNames={translatePlaceNames}
@@ -2070,7 +2075,7 @@ export function MobileTerritory({
         onStartSession={handleStartSession}
         onSubmitRequest={onSubmitRestaurantRequest}
         onClose={() => setShowRestaurantSheet(false)}
-      />
+      /></FullBuildingGate>
     )}
     </>
   )

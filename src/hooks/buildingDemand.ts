@@ -43,6 +43,10 @@ export function buildingDemandForRoute(role: Role, pathname: string, search: str
       && [null, 'territory', 'informal'].includes(params.get('tab'))) return 'zone'
   }
   if (!desktop && pathname === '/map') return 'map'
+  // 0170: a leader's mobile 나의 봉사 shows schedule, labelled cards/restaurants and sessions.
+  // Its regular/return-visit tools and restaurant sheet request full buildings when opened
+  // (FullBuildingGate). Administrators' 나의 봉사 keeps its full card list.
+  if (!desktop && role === 'leader' && pathname === '/territory' && !search) return entryMode
   return 'full'
 }
 

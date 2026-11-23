@@ -222,8 +222,24 @@ test.each(['admin', 'leader'] as const)('%s personal settings do not promote bui
   expect(result.current.buildings).toBe(buildings)
   rerender({ path: '/territory' })
   await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
-  expect(result.current.fullBuildingReader!.ready).toBe(true)
+  if (role === 'leader') {
+    // 0170: a leader's mobile 나의 봉사 does not read full buildings until a tool asks for them.
+    expect(result.current.fullBuildingReader!.ready).toBe(false)
+    expect(buildingReads().map(read => read.columns)).not.toContain(expect.stringContaining('memo'))
+    await act(async () => { result.current.fullBuildingReader!.request() })
+  }
+  await waitFor(() => expect(result.current.fullBuildingReader!.ready).toBe(true))
   expect(result.current.buildings[0].units[0].memo).toBe('saved unit memo')
+})
+
+test.each([[false, 'true', 'landing'], [false, undefined, 'home'], [true, 'true', 'full'], [true, undefined, 'full']] as const)('leader mobile territory is light: desktop=%s lightweight=%s -> %s; admin and deep links stay full', (desktop, flag, mode) => {
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', flag)
+  expect(buildingDemandForRoute('leader', '/territory', '', desktop)).toBe(mode)
+  expect(buildingDemandForRoute('admin', '/territory', '', desktop)).toBe('full')
+  expect(buildingDemandForRoute('developer', '/territory', '', desktop)).toBeUndefined()
+  expect(buildingDemandForRoute('user', '/territory', '', desktop)).toBeUndefined()
+  for (const search of ['?assignmentEvent=9', '?openEvent=9', '?unknown=1']) expect(buildingDemandForRoute('leader', '/territory', search, desktop)).toBe('full')
+  for (const path of ['/territory/regular/7', '/territory/']) expect(buildingDemandForRoute('leader', path, '', desktop)).toBe('full')
 })
 
 test.each(['true', 'false', undefined])('opt-in management and assignment building reductions preserve gates with demo=%s', demo => {
