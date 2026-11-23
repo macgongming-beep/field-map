@@ -233,3 +233,12 @@ test('a failed fallback page read is not treated as complete', async () => {
     ? { data: [embedded(event, full)], error: null } : { data: [], error: name === 'event_card_assignments' ? new Error('offline') : null })
   await expect(readScopedCalendar('since:2026-08-01')).rejects.toThrow('offline')
 })
+// 0167 review: embedded arrays have no guaranteed order; the table reads were order(id).
+test('window reads keep id-ordered teams, card links and the primary card whatever the embedded order', async () => {
+  state.query.mockResolvedValue({ data: [embedded(event,
+    [{ id: 5, event_id: 7, user_name: 'B', assigned_card_id: 99 }, { id: 1, event_id: 7, user_name: 'A', assigned_card_id: 10 }],
+    [{ id: 30, event_id: 7, user_name: 'A', card_id: 30 }, { id: 10, event_id: 7, user_name: 'A', card_id: 10 }, { id: 20, event_id: 7, user_name: 'A', card_id: 20 }])], error: null })
+  const [row] = await readScopedCalendar('window:2026-08-01:2026-08-31')
+  expect(row.cardAssignments.map(a => a.userName)).toEqual(['A', 'B'])
+  expect(row.cardAssignments[0]).toMatchObject({ assignedCardIds: [10, 20, 30], assignedCardId: 10 })
+})

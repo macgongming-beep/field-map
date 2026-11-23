@@ -110,6 +110,10 @@ async function withEmbeddedAssignments(rows: EmbeddedCalendarEvent[]) {
     linked.push(...cards)
   }
   if (truncated) return hydrateCalendarAssignments(events)
+  // Embedded arrays have no guaranteed order. The table reads were order(id), and the merge
+  // takes team order, assignedCardIds and the first (primary) card from arrival order.
+  assignments.sort((a, b) => a.id - b.id)
+  linked.sort((a, b) => a.id - b.id)
   const merged = mergeEventCardAssignments(assignments.map(toEventCardAssignment), linked)
   return events.map(event => toCalendarEvent(event, merged.filter(a => a.eventId === event.id)))
 }
@@ -142,30 +146,46 @@ async function readServiceCalendar(scope: string) {
   if (!parsed) throw new Error('Invalid service calendar scope')
   const { user: userName, date: today, target } = parsed
   // 0167: each index is an event query that also carries the event body and every team,
-  // so the screen needs one round trip instead of index -> bodies.
-  //   today:      all of today's events
-  //   mine:       events with one of my card assignments (alias inner join; teams stay complete)
-  //   restaurant: restaurant events from today on (0164). Unit details show everyone's, but
-  //               only for today or later; past ones I am card-assigned to come from `mine`.
-  //   target:     the explicit route event
+  // so the screen needs one round trip instead of index -> bodies. The four filters are
+  // disjoint so an event body and its teams are downloaded once:
+  //   target:     the explicit route event, whatever its date
+  //   today:      every other event of today
+  //   mine:       other events with one of my card assignments, except today's (alias inner join;
+  //               embedded teams stay complete)
+  //   restaurant: other restaurant events after today (0164: unit details show everyone's
+  //               restaurant assignments only from today on; today's come with `today`)
+  // A future event that is both mine and a restaurant event is still read twice (deduplicated
+  // below); excluding it would need an anti-join filter and was left out for safety.
   // Never filter the embedded teams by user: shared assignments need every team in the event.
   const columns = `${CALENDAR_EVENT_COLUMNS},${EMBEDDED_ASSIGNMENTS}`
   type MineRow = EmbeddedCalendarEvent & { mine?: { user_name: string }[] }
   type RestaurantRow = EmbeddedCalendarEvent & { restaurant?: { event_id: number }[] }
   const [todayRows, mineRows, restaurantRows, targetRows] = await settleAll<[EmbeddedCalendarEvent[], MineRow[], RestaurantRow[], EmbeddedCalendarEvent[]]>([
-    pages<EmbeddedCalendarEvent>((from, to) => supabase.from('calendar_events')
-      .select(columns).eq('event_date', today).order('id').range(from, to)),
-    pages<MineRow>((from, to) => supabase.from('calendar_events')
-      .select(`${columns},mine:event_card_assignments!inner(user_name)`).eq('mine.user_name', userName).order('id').range(from, to)),
-    pages<RestaurantRow>((from, to) => supabase.from('calendar_events')
-      .select(`${columns},restaurant:event_restaurant_assignments!inner(event_id)`).gte('event_date', today).order('id').range(from, to)),
+    pages<EmbeddedCalendarEvent>((from, to) => {
+      let query = supabase.from('calendar_events').select(columns).eq('event_date', today)
+      if (target != null) query = query.neq('id', target)
+      return query.order('id').range(from, to)
+    }),
+    pages<MineRow>((from, to) => {
+      let query = supabase.from('calendar_events').select(`${columns},mine:event_card_assignments!inner(user_name)`)
+        .eq('mine.user_name', userName).neq('event_date', today)
+      if (target != null) query = query.neq('id', target)
+      return query.order('id').range(from, to)
+    }),
+    pages<RestaurantRow>((from, to) => {
+      let query = supabase.from('calendar_events').select(`${columns},restaurant:event_restaurant_assignments!inner(event_id)`)
+        .gt('event_date', today)
+      if (target != null) query = query.neq('id', target)
+      return query.order('id').range(from, to)
+    }),
     target == null ? Promise.resolve([]) : pages<EmbeddedCalendarEvent>((from, to) => supabase.from('calendar_events')
       .select(columns).eq('id', target).order('id').range(from, to)),
   ])
   // The server must honour every filter; anything else is not trusted as a complete snapshot.
-  if (todayRows.some(row => row.event_date !== today)
-    || mineRows.some(row => !Array.isArray(row.mine) || row.mine.length === 0 || row.mine.some(link => link.user_name !== userName))
-    || restaurantRows.some(row => typeof row.event_date !== 'string' || row.event_date < today
+  if (todayRows.some(row => row.event_date !== today || row.id === target)
+    || mineRows.some(row => row.event_date === today || row.id === target
+      || !Array.isArray(row.mine) || row.mine.length === 0 || row.mine.some(link => link.user_name !== userName))
+    || restaurantRows.some(row => typeof row.event_date !== 'string' || row.event_date <= today || row.id === target
       || !Array.isArray(row.restaurant) || row.restaurant.length === 0 || row.restaurant.some(link => link.event_id !== row.id))) {
     throw new Error('Invalid service calendar index')
   }

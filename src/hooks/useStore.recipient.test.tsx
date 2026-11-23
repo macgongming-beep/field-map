@@ -52,7 +52,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {
     let range: [number, number] = [0, 999]
     const filters: [string, unknown][] = []
     const q: Record<string, unknown> = {}
-    for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'lte', 'neq', 'update', 'insert']) q[name] = () => q
+    for (const name of ['select', 'order', 'range', 'eq', 'in', 'is', 'gte', 'gt', 'lte', 'neq', 'update', 'insert']) q[name] = () => q
     q.select = (columns: string) => {
       selected = columns
       if (table === 'visit_histories') state.historyColumns.push(columns)
@@ -1057,10 +1057,12 @@ test.each([false, true])('assigned-map navigation recipient request reuse=%s wit
 test.each(['service:["Volunteer","2026-10-30",null]', 'service:["Volunteer","2026-10-30",7]'])('fresh personal calendar %s is reused for territory scope, not reread', async scope => {
   enableScopedHistories()
   vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'true')
-  // 0167: today's query carries the event body itself (no separate index read).
-  state.calendarResponses.push(
-    Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30', time: '10:00', title: 'Shared' }], error: null }),
-  )
+  // 0167: the event body comes with its query (no index read). Queries resolve in order
+  // today, mine, restaurant, target; a target event is excluded from the first three.
+  const shared = Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30', time: '10:00', title: 'Shared' }], error: null })
+  const empty = () => Promise.resolve({ data: [], error: null })
+  if (scope.endsWith(',7]')) state.calendarResponses.push(empty(), empty(), empty(), shared)
+  else state.calendarResponses.push(shared)
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', scope))
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(result.current.error).toBeNull()
