@@ -33,6 +33,7 @@
 인도자 모바일 나의 봉사 대기 분리: [0170 전체 건물 대기 분리](0170-demo-leader-my-service-light-entry.md).
 식당 시트 지도 자료 재사용: [0171 지도 → 식당 중복 조회 제거](0171-demo-restaurant-sheet-map-snapshot.md).
 관리자 보기 전환 나의 봉사: [0172 인도자와 같은 가벼운 진입](0172-demo-admin-view-light-my-service.md).
+봉사자 앱 시작: [0173 기본 자료로 홈·달력·나의 봉사 먼저](0173-demo-volunteer-early-start.md).
 
 봉사자·관리 화면 조회 데모 재검증: [0155 개인 구역 ID 재사용과 경량 관리 조회](0155-demo-section-read-reuse.md).
 
