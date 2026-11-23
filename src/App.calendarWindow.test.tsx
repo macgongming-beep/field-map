@@ -359,7 +359,7 @@ const volunteerBase = () => {
   state.auth.user = { id: 7, name: 'Volunteer', role: 'user' }
   state.storeLoading = true; state.recipientBaseReady = true; state.buildingReady = false
 }
-test.each(['/', '/calendar'])('volunteer %s opens on the base part while territory details stay gated', async path => {
+test.each(['/', '/calendar', '/territory'])('volunteer %s opens on the base part while territory details stay gated', async path => {
   volunteerBase()
   render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
   expect(await screen.findByRole('button', { name: 'navigation' })).toBeInTheDocument()
@@ -370,7 +370,7 @@ test.each(['/', '/calendar'])('volunteer %s opens on the base part while territo
   expect(screen.queryByText('territory detail')).not.toBeInTheDocument()
   expect(screen.getByText('데이터 불러오는 중...')).toBeInTheDocument()
 })
-test.each(['/territory', '/map', '/?openEvent=5', '/settings'])('volunteer %s keeps the full first wait', async path => {
+test.each(['/territory?assignmentEvent=3', '/map', '/?openEvent=5', '/settings'])('volunteer %s keeps the full first wait', async path => {
   volunteerBase()
   render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>)
   expect(await screen.findByText('app loading')).toBeInTheDocument()

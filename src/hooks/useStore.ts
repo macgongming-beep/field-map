@@ -1912,6 +1912,12 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     return true
   }
 
+  const recipientFullReader = useMemo(() => ({
+    ready: recipientTerritoryLoaded, mapReady: recipientTerritoryLoaded, error: false,
+    // The first snapshot is already loading every personal slice; there is nothing more to ask for.
+    request: () => {}, requestMap: () => {},
+    retry: () => fetchAll(),
+  }), [recipientTerritoryLoaded, fetchAll])
   // Calendar/zone tiers carry placeholder coordinates; only map/full (or eager) buildings are real places.
   const storePlaces = !demandBuildings || (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank.map)
   const serviceLabelSource = useMemo(() => ({ revision: labelRevision, storePlaces }), [labelRevision, storePlaces])
@@ -1921,7 +1927,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     buildingScopeReady: recipientReader ? recipientTerritoryLoaded
       : !demandBuildings || (loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank[routeBuildingMode]),
     recipientBaseReady: Boolean(recipientReader) && recipientBaseReady,
-    fullBuildingReader: demandBuildings ? {
+    // 0173: a volunteer's 나의 봉사 can open before personal territory; its tools wait here.
+    fullBuildingReader: recipientReader ? recipientFullReader : demandBuildings ? {
       ready: loadedBuildingMode === 'full', error: buildingReadError,
       request: requestFullBuildings, retry: retryBuildingRead,
       mapReady: loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank.map,

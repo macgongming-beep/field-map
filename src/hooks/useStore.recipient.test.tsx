@@ -2244,9 +2244,15 @@ test('base part is ready before personal territory; territory readiness follows 
   expect(result.current.buildingScopeReady).toBe(false)
   expect(result.current.buildings).toEqual([])
   expect(state.reads).not.toContain('cards')
+  // 나의 봉사 tools wait for personal territory; asking for it adds no read.
+  expect(result.current.fullBuildingReader).toMatchObject({ ready: false, mapReady: false, error: false })
+  const before = state.reads.length
+  act(() => { result.current.fullBuildingReader!.request(); result.current.fullBuildingReader!.requestMap() })
+  expect(state.reads).toHaveLength(before)
   await act(async () => { releaseBuildings() })
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(result.current.buildingScopeReady).toBe(true)
+  expect(result.current.fullBuildingReader).toMatchObject({ ready: true, mapReady: true })
   expect(result.current.buildings.map(b => b.id)).toEqual([10])
   // A later refresh never closes the gate again.
   await act(async () => { await result.current.refetchAll() })

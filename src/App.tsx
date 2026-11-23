@@ -386,11 +386,11 @@ function AppSession({ auth, recipientUser, startup, onScreenReady }: {
     }
   }
 
-  // 0173: a volunteer's mobile home and month view render from schedules alone. Their first
-  // screen opens once the non-territory part of the snapshot is in; personal territory keeps
-  // loading. Event details wait behind TerritoryReadGate; other routes keep the full wait.
+  // 0173: a volunteer's mobile home, month view and 나의 봉사 open once the non-territory part
+  // of the first snapshot is in; personal territory keeps loading. Event details wait behind
+  // TerritoryReadGate and 나의 봉사 tools behind FullBuildingGate; other routes keep the full wait.
   const recipientEarlyRoute = Boolean(recipientUser) && !isDesktop
-    && ((location.pathname === '/' && !location.search) || location.pathname === '/calendar')
+    && (((location.pathname === '/' || location.pathname === '/territory') && !location.search) || location.pathname === '/calendar')
   const storeLoading = loading && !(recipientBaseReady && recipientEarlyRoute)
   // 무엇을 그릴지는 utils/appScreen 이 정한다 (순서가 미묘해 시험을 붙였다).
   const screen = chooseAppScreen({ user, authLoading, loading: recipientPreview ? false : storeLoading, error: recipientPreview ? null : error })
