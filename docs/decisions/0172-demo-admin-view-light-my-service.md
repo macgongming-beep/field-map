@@ -1,6 +1,6 @@
 # 관리자 보기 전환의 나의 봉사: 인도자와 같은 가벼운 진입
 
-- 상태: 데모 반영 대상. 운영 미적용.
+- 상태: 데모 반영 완료(`dpl_ALJPbPW5vcdwVxE3nzPsgjuvmfpX`). 운영 미적용, 리뷰 대기.
 - 날짜: 2026-11-23
 - 브랜치: `claude/perf-progressive-nov23`(앞선 기록: 0170, 0171)
 - 커밋: `dbaff1a`
@@ -82,6 +82,13 @@
 - 화면 회귀(I, 세 역할): 페이지 오류 0건, WebKit 표시 글자는 P와 같았다.
   - WebKit 390px: `/`, `/calendar`, `/territory`(관리자는 `/zone`)
   - Chromium 1440px
+
+## 데모 배포
+
+- 배포: `dpl_ALJPbPW5vcdwVxE3nzPsgjuvmfpX`. 공식 경로로 한 번만 했다.
+- 소스: `bdfc55c`(앱 코드는 측정한 I `dbaff1a`와 같다). 자산 파일 이름이 측정 빌드와 같다.
+- 검증: 공개 파일 25개의 해시가 stage 빌드와 같다. 운영 배포 ID와 운영·데모 설정에 변화가 없다.
+- 이 기록을 더한 문서 커밋은 다시 배포하지 않았다.
 
 ## 대가와 남은 것
 
