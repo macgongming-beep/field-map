@@ -2,25 +2,28 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { calendarReadScope, calendarWindowEnabled, readScopedCalendar } from './calendarReadScope'
 import { attendanceMeetings } from '../utils/serviceAttendance'
 
-const state = vi.hoisted(() => ({ calls: [] as { table: string; filters: [string, unknown][]; from: number }[], query: vi.fn() }))
+const state = vi.hoisted(() => ({ calls: [] as { table: string; columns: string; filters: [string, unknown][]; from: number }[], query: vi.fn() }))
 vi.mock('../lib/supabase', () => ({ supabase: { from: (table: string) => {
   const filters: [string, unknown][] = []
+  let columns = ''
   const q = {
-    select: () => q, order: () => q,
+    select: (value: string) => { columns = value; return q }, order: () => q,
     gte: (key: string, value: string) => { filters.push([key, value]); return q },
     lte: (key: string, value: string) => { filters.push([key, value]); return q },
     in: (key: string, value: number[]) => { filters.push([key, value]); return q },
-    range: (from: number) => { state.calls.push({ table, filters, from }); return state.query(table, from, filters) },
+    range: (from: number) => { state.calls.push({ table, columns, filters, from }); return state.query(table, from, filters) },
   }
   return q
 } } }))
 const event = { id: 7, event_date: '2026-08-02', time: '10:00', title: 'Old meeting', leader_name: 'A',
   event_participants: [{ user_name: 'A', role: '입명' }, { user_name: 'Guest', role: '게스트' }] }
 const assignment = { id: 1, event_id: 7, user_name: 'A', assigned_card_id: 10 }
+// 0167: window reads embed every team in the event row.
+const embedded = (row: Record<string, unknown>, base: unknown[] = [], cards: unknown[] = []) => ({ ...row, event_card_assignments: base, event_card_assignment_cards: cards })
 beforeEach(() => {
   vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', undefined)
   state.calls = []
-  state.query.mockReset().mockImplementation(async (table: string) => ({ data: table === 'calendar_events' ? [event] : table === 'event_card_assignments' ? [assignment] : [], error: null }))
+  state.query.mockReset().mockImplementation(async (table: string) => ({ data: table === 'calendar_events' ? [embedded(event, [assignment])] : table === 'event_card_assignments' ? [assignment] : [], error: null }))
 })
 const now = new Date('2026-10-23T12:00:00')
 afterEach(() => vi.unstubAllEnvs())
@@ -170,39 +173,63 @@ test.each(['admin', 'developer'] as const)('demo %s card allocation shares home 
 test.each(['user', 'leader', undefined] as const)('non-admin %s allocation stays conservative', role => {
   expect(calendarReadScope('/assignment', '', '', false, 'true', now, role)).toBe('full')
 })
-test('old month keeps applicants, guests, assignments and attendance counts', async () => {
+test('old month keeps applicants, guests, assignments and attendance counts in one request', async () => {
   const rows = await readScopedCalendar('window:2026-08-01:2026-08-31')
   expect(rows[0]).toMatchObject({ applicants: ['A', 'Guest'], guests: ['Guest'], cardAssignments: [{ assignedCardId: 10 }] })
   expect(attendanceMeetings(rows, '2026-08', now)[0].count).toBe(2)
+  expect(state.calls).toHaveLength(1)
   expect(state.calls[0].filters).toEqual([['event_date', '2026-08-01'], ['event_date', '2026-08-31']])
-  expect(state.calls.slice(1).every(c => JSON.stringify(c.filters) === JSON.stringify([['event_id', [7]]]))).toBe(true)
+  expect(state.calls[0].columns).toContain('event_card_assignments(*),event_card_assignment_cards(*)')
+})
+test('multi-card links and other teams arrive embedded, never filtered by user', async () => {
+  state.query.mockResolvedValue({ data: [embedded(event, [assignment, { id: 2, event_id: 7, user_name: 'B', assigned_card_id: 20 }],
+    [{ id: 5, event_id: 7, user_name: 'B', card_id: 21 }])], error: null })
+  const [row] = await readScopedCalendar('window:2026-08-01:2026-08-31')
+  expect(row.cardAssignments).toEqual(expect.arrayContaining([
+    expect.objectContaining({ userName: 'A', assignedCardId: 10 }),
+    expect.objectContaining({ userName: 'B', assignedCardIds: [21] }),
+  ]))
 })
 test('empty month does not request either entire assignment table', async () => {
   state.query.mockResolvedValue({ data: [], error: null })
   expect(await readScopedCalendar('since:2026-08-01')).toEqual([])
   expect(state.calls.map(c => c.table)).toEqual(['calendar_events'])
 })
-test.each(['event_card_assignments', 'event_card_assignment_cards'])('all pages of %s are read', async table => {
-  const original = state.query.getMockImplementation()!
-  state.query.mockImplementation((name, from, filters) => name === table
-    ? Promise.resolve({ data: from === 0 ? Array.from({ length: 1000 }, (_, i) => ({ ...assignment, id: i + 1, card_id: 10 })) : [], error: null })
-    : original(name, from, filters))
+test.each(['event_card_assignments', 'event_card_assignment_cards'])('an embedded %s list as long as a page falls back to reading every page', async table => {
+  const full = Array.from({ length: 1000 }, (_, i) => ({ ...assignment, id: i + 1, card_id: 10 }))
+  state.query.mockImplementation(async (name: string, from: number) => name === 'calendar_events'
+    ? { data: [embedded(event, table === 'event_card_assignments' ? full : [], table === 'event_card_assignment_cards' ? full : [])], error: null }
+    : { data: name === table && from === 0 ? full : name === table ? [{ ...assignment, id: 1001, card_id: 10 }] : [], error: null })
   await readScopedCalendar('since:2026-08-01')
   expect(state.calls.some(c => c.table === table && c.from === 1000)).toBe(true)
 })
-test('more than 1000 events and their participants survive paging and batching', async () => {
+test('more than 1000 events and their participants survive paging without assignment table reads', async () => {
   state.query.mockImplementation(async (table, from) => ({ data: table === 'calendar_events'
-    ? from === 0 ? Array.from({ length: 1000 }, (_, i) => ({ ...event, id: i + 1 })) : [{ ...event, id: 1001 }]
+    ? from === 0 ? Array.from({ length: 1000 }, (_, i) => embedded({ ...event, id: i + 1 })) : [embedded({ ...event, id: 1001 })]
     : [], error: null }))
   const rows = await readScopedCalendar('since:2026-08-01')
   expect(rows).toHaveLength(1001)
   expect(rows[1000].applicants).toEqual(['A', 'Guest'])
-  expect(state.calls.filter(c => c.table === 'event_card_assignments')).toHaveLength(11)
+  expect(state.calls.filter(c => c.table !== 'calendar_events')).toHaveLength(0)
 })
-test.each(['calendar_events', 'event_card_assignments', 'event_card_assignment_cards'])('rejects failed and foreign rows from %s', async table => {
-  const original = state.query.getMockImplementation()!
-  state.query.mockImplementation((name, from, filters) => name === table ? Promise.resolve({ data: [], error: new Error('offline') }) : original(name, from, filters))
+test('a failed or out-of-range event read is rejected', async () => {
+  state.query.mockResolvedValue({ data: [], error: new Error('offline') })
   await expect(readScopedCalendar('since:2026-08-01')).rejects.toThrow('offline')
-  state.query.mockImplementation((name, from, filters) => name === table ? Promise.resolve({ data: [table === 'calendar_events' ? { ...event, event_date: '2020-01-01' } : { ...assignment, event_id: 999 }], error: null }) : original(name, from, filters))
+  state.query.mockResolvedValue({ data: [embedded({ ...event, event_date: '2020-01-01' })], error: null })
   await expect(readScopedCalendar('since:2026-08-01')).rejects.toThrow('Invalid scoped')
+})
+test.each([
+  ['a foreign assignment', embedded(event, [{ ...assignment, event_id: 999 }])],
+  ['a foreign card link', embedded(event, [], [{ id: 5, event_id: 999, user_name: 'A', card_id: 1 }])],
+  ['missing assignments', { ...event, event_card_assignment_cards: [] }],
+  ['missing card links', { ...event, event_card_assignments: [] }],
+])('rejects %s instead of showing an incomplete team', async (_label, row) => {
+  state.query.mockResolvedValue({ data: [row], error: null })
+  await expect(readScopedCalendar('since:2026-08-01')).rejects.toThrow('Invalid embedded calendar assignment')
+})
+test('a failed fallback page read is not treated as complete', async () => {
+  const full = Array.from({ length: 1000 }, (_, i) => ({ ...assignment, id: i + 1 }))
+  state.query.mockImplementation(async (name: string) => name === 'calendar_events'
+    ? { data: [embedded(event, full)], error: null } : { data: [], error: name === 'event_card_assignments' ? new Error('offline') : null })
+  await expect(readScopedCalendar('since:2026-08-01')).rejects.toThrow('offline')
 })

@@ -78,10 +78,40 @@ export async function readScopedCalendar(scope: string) {
   const since = match[1] ?? match[2]
   const until = match[3]
   if (until && until < since) throw new Error('Invalid calendar scope')
-  const events = await pages<RawCalendarEvent>((from, to) => supabase.from('calendar_events')
-    .select(CALENDAR_EVENT_COLUMNS).gte('event_date', since).lte('event_date', until ?? '9999-12-31').order('event_date').order('time').order('id').range(from, to))
+  // 0167: every team arrives with its event in one round trip instead of two.
+  const events = await pages<EmbeddedCalendarEvent>((from, to) => supabase.from('calendar_events')
+    .select(`${CALENDAR_EVENT_COLUMNS},${EMBEDDED_ASSIGNMENTS}`).gte('event_date', since).lte('event_date', until ?? '9999-12-31').order('event_date').order('time').order('id').range(from, to))
   if (events.some(e => !Number.isSafeInteger(e.id) || e.event_date < since || (until && e.event_date > until))) throw new Error('Invalid scoped calendar event')
-  return hydrateCalendarAssignments(events)
+  return withEmbeddedAssignments(events)
+}
+
+// Children of each event, embedded by their event_id foreign keys. Never filtered by user.
+const EMBEDDED_ASSIGNMENTS = 'event_card_assignments(*),event_card_assignment_cards(*)'
+const EMBED_LIMIT = 1000
+type EmbeddedCalendarEvent = RawCalendarEvent & {
+  event_card_assignments?: RawEventCardAssignment[]
+  event_card_assignment_cards?: RawEventCardAssignmentCard[]
+}
+
+async function withEmbeddedAssignments(rows: EmbeddedCalendarEvent[]) {
+  const events: RawCalendarEvent[] = []
+  const assignments: RawEventCardAssignment[] = []
+  const linked: RawEventCardAssignmentCard[] = []
+  let truncated = false
+  for (const row of rows) {
+    const { event_card_assignments: base, event_card_assignment_cards: cards, ...event } = row
+    if (!Array.isArray(base) || !Array.isArray(cards)) throw new Error('Invalid embedded calendar assignment')
+    if ([...base, ...cards].some(child => child.event_id !== row.id)) throw new Error('Invalid embedded calendar assignment')
+    // An embedded list as long as a response page may have been cut short by the server.
+    // Never treat it as complete: read those teams the paged way.
+    if (base.length >= EMBED_LIMIT || cards.length >= EMBED_LIMIT) truncated = true
+    events.push(event as RawCalendarEvent)
+    assignments.push(...base)
+    linked.push(...cards)
+  }
+  if (truncated) return hydrateCalendarAssignments(events)
+  const merged = mergeEventCardAssignments(assignments.map(toEventCardAssignment), linked)
+  return events.map(event => toCalendarEvent(event, merged.filter(a => a.eventId === event.id)))
 }
 
 async function hydrateCalendarAssignments(events: RawCalendarEvent[]) {
@@ -111,41 +141,42 @@ async function readServiceCalendar(scope: string) {
   const parsed = parseServiceCalendarScope(scope)
   if (!parsed) throw new Error('Invalid service calendar scope')
   const { user: userName, date: today, target } = parsed
-  type RestaurantIndexRow = { event_id: number; calendar_events: { event_date: string } | null }
-  const [todayRows, mine, restaurants] = await settleAll<[{ id: number; event_date: string }[], { event_id: number; user_name: string }[], RestaurantIndexRow[]]>([
-    pages<{ id: number; event_date: string }>((from, to) => supabase.from('calendar_events')
-      .select('id,event_date').eq('event_date', today).order('id').range(from, to)),
-    pages<{ event_id: number; user_name: string }>((from, to) => supabase.from('event_card_assignments')
-      .select('event_id,user_name').eq('user_name', userName).order('id').range(from, to)),
-    // Map unit details display everyone's restaurant assignments, but only for events
-    // dated today or later (getCurrentRestaurantAssignmentsForUnit). No service screen
-    // shows a past restaurant-only event, so the index covers every user's restaurant
-    // events from today on. Past ones the user is card-assigned to still come from `mine`.
-    pages<RestaurantIndexRow>((from, to) => supabase.from('event_restaurant_assignments')
-      .select('event_id,calendar_events!inner(event_date)').gte('calendar_events.event_date', today).order('id').range(from, to)),
+  // 0167: each index is an event query that also carries the event body and every team,
+  // so the screen needs one round trip instead of index -> bodies.
+  //   today:      all of today's events
+  //   mine:       events with one of my card assignments (alias inner join; teams stay complete)
+  //   restaurant: restaurant events from today on (0164). Unit details show everyone's, but
+  //               only for today or later; past ones I am card-assigned to come from `mine`.
+  //   target:     the explicit route event
+  // Never filter the embedded teams by user: shared assignments need every team in the event.
+  const columns = `${CALENDAR_EVENT_COLUMNS},${EMBEDDED_ASSIGNMENTS}`
+  type MineRow = EmbeddedCalendarEvent & { mine?: { user_name: string }[] }
+  type RestaurantRow = EmbeddedCalendarEvent & { restaurant?: { event_id: number }[] }
+  const [todayRows, mineRows, restaurantRows, targetRows] = await settleAll<[EmbeddedCalendarEvent[], MineRow[], RestaurantRow[], EmbeddedCalendarEvent[]]>([
+    pages<EmbeddedCalendarEvent>((from, to) => supabase.from('calendar_events')
+      .select(columns).eq('event_date', today).order('id').range(from, to)),
+    pages<MineRow>((from, to) => supabase.from('calendar_events')
+      .select(`${columns},mine:event_card_assignments!inner(user_name)`).eq('mine.user_name', userName).order('id').range(from, to)),
+    pages<RestaurantRow>((from, to) => supabase.from('calendar_events')
+      .select(`${columns},restaurant:event_restaurant_assignments!inner(event_id)`).gte('event_date', today).order('id').range(from, to)),
+    target == null ? Promise.resolve([]) : pages<EmbeddedCalendarEvent>((from, to) => supabase.from('calendar_events')
+      .select(columns).eq('id', target).order('id').range(from, to)),
   ])
-  if (todayRows.some(row => row.event_date !== today) || mine.some(row => row.user_name !== userName)
-    || restaurants.some(row => typeof row.calendar_events?.event_date !== 'string' || row.calendar_events.event_date < today)) throw new Error('Invalid service calendar index')
-  const ids = [...new Set([...todayRows.map(row => row.id), ...mine.map(row => row.event_id),
-    ...restaurants.map(row => row.event_id), ...(target == null ? [] : [target])])]
-  if (ids.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new Error('Invalid service calendar event id')
-  const readEvents = async () => {
-    const events: RawCalendarEvent[] = []
-    for (let start = 0; start < ids.length; start += 100) {
-      const batch = ids.slice(start, start + 100)
-      const rows = await pages<RawCalendarEvent>((from, to) => supabase.from('calendar_events')
-        .select(CALENDAR_EVENT_COLUMNS).in('id', batch).order('id').range(from, to))
-      if (rows.some(row => !batch.includes(row.id))) throw new Error('Invalid service calendar event')
-      events.push(...rows)
-    }
-    return events
+  // The server must honour every filter; anything else is not trusted as a complete snapshot.
+  if (todayRows.some(row => row.event_date !== today)
+    || mineRows.some(row => !Array.isArray(row.mine) || row.mine.length === 0 || row.mine.some(link => link.user_name !== userName))
+    || restaurantRows.some(row => typeof row.event_date !== 'string' || row.event_date < today
+      || !Array.isArray(row.restaurant) || row.restaurant.length === 0 || row.restaurant.some(link => link.event_id !== row.id))) {
+    throw new Error('Invalid service calendar index')
   }
-  // Assignments depend only on the indexed IDs, not on the event bodies, so both
-  // reads start together. Settle both before failing so a retry never overlaps.
-  // Cost: an indexed ID with no event body (deleted event, stale deep-link target)
-  // or a failed event read still pays for its two assignment reads.
-  // Never filter these rows by user: shared assignments need every team in the event.
-  const [events, merged] = await settleAll<[RawCalendarEvent[], ReturnType<typeof mergeEventCardAssignments>]>([readEvents(), readCalendarAssignments(ids)])
-  return events.map(event => toCalendarEvent(event, merged.filter(a => a.eventId === event.id)))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
+  if (targetRows.some(row => row.id !== target)) throw new Error('Invalid service calendar event')
+  const unique = new Map<number, EmbeddedCalendarEvent>()
+  for (const row of [...todayRows, ...mineRows, ...restaurantRows, ...targetRows]) {
+    if (!Number.isSafeInteger(row.id) || row.id <= 0) throw new Error('Invalid service calendar event id')
+    if (unique.has(row.id)) continue
+    const { mine: _mine, restaurant: _restaurant, ...event } = row as MineRow & RestaurantRow
+    unique.set(row.id, event)
+  }
+  const events = await withEmbeddedAssignments([...unique.values()])
+  return events.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id - b.id)
 }

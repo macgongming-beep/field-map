@@ -3,46 +3,72 @@ import { calendarReadScope, readScopedCalendar } from './calendarReadScope'
 import { getCurrentRestaurantAssignmentsForUnit } from '../utils/restaurantAssignments'
 import type { EventRestaurantAssignment } from '../types'
 
-const state = vi.hoisted(() => ({ calls: [] as { table: string; columns: string; filters: [string, unknown][]; from: number }[], query: vi.fn() }))
+// 0167: the service read is event queries with embedded teams. A small PostgREST stand-in
+// answers them from the fixture tables below, honouring filters, alias inner joins and paging.
+type Row = Record<string, unknown> & { id: number }
+type Call = { table: string; columns: string; filters: [string, unknown][]; from: number; to: number }
+const state = vi.hoisted(() => ({ calls: [] as Call[], query: vi.fn(), db: {} as Record<string, Row[]> }))
 vi.mock('../lib/supabase', () => ({ supabase: { from: (table: string) => {
   let columns = ''
   const filters: [string, unknown][] = []
   const q = {
     select: (value: string) => { columns = value; return q }, order: () => q,
-    eq: (key: string, value: unknown) => { filters.push([key, value]); return q },
-    in: (key: string, value: unknown) => { filters.push([key, value]); return q },
+    eq: (key: string, value: unknown) => { filters.push([`eq:${key}`, value]); return q },
     gte: (key: string, value: unknown) => { filters.push([`gte:${key}`, value]); return q },
-    range: (from: number) => { const call = { table, columns, filters, from }; state.calls.push(call); return state.query(call) },
+    in: (key: string, value: unknown) => { filters.push([`in:${key}`, value]); return q },
+    range: (from: number, to: number) => { const call = { table, columns, filters, from, to }; state.calls.push(call); return state.query(call) },
   }
   return q
 } } }))
-const now = new Date('2026-10-23T12:00:00')
+
+const today = '2026-10-23'
+const now = new Date(`${today}T12:00:00`)
 const scope = calendarReadScope('/territory', '', '', false, 'true', now, 'user', 'Me')
-const events = [
-  { id: 1, event_date: '2026-08-02', time: '10:00', title: 'Past', event_participants: [{ user_name: 'Me', role: '신청' }] },
-  { id: 2, event_date: '2027-08-08', time: '15:00', title: 'Future' },
-  { id: 3, event_date: '2026-10-23', time: '10:00', title: 'Today' },
-  { id: 4, event_date: '2027-05-01', time: '17:00', title: 'Other restaurant assignment' },
-  { id: 5, event_date: '2025-01-01', time: '18:30', title: 'Explicit old target' },
-]
+const children = (table: string, eventId: number) => state.db[table].filter(row => row.event_id === eventId)
+function server(call: Call) {
+  if (call.table !== 'calendar_events') return { data: state.db[call.table].filter(row => call.filters.every(([key, value]) => key !== 'in:event_id' || (value as number[]).includes(row.event_id as number))).slice(call.from, call.to + 1), error: null }
+  const filter = (name: string) => call.filters.find(([key]) => key === name)?.[1]
+  let rows = [...state.db.calendar_events].sort((a, b) => a.id - b.id)
+  if (filter('eq:event_date') !== undefined) rows = rows.filter(row => row.event_date === filter('eq:event_date'))
+  if (filter('gte:event_date') !== undefined) rows = rows.filter(row => (row.event_date as string) >= (filter('gte:event_date') as string))
+  if (filter('eq:id') !== undefined) rows = rows.filter(row => row.id === filter('eq:id'))
+  const mine = call.columns.includes('mine:event_card_assignments!inner(user_name)')
+  const restaurant = call.columns.includes('restaurant:event_restaurant_assignments!inner(event_id)')
+  if (mine) rows = rows.filter(row => children('event_card_assignments', row.id).some(child => child.user_name === filter('eq:mine.user_name')))
+  if (restaurant) rows = rows.filter(row => children('event_restaurant_assignments', row.id).length > 0)
+  const data = rows.slice(call.from, call.to + 1).map(row => ({ ...row,
+    ...(call.columns.includes('event_card_assignments(*)') ? { event_card_assignments: children('event_card_assignments', row.id) } : {}),
+    ...(call.columns.includes('event_card_assignment_cards(*)') ? { event_card_assignment_cards: children('event_card_assignment_cards', row.id) } : {}),
+    ...(mine ? { mine: children('event_card_assignments', row.id).filter(child => child.user_name === filter('eq:mine.user_name')).map(child => ({ user_name: child.user_name })) } : {}),
+    ...(restaurant ? { restaurant: children('event_restaurant_assignments', row.id).map(child => ({ event_id: child.event_id })) } : {}),
+  }))
+  return { data, error: null }
+}
+const kind = (call: Call) => call.table !== 'calendar_events' ? call.table
+  : call.columns.includes('mine:') ? 'mine' : call.columns.includes('restaurant:') ? 'restaurant'
+    : call.filters.some(([key]) => key === 'eq:id') ? 'target' : 'today'
+
 afterEach(() => vi.unstubAllEnvs())
-// Server-side date filter as requested; without one the emulated server returns every row.
-const dateFilter = (call: { filters: [string, unknown][] }) => (call.filters.find(([key]) => key === 'gte:calendar_events.event_date')?.[1] as string | undefined) ?? ''
 beforeEach(() => {
   state.calls = []
-  state.query.mockReset().mockImplementation(async ({ table, columns, filters }) => {
-    if (columns === 'id,event_date') return { data: [{ id: 3, event_date: '2026-10-23' }], error: null }
-    if (columns === 'event_id,user_name') return { data: [{ event_id: 1, user_name: 'Me' }, { event_id: 2, user_name: 'Me' }], error: null }
-    if (table === 'event_restaurant_assignments') return { data: [{ event_id: 4, calendar_events: { event_date: '2027-05-01' } }], error: null }
-    const ids = filters[0][1] as number[]
-    if (table === 'calendar_events') return { data: events.filter(event => ids.includes(event.id)), error: null }
-    if (table === 'event_card_assignments') return { data: [
+  state.db = {
+    calendar_events: [
+      { id: 1, event_date: '2026-08-02', time: '10:00', title: 'Past', event_participants: [{ user_name: 'Me', role: '신청' }] },
+      { id: 2, event_date: '2027-08-08', time: '15:00', title: 'Future' },
+      { id: 3, event_date: today, time: '10:00', title: 'Today' },
+      { id: 4, event_date: '2027-05-01', time: '17:00', title: 'Other restaurant assignment' },
+      { id: 5, event_date: '2025-01-01', time: '18:30', title: 'Explicit old target' },
+      { id: 6, event_date: '2026-09-01', time: '12:00', title: 'Past restaurant only' },
+    ],
+    event_card_assignments: [
       { id: 1, event_id: 1, user_name: 'Me', assigned_card_id: 10, team_key: 'mine' },
       { id: 2, event_id: 1, user_name: 'Other', assigned_card_id: 20, team_key: 'other' },
       { id: 3, event_id: 2, user_name: 'Me', assigned_card_id: 30, team_key: 'future' },
-    ].filter(row => ids.includes(row.event_id)), error: null }
-    return { data: [{ id: 1, event_id: 1, user_name: 'Other', card_id: 21 }], error: null }
-  })
+    ],
+    event_card_assignment_cards: [{ id: 1, event_id: 1, user_name: 'Other', card_id: 21 }],
+    event_restaurant_assignments: [{ id: 1, event_id: 4 }, { id: 2, event_id: 6 }],
+  }
+  state.query.mockReset().mockImplementation(async (call: Call) => server(call))
 })
 
 test.each(['user', 'leader'] as const)('only eligible service roles opt in (%s); identity and target stay in the cache key', role => {
@@ -72,7 +98,7 @@ test('only the actual leader zone shares the service snapshot, including all-car
   for (const search of ['?openChat=5', '?openEvent=5']) expect(calendarReadScope('/zone', search, '', false, 'true', now, 'leader', 'Me')).toBe('full')
 })
 
-test('leader zone retains complete other-team assignments and old/future restaurant events', async () => {
+test('leader zone retains complete other-team assignments and future restaurant events', async () => {
   const rows = await readScopedCalendar(calendarReadScope('/zone', '?scope=all', '', false, 'true', now, 'leader', 'Me'))
   expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
   expect(rows[0].cardAssignments).toEqual(expect.arrayContaining([
@@ -80,7 +106,7 @@ test('leader zone retains complete other-team assignments and old/future restaur
   ]))
 })
 
-test.each(['user', 'leader'] as const)('%s preserves past/future personal events, all shared teams, multi-card links and other restaurant dates', async role => {
+test.each(['user', 'leader'] as const)('%s preserves past/future personal events, all shared teams, multi-card links and other restaurant dates in one round trip', async role => {
   const rows = await readScopedCalendar(calendarReadScope('/territory', '', '', false, 'true', now, role, 'Me'))
   expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
   expect(rows[0].applicants).toEqual(['Me'])
@@ -89,8 +115,19 @@ test.each(['user', 'leader'] as const)('%s preserves past/future personal events
     expect.objectContaining({ userName: 'Other', assignedCardIds: [21], teamKey: 'other' }),
   ]))
   expect(rows.at(-1)?.cardAssignments[0].assignedCardId).toBe(30)
-  expect(state.calls).toHaveLength(6)
-  expect(state.calls.filter(call => call.columns === '*').every(call => call.filters[0][0] === 'event_id')).toBe(true)
+  expect(state.calls.map(kind).sort()).toEqual(['mine', 'restaurant', 'today'])
+  expect(state.calls.every(call => call.columns.includes('event_card_assignments(*),event_card_assignment_cards(*)'))).toBe(true)
+})
+
+test('every query starts together: nothing waits for another response', async () => {
+  let release!: () => void
+  const held = new Promise<void>(resolve => { release = resolve })
+  state.query.mockImplementation(async (call: Call) => { await held; return server(call) })
+  const read = readScopedCalendar(calendarReadScope('/map', '?assignmentMap=5', '', false, 'true', now, 'user', 'Me'))
+  await vi.waitFor(() => expect(state.calls.map(kind).sort()).toEqual(['mine', 'restaurant', 'target', 'today']))
+  release()
+  expect((await read).map(row => row.id)).toEqual([5, 1, 3, 4, 2])
+  expect(state.calls).toHaveLength(4)
 })
 
 test.each(['user', 'leader'] as const)('%s explicit old map target is included even outside personal assignments', async role => {
@@ -99,88 +136,39 @@ test.each(['user', 'leader'] as const)('%s explicit old map target is included e
 })
 
 test('leader without a personal card assignment keeps today meeting participants and other teams', async () => {
-  const original = state.query.getMockImplementation()!
-  state.query.mockImplementation(call => {
-    if (call.columns === 'event_id,user_name' || call.table === 'event_restaurant_assignments' || call.table === 'event_card_assignment_cards') return { data: [], error: null }
-    if (call.table === 'calendar_events' && call.columns !== 'id,event_date') return { data: [{ ...events[2], leader_name: 'Me', event_participants: [{ user_name: 'Guest', role: '게스트' }] }], error: null }
-    if (call.table === 'event_card_assignments') return { data: [{ id: 9, event_id: 3, user_name: 'Other team', assigned_card_id: 90, team_key: 'other' }], error: null }
-    return original(call)
-  })
+  state.db.calendar_events = [{ id: 3, event_date: today, time: '10:00', title: 'Today', leader_name: 'Me', event_participants: [{ user_name: 'Guest', role: '게스트' }] }]
+  state.db.event_card_assignments = [{ id: 9, event_id: 3, user_name: 'Other team', assigned_card_id: 90, team_key: 'other' }]
+  state.db.event_card_assignment_cards = []
+  state.db.event_restaurant_assignments = []
   const rows = await readScopedCalendar(calendarReadScope('/territory', '', '', false, 'true', now, 'leader', 'Me'))
   expect(rows).toHaveLength(1)
   expect(rows[0]).toMatchObject({ leaders: ['Me'], applicants: ['Guest'], cardAssignments: [{ userName: 'Other team', assignedCardId: 90 }] })
 })
 
-test('shared team assignments start with the event bodies instead of waiting for them', async () => {
-  const original = state.query.getMockImplementation()!
-  let releaseEvents!: () => void
-  const eventsHeld = new Promise<void>(resolve => { releaseEvents = resolve })
-  state.query.mockImplementation(async call => {
-    if (call.table === 'calendar_events' && call.columns !== 'id,event_date') await eventsHeld
-    return original(call)
-  })
-  const read = readScopedCalendar(scope)
-  await vi.waitFor(() => expect(state.calls.filter(call => call.columns === '*').map(call => call.table).sort())
-    .toEqual(['event_card_assignment_cards', 'event_card_assignments']))
-  expect(state.calls.filter(call => call.table === 'calendar_events' && call.columns !== 'id,event_date')).toHaveLength(1)
-  releaseEvents()
-  const rows = await read
-  // Same requests and the same merged result as the serial read.
-  expect(state.calls).toHaveLength(6)
-  expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
-  expect(rows[0].cardAssignments).toEqual(expect.arrayContaining([
-    expect.objectContaining({ userName: 'Me', assignedCardId: 10, teamKey: 'mine' }),
-    expect.objectContaining({ userName: 'Other', assignedCardIds: [21], teamKey: 'other' }),
-  ]))
+test('an event in several indexes appears once with every team', async () => {
+  state.db.event_card_assignments.push({ id: 7, event_id: 3, user_name: 'Me', assigned_card_id: 40 }, { id: 8, event_id: 3, user_name: 'Other', assigned_card_id: 41 })
+  state.db.event_restaurant_assignments.push({ id: 3, event_id: 3 })
+  const rows = await readScopedCalendar(scope)
+  expect(rows.filter(row => row.id === 3)).toHaveLength(1)
+  expect(rows.find(row => row.id === 3)?.cardAssignments.map(a => a.userName).sort()).toEqual(['Me', 'Other'])
+  expect('mine' in rows.find(row => row.id === 3)!).toBe(false)
 })
 
 test.each([
-  ['calendar_events', 'event_card_assignments'],
-  ['event_card_assignments', 'calendar_events'],
-])('a failed %s read waits for the concurrent %s read before rejecting', async (failing, held) => {
-  const original = state.query.getMockImplementation()!
-  let releaseHeld!: () => void
-  const heldRead = new Promise<void>(resolve => { releaseHeld = resolve })
-  let heldDone = false
-  state.query.mockImplementation(async call => {
-    if (call.columns === 'id,event_date' || call.columns === 'event_id,user_name' || call.table === 'event_restaurant_assignments') return original(call)
-    if (call.table === failing) return { data: [], error: new Error('offline') }
-    if (call.table === held) { await heldRead; heldDone = true }
-    return original(call)
-  })
-  let settled = false
-  const read = readScopedCalendar(scope).finally(() => { settled = true })
-  await vi.waitFor(() => expect(state.calls.some(call => call.table === held && call.columns !== 'id,event_date')).toBe(true))
-  await new Promise(resolve => setTimeout(resolve, 20))
-  expect(settled).toBe(false)
-  releaseHeld()
-  await expect(read).rejects.toThrow('offline')
-  expect(heldDone).toBe(true)
-})
-
-// Both assignment tables and all three index reads must finish before a failure
-// surfaces; otherwise a retry can overlap requests that are still in flight.
-test.each([
-  ['event_card_assignments', 'event_card_assignment_cards'],
-  ['event_card_assignment_cards', 'event_card_assignments'],
-  ['event_card_assignments', 'calendar_events'],
-  ['event_card_assignment_cards', 'calendar_events'],
-])('a failed %s read drains the held %s read first', async (failed, held) => {
-  const original = state.query.getMockImplementation()!
+  ['today', 'mine'], ['mine', 'restaurant'], ['restaurant', 'today'], ['target', 'mine'],
+])('a failed %s query waits for the held %s query before rejecting', async (failed, held) => {
   let release!: () => void
   const hold = new Promise<void>(resolve => { release = resolve })
   let heldDone = false
-  const isBody = (call: { table: string; columns: string }) => call.table !== 'calendar_events' ? call.columns === '*' : call.columns !== 'id,event_date'
-  state.query.mockImplementation(async call => {
-    if (!isBody(call)) return original(call)
-    if (call.table === failed) return { data: [], error: new Error('offline') }
-    if (call.table === held) { await hold; heldDone = true }
-    return original(call)
+  state.query.mockImplementation(async (call: Call) => {
+    if (kind(call) === failed) return { data: null, error: new Error('offline') }
+    if (kind(call) === held) { await hold; heldDone = true }
+    return server(call)
   })
   let settled = false
-  const read = readScopedCalendar(scope).finally(() => { settled = true })
+  const read = readScopedCalendar(calendarReadScope('/map', '?assignmentMap=5', '', false, 'true', now, 'user', 'Me')).finally(() => { settled = true })
   try {
-    await vi.waitFor(() => expect(state.calls.some(call => call.table === held && isBody(call))).toBe(true))
+    await vi.waitFor(() => expect(state.calls.some(call => kind(call) === held)).toBe(true))
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(settled).toBe(false)
   } finally { release() }
@@ -188,89 +176,60 @@ test.each([
   expect(heldDone).toBe(true)
 })
 
-test.each([
-  ['id,event_date', 'event_id,user_name'],
-  ['event_id,user_name', 'event_id,calendar_events!inner(event_date)'],
-  ['event_id,calendar_events!inner(event_date)', 'id,event_date'],
-])('a failed %s index read drains the held %s index read first', async (failed, held) => {
-  const original = state.query.getMockImplementation()!
-  let release!: () => void
-  const hold = new Promise<void>(resolve => { release = resolve })
-  let heldDone = false
-  state.query.mockImplementation(async call => {
-    if (call.columns === failed) return { data: [], error: new Error('offline') }
-    if (call.columns === held) { await hold; heldDone = true }
-    return original(call)
-  })
-  let settled = false
-  const read = readScopedCalendar(scope).finally(() => { settled = true })
-  try {
-    await vi.waitFor(() => expect(state.calls.some(call => call.columns === held)).toBe(true))
-    await new Promise(resolve => setTimeout(resolve, 20))
-    expect(settled).toBe(false)
-  } finally { release() }
-  await expect(read).rejects.toThrow('offline')
-  expect(heldDone).toBe(true)
-  // Nothing past the index starts once an index read has failed.
-  expect(state.calls.some(call => call.columns === '*' || (call.table === 'calendar_events' && call.columns !== 'id,event_date'))).toBe(false)
-})
-
-// Usage contract. Normal paths keep the serial request count; an indexed ID with
-// no event body now also pays for both assignment tables (4 -> 6 requests).
-test('a deleted deep-link target returns nothing but still reads both assignment tables', async () => {
-  state.query.mockResolvedValue({ data: [], error: null })
+// Usage contract: a deleted deep-link target costs its own query and nothing else.
+test('a deleted deep-link target returns nothing and reads no assignment table', async () => {
+  state.db.calendar_events = []
   const target = calendarReadScope('/map', '?assignmentMap=999', '', false, 'true', now, 'user', 'Me')
   expect(await readScopedCalendar(target)).toEqual([])
-  expect(state.calls).toHaveLength(6)
-  expect(state.calls.filter(call => call.columns === '*').map(call => call.table).sort())
-    .toEqual(['event_card_assignment_cards', 'event_card_assignments'])
+  expect(state.calls.map(kind).sort()).toEqual(['mine', 'restaurant', 'target', 'today'])
 })
 
-test('empty indexes never turn into an unfiltered event or assignment read', async () => {
-  state.query.mockResolvedValue({ data: [], error: null })
+test('empty indexes never turn into an unfiltered event read', async () => {
+  state.db.calendar_events = []
   expect(await readScopedCalendar(scope)).toEqual([])
   expect(state.calls).toHaveLength(3)
-})
-
-test.each(['calendar_events', 'event_card_assignments', 'event_restaurant_assignments', 'event_card_assignment_cards'])('failed %s read is not silently treated as a complete snapshot', async table => {
-  const original = state.query.getMockImplementation()!
-  state.query.mockImplementation(call => call.table === table ? { data: [], error: new Error('offline') } : original(call))
-  await expect(readScopedCalendar(scope)).rejects.toThrow('offline')
+  expect(state.calls.every(call => call.filters.length > 0)).toBe(true)
 })
 
 test.each([
-  ['id,event_date', [{ id: 3, event_date: '2000-01-01' }]],
-  ['event_id,user_name', [{ event_id: 1, user_name: 'Foreign' }]],
-  ['event_id,calendar_events!inner(event_date)', [{ event_id: -1, calendar_events: { event_date: '2027-05-01' } }]],
-  // The server must honour the date filter; a past or missing date is not trusted.
-  ['event_id,calendar_events!inner(event_date)', [{ event_id: 4, calendar_events: { event_date: '2026-10-22' } }]],
-  ['event_id,calendar_events!inner(event_date)', [{ event_id: 4, calendar_events: null }]],
-])('rejects invalid index %s', async (columns, data) => {
-  const original = state.query.getMockImplementation()!
-  state.query.mockImplementation(call => call.columns === columns ? { data, error: null } : original(call))
-  await expect(readScopedCalendar(scope)).rejects.toThrow('Invalid service calendar')
+  ['today row of another day', (call: Call) => kind(call) === 'today' ? { data: [{ ...state.db.calendar_events[2], event_date: '2000-01-01', event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar index'],
+  ['mine row without my assignment', (call: Call) => kind(call) === 'mine' ? { data: [{ ...state.db.calendar_events[0], mine: [], event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar index'],
+  ['mine row of another user', (call: Call) => kind(call) === 'mine' ? { data: [{ ...state.db.calendar_events[0], mine: [{ user_name: 'Foreign' }], event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar index'],
+  ['past restaurant row', (call: Call) => kind(call) === 'restaurant' ? { data: [{ ...state.db.calendar_events[5], restaurant: [{ event_id: 6 }], event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar index'],
+  ['restaurant row without its assignment', (call: Call) => kind(call) === 'restaurant' ? { data: [{ ...state.db.calendar_events[3], restaurant: [], event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar index'],
+  ['restaurant link of another event', (call: Call) => kind(call) === 'restaurant' ? { data: [{ ...state.db.calendar_events[3], restaurant: [{ event_id: 99 }], event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar index'],
+  ['team of another event', (call: Call) => kind(call) === 'today' ? { data: [{ ...state.db.calendar_events[2], event_card_assignments: [{ id: 9, event_id: 99, user_name: 'X', assigned_card_id: 1 }], event_card_assignment_cards: [] }], error: null } : null, 'Invalid embedded calendar assignment'],
+  ['missing team list', (call: Call) => kind(call) === 'today' ? { data: [{ ...state.db.calendar_events[2], event_card_assignment_cards: [] }], error: null } : null, 'Invalid embedded calendar assignment'],
+  ['invalid event id', (call: Call) => kind(call) === 'today' ? { data: [{ ...state.db.calendar_events[2], id: -1, event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar event id'],
+])('rejects a %s', async (_label, override, message) => {
+  state.query.mockImplementation(async (call: Call) => override(call) ?? server(call))
+  await expect(readScopedCalendar(scope)).rejects.toThrow(message)
 })
 
-test('event and assignment rows outside the requested IDs are rejected', async () => {
-  const original = state.query.getMockImplementation()!
-  state.query.mockImplementation(call => call.table === 'calendar_events' && call.columns !== 'id,event_date'
-    ? { data: [{ ...events[0], id: 999 }], error: null } : original(call))
-  await expect(readScopedCalendar(scope)).rejects.toThrow('Invalid service calendar event')
-  state.query.mockImplementation(call => call.table === 'event_card_assignment_cards'
-    ? { data: [{ event_id: 999 }], error: null } : original(call))
-  await expect(readScopedCalendar(scope)).rejects.toThrow('Invalid scoped calendar assignment')
+test('a target row other than the requested event is rejected', async () => {
+  state.query.mockImplementation(async (call: Call) => kind(call) === 'target' ? { data: [{ ...state.db.calendar_events[0], event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : server(call))
+  await expect(readScopedCalendar(calendarReadScope('/map', '?assignmentMap=5', '', false, 'true', now, 'user', 'Me'))).rejects.toThrow('Invalid service calendar event')
 })
 
-test('personal indexes page beyond 1000 and event IDs are read in batches of 100', async () => {
-  state.query.mockImplementation(async ({ columns, table, from, filters }) => {
-    if (columns === 'event_id,user_name') return { data: from === 0
-      ? Array.from({ length: 1000 }, (_, i) => ({ event_id: i + 1, user_name: 'Me' })) : [{ event_id: 1001, user_name: 'Me' }], error: null }
-    if (table === 'calendar_events' && columns !== 'id,event_date') return { data: (filters[0][1] as number[]).map(id => ({ ...events[0], id })), error: null }
-    return { data: [], error: null }
-  })
+test('personal events page beyond 1000', async () => {
+  state.db.calendar_events = Array.from({ length: 1001 }, (_, i) => ({ id: i + 1, event_date: '2026-01-01', time: '10:00', title: `E${i + 1}` }))
+  state.db.event_card_assignments = state.db.calendar_events.map(event => ({ id: event.id, event_id: event.id, user_name: 'Me', assigned_card_id: 1 }))
+  state.db.event_restaurant_assignments = []
   expect(await readScopedCalendar(scope)).toHaveLength(1001)
-  expect(state.calls.filter(call => call.columns === 'event_id,user_name').map(call => call.from)).toEqual([0, 1000])
-  expect(state.calls.filter(call => call.table === 'calendar_events' && call.columns !== 'id,event_date')).toHaveLength(11)
+  expect(state.calls.filter(call => kind(call) === 'mine').map(call => call.from)).toEqual([0, 1000])
+})
+
+test('an embedded team list as long as a page falls back to reading every page of that table', async () => {
+  state.db.event_card_assignments = Array.from({ length: 1001 }, (_, i) => ({ id: i + 1, event_id: 3, user_name: `U${i}`, assigned_card_id: 1 }))
+  state.query.mockImplementation(async (call: Call) => {
+    const result = server(call)
+    // A server that caps embedded lists at a page.
+    if (call.table === 'calendar_events') result.data = result.data.map(row => ({ ...row, ...(Array.isArray(row.event_card_assignments) ? { event_card_assignments: (row.event_card_assignments as Row[]).slice(0, 1000) } : {}) }))
+    return result
+  })
+  const rows = await readScopedCalendar(scope)
+  expect(rows.find(row => row.id === 3)?.cardAssignments).toHaveLength(1001)
+  expect(state.calls.filter(call => call.table === 'event_card_assignments').map(call => call.from)).toEqual([0, 1000])
 })
 
 test.each(['user', 'leader'] as const)('%s read reuse preserves the shared list/map scope and every personal team', async role => {
@@ -284,8 +243,7 @@ test.each(['user', 'leader'] as const)('%s read reuse preserves the shared list/
     expect.objectContaining({ userName: 'Me', assignedCardId: 10 }),
     expect.objectContaining({ userName: 'Other', assignedCardIds: [21], teamKey: 'other' }),
   ]))
-  expect(state.calls).toHaveLength(6)
-  expect(state.calls.some(call => call.table === 'event_restaurant_assignments')).toBe(true)
+  expect(state.calls).toHaveLength(4)
 })
 
 test('read reuse never narrows admin, developer, statistics or invalid deep links', () => {
@@ -309,61 +267,38 @@ test.each(['service:["Me","2026-10-23",null,"bad"]', 'service:["Me","2026-10-23"
 })
 
 // 0164: restaurant events before today are never displayed by a service screen.
-test('the restaurant index asks only for restaurant events dated today or later', async () => {
+test('the restaurant query asks only for restaurant events dated today or later', async () => {
   await readScopedCalendar(scope)
-  const index = state.calls.filter(call => call.table === 'event_restaurant_assignments')
-  expect(index).toHaveLength(1)
-  expect(index[0].columns).toBe('event_id,calendar_events!inner(event_date)')
-  expect(index[0].filters).toEqual([['gte:calendar_events.event_date', '2026-10-23']])
+  const restaurant = state.calls.filter(call => kind(call) === 'restaurant')
+  expect(restaurant).toHaveLength(1)
+  expect(restaurant[0].columns).toContain('restaurant:event_restaurant_assignments!inner(event_id)')
+  expect(restaurant[0].filters).toEqual([['gte:event_date', today]])
 })
 
-test('a past restaurant-only event is no longer hydrated, but a past personal event still is', async () => {
-  const original = state.query.getMockImplementation()!
-  // The server applies the date filter: event 6 (past, restaurant only) is not returned.
-  const restaurantRows = [{ event_id: 6, date: '2026-09-01' }, { event_id: 4, date: '2027-05-01' }]
-  state.query.mockImplementation(call => call.table === 'event_restaurant_assignments'
-    ? { data: restaurantRows.filter(row => row.date >= dateFilter(call)).map(row => ({ event_id: row.event_id, calendar_events: { event_date: row.date } })), error: null }
-    : original(call))
+test('a past restaurant-only event is not read, but a past personal event still is', async () => {
   const rows = await readScopedCalendar(scope)
-  expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
-  const bodyIds = state.calls.filter(call => call.table === 'calendar_events' && call.columns !== 'id,event_date').flatMap(call => call.filters[0][1] as number[])
-  expect(bodyIds).not.toContain(6)
-  expect(bodyIds).toContain(1)
+  expect(rows.map(row => row.id)).not.toContain(6)
+  expect(rows.map(row => row.id)).toContain(1)
 })
 
-// 0164 regression: the unit-detail consumer sees exactly what the old complete index gave it.
+// 0164 regression: the unit-detail consumer sees exactly what a complete index gave it.
 test('unit detail restaurant assignments are unchanged: today and future kept, past-only dropped', async () => {
-  const original = state.query.getMockImplementation()!
-  const restaurantEvents = [{ id: 6, date: '2026-09-01' }, { id: 3, date: '2026-10-23' }, { id: 4, date: '2027-05-01' }, { id: 1, date: '2026-08-02' }]
-  const bodies = [...events, { id: 6, event_date: '2026-09-01', time: '12:00', title: 'Past restaurant only' }]
-  state.query.mockImplementation(call => {
-    if (call.table === 'event_restaurant_assignments') return { data: restaurantEvents.filter(row => row.date >= dateFilter(call))
-      .map(row => ({ event_id: row.id, calendar_events: { event_date: row.date } })), error: null }
-    if (call.table === 'calendar_events' && call.columns !== 'id,event_date') {
-      const ids = call.filters[0][1] as number[]
-      return { data: bodies.filter(event => ids.includes(event.id)), error: null }
-    }
-    return original(call)
-  })
+  state.db.event_restaurant_assignments.push({ id: 3, event_id: 3 }, { id: 4, event_id: 1 })
   const rows = await readScopedCalendar(scope)
-  const assignments = restaurantEvents.map((row, i) => ({ id: i + 1, eventId: row.id, unitId: 100, userName: 'Other' }) as EventRestaurantAssignment)
-  const shown = getCurrentRestaurantAssignmentsForUnit(assignments, rows, 100, '2026-10-23').map(a => a.eventId)
-  // The old complete index hydrated event 6 too; the consumer filtered it out anyway.
-  const allBodies = bodies.map(event => ({ id: event.id, date: event.event_date }))
-  const before = getCurrentRestaurantAssignmentsForUnit(assignments, allBodies as never, 100, '2026-10-23').map(a => a.eventId)
+  const assignments = state.db.event_restaurant_assignments.map((row, i) => ({ id: i + 1, eventId: row.event_id, unitId: 100, userName: 'Other' }) as EventRestaurantAssignment)
+  const shown = getCurrentRestaurantAssignmentsForUnit(assignments, rows, 100, today).map(a => a.eventId).sort()
+  const all = state.db.calendar_events.map(event => ({ id: event.id, date: event.event_date }))
+  const before = getCurrentRestaurantAssignmentsForUnit(assignments, all as never, 100, today).map(a => a.eventId).sort()
   expect(shown).toEqual([3, 4])
   expect(shown).toEqual(before)
-  // Past event 1 stays because it is the user's own card assignment, not because of restaurants.
   expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
 })
 
 test('the restaurant date boundary is the scope day in local time, and a stale scope only widens it', async () => {
-  const justAfterMidnight = calendarReadScope('/territory', '', '', false, 'true', new Date('2026-10-23T00:30:00'), 'user', 'Me')
+  const justAfterMidnight = calendarReadScope('/territory', '', '', false, 'true', new Date(`${today}T00:30:00`), 'user', 'Me')
   expect(justAfterMidnight).toBe(scope)
   const lastNight = calendarReadScope('/territory', '', '', false, 'true', new Date('2026-10-22T23:59:00'), 'user', 'Me')
-  state.query.mockResolvedValue({ data: [], error: null })
+  state.db.calendar_events = []
   expect(await readScopedCalendar(lastNight)).toEqual([])
-  const index = state.calls.find(call => call.table === 'event_restaurant_assignments')!
-  // Opened yesterday and still showing: the filter starts a day earlier, never later.
-  expect(index.filters).toEqual([['gte:calendar_events.event_date', '2026-10-22']])
+  expect(state.calls.find(call => kind(call) === 'restaurant')!.filters).toEqual([['gte:event_date', '2026-10-22']])
 })

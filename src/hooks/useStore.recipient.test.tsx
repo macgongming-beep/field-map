@@ -86,7 +86,11 @@ vi.mock('../lib/supabase', () => ({ supabase: {
       if (table === 'restaurant_requests' && !writing) state.requestFilters.push(filters)
       if (table === 'calendar_events' && !writing) state.calendarFilters.push([...filters])
       if (table === 'calendar_events' && !writing && state.calendarResponses.length) {
-        return resolve(await state.calendarResponses.shift())
+        const response = await state.calendarResponses.shift()!
+        // Like PostgREST: an embedded relation is always present, as an array.
+        const embeds = selected.includes('event_card_assignments(') ? ['event_card_assignments', 'event_card_assignment_cards'] : []
+        return resolve(embeds.length && Array.isArray(response.data)
+          ? { ...response, data: response.data.map(row => Object.fromEntries([...embeds.map(key => [key, []]), ...Object.entries(row)])) } : response)
       }
       if (table === 'cards' && !lookup) state.cardFilters.push(filters)
       if (table === 'cards' && !lookup && state.cardHold) await state.cardHold
@@ -1021,8 +1025,8 @@ test.each([false, true])('assigned-map navigation recipient request reuse=%s wit
   vi.stubEnv('VITE_CALENDAR_NAVIGATION_REUSE_ENABLED', String(enabled))
   const base = 'service:["Volunteer","2026-10-30",null]'
   const target = 'service:["Volunteer","2026-10-30",7]'
+  // 0167: today's query carries the event body itself (no separate index read).
   state.calendarResponses.push(
-    Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30' }], error: null }),
     Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30', time: '10:00', title: 'Shared', event_participants: [
       { user_name: 'Volunteer', role: '신청' }, { user_name: 'Other team', role: '신청' },
     ] }], error: null }),
@@ -1053,8 +1057,8 @@ test.each([false, true])('assigned-map navigation recipient request reuse=%s wit
 test.each(['service:["Volunteer","2026-10-30",null]', 'service:["Volunteer","2026-10-30",7]'])('fresh personal calendar %s is reused for territory scope, not reread', async scope => {
   enableScopedHistories()
   vi.stubEnv('VITE_SERVICE_CALENDAR_REUSE_ENABLED', 'true')
+  // 0167: today's query carries the event body itself (no separate index read).
   state.calendarResponses.push(
-    Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30' }], error: null }),
     Promise.resolve({ data: [{ id: 7, event_date: '2026-10-30', time: '10:00', title: 'Shared' }], error: null }),
   )
   const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', scope))
@@ -1091,7 +1095,8 @@ test('failed fresh personal assignments never replace existing scope with partia
   await waitFor(() => expect(result.current.loading).toBe(false))
   const buildings = result.current.buildings
   state.refresh.mockClear()
-  state.failedTable = 'event_card_assignments'
+  // 0167: the personal assignment index is now part of the event queries.
+  state.failedTable = 'calendar_events'
   await act(async () => {
     await expect(result.current.refetchSlices(['calendar'], { triggeredBy: 'mutation:calendar' })).rejects.toThrow()
   })
