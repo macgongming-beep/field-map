@@ -26,6 +26,8 @@ const events = [
   { id: 5, event_date: '2025-01-01', time: '18:30', title: 'Explicit old target' },
 ]
 afterEach(() => vi.unstubAllEnvs())
+// Server-side date filter as requested; without one the emulated server returns every row.
+const dateFilter = (call: { filters: [string, unknown][] }) => (call.filters.find(([key]) => key === 'gte:calendar_events.event_date')?.[1] as string | undefined) ?? ''
 beforeEach(() => {
   state.calls = []
   state.query.mockReset().mockImplementation(async ({ table, columns, filters }) => {
@@ -320,7 +322,7 @@ test('a past restaurant-only event is no longer hydrated, but a past personal ev
   // The server applies the date filter: event 6 (past, restaurant only) is not returned.
   const restaurantRows = [{ event_id: 6, date: '2026-09-01' }, { event_id: 4, date: '2027-05-01' }]
   state.query.mockImplementation(call => call.table === 'event_restaurant_assignments'
-    ? { data: restaurantRows.filter(row => row.date >= (call.filters[0][1] as string)).map(row => ({ event_id: row.event_id, calendar_events: { event_date: row.date } })), error: null }
+    ? { data: restaurantRows.filter(row => row.date >= dateFilter(call)).map(row => ({ event_id: row.event_id, calendar_events: { event_date: row.date } })), error: null }
     : original(call))
   const rows = await readScopedCalendar(scope)
   expect(rows.map(row => row.id)).toEqual([1, 3, 4, 2])
@@ -335,7 +337,7 @@ test('unit detail restaurant assignments are unchanged: today and future kept, p
   const restaurantEvents = [{ id: 6, date: '2026-09-01' }, { id: 3, date: '2026-10-23' }, { id: 4, date: '2027-05-01' }, { id: 1, date: '2026-08-02' }]
   const bodies = [...events, { id: 6, event_date: '2026-09-01', time: '12:00', title: 'Past restaurant only' }]
   state.query.mockImplementation(call => {
-    if (call.table === 'event_restaurant_assignments') return { data: restaurantEvents.filter(row => row.date >= (call.filters[0][1] as string))
+    if (call.table === 'event_restaurant_assignments') return { data: restaurantEvents.filter(row => row.date >= dateFilter(call))
       .map(row => ({ event_id: row.id, calendar_events: { event_date: row.date } })), error: null }
     if (call.table === 'calendar_events' && call.columns !== 'id,event_date') {
       const ids = call.filters[0][1] as number[]
