@@ -18,7 +18,7 @@ export function buildingDemandEnabled(role: Role) {
     && (import.meta.env.VITE_BUILDING_DEMAND_ENABLED ?? import.meta.env.VITE_DEMO_MODE) === 'true'
 }
 
-export function buildingDemandForRoute(role: Role, pathname: string, search: string, desktop: boolean): BuildingDemand | undefined {
+export function buildingDemandForRoute(role: Role, pathname: string, search: string, desktop: boolean, mobileView: Role = role): BuildingDemand | undefined {
   if (!buildingDemandEnabled(role)) return undefined
   const entryMode = import.meta.env.VITE_ROUTE_LIGHTWEIGHT_ENABLED === 'true' ? 'landing' : 'home'
   // Unknown consumers stay full. Assignment editors independently request full data.
@@ -46,7 +46,10 @@ export function buildingDemandForRoute(role: Role, pathname: string, search: str
   // 0170: a leader's mobile 나의 봉사 shows schedule, labelled cards/restaurants and sessions.
   // Its regular/return-visit tools and restaurant sheet request full buildings when opened
   // (FullBuildingGate). Administrators' 나의 봉사 keeps its full card list.
-  if (!desktop && role === 'leader' && pathname === '/territory' && !search) return entryMode
+  // 0172: an administrator viewing the leader/volunteer screen gets that same 나의 봉사 (same
+  // components and tool gates); the administrator's own card list is not shown there.
+  const territoryView = role === 'admin' && (mobileView === 'leader' || mobileView === 'user') ? 'leader' : role
+  if (!desktop && territoryView === 'leader' && pathname === '/territory' && !search) return entryMode
   return 'full'
 }
 

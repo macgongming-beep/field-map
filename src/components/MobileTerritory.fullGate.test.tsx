@@ -115,3 +115,18 @@ test('map snapshot restaurant sheet: list, history preview, session payload and 
   expect(onAddRestaurantVisit).toHaveBeenCalledWith(71, '다시 방문')
   localStorage.removeItem('rs:나')
 })
+
+// 0172: an administrator viewing the volunteer screen gets the same gated tools on light data.
+test('volunteer view on light data: count without buildings, tools still gated', () => {
+  const light = reader()
+  mount(light, { role: 'user' })
+  expect(within(regularSection()).getByText('1')).toBeInTheDocument()
+  expect(light.request).not.toHaveBeenCalled()
+  openRestaurantSheet()
+  expect(light.requestMap).toHaveBeenCalled()
+  expect(screen.getByRole('status')).toHaveTextContent('불러오는 중...')
+  fireEvent.click(document.querySelector('.mobile-sheet-backdrop')!)
+  openReturnVisits()
+  expect(light.request).toHaveBeenCalled()
+  expect(screen.queryByText('고림동 102호')).not.toBeInTheDocument()
+})

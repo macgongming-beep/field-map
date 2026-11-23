@@ -906,3 +906,20 @@ test.each(['same act', 'while the full read is pending'] as const)('full then ma
   expect(buildingReads().every(read => read.columns.includes('memo'))).toBe(true)
   expect(result.current.fullBuildingReader!.mapReady).toBe(true)
 })
+
+// 0172: an administrator viewing the leader/volunteer mobile screen gets the light 나의 봉사.
+test.each([[false, 'true', 'landing'], [false, undefined, 'home'], [true, 'true', 'full'], [true, undefined, 'full']] as const)('admin viewing leader/user: desktop=%s lightweight=%s -> %s; own view and deep links stay full', (desktop, flag, mode) => {
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', flag)
+  for (const view of ['leader', 'user'] as const) {
+    expect(buildingDemandForRoute('admin', '/territory', '', desktop, view)).toBe(mode)
+    for (const search of ['?assignmentEvent=9', '?openEvent=9']) expect(buildingDemandForRoute('admin', '/territory', search, desktop, view)).toBe('full')
+    expect(buildingDemandForRoute('admin', '/territory/regular/7', '', desktop, view)).toBe('full')
+  }
+  expect(buildingDemandForRoute('admin', '/territory', '', desktop, 'admin')).toBe('full')
+  expect(buildingDemandForRoute('admin', '/territory', '', desktop)).toBe('full')
+  // A volunteer view never widens what a leader account gets, and developer stays outside demand.
+  expect(buildingDemandForRoute('leader', '/territory', '', desktop, 'admin')).toBe(mode)
+  expect(buildingDemandForRoute('developer', '/territory', '', desktop, 'leader')).toBeUndefined()
+  // Other admin routes ignore the view.
+  expect(buildingDemandForRoute('admin', '/map', '', desktop, 'leader')).toBe(desktop ? 'full' : 'map')
+})
