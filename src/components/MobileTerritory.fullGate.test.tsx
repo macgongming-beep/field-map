@@ -130,3 +130,28 @@ test('volunteer view on light data: count without buildings, tools still gated',
   expect(light.request).toHaveBeenCalled()
   expect(screen.queryByText('고림동 102호')).not.toBeInTheDocument()
 })
+
+// Codex 0173 review: a restored restaurant session saves outside FullBuildingGate. It needs
+// only the stored unit id, never buildings, so it works (and fails safely) on light data.
+test.each(['saved', 'failed'] as const)('a restored restaurant session result on light data: %s', async outcome => {
+  const session = { kind: 'building', buildingId: 7, unitId: 71, name: 'Noodle', address: '고림로 7', startedAt: new Date().toISOString() }
+  localStorage.setItem('rs:나', JSON.stringify(session))
+  const onAddRestaurantVisit = outcome === 'saved' ? vi.fn(async () => {}) : vi.fn(async () => { throw new Error('offline') })
+  const light = reader()
+  mount(light, { role: 'user', onAddRestaurantVisit })
+  expect(document.querySelector('.mt-rs-active-card')).not.toBeNull()
+  fireEvent.click(document.querySelector('.mt-rs-memo-toggle-btn')!)
+  fireEvent.change(document.querySelector('.mt-rs-memo-input')!, { target: { value: '다시 방문' } })
+  await act(async () => { fireEvent.click(document.querySelector('.mt-rs-save-btn')!) })
+  expect(onAddRestaurantVisit).toHaveBeenCalledWith(71, '다시 방문')
+  expect(light.request).not.toHaveBeenCalled()
+  if (outcome === 'saved') {
+    expect(localStorage.getItem('rs:나')).toBeNull()
+    expect(document.querySelector('.mt-rs-active-card')).toBeNull()
+  } else {
+    // The draft and the session stay for another try.
+    expect(JSON.parse(localStorage.getItem('rs:나')!)).toMatchObject({ unitId: 71 })
+    expect((document.querySelector('.mt-rs-memo-input') as HTMLTextAreaElement).value).toBe('다시 방문')
+  }
+  localStorage.removeItem('rs:나')
+})

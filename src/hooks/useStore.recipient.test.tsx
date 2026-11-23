@@ -2372,3 +2372,65 @@ test('a sequential base part that answers after sign-out never marks the signed-
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   expect(result.current.recipientBaseReady).toBe(false)
 })
+
+// Codex 0173 review: a failed first snapshot surfaces only after every read it started.
+test.each([
+  ['an early base slice fails while personal territory is pending', 'return_visits', 'cards'],
+  ['a personal territory slice fails while an early base slice is pending', 'cards', 'return_visits'],
+] as const)('sequential failure: %s', async (_label, failing, held) => {
+  let release!: () => void
+  const hold = new Promise<void>(resolve => { release = resolve })
+  if (held === 'cards') state.cardHold = hold
+  else state.returnHold = hold
+  state.failedTable = failing
+  const { result } = renderHook(() => useStore(true, 'user', 'Volunteer', 'full'))
+  await waitFor(() => expect(state.reads).toContain(held))
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  // Still waiting for the held read: no error, no completion yet.
+  expect(result.current.error).toBeNull()
+  expect(result.current.loading).toBe(true)
+  await act(async () => { release() })
+  await waitFor(() => expect(result.current.error).not.toBeNull())
+  expect(result.current.loading).toBe(false)
+  expect(result.current.buildingScopeReady).toBe(false)
+  state.cardHold = null
+})
+
+// Codex 0173 review: the session is taken before the first await of the snapshot.
+test('a parallel snapshot whose clock answers after sign-out never marks the store ready', async () => {
+  enableScopedHistories()
+  vi.stubEnv('VITE_CALENDAR_WINDOW_ENABLED', 'true')
+  vi.stubEnv('VITE_RECIPIENT_INITIAL_PARALLEL_ENABLED', 'true')
+  let releaseClock!: (value: string) => void
+  state.clock.mockReset().mockReturnValue(new Promise(resolve => { releaseClock = resolve }))
+  const { result, rerender } = renderHook(({ enabled }) => useStore(enabled, 'user', 'Volunteer', 'window:2026-10-01:2026-10-31'), { initialProps: { enabled: true } })
+  await waitFor(() => expect(state.clock).toHaveBeenCalled())
+  rerender({ enabled: false })
+  await act(async () => { releaseClock('2026-10-05T00:00:00Z') })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  expect(result.current.recipientBaseReady).toBe(false)
+  expect(result.current.buildingScopeReady).toBe(false)
+})
+
+test('a sequential snapshot whose calendar answers after sign-out never marks the store ready', async () => {
+  let releaseCalendar!: (value: { data: Record<string, unknown>[]; error: null }) => void
+  state.calendarResponses.push(new Promise(resolve => { releaseCalendar = resolve }))
+  const { result, rerender } = renderHook(({ enabled }) => useStore(enabled, 'user', 'Volunteer', 'full'), { initialProps: { enabled: true } })
+  await waitFor(() => expect(state.reads).toContain('calendar_events'))
+  rerender({ enabled: false })
+  await act(async () => { releaseCalendar({ data: [], error: null }) })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  expect(result.current.recipientBaseReady).toBe(false)
+  expect(result.current.buildingScopeReady).toBe(false)
+})
+
+test('personal territory that answers after sign-out never marks the store territory-ready', async () => {
+  let releaseBuildings!: () => void
+  state.recipientDetails = new Promise(resolve => { releaseBuildings = resolve })
+  const { result, rerender } = renderHook(({ enabled }) => useStore(enabled, 'user', 'Volunteer', 'full'), { initialProps: { enabled: true } })
+  await waitFor(() => expect(result.current.recipientBaseReady).toBe(true))
+  rerender({ enabled: false })
+  await act(async () => { releaseBuildings() })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)) })
+  expect(result.current.buildingScopeReady).toBe(false)
+})

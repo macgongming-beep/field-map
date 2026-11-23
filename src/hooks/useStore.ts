@@ -911,6 +911,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     }
     if (recipientReader) {
       const work = async () => {
+        // 0173: the session this snapshot belongs to, taken before the first await.
+        const session = recipientSnapshotSession.current
         const refreshTerritory = slices.some((slice) => ['calendar', 'resources', 'returnVisits', 'buildings', 'cards', 'cardBoundaries'].includes(slice))
         const canKeepTerritory = calendarTerritoryRefreshEnabled() && recipientTerritoryReady.current && loadedOnceRef.current
           && recipientReader.scoped && slices.length === 1 && slices[0] === 'calendar'
@@ -935,7 +937,6 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
               : fetchSlice(slice, false, false, options?.strictGroups))
           const territorySlices = new Set<Slice>(['buildings', 'cardBoundaries', ...afterBuildings])
           const baseReads = [...requested].flatMap((slice, index) => territorySlices.has(slice) ? [] : [reads[index]])
-          const session = recipientSnapshotSession.current
           void Promise.all(baseReads).then(() => {
             // This path runs only for the first snapshot; ignore a part from an earlier session.
             if (session === recipientSnapshotSession.current) setRecipientBaseReady(true)
@@ -1016,22 +1017,27 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
             requested.delete(slice)
             earlyBase.push(fetchSlice(slice, false, false, options?.strictGroups))
           }
-          const session = recipientSnapshotSession.current
           void Promise.all(earlyBase).then(() => {
             if (session === recipientSnapshotSession.current) setRecipientBaseReady(true)
           }, () => {})
         }
+        // Every read this snapshot starts; a failure waits for all of them before surfacing.
+        const started: Promise<number>[] = [...earlyBase]
         try {
           // Calendar changes include unassignment/cancellation, not only newly granted cards.
           if (refreshTerritory) {
             recipientReader.refresh(freshCalendar)
-            await fetchSlice('buildings')
+            const buildingsRead = fetchSlice('buildings')
+            started.push(buildingsRead)
+            await buildingsRead
             requested.delete('buildings')
           }
-          await Promise.all([...earlyBase, ...[...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups))])
+          const rest = [...requested].map((slice) => fetchSlice(slice, false, false, options?.strictGroups))
+          started.push(...rest)
+          await Promise.all([...earlyBase, ...rest])
         } catch (error) {
           // A retry must not race unfinished writes from this failed snapshot.
-          await Promise.allSettled(earlyBase)
+          await Promise.allSettled(started)
           throw error
         }
         if (baseline && slices.includes('buildings')) {
@@ -1156,6 +1162,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
 
   // 기존 fetchAll: 모든 slice + auto_close 부수효과 유지 (100% 후방호환)
   const fetchAll = useCallback(async (recovery = false) => {
+    const fetchSession = recipientSnapshotSession.current
     // 자동 종료 함수 호출 (5분 디바운스, 백그라운드 fire-and-forget)
     if (Date.now() - lastAutoCloseAtRef.current > 5 * 60 * 1000) {
       lastAutoCloseAtRef.current = Date.now()
@@ -1184,7 +1191,7 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
         }
       }
       loadedOnceRef.current = true
-      if (recipientReader) setRecipientTerritoryLoaded(true)
+      if (recipientReader && fetchSession === recipientSnapshotSession.current) setRecipientTerritoryLoaded(true)
     } catch (error) {
       // Only a complete existing snapshot makes cancellation safe to leave on screen.
       if (error instanceof SupersededReadError && loadedOnceRef.current) throw error
