@@ -9870,6 +9870,11 @@ button:focus-visible {
   padding: 6px 0;
 }
 
+.mobile-today-card-pending {
+  /* 이름표가 아직 오지 않은 줄: 자리만 둔다 (배정 없음이 아니다) */
+  color: var(--text-muted, #9aa0a6);
+  letter-spacing: 0.15em;
+}
 .mobile-today-card-dot {
   width: 6px;
   height: 6px;

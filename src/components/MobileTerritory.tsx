@@ -7,6 +7,7 @@ import { t, translateKoreanAddress, weekdayShortLabels } from '../i18n'
 import { getTerritoryCardOperationalState, sortTerritoryCardsByOperationalPriority } from '../utils/cardSearch'
 import { findReturnVisitBuilding, getUserReturnVisits, normalizeVisitorName } from '../utils/returnVisits'
 import { RestaurantServiceSheet } from './RestaurantServiceSheet'
+import { useAssignmentCardLabels, usePlaceLabels } from '../hooks/useServiceLabels'
 import { msg } from '../lib/msg'
 import { showToast } from '../lib/toast'
 import { useGroupTerritory } from '../features/groupTerritory/context'
@@ -371,12 +372,23 @@ export function MobileTerritory({
     return { event, cards: assignedCards, teammates }
   }
 
+  // Today/future rows keep the assignment's card IDs in order; names come from labels so a
+  // card that is not loaded yet is never dropped or shown as "no assigned card".
   const myTodayAssignments = useMemo(() => {
-    return myAssignmentsSplit.activeEvents
-      .map(buildAssignment)
-      .filter(Boolean) as Array<{ event: CalendarEvent; cards: TerritoryCard[]; teammates: string[] }>
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myAssignmentsSplit, cards, currentVisitor])
+    return myAssignmentsSplit.activeEvents.flatMap((event) => {
+      const assignment = event.cardAssignments.find((a) => a.userName === currentVisitor)
+      const isParticipant = !!assignment || event.applicants.includes(currentVisitor)
+        || event.assigned.includes(currentVisitor) || event.leaders.includes(currentVisitor)
+      if (!isParticipant) return []
+      return [{ event, cardIds: assignmentCardIds(assignment), teammates: getAssignmentTeamMembers(event, currentVisitor) }]
+    })
+  }, [myAssignmentsSplit, currentVisitor])
+  const todayCardLabels = useAssignmentCardLabels(myTodayAssignments.flatMap((item) => item.cardIds), cards)
+  const todayRestaurantRequests = useMemo(() => eventRestaurantAssignments
+    .filter((a) => a.userName === currentVisitor && myTodayAssignments.some((item) => item.event.id === a.eventId))
+    .map((a) => ({ buildingId: a.buildingId, unitId: a.unitId ?? null })),
+  [eventRestaurantAssignments, currentVisitor, myTodayAssignments])
+  const todayPlaces = usePlaceLabels(todayRestaurantRequests, buildings)
 
   const myPastAssignments = useMemo(() => {
     return myAssignmentsSplit.pastEvents
@@ -758,7 +770,7 @@ export function MobileTerritory({
               <div className="mobile-territory-empty">{t(language, 'territory.noTodayService')}</div>
             ) : (
               <div className="mobile-today-service-list">
-                {myTodayAssignments.map(({ event, cards: assignedCards, teammates }) => {
+                {myTodayAssignments.map(({ event, cardIds, teammates }) => {
                   const isOpen = expandedEventIds.has(event.id)
                   // v2: 본인의 비공식/식당 배정
                   const myInformal = eventInformalAssignments.filter(
@@ -767,7 +779,13 @@ export function MobileTerritory({
                   const myRestaurants = eventRestaurantAssignments.filter(
                     (a) => a.eventId === event.id && a.userName === currentVisitor,
                   )
-                  const totalCount = assignedCards.length + myInformal.length + myRestaurants.length
+                  // A deleted card/place stays dropped as before; one still loading or failed is kept.
+                  const cardRows = cardIds.filter((id) => todayCardLabels.label(id) || todayCardLabels.pending(id) || todayCardLabels.error)
+                  const restaurantRows = myRestaurants.filter((asn) => {
+                    const request = { buildingId: asn.buildingId, unitId: asn.unitId ?? null }
+                    return todayPlaces.place(request) || todayPlaces.pending(request) || todayPlaces.error
+                  })
+                  const totalCount = cardRows.length + myInformal.length + restaurantRows.length
                   return (
                     <article className={`mobile-today-service-card${isOpen ? ' open' : ''}`} key={event.id}>
                       <button className="mobile-today-service-toggle" onClick={() => toggleTodayEvent(event.id)} type="button">
@@ -785,20 +803,20 @@ export function MobileTerritory({
                             <div className="mobile-territory-empty compact">{t(language, 'territory.noAssignedCards')}</div>
                           ) : (
                             <>
-                              {onOpenAssignmentMap && assignedCards.length > 0 && <button className="assigned-service-map-button" type="button" onClick={() => onOpenAssignmentMap(event.id)}>
+                              {onOpenAssignmentMap && cardIds.length > 0 && <button className="assigned-service-map-button" type="button" onClick={() => onOpenAssignmentMap(event.id)}>
                                 <span>{cardServiceLabel(assignedServiceScope(event, currentVisitor).scope)} · {msg('전체 지도')}</span>
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z M9 3v15 M15 6v15" /></svg>
                               </button>}
-                              {assignedCards.map((card) => {
+                              {cardRows.map((cardId) => {
+                                const card = todayCardLabels.label(cardId)
                                 return (
-                                  <div className="mobile-today-card-row" key={`card-${card.id}`}>
+                                  <div className="mobile-today-card-row" key={`card-${cardId}`} aria-busy={card ? undefined : true}>
                                     <span className="mobile-today-card-dot" aria-hidden="true" />
                                     <strong>
-                                      {translateKoreanAddress(card.name, language, translatePlaceNames)}
-
+                                      {card ? translateKoreanAddress(card.name, language, translatePlaceNames) : <span className="mobile-today-card-pending" aria-hidden="true">···</span>}
                                     </strong>
-                                    {(!onOpenAssignmentMap || assignedServiceScope(event, currentVisitor).scope === '전체') && <em>{card.progress}%</em>}
-                                    <button onClick={() => onOpenAssignmentMap ? onOpenAssignmentMap(event.id, card.id) : onOpenMap(card.id)} type="button">{t(language, 'zone.map')}</button>
+                                    {!card && todayCardLabels.error && <button onClick={todayCardLabels.retry} type="button">{msg('다시 시도')}</button>}
+                                    <button onClick={() => onOpenAssignmentMap ? onOpenAssignmentMap(event.id, cardId) : onOpenMap(cardId)} type="button">{t(language, 'zone.map')}</button>
                                   </div>
                                 )
                               })}
@@ -817,17 +835,15 @@ export function MobileTerritory({
                                   </div>
                                 )
                               })}
-                              {myRestaurants.map((asn) => {
-                                const b = buildings.find((x) => x.id === asn.buildingId)
-                                if (!b) return null
-                                const unit = asn.unitId != null ? b.units.find((u) => u.id === asn.unitId) : null
-                                const restName = unit?.number || b.name || b.address
+                              {restaurantRows.map((asn) => {
+                                const b = todayPlaces.place({ buildingId: asn.buildingId, unitId: asn.unitId ?? null })
+                                const restName = b ? b.unitNumber || b.name || b.address : null
                                 return (
-                                  <div className="mobile-today-card-row" key={`rest-${asn.id}`}>
+                                  <div className="mobile-today-card-row" key={`rest-${asn.id}`} aria-busy={b ? undefined : true}>
                                     <span className="mobile-today-card-dot" aria-hidden="true" style={{ background: '#d88a3e' }} />
-                                    <strong>{restName}{unit ? ` · ${b.name || b.address}` : ''}</strong>
+                                    <strong>{b ? <>{restName}{b.unitNumber !== null ? ` · ${b.name || b.address}` : ''}</> : <span className="mobile-today-card-pending" aria-hidden="true">···</span>}</strong>
                                     <em style={{ color: '#d88a3e' }}>{msg('식당')}</em>
-                                    <button
+                                    {b ? <button
                                       type="button"
                                       onClick={() => {
                                         if (b.lat && b.lng) {
@@ -837,7 +853,7 @@ export function MobileTerritory({
                                           onOpenMap(b.cardId)
                                         }
                                       }}
-                                    >{msg('길찾기')}</button>
+                                    >{msg('길찾기')}</button> : todayPlaces.error ? <button onClick={todayPlaces.retry} type="button">{msg('다시 시도')}</button> : null}
                                   </div>
                                 )
                               })}
