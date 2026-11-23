@@ -37,10 +37,11 @@ vi.mock('./hooks/useCalendarRealtime', () => ({ useCalendarRealtime: () => {} })
 vi.mock('./hooks/usePlaceDeletionRealtime', () => ({ usePlaceDeletionRealtime: () => {} }))
 vi.mock('./hooks/useUnitCreationRealtime', () => ({ useUnitCreationRealtime: () => {} }))
 vi.mock('./lib/pwa', () => ({ applyUpdate: vi.fn() }))
-vi.mock('./components/MobileHome', () => ({ MobileHome: () => {
+vi.mock('./components/MobileHome', () => ({ MobileHome: ({ onChangeViewMode }: { onChangeViewMode?: (role: string) => void }) => {
   useState(() => { state.shellMounts++; return null })
   // Like the real calendar: territory consumers live inside the route.
-  return <><button>navigation</button><RouteReadGate><CalendarConsumer /><TerritoryReadGate><div>territory detail</div></TerritoryReadGate></RouteReadGate></>
+  return <><button>navigation</button>
+    {['admin', 'leader', 'user'].map(view => <button key={view} onClick={() => onChangeViewMode?.(view)}>{`view:${view}`}</button>)}<RouteReadGate><CalendarConsumer /><TerritoryReadGate><div>territory detail</div></TerritoryReadGate></RouteReadGate></>
 } }))
 vi.mock('./components/Login', () => ({ Login: () => <div>login screen</div> }))
 vi.mock('./components/Toast', () => ({ Toast: () => null }))
@@ -320,3 +321,31 @@ test.each([['false', 'true', true], ['true', 'false', false]] as const)(
     } else expect(await screen.findByText('detail mounted')).toBeTruthy()
   },
 )
+
+// 0172 (ported from the Codex review copy): the saved mobile view reaches building demand,
+// while authority (store role, session user) stays the administrator's.
+test.each(['leader', 'user'])('admin saved %s view reaches the building demand without changing authority', async view => {
+  vi.stubEnv('VITE_BUILDING_DEMAND_ENABLED', 'true')
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  window.localStorage.setItem('chsViewMode:1', view)
+  render(<MemoryRouter initialEntries={['/territory']}><App /></MemoryRouter>)
+  await waitFor(() => expect(state.buildingScope).toBe('landing'))
+  expect(state.role).toBe('admin')
+  expect(state.sessionUser).toBe('Admin')
+})
+
+test('switching the view in the app moves 나의 봉사 demand and switching back restores the admin full read', async () => {
+  vi.stubEnv('VITE_BUILDING_DEMAND_ENABLED', 'true')
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  render(<MemoryRouter initialEntries={['/territory']}><App /></MemoryRouter>)
+  await waitFor(() => expect(state.buildingScope).toBe('full'))
+  fireEvent.click(await screen.findByRole('button', { name: 'view:leader' }))
+  await waitFor(() => expect(state.buildingScope).toBe('landing'))
+  expect(window.localStorage.getItem('chsViewMode:1')).toBe('leader')
+  fireEvent.click(screen.getByRole('button', { name: 'view:user' }))
+  await waitFor(() => expect(state.buildingScope).toBe('landing'))
+  fireEvent.click(screen.getByRole('button', { name: 'view:admin' }))
+  await waitFor(() => expect(state.buildingScope).toBe('full'))
+  expect(state.role).toBe('admin')
+  expect(state.sessionUser).toBe('Admin')
+})
