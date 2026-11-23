@@ -27,6 +27,7 @@
 0160~0162 운영 반영: [0163](0163-demo-perf-0160-0162-production-release.md).
 나의 봉사 식당 색인: [0164 오늘 이후 일정만](0164-demo-service-restaurant-index-from-today.md).
 인도자 나의 봉사 건물 전체 조회: [0165 분리 보류](0165-leader-my-service-full-buildings-deferred.md).
+캘린더·나의 봉사 일정 읽기: [0167 한 번의 왕복으로](0167-demo-calendar-service-one-round-trip.md).
 
 봉사자·관리 화면 조회 데모 재검증: [0155 개인 구역 ID 재사용과 경량 관리 조회](0155-demo-section-read-reuse.md).
 
