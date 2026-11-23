@@ -146,16 +146,17 @@ async function readServiceCalendar(scope: string) {
   if (!parsed) throw new Error('Invalid service calendar scope')
   const { user: userName, date: today, target } = parsed
   // 0167: each index is an event query that also carries the event body and every team,
-  // so the screen needs one round trip instead of index -> bodies. The four filters are
-  // disjoint so an event body and its teams are downloaded once:
-  //   target:     the explicit route event, whatever its date
+  // so the screen needs one round trip instead of index -> bodies.
+  //   target:     the explicit route event, whatever its date (excluded from the others by
+  //               its immutable id)
   //   today:      every other event of today
-  //   mine:       other events with one of my card assignments, except today's (alias inner join;
+  //   mine:       other events with one of my card assignments, any date (alias inner join;
   //               embedded teams stay complete)
-  //   restaurant: other restaurant events after today (0164: unit details show everyone's
-  //               restaurant assignments only from today on; today's come with `today`)
-  // A future event that is both mine and a restaurant event is still read twice (deduplicated
-  // below); excluding it would need an anti-join filter and was left out for safety.
+  //   restaurant: other restaurant events from today on (0164: unit details show everyone's
+  //               restaurant assignments only for today or later)
+  // The four requests read separate snapshots. Never split them by a date that can change
+  // between them: an event moving across today would be missed by both (0167 review).
+  // Overlapping date ranges are read more than once and deduplicated below.
   // Never filter the embedded teams by user: shared assignments need every team in the event.
   const columns = `${CALENDAR_EVENT_COLUMNS},${EMBEDDED_ASSIGNMENTS}`
   type MineRow = EmbeddedCalendarEvent & { mine?: { user_name: string }[] }
@@ -168,13 +169,13 @@ async function readServiceCalendar(scope: string) {
     }),
     pages<MineRow>((from, to) => {
       let query = supabase.from('calendar_events').select(`${columns},mine:event_card_assignments!inner(user_name)`)
-        .eq('mine.user_name', userName).neq('event_date', today)
+        .eq('mine.user_name', userName)
       if (target != null) query = query.neq('id', target)
       return query.order('id').range(from, to)
     }),
     pages<RestaurantRow>((from, to) => {
       let query = supabase.from('calendar_events').select(`${columns},restaurant:event_restaurant_assignments!inner(event_id)`)
-        .gt('event_date', today)
+        .gte('event_date', today)
       if (target != null) query = query.neq('id', target)
       return query.order('id').range(from, to)
     }),
@@ -183,9 +184,9 @@ async function readServiceCalendar(scope: string) {
   ])
   // The server must honour every filter; anything else is not trusted as a complete snapshot.
   if (todayRows.some(row => row.event_date !== today || row.id === target)
-    || mineRows.some(row => row.event_date === today || row.id === target
+    || mineRows.some(row => row.id === target
       || !Array.isArray(row.mine) || row.mine.length === 0 || row.mine.some(link => link.user_name !== userName))
-    || restaurantRows.some(row => typeof row.event_date !== 'string' || row.event_date <= today || row.id === target
+    || restaurantRows.some(row => typeof row.event_date !== 'string' || row.event_date < today || row.id === target
       || !Array.isArray(row.restaurant) || row.restaurant.length === 0 || row.restaurant.some(link => link.event_id !== row.id))) {
     throw new Error('Invalid service calendar index')
   }

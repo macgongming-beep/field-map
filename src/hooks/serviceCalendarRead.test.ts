@@ -150,17 +150,18 @@ test('leader without a personal card assignment keeps today meeting participants
   expect(rows[0]).toMatchObject({ leaders: ['Me'], applicants: ['Guest'], cardAssignments: [{ userName: 'Other team', assignedCardId: 90 }] })
 })
 
-// 0167 review: each event body and its teams are downloaded by one query only.
+// 0167: only the immutable target id is excluded. Date ranges overlap so no read misses an event.
 const returnedIds = () => state.calls.map(call => ({ kind: kind(call), ids: (server(call).data as Row[]).map(row => row.id) }))
-test('today, mine, restaurant and target are disjoint: a today event that is also mine and a restaurant event is read once', async () => {
+test('a today event that is also mine and a restaurant event is downloaded by each of those queries and shown once', async () => {
   state.db.event_card_assignments.push({ id: 7, event_id: 3, user_name: 'Me', assigned_card_id: 40 }, { id: 8, event_id: 3, user_name: 'Other', assigned_card_id: 41 })
   state.db.event_restaurant_assignments.push({ id: 3, event_id: 3 })
   const rows = await readScopedCalendar(scope)
-  const seen = returnedIds().flatMap(r => r.ids)
-  expect(seen.filter(id => id === 3)).toHaveLength(1)
-  expect(new Set(seen).size).toBe(seen.length)
+  // The overlap returns on purpose (usage limit recorded in 0167), so it must stay visible here.
+  expect(returnedIds().filter(r => r.ids.includes(3)).map(r => r.kind).sort()).toEqual(['mine', 'restaurant', 'today'])
+  expect(rows.filter(row => row.id === 3)).toHaveLength(1)
   expect(rows.find(row => row.id === 3)?.cardAssignments.map(a => a.userName)).toEqual(['Me', 'Other'])
   expect('mine' in rows.find(row => row.id === 3)!).toBe(false)
+  expect('restaurant' in rows.find(row => row.id === 3)!).toBe(false)
 })
 
 test.each([
@@ -247,8 +248,6 @@ test.each([
   ['team of another event', (call: Call) => kind(call) === 'today' ? { data: [{ ...state.db.calendar_events[2], event_card_assignments: [{ id: 9, event_id: 99, user_name: 'X', assigned_card_id: 1 }], event_card_assignment_cards: [] }], error: null } : null, 'Invalid embedded calendar assignment'],
   ['missing team list', (call: Call) => kind(call) === 'today' ? { data: [{ ...state.db.calendar_events[2], event_card_assignment_cards: [] }], error: null } : null, 'Invalid embedded calendar assignment'],
   ['invalid event id', (call: Call) => kind(call) === 'today' ? { data: [{ ...state.db.calendar_events[2], id: -1, event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar event id'],
-  ['mine row dated today', (call: Call) => kind(call) === 'mine' ? { data: [{ ...state.db.calendar_events[2], mine: [{ user_name: 'Me' }], event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar index'],
-  ['restaurant row dated today', (call: Call) => kind(call) === 'restaurant' ? { data: [{ ...state.db.calendar_events[2], restaurant: [{ event_id: 3 }], event_card_assignments: [], event_card_assignment_cards: [] }], error: null } : null, 'Invalid service calendar index'],
 ])('rejects a %s', async (_label, override, message) => {
   state.query.mockImplementation(async (call: Call) => override(call) ?? server(call))
   await expect(readScopedCalendar(scope)).rejects.toThrow(message)
@@ -321,13 +320,19 @@ test.each(['service:["Me","2026-10-23",null,"bad"]', 'service:["Me","2026-10-23"
 })
 
 // 0164: restaurant events before today are never displayed by a service screen.
-test('the restaurant query asks only for restaurant events after today; today\'s come with the today query', async () => {
+test('the restaurant query asks for restaurant events dated today or later; mine has no date filter', async () => {
   await readScopedCalendar(scope)
   const restaurant = state.calls.filter(call => kind(call) === 'restaurant')
   expect(restaurant).toHaveLength(1)
   expect(restaurant[0].columns).toContain('restaurant:event_restaurant_assignments!inner(event_id)')
-  expect(restaurant[0].filters).toEqual([['gt:event_date', today]])
-  expect(state.calls.find(call => kind(call) === 'mine')!.filters).toEqual([['eq:mine.user_name', 'Me'], ['neq:event_date', today]])
+  expect(restaurant[0].filters).toEqual([['gte:event_date', today]])
+  expect(state.calls.find(call => kind(call) === 'mine')!.filters).toEqual([['eq:mine.user_name', 'Me']])
+})
+
+test.each(['mine', 'restaurant'] as const)('a %s row dated today is accepted (ranges overlap with today)', async which => {
+  const row = { ...state.db.calendar_events[2], mine: [{ user_name: 'Me' }], restaurant: [{ event_id: 3 }], event_card_assignments: [], event_card_assignment_cards: [] }
+  state.query.mockImplementation(async (call: Call) => kind(call) === which ? { data: [row], error: null } : server(call))
+  expect((await readScopedCalendar(scope)).map(r => r.id)).toContain(3)
 })
 
 test('a past restaurant-only event is not read, but a past personal event still is', async () => {
@@ -355,5 +360,54 @@ test('the restaurant date boundary is the scope day in local time, and a stale s
   const lastNight = calendarReadScope('/territory', '', '', false, 'true', new Date('2026-10-22T23:59:00'), 'user', 'Me')
   state.db.calendar_events = []
   expect(await readScopedCalendar(lastNight)).toEqual([])
-  expect(state.calls.find(call => kind(call) === 'restaurant')!.filters).toEqual([['gt:event_date', '2026-10-22']])
+  expect(state.calls.find(call => kind(call) === 'restaurant')!.filters).toEqual([['gte:event_date', '2026-10-22']])
+})
+
+// 0167 review (Codex): the four queries read separate snapshots; an event whose date crosses
+// today between them must still be read by at least one of them.
+test.each(['future-to-today', 'today-to-future'])('review: personal assignment survives date crossing between reads: %s', async direction => {
+  const future = '2026-10-24'
+  state.db.calendar_events = [{ id: 91, event_date: direction === 'future-to-today' ? future : today, time: '10:00', title: 'Moved' }]
+  state.db.event_card_assignments = [{ id: 1, event_id: 91, user_name: 'Me', assigned_card_id: 10 }]
+  state.db.event_card_assignment_cards = []
+  state.db.event_restaurant_assignments = []
+  let release!: () => void
+  const mineRead = new Promise<void>(resolve => { release = resolve })
+  state.query.mockImplementation(async (call: Call) => {
+    if (direction === 'today-to-future' && kind(call) === 'today') await mineRead
+    const response = server(call)
+    if (direction === 'future-to-today' && kind(call) === 'today') {
+      state.db.calendar_events[0].event_date = today
+    }
+    if (direction === 'today-to-future' && kind(call) === 'mine') {
+      state.db.calendar_events[0].event_date = future
+      release()
+    }
+    return response
+  })
+  const rows = await readScopedCalendar(scope)
+  expect(rows.map(row => row.id)).toContain(91)
+  expect(rows.find(row => row.id === 91)?.cardAssignments[0].assignedCardId).toBe(10)
+})
+
+// 0167 review: another user's restaurant event crosses today <-> tomorrow between the reads.
+test.each(['today-to-tomorrow', 'tomorrow-to-today'])('review: another user restaurant event survives date crossing between reads: %s', async direction => {
+  const tomorrow = '2026-10-24'
+  state.db.calendar_events = [{ id: 92, event_date: direction === 'today-to-tomorrow' ? today : tomorrow, time: '12:00', title: 'Restaurant moved' }]
+  state.db.event_card_assignments = []
+  state.db.event_card_assignment_cards = []
+  state.db.event_restaurant_assignments = [{ id: 1, event_id: 92 }]
+  let release!: () => void
+  const first = new Promise<void>(resolve => { release = resolve })
+  // today-to-tomorrow: restaurant reads first (still today), then the date moves, then today reads.
+  // tomorrow-to-today: today reads first (still tomorrow), then the date moves, then restaurant reads.
+  const [early, late] = direction === 'today-to-tomorrow' ? ['restaurant', 'today'] : ['today', 'restaurant']
+  state.query.mockImplementation(async (call: Call) => {
+    if (kind(call) === late) await first
+    const response = server(call)
+    if (kind(call) === early) { state.db.calendar_events[0].event_date = direction === 'today-to-tomorrow' ? tomorrow : today; release() }
+    return response
+  })
+  const rows = await readScopedCalendar(scope)
+  expect(rows.map(row => row.id)).toContain(92)
 })
