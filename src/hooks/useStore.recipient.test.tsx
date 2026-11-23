@@ -2361,3 +2361,14 @@ test('the first snapshot is complete only after its early base slices, even when
   await waitFor(() => expect(result.current.loading).toBe(false))
   expect(result.current.buildingScopeReady).toBe(true)
 })
+
+test('a sequential base part that answers after sign-out never marks the signed-out store ready', async () => {
+  let releaseReturns!: () => void
+  state.returnHold = new Promise(resolve => { releaseReturns = resolve })
+  const { result, rerender } = renderHook(({ enabled }) => useStore(enabled, 'user', 'Volunteer', 'full'), { initialProps: { enabled: true } })
+  await waitFor(() => expect(state.reads).toContain('return_visits'))
+  rerender({ enabled: false })
+  await act(async () => { releaseReturns() })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  expect(result.current.recipientBaseReady).toBe(false)
+})
