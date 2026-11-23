@@ -888,3 +888,21 @@ test('a failed map request stays gated and retries into the map snapshot', async
   expect(result.current.fullBuildingReader!.error).toBe(false)
   expect(buildingReads().at(-1)!.columns).toBe(MAP_BUILDING_COLUMNS)
 })
+
+// Codex 0171 review: a map request that arrives while a full request is still pending must not lower it.
+test.each(['same act', 'while the full read is pending'] as const)('full then map (%s) keeps and completes the full snapshot', async timing => {
+  const { result } = lightLeader()
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let release!: () => void
+  state.buildingResponse = new Promise(resolve => { release = () => resolve({ data: structuredClone(state.rows), error: null }) })
+  if (timing === 'same act') act(() => { result.current.fullBuildingReader!.request(); result.current.fullBuildingReader!.requestMap() })
+  else {
+    act(() => result.current.fullBuildingReader!.request())
+    await waitFor(() => expect(buildingReads()).toHaveLength(1))
+    act(() => result.current.fullBuildingReader!.requestMap())
+  }
+  await act(async () => { release() })
+  await waitFor(() => expect(result.current.fullBuildingReader!.ready).toBe(true))
+  expect(buildingReads().every(read => read.columns.includes('memo'))).toBe(true)
+  expect(result.current.fullBuildingReader!.mapReady).toBe(true)
+})
