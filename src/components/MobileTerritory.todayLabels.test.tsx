@@ -163,3 +163,25 @@ test('a label read without the assigned unit still shows the building, as the st
   mount({ eventRestaurantAssignments: [restaurant()] })
   await waitFor(() => expect(rows().find(row => row.textContent?.includes('식당'))!.querySelector('strong')!.textContent).toBe('Noodle'))
 })
+
+// Codex review: a deleted-card assignment must not leave its map action behind.
+test('deleted cards do not leave an assignment map action when only a restaurant remains', async () => {
+  state.cardResult = () => Promise.resolve([])
+  state.placeResult = () => Promise.resolve(placeLabel())
+  mount({ eventRestaurantAssignments: [restaurant()], onOpenAssignmentMap: vi.fn() })
+  await waitFor(() => expect(count()).toBe('1개'))
+  expect(within(article()).queryByRole('button', { name: /전체 지도/ })).not.toBeInTheDocument()
+  expect(within(article()).getByRole('button', { name: '길찾기' })).toBeInTheDocument()
+})
+
+test.each([
+  ['still loading', () => new Promise(() => {})],
+  ['failed', () => Promise.reject(new Error('offline'))],
+])('the assignment map action stays while card names are %s', async (_label, result) => {
+  state.cardResult = result as () => Promise<unknown>
+  const onOpenAssignmentMap = vi.fn()
+  mount({ onOpenAssignmentMap })
+  await waitFor(() => expect(rows()).toHaveLength(2))
+  fireEvent.click(within(article()).getByRole('button', { name: /전체 지도/ }))
+  expect(onOpenAssignmentMap).toHaveBeenCalledWith(394)
+})
