@@ -2063,7 +2063,9 @@ export function MobileTerritory({
 
     {/* 식당봉사 시트 */}
     {showRestaurantSheet && onSubmitRestaurantRequest && (
-      <FullBuildingGate sheet onClose={() => setShowRestaurantSheet(false)}><RestaurantServiceSheet
+      // 0171: the sheet uses building name/address/card/restaurant flags, unit number/restaurant flag,
+      // card region and visit histories — all in the map snapshot; it never reads memos.
+      <FullBuildingGate sheet tier="map" onClose={() => setShowRestaurantSheet(false)}><RestaurantServiceSheet
         role={role}
         language={language}
         translatePlaceNames={translatePlaceNames}

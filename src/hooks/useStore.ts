@@ -211,14 +211,17 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
   const demandBuildings = buildingDemandEnabled(role) && !recipientReader && requestedBuildingDemand !== undefined
   const acquiredBuildingMode = useRef<BuildingDemand>(requestedBuildingDemand === 'landing' ? 'landing' : 'home')
   const buildingSnapshotMode = useRef<BuildingDemand>(requestedBuildingDemand === 'landing' ? 'landing' : 'home')
-  const [fullBuildingRequested, setFullBuildingRequested] = useState(false)
+  // A tool's request lasts for this store: once asked, later refreshes keep that tier.
+  const [toolBuildingTier, setToolBuildingTier] = useState<'map' | 'full' | null>(null)
   // 0170: display labels read outside the store follow every later successful territory refresh.
   const [labelRevision, setLabelRevision] = useState(0)
-  const requestFullBuildings = useCallback(() => { setFullBuildingRequested(true) }, [])
+  const requestFullBuildings = useCallback(() => { setToolBuildingTier('full') }, [])
+  const requestMapBuildings = useCallback(() => { setToolBuildingTier(current => current ?? 'map') }, [])
   const routeBuildingMode = demandBuildings
     && (!(requestedBuildingDemand === 'calendar' || requestedBuildingDemand === 'zone') || calendarZoneBuildingDemandEnabled())
     ? requestedBuildingDemand : 'full'
-  const requestedBuildingMode = fullBuildingRequested ? 'full' : routeBuildingMode
+  const requestedBuildingMode = toolBuildingTier != null && buildingDemandRank[toolBuildingTier] > buildingDemandRank[routeBuildingMode]
+    ? toolBuildingTier : routeBuildingMode
   const buildingMode = buildingDemandRank[acquiredBuildingMode.current] > buildingDemandRank[requestedBuildingMode]
     ? acquiredBuildingMode.current : requestedBuildingMode
   const buildingModeRef = useRef(buildingMode)
@@ -1901,6 +1904,8 @@ export function useStore(enabled: boolean = true, role: Role = 'user', recipient
     fullBuildingReader: demandBuildings ? {
       ready: loadedBuildingMode === 'full', error: buildingReadError,
       request: requestFullBuildings, retry: retryBuildingRead,
+      mapReady: loadedBuildingMode != null && buildingDemandRank[loadedBuildingMode] >= buildingDemandRank.map,
+      requestMap: requestMapBuildings,
     } : null,
     serviceLabelSource,
     buildingReadError,

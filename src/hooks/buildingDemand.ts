@@ -89,5 +89,7 @@ export const BuildingDetailContext = createContext<BuildingDetailReader | null>(
 
 export type FullBuildingReader = {
   ready: boolean; error: boolean; request: () => void; retry: () => Promise<void>
+  /** 0171: map-or-richer snapshot (no memos). Tools that only list places ask for this instead of full. */
+  mapReady: boolean; requestMap: () => void
 }
 export const FullBuildingContext = createContext<FullBuildingReader | null>(null)

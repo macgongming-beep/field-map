@@ -69,7 +69,7 @@ test('event read failure keeps fullscreen back and retries the latest version', 
 test('building read failure retains fullscreen and retries without refetching the event', async () => {
   read.mockResolvedValue(fresh)
   const p = props(), request = vi.fn(), retry = vi.fn().mockResolvedValue(undefined)
-  const reader: FullBuildingReader = { ready: false, error: true, request, retry }
+  const reader: FullBuildingReader = { ready: false, error: true, request, retry, mapReady: false, requestMap: vi.fn() }
   const view = () => <FullBuildingContext.Provider value={{ ...reader }}><AssignmentEditor {...p} /></FullBuildingContext.Provider>
   const rendered = render(view())
   await act(async () => {})

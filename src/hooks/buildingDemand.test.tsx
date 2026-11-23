@@ -813,3 +813,78 @@ test('label revision moves after later successful territory refreshes only', asy
   await act(async () => { await result.current.refetchSlices(['buildings', 'cards'], { triggeredBy: 'realtime:unit-created-recovery' }) })
   expect(result.current.serviceLabelSource.revision).toBe(afterMap + 1)
 })
+
+// 0171: the restaurant sheet asks for the map snapshot only; an existing one is reused.
+const lightLeader = () => {
+  vi.stubEnv('VITE_ROUTE_LIGHTWEIGHT_ENABLED', 'true')
+  return renderHook(({ mode }: { mode: BuildingDemand }) =>
+    useStore(true, 'leader', undefined, undefined, 'tester', mode), { initialProps: { mode: 'landing' as BuildingDemand } })
+}
+test('a map request from light 나의 봉사 reads map columns, not full, and full stays a separate request', async () => {
+  const { result } = lightLeader()
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  expect(buildingReads()).toEqual([])
+  expect(result.current.fullBuildingReader).toMatchObject({ mapReady: false, ready: false })
+  act(() => result.current.fullBuildingReader!.requestMap())
+  await waitFor(() => expect(result.current.fullBuildingReader!.mapReady).toBe(true))
+  expect(buildingReads().map(read => read.columns)).toEqual([MAP_BUILDING_COLUMNS])
+  expect(result.current.fullBuildingReader!.ready).toBe(false)
+  expect(result.current.buildings.find(b => b.id === 1)).toMatchObject({ lat: 37, lng: 127, name: 'Building 1' })
+  expect(result.current.buildings.find(b => b.id === 1)?.memo).toBeFalsy()
+  // Repeating the map request reads nothing more.
+  act(() => result.current.fullBuildingReader!.requestMap())
+  await act(async () => {})
+  expect(buildingReads()).toHaveLength(1)
+  act(() => result.current.fullBuildingReader!.request())
+  await waitFor(() => expect(result.current.fullBuildingReader!.ready).toBe(true))
+  expect(buildingReads()).toHaveLength(2)
+  expect(buildingReads()[1].columns).not.toBe(MAP_BUILDING_COLUMNS)
+  expect(buildingReads()[1].columns).toContain('memo')
+  // A later map request never downgrades a full snapshot.
+  act(() => result.current.fullBuildingReader!.requestMap())
+  await act(async () => {})
+  expect(buildingReads()).toHaveLength(2)
+  expect(result.current.fullBuildingReader!.ready).toBe(true)
+  // ...not even on the next refresh, which must read full again.
+  await act(async () => { await result.current.refetchAll() })
+  expect(buildingReads().at(-1)!.columns).toContain('memo')
+  expect(result.current.fullBuildingReader!.ready).toBe(true)
+})
+
+test.each(['map', 'full'] as const)('assignment %s then light 나의 봉사: the restaurant sheet reuses it with no building read', async tier => {
+  const { result, rerender } = lightLeader()
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ mode: tier })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  rerender({ mode: 'landing' })
+  const before = buildingReads().length
+  expect(result.current.fullBuildingReader!.mapReady).toBe(true)
+  act(() => result.current.fullBuildingReader!.requestMap())
+  await act(async () => {})
+  expect(buildingReads()).toHaveLength(before)
+})
+
+test.each(['calendar', 'zone'] as const)('%s snapshots are not map data: the sheet still reads the map snapshot', async tier => {
+  const { result, rerender } = lightLeader()
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  rerender({ mode: tier })
+  await waitFor(() => expect(result.current.buildingScopeReady).toBe(true))
+  rerender({ mode: 'landing' })
+  expect(result.current.fullBuildingReader!.mapReady).toBe(false)
+  act(() => result.current.fullBuildingReader!.requestMap())
+  await waitFor(() => expect(result.current.fullBuildingReader!.mapReady).toBe(true))
+  expect(buildingReads().at(-1)!.columns).toBe(MAP_BUILDING_COLUMNS)
+})
+
+test('a failed map request stays gated and retries into the map snapshot', async () => {
+  const { result } = lightLeader()
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  state.buildingResponse = Promise.resolve({ data: [], error: new Error('offline') })
+  act(() => result.current.fullBuildingReader!.requestMap())
+  await waitFor(() => expect(result.current.fullBuildingReader!.error).toBe(true))
+  expect(result.current.fullBuildingReader!.mapReady).toBe(false)
+  await act(async () => { await result.current.fullBuildingReader!.retry() })
+  expect(result.current.fullBuildingReader!.mapReady).toBe(true)
+  expect(result.current.fullBuildingReader!.error).toBe(false)
+  expect(buildingReads().at(-1)!.columns).toBe(MAP_BUILDING_COLUMNS)
+})
