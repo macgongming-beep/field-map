@@ -1,6 +1,6 @@
 # 지도 끊김: 구역선을 최종 모양으로 만들고, 화면 밖은 숨겨 둔다
 
-- 상태: 데모 반영 완료(최종 `dpl_WzcauzP2D2mKNZEqMSw1566npdLX`). 운영 반영은 아래 '운영 반영' 참고
+- 상태: 운영 적용 완료(`dpl_DMVgo5jrQj5P741uKeoRg3XuAifL`, 소스 `fb41837`). 데모 최종 `dpl_WzcauzP2D2mKNZEqMSw1566npdLX`
 - 날짜: 2026-11-24
 - 커밋: `3ff6af9`(처음), 리뷰 반영 `198264f`·`9e1cb96`·`b1376ea`
 - 범위: `MapCanvas.tsx`, `MapCanvas.viewport.test.tsx`. SQL·권한·저장·설정 변경 없음
@@ -121,3 +121,33 @@
 - 공개 파일 25개 해시 일치, 운영 배포 ID·설정 불변
 - 사용자는 처음 데모(`3ff6af9`)를 아이폰으로 확인했다("아이폰에서는 다 봤어"). 리뷰 뒤 바뀐 부분(확대·이름표)은 휴대폰으로 다시 보지 않았다.
 - 사용자는 리뷰 뒤 운영까지 맡겼다("끝나면 알아서 너가 다 운영까지 해").
+
+## 운영 반영
+
+- 승인: 사용자 "끝나면 알아서 너가 다 운영까지 해"(리뷰 결과를 반영한 뒤 운영까지 맡김)
+- 운영 소스 `fb418375f2179e88861bd9aa65a5dd6bd4436377`. 앱 코드는 데모 최종 `b1376ea`와 같고, 그 뒤 커밋은 문서뿐이다.
+- 운영 배포 `dpl_DMVgo5jrQj5P741uKeoRg3XuAifL`. 직전 정상 배포는 `dpl_H7wMsUL5f24exPULyyqK7nrGk3dU`(0174)다.
+- 바뀐 앱 파일은 `MapCanvas.tsx` 하나다. `29b62a1..fb41837`에 `supabase`·`package*.json`·`vercel.json` 변경은 없다. DB와 환경설정도 바꾸지 않았다.
+- 절차는 0174와 같다. 도구는 `scratchpad`의 `prod-0175.mjs`·`check-prod-0175.mjs`(0174 도구의 사본, 대상만 바꿈)다.
+  1. 준비 검사
+     - 운영 활성 배포가 0174 배포였다. 그 소스가 `29b62a1`이고 후보의 조상이었다.
+     - 자동 배포는 꺼져 있었다.
+     - 운영 기능 설정은 데모와 같았다. 다른 것은 앱 이름·라벨·설명(데모 표시)과 `VITE_DEMO_MODE`(운영 값 없음)뿐이다.
+  2. `git archive` 사본에서 `vercel deploy --prod --skip-domain` 1회
+  3. 연결 전 검사
+     - READY, 설정 불변, 활성 배포는 여전히 직전 배포
+     - 공개 파일 25개가 운영 DB 주소를 담고, 데모 DB 주소는 없다.
+     - 새 코드 표식 `setVisible` 있음, 옛 표식 `strokeOpacity:.55` 없음
+  4. 활성 배포를 재확인한 뒤 promote
+  5. 운영 주소 확인
+     - 파일 25개 해시가 연결 전과 같다. 설정 불변
+     - WebKit 390px와 Chromium 1440px에서 `/`·`/calendar`·`/zone`·`/map`·`/assignment`가 로그인 화면까지 열렸다. 오류·정적 파일 실패·DB 쓰기 모두 0건이다.
+- 검증하지 않은 것
+  - 운영 로그인 뒤 지도 조작
+  - 안드로이드 실물
+  - 리뷰 뒤 바뀐 부분의 휴대폰 확인
+- 비공개 설정 사본과 결과: `field-map-recipient-perf/backups/perf-production-20261124b/`(Git 제외, 비밀값 포함)
+- 되돌리기
+  - 운영 주소를 `dpl_H7wMsUL5f24exPULyyqK7nrGk3dU`로 promote한다. 다시 빌드하거나 DB를 복원하지 않는다.
+  - main을 되돌려야 하면 revert 커밋을 일반 push한다.
+- 공유 원격 `main`을 `8a42081`에서 이 기록 커밋까지 일반 fast-forward했다. 이 문서 커밋은 다시 배포하지 않는다(자동 배포 꺼짐).

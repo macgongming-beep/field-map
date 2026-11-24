@@ -35,7 +35,7 @@
 관리자 보기 전환 나의 봉사: [0172 인도자와 같은 가벼운 진입](0172-demo-admin-view-light-my-service.md).
 봉사자 앱 시작: [0173 기본 자료로 홈·달력·나의 봉사 먼저](0173-demo-volunteer-early-start.md).
 0169~0173 운영 반영: [0174](0174-my-service-startup-production-release.md).
-지도 끊김: [0175 구역선을 최종 모양으로 만들고 화면 밖은 숨김](0175-demo-map-boundary-jank.md).
+지도 끊김: [0175 구역선을 최종 모양으로 만들고 화면 밖은 숨김](0175-demo-map-boundary-jank.md) (운영 반영 포함).
 
 봉사자·관리 화면 조회 데모 재검증: [0155 개인 구역 ID 재사용과 경량 관리 조회](0155-demo-section-read-reuse.md).
 
