@@ -329,7 +329,11 @@ function cardLabelHtml(text: string): string {
 const CARD_LABEL_MIN_ZOOM = 15  // 이 줌 미만이면 라벨 숨김 (겹침 방지)
 
 // 화면 밖에 숨겨 둘 구역선 수의 한도. 넘으면 오래된 것부터 지도에서 뗀다.
-const MAX_PARKED_BOUNDARIES = 300
+// 숨긴 것도 지도에 붙어 있는 동안은 팬·줌마다 SDK 알림을 받으므로 많이 두지 않는다.
+const MAX_PARKED_BOUNDARIES = 150
+// 한 프레임에 떼는 수. 떼기(setMap(null))는 붙은 것이 많을수록 비싸서 나눠서 뗀다.
+// (동 단위에서 확대해 들어가면 수백 개가 한꺼번에 화면 밖이 된다)
+const PARKED_DETACH_CHUNK = 30
 
 function samePoints(a: { lat: number; lng: number }[] | undefined, b: { lat: number; lng: number }[]): boolean {
   if (a === b) return true
@@ -1308,7 +1312,30 @@ function NaverMapCanvas({
     }
   }
 
-  useEffect(() => () => cancelBoundaryQueue(), [])
+  const parkedDetachTimerRef = useRef<number | null>(null)
+  const detachParkedOverflowRef = useRef<() => void>(() => {})
+  detachParkedOverflowRef.current = () => {
+    parkedDetachTimerRef.current = null
+    const parked = parkedPolygonIdsRef.current
+    const currentMap = cardPolygonsRef.current
+    let budget = PARKED_DETACH_CHUNK
+    // 넣은 순서 = 오래 숨겨 둔 순서. 그사이 다시 보인 것은 목록에서 빠져 있다
+    for (const cardId of parked) {
+      if (parked.size <= MAX_PARKED_BOUNDARIES || budget <= 0) break
+      currentMap.get(cardId)?.setMap(null)
+      currentMap.delete(cardId)
+      parked.delete(cardId)
+      budget--
+    }
+    if (parked.size > MAX_PARKED_BOUNDARIES) {
+      parkedDetachTimerRef.current = window.requestAnimationFrame(() => detachParkedOverflowRef.current())
+    }
+  }
+
+  useEffect(() => () => {
+    cancelBoundaryQueue()
+    if (parkedDetachTimerRef.current !== null) window.cancelAnimationFrame(parkedDetachTimerRef.current)
+  }, [])
 
   const syncCardBoundaries = () => {
     const naver = (window as any).naver
@@ -1363,13 +1390,9 @@ function NaverMapCanvas({
         else removePolygon(polygon, cardId)
       }
     })
-    // 숨겨 둔 것이 너무 많아지면 오래된 것부터 정말로 뗀다
-    if (parked.size > MAX_PARKED_BOUNDARIES) {
-      for (const cardId of [...parked].slice(0, parked.size - MAX_PARKED_BOUNDARIES)) {
-        const polygon = currentMap.get(cardId)
-        if (polygon) removePolygon(polygon, cardId)
-        else parked.delete(cardId)
-      }
+    // 숨겨 둔 것이 너무 많아지면 오래된 것부터 정말로 뗀다 — 다음 프레임부터 나눠서
+    if (parked.size > MAX_PARKED_BOUNDARIES && parkedDetachTimerRef.current === null) {
+      parkedDetachTimerRef.current = window.requestAnimationFrame(() => detachParkedOverflowRef.current())
     }
     // 사라진 경계의 라벨 제거
     labelMap.forEach((label, cardId) => {

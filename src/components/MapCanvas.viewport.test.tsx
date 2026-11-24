@@ -233,11 +233,44 @@ test('hidden boundaries over the limit are detached oldest first', () => {
   getBounds.mockReturnValue(near)
   act(() => { emit(maps[0], 'center_changed'); emit(maps[0], 'idle') })
   expect(shownCardPolygons()).toHaveLength(1)
-  const detached = farPolygons.filter(p => p.getMap() === null)
-  expect(detached).toHaveLength(100)
-  expect(farPolygons.filter(p => p.getMap() === maps[0] && !p.visible)).toHaveLength(300)
+  const detached = () => farPolygons.filter(p => p.getMap() === null)
+  // 그 자리에서 한꺼번에 떼지 않는다(확대해 들어갈 때 멈춤) — 다음 프레임부터 30개씩
+  expect(detached()).toHaveLength(0)
+  expect(farPolygons.every(p => !p.visible)).toBe(true)
+  act(() => { vi.advanceTimersByTime(17) })
+  expect(detached()).toHaveLength(30)
+  act(() => { vi.advanceTimersByTime(1000) })
+  expect(detached()).toHaveLength(250)
+  expect(farPolygons.filter(p => p.getMap() === maps[0] && !p.visible)).toHaveLength(150)
   // 오래 숨겨 둔 것(먼저 만든 것, 가운데에서 같은 거리라 넣은 순서)부터 뗀다
-  expect(detached).toEqual(farPolygons.slice(0, 100))
+  expect(detached()).toEqual(farPolygons.slice(0, 250))
+  getBounds.mockRestore()
+})
+
+test('boundaries shown again while the overflow is being detached stay on the map', () => {
+  vi.useFakeTimers()
+  const near = new Bounds(new LatLng(37.09, 127.09), new LatLng(37.21, 127.21))
+  const far = new Bounds(new LatLng(37.69, 127.69), new LatLng(37.72, 127.72))
+  const getBounds = vi.spyOn(FakeMap.prototype, 'getBounds').mockReturnValue(far)
+  const many = [boundaries[0], ...Array.from({ length: 400 }, (_, i) => testBoundary(i + 2, [37.7, 127.7, 37.71, 127.71]))]
+  const view = render(<MapCanvas {...props} cardBoundaries={many} boundaryViewportMinZoom={13} viewportMemory={{ current: { lat: 37.7, lng: 127.7, zoom: 14 } }} />)
+  act(() => { vi.advanceTimersByTime(1000) })
+  const farPolygons = polygons.filter(p => p.options.visible !== undefined && p.options.paths?.[0].lat() === 37.7)
+  getBounds.mockReturnValue(near)
+  act(() => { emit(maps[0], 'center_changed'); emit(maps[0], 'idle'); vi.advanceTimersByTime(17) })
+  expect(farPolygons.filter(p => p.getMap() === null)).toHaveLength(30)
+  getBounds.mockReturnValue(far)
+  act(() => { emit(maps[0], 'center_changed'); emit(maps[0], 'idle'); vi.advanceTimersByTime(1000) })
+  expect(farPolygons.filter(p => p.getMap() === null)).toHaveLength(30)
+  expect(farPolygons.filter(p => p.getMap() === maps[0]).every(p => p.visible)).toBe(true)
+  expect(shownCardPolygons()).toHaveLength(400)
+  // 떼던 중에 화면을 닫아도 남은 프레임이 돌지 않는다
+  getBounds.mockReturnValue(near)
+  act(() => { emit(maps[0], 'center_changed'); emit(maps[0], 'idle') })
+  view.unmount()
+  const attached = polygons.filter(p => p.getMap() === maps[0]).length
+  act(() => { vi.advanceTimersByTime(1000) })
+  expect(polygons.filter(p => p.getMap() === maps[0]).length).toBe(attached)
   getBounds.mockRestore()
 })
 
