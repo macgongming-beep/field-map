@@ -30,7 +30,9 @@ function view(source: ServiceLabelSource, extra: Record<string, unknown> = {}) {
   const tree = (value: ServiceLabelSource, more: Record<string, unknown>) =>
     <MemoryRouter><ServiceLabelContext.Provider value={value}><MobileTerritory {...(props(more) as never)} /></ServiceLabelContext.Provider></MemoryRouter>
   const result = render(tree(source, extra))
-  fireEvent.click(screen.getByRole('button', { name: /15:00 전도/ }))
+  // 12~17시에는 지금 시간대 일정이라 저절로 펼쳐진다. 그때 누르면 접혀서 시험이 오후에만 실패했다
+  const toggle = screen.getByRole('button', { name: /15:00 전도/ })
+  if (!toggle.closest('article')?.classList.contains('open')) fireEvent.click(toggle)
   return { ...result, update: (value: ServiceLabelSource, more: Record<string, unknown> = extra) => result.rerender(tree(value, more)) }
 }
 const article = () => screen.getByRole('button', { name: /15:00 전도/ }).closest('article')!
