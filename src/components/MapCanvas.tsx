@@ -1134,8 +1134,10 @@ function NaverMapCanvas({
   // 구역선 하나의 모양. 처음 만들 때와 다시 칠할 때 같은 값을 쓴다.
   // `map`은 넣지 않는다 — setOptions({ map })은 같은 지도라도 떼었다 다시 붙여서 비싸다.
   // 보이기·숨기기는 boundaryPolygonShown 이 따로 정한다.
-  const boundaryPolygonStyle = (cardId: number): Record<string, unknown> => {
-    const clickable = !addingBuilding
+  // palette 는 부르는 쪽이 한 번 읽어 넘긴다 — 구역선마다 getComputedStyle 을 부르지 않는다
+  const boundaryPolygonStyle = (cardId: number, palette: ReturnType<typeof getMapPalette>): Record<string, unknown> => {
+    // 그리는 중인 카드의 숨긴 옛 구역선은 누름도 받지 않는다(옛 모양 안을 눌러도 점이 찍히게)
+    const clickable = !addingBuilding && !(drawingBoundary && cardId === selectedCardIdRef.current)
     const colorMap = cardColorMapRef.current
 
     // ── 배정 색칠 모드 (cardColorMap 있으면 우선) ──
@@ -1168,7 +1170,6 @@ function NaverMapCanvas({
     }
 
     // ── 기존 단색 강조 모드 ──
-    const palette = getMapPalette()
     const currentCardId = selectedCardIdRef.current
     const hIds = highlightedCardIdsRef.current || new Set()
     const selectedIds = selectedCardIdsRef.current
@@ -1206,8 +1207,9 @@ function NaverMapCanvas({
     const naver = (window as any).naver
     if (!naver?.maps || !mapInstanceRef.current) return
 
+    const palette = getMapPalette()
     cardPolygonsRef.current.forEach((polygon, cardId) => {
-      const options = boundaryPolygonStyle(cardId)
+      const options = boundaryPolygonStyle(cardId, palette)
       const previous = polygonStylesRef.current.get(polygon)
       if (!previous || !Object.entries(options).every(([key, value]) => previous[key] === value)) {
         polygon.setOptions(options)
@@ -1218,14 +1220,14 @@ function NaverMapCanvas({
   }
 
   // 구역선 하나를 지도에 올린다 (폴리곤)
-  const createBoundaryPolygon = (boundary: CardBoundary) => {
+  const createBoundaryPolygon = (boundary: CardBoundary, palette: ReturnType<typeof getMapPalette>) => {
     const naver = (window as any).naver
     if (!naver?.maps || !mapInstanceRef.current) return
     if (cardPolygonsRef.current.has(boundary.cardId)) return
     if (!boundary.points || boundary.points.length < 3) return
     // 처음부터 최종 모양으로 만든다. 기본 모양으로 만든 뒤 setOptions 로 다시 칠하면
     // 축소해서 수백 개가 한꺼번에 생길 때 그 다시 칠하기가 지도를 멈췄다.
-    const style = boundaryPolygonStyle(boundary.cardId)
+    const style = boundaryPolygonStyle(boundary.cardId, palette)
     const shown = boundaryPolygonShown(boundary.cardId)
     try {
       const polygon = new naver.maps.Polygon({
@@ -1294,7 +1296,8 @@ function NaverMapCanvas({
   drainBoundaryQueueRef.current = () => {
     const CHUNK = 40
     const chunk = boundaryQueueRef.current.splice(0, CHUNK)
-    chunk.forEach(createBoundaryPolygon)
+    const palette = getMapPalette()
+    chunk.forEach((boundary) => createBoundaryPolygon(boundary, palette))
     // 스타일 정리는 끝나고 한 번만 — 조각마다 전체를 다시 칠하면 그게 또 부담이다
     if (boundaryQueueRef.current.length > 0) {
       boundaryChunkTimerRef.current = window.requestAnimationFrame(() => drainBoundaryQueueRef.current())
@@ -1395,7 +1398,8 @@ function NaverMapCanvas({
     }
 
     const FIRST_BATCH = 40
-    pending.slice(0, FIRST_BATCH).forEach(createBoundaryPolygon)
+    const palette = getMapPalette()
+    pending.slice(0, FIRST_BATCH).forEach((boundary) => createBoundaryPolygon(boundary, palette))
     boundaryQueueRef.current = pending.slice(FIRST_BATCH)
 
     updatePolygonStyles()

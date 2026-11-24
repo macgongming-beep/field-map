@@ -149,6 +149,19 @@ test('boundaries are created with their final style and later only changed style
   }
 })
 
+test('a boundary created while its card is being redrawn starts hidden and does not take taps', () => {
+  const memory: MapViewportMemory = { current: { lat: 37.2, lng: 127.2, zoom: 14 } }
+  const view = render(<MapCanvas {...props} viewportMemory={memory} selectedCardId={1} drawingBoundary />)
+  const one = polygons.find(p => p.options.visible !== undefined && p.options.paths?.[0].lat() === 37.1)!
+  const two = cardPolygon(37.3)
+  expect(one.options).toEqual(expect.objectContaining({ visible: false, clickable: false }))
+  expect(one.visible).toBe(false)
+  expect(two.options).toEqual(expect.objectContaining({ visible: true, clickable: true }))
+  view.rerender(<MapCanvas {...props} viewportMemory={memory} selectedCardId={1} />)
+  expect(one.visible).toBe(true)
+  expect(one.setOptions).toHaveBeenLastCalledWith(expect.objectContaining({ clickable: true }))
+})
+
 test('a boundary removed by a filter is detached and returns as a new polygon in its current style', () => {
   const memory: MapViewportMemory = { current: { lat: 37.2, lng: 127.2, zoom: 14 } }
   const view = render(<MapCanvas {...props} viewportMemory={memory} highlightedCardIds={new Set([1])} />)
