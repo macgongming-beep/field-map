@@ -328,6 +328,15 @@ function cardLabelHtml(text: string): string {
 
 const CARD_LABEL_MIN_ZOOM = 15  // 이 줌 미만이면 라벨 숨김 (겹침 방지)
 
+// 화면 밖에 숨겨 둘 구역선 수의 한도. 넘으면 오래된 것부터 지도에서 뗀다.
+const MAX_PARKED_BOUNDARIES = 300
+
+function samePoints(a: { lat: number; lng: number }[] | undefined, b: { lat: number; lng: number }[]): boolean {
+  if (a === b) return true
+  if (!a || a.length !== b.length) return false
+  return a.every((point, index) => point.lat === b[index].lat && point.lng === b[index].lng)
+}
+
 function previewPinHtml(): string {
   const infoColor = cssVar('--info-700', '#3b82f6')
   return `<div style="position:relative; width:40px; height:40px; display:flex; justify-content:center;">
@@ -578,6 +587,11 @@ function NaverMapCanvas({
   const boundaryRef = useRef<any>(null)
   const cardPolygonsRef = useRef<Map<number, any>>(new Map())
   const polygonStylesRef = useRef(new WeakMap<object, Record<string, unknown>>())
+  const polygonShownRef = useRef(new WeakMap<object, boolean>())
+  // 화면 밖으로 나간 구역선은 지우지 않고 숨겨 둔다(넣은 순서대로). 돌아오면 다시 보이기만 한다.
+  // 지도에서 떼는 일(setMap(null))이 구역선마다 비싸서, 끌 때마다 떼고 다시 만들면 끊겼다.
+  const parkedPolygonIdsRef = useRef<Set<number>>(new Set())
+  const polygonPointsRef = useRef(new WeakMap<object, CardBoundary['points']>())
   const cardLabelsRef = useRef<Map<number, any>>(new Map())  // 구역선 중앙 카드 라벨
   const draftBoundaryRef = useRef<any>(null)
   const draftPointMarkerRefs = useRef<any[]>([])
@@ -1117,78 +1131,89 @@ function NaverMapCanvas({
     )
   }
 
-  const updatePolygonStyles = () => {
-    const naver = (window as any).naver
-    if (!naver?.maps || !mapInstanceRef.current) return
-    const palette = getMapPalette()
+  // 구역선 하나의 모양. 처음 만들 때와 다시 칠할 때 같은 값을 쓴다.
+  // `map`은 넣지 않는다 — setOptions({ map })은 같은 지도라도 떼었다 다시 붙여서 비싸다.
+  // 보이기·숨기기는 boundaryPolygonShown 이 따로 정한다.
+  const boundaryPolygonStyle = (cardId: number): Record<string, unknown> => {
+    const clickable = !addingBuilding
+    const colorMap = cardColorMapRef.current
 
+    // ── 배정 색칠 모드 (cardColorMap 있으면 우선) ──
+    if (colorMap) {
+      const teamColor = colorMap.get(cardId)
+      if (teamColor) {
+        // 팀 배정된 구역 — 팀색으로 채움 (파스텔이라 채도 보강)
+        return {
+          fillColor: teamColor,
+          fillOpacity: 0.45,
+          strokeColor: teamColor,
+          strokeOpacity: 1,
+          strokeWeight: 3,
+          strokeStyle: 'solid',
+          zIndex: 25,
+          clickable,
+        }
+      }
+      // 미배정 담당 구역 — 잘 보이게 (연한 채움 + 또렷한 실선 테두리)
+      return {
+        fillColor: '#5b6b7c',
+        fillOpacity: 0.10,
+        strokeColor: '#5b6b7c',
+        strokeOpacity: 0.85,
+        strokeWeight: 2.5,
+        strokeStyle: 'solid',
+        zIndex: 8,
+        clickable,
+      }
+    }
+
+    // ── 기존 단색 강조 모드 ──
+    const palette = getMapPalette()
     const currentCardId = selectedCardIdRef.current
     const hIds = highlightedCardIdsRef.current || new Set()
     const selectedIds = selectedCardIdsRef.current
+    const isSelected =
+      selectedIds && selectedIds.size > 0
+        ? selectedIds.has(cardId)
+      : currentCardId === '전체'
+        ? hIds.has(cardId)
+        : cardId === currentCardId
 
-    const colorMap = cardColorMapRef.current
+    return {
+      fillColor: isSelected ? '#5D5B54' : palette.cardDraft,
+      fillOpacity: isSelected ? 0.10 : 0.05,
+      strokeColor: isSelected ? '#5D5B54' : palette.cardDraft,
+      strokeOpacity: isSelected ? 0.85 : 0.5,
+      strokeWeight: isSelected ? 3 : 2,
+      strokeStyle: isSelected ? 'solid' : 'shortdash',
+      zIndex: isSelected ? 20 : 5,
+      clickable,
+    }
+  }
+
+  // 숨겨 둔(화면 밖) 구역선과 그리는 중인 카드의 구역선은 감춘다
+  const boundaryPolygonShown = (cardId: number) =>
+    !parkedPolygonIdsRef.current.has(cardId) && !(drawingBoundary && cardId === selectedCardIdRef.current)
+
+  const setPolygonShown = (polygon: any, shown: boolean) => {
+    if (polygonShownRef.current.get(polygon) === shown) return
+    if (typeof polygon.setVisible === 'function') polygon.setVisible(shown)
+    else polygon.setOptions({ visible: shown })
+    polygonShownRef.current.set(polygon, shown)
+  }
+
+  const updatePolygonStyles = () => {
+    const naver = (window as any).naver
+    if (!naver?.maps || !mapInstanceRef.current) return
 
     cardPolygonsRef.current.forEach((polygon, cardId) => {
-      const isVisible = !(drawingBoundary && cardId === currentCardId)
-      const applyStyle = (options: Record<string, unknown>) => {
-        const previous = polygonStylesRef.current.get(polygon)
-        if (previous && Object.entries(options).every(([key, value]) => previous[key] === value)) return
+      const options = boundaryPolygonStyle(cardId)
+      const previous = polygonStylesRef.current.get(polygon)
+      if (!previous || !Object.entries(options).every(([key, value]) => previous[key] === value)) {
         polygon.setOptions(options)
         polygonStylesRef.current.set(polygon, options)
       }
-
-      // ── 배정 색칠 모드 (cardColorMap 있으면 우선) ──
-      if (colorMap) {
-        const teamColor = colorMap.get(cardId)
-        if (teamColor) {
-          // 팀 배정된 구역 — 팀색으로 채움 (파스텔이라 채도 보강)
-          applyStyle({
-            fillColor: teamColor,
-            fillOpacity: 0.45,
-            strokeColor: teamColor,
-            strokeOpacity: 1,
-            strokeWeight: 3,
-            strokeStyle: 'solid',
-            zIndex: 25,
-            map: isVisible ? mapInstanceRef.current : null,
-            clickable: !addingBuilding,
-          })
-        } else {
-          // 미배정 담당 구역 — 잘 보이게 (연한 채움 + 또렷한 실선 테두리)
-          applyStyle({
-            fillColor: '#5b6b7c',
-            fillOpacity: 0.10,
-            strokeColor: '#5b6b7c',
-            strokeOpacity: 0.85,
-            strokeWeight: 2.5,
-            strokeStyle: 'solid',
-            zIndex: 8,
-            map: isVisible ? mapInstanceRef.current : null,
-            clickable: !addingBuilding,
-          })
-        }
-        return
-      }
-
-      // ── 기존 단색 강조 모드 ──
-      const isSelected =
-        selectedIds && selectedIds.size > 0
-          ? selectedIds.has(cardId)
-        : currentCardId === '전체'
-          ? hIds.has(cardId)
-          : cardId === currentCardId
-
-      applyStyle({
-        fillColor: isSelected ? '#5D5B54' : palette.cardDraft,
-        fillOpacity: isSelected ? 0.10 : 0.05,
-        strokeColor: isSelected ? '#5D5B54' : palette.cardDraft,
-        strokeOpacity: isSelected ? 0.85 : 0.5,
-        strokeWeight: isSelected ? 3 : 2,
-        strokeStyle: isSelected ? 'solid' : 'shortdash',
-        zIndex: isSelected ? 20 : 5,
-        map: isVisible ? mapInstanceRef.current : null,
-        clickable: !addingBuilding,
-      })
+      setPolygonShown(polygon, boundaryPolygonShown(cardId))
     })
   }
 
@@ -1198,9 +1223,14 @@ function NaverMapCanvas({
     if (!naver?.maps || !mapInstanceRef.current) return
     if (cardPolygonsRef.current.has(boundary.cardId)) return
     if (!boundary.points || boundary.points.length < 3) return
-    const palette = getMapPalette()
+    // 처음부터 최종 모양으로 만든다. 기본 모양으로 만든 뒤 setOptions 로 다시 칠하면
+    // 축소해서 수백 개가 한꺼번에 생길 때 그 다시 칠하기가 지도를 멈췄다.
+    const style = boundaryPolygonStyle(boundary.cardId)
+    const shown = boundaryPolygonShown(boundary.cardId)
     try {
       const polygon = new naver.maps.Polygon({
+        ...style,
+        visible: shown,
         map: mapInstanceRef.current,
         paths: boundary.points.map(({ lat, lng }) => {
           if (typeof lat !== 'number' || typeof lng !== 'number') {
@@ -1208,14 +1238,10 @@ function NaverMapCanvas({
           }
           return new naver.maps.LatLng(lat, lng)
         }),
-        fillColor: palette.cardDraft,
-        fillOpacity: 0.08,
-        strokeColor: palette.cardDraft,
-        strokeOpacity: 0.55,
-        strokeWeight: 2,
-        strokeStyle: 'shortdash',
-        clickable: !addingBuilding,
       })
+      polygonStylesRef.current.set(polygon, style)
+      polygonShownRef.current.set(polygon, shown)
+      polygonPointsRef.current.set(polygon, boundary.points)
 
       naver.maps.Event.addListener(polygon, 'click', () => {
         onSelectCardBoundaryRef.current?.(boundary.cardId)
@@ -1313,12 +1339,35 @@ function NaverMapCanvas({
     const labelMap = cardLabelsRef.current
     const boundaryIds = new Set(visibleBoundaries.map((b) => b.cardId))
 
+    const parked = parkedPolygonIdsRef.current
+    const removePolygon = (polygon: any, cardId: number) => {
+      polygon.setMap(null)
+      currentMap.delete(cardId)
+      parked.delete(cardId)
+    }
+    const boundaryById = new Map(cardBoundariesRef.current.map((b) => [b.cardId, b]))
     currentMap.forEach((polygon, cardId) => {
-      if (!boundaryIds.has(cardId)) {
-        polygon.setMap(null)
-        currentMap.delete(cardId)
+      const boundary = boundaryById.get(cardId)
+      if (!boundary) {
+        // 구역선 자체가 없어졌다(필터·삭제) — 지도에서 뗀다
+        removePolygon(polygon, cardId)
+      } else if (!boundaryIds.has(cardId)) {
+        // 화면 밖으로 나갔다 — 숨겨 두고 다시 쓴다
+        if (!parked.has(cardId)) parked.add(cardId)
+      } else if (parked.has(cardId)) {
+        // 숨겨 둔 것이 돌아왔다. 그동안 모양이 바뀌었으면 새로 만든다
+        if (samePoints(polygonPointsRef.current.get(polygon), boundary.points)) parked.delete(cardId)
+        else removePolygon(polygon, cardId)
       }
     })
+    // 숨겨 둔 것이 너무 많아지면 오래된 것부터 정말로 뗀다
+    if (parked.size > MAX_PARKED_BOUNDARIES) {
+      for (const cardId of [...parked].slice(0, parked.size - MAX_PARKED_BOUNDARIES)) {
+        const polygon = currentMap.get(cardId)
+        if (polygon) removePolygon(polygon, cardId)
+        else parked.delete(cardId)
+      }
+    }
     // 사라진 경계의 라벨 제거
     labelMap.forEach((label, cardId) => {
       if (!boundaryIds.has(cardId)) {
@@ -1365,7 +1414,9 @@ function NaverMapCanvas({
     if (show) {
       // 아직 안 만든 라벨은 이때 만든다 (숨겨진 라벨을 미리 만들지 않는다)
       cardBoundariesRef.current.forEach((boundary) => {
-        if (cardPolygonsRef.current.has(boundary.cardId)) createBoundaryLabel(boundary)
+        if (cardPolygonsRef.current.has(boundary.cardId) && !parkedPolygonIdsRef.current.has(boundary.cardId)) {
+          createBoundaryLabel(boundary)
+        }
       })
     }
     cardLabelsRef.current.forEach((label) => {
