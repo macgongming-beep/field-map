@@ -1337,32 +1337,33 @@ function NaverMapCanvas({
     if (parkedDetachTimerRef.current !== null) window.cancelAnimationFrame(parkedDetachTimerRef.current)
   }, [])
 
+  // 구역선을 유지할 화면 영역(화면 + 사방 25%). 기준 줌 아래면 null = 전부
+  const boundaryViewBounds = () => {
+    const map = mapInstanceRef.current
+    if (!map) return null
+    // 가까이 확대했을 때는 모바일과 PC 모두 화면 주변 구역선만 유지한다.
+    // PC만 600여 폴리곤을 계속 그리던 탓에 줌·팬마다 SVG 갱신이 끊겼다.
+    const rawBounds = map.getZoom() >= boundaryViewportMinZoom ? map.getBounds?.() : null
+    if (!rawBounds?.getSW || !rawBounds?.getNE) return null
+    const sw = rawBounds.getSW()
+    const ne = rawBounds.getNE()
+    const latPad = Math.abs(ne.lat() - sw.lat()) * 0.25
+    const lngPad = Math.abs(ne.lng() - sw.lng()) * 0.25
+    return {
+      minLat: sw.lat() - latPad,
+      maxLat: ne.lat() + latPad,
+      minLng: sw.lng() - lngPad,
+      maxLng: ne.lng() + lngPad,
+    }
+  }
+
   const syncCardBoundaries = () => {
     const naver = (window as any).naver
     if (!naver?.maps || !mapInstanceRef.current) return
 
-    const zoom = mapInstanceRef.current.getZoom()
-    // 가까이 확대했을 때는 모바일과 PC 모두 화면 주변 구역선만 유지한다.
-    // PC만 600여 폴리곤을 계속 그리던 탓에 줌·팬마다 SVG 갱신이 끊겼다.
-    const rawBounds = zoom >= boundaryViewportMinZoom
-      ? mapInstanceRef.current.getBounds?.()
-      : null
-    const visibleBoundaries = rawBounds?.getSW && rawBounds?.getNE
-      ? (() => {
-          const sw = rawBounds.getSW()
-          const ne = rawBounds.getNE()
-          const latPad = Math.abs(ne.lat() - sw.lat()) * 0.25
-          const lngPad = Math.abs(ne.lng() - sw.lng()) * 0.25
-          const bounds = {
-            minLat: sw.lat() - latPad,
-            maxLat: ne.lat() + latPad,
-            minLng: sw.lng() - lngPad,
-            maxLng: ne.lng() + lngPad,
-          }
-          return cardBoundariesRef.current.filter((boundary) =>
-            boundaryIntersectsBounds(boundary.points, bounds),
-          )
-        })()
+    const bounds = boundaryViewBounds()
+    const visibleBoundaries = bounds
+      ? cardBoundariesRef.current.filter((boundary) => boundaryIntersectsBounds(boundary.points, bounds))
       : cardBoundariesRef.current
 
     const currentMap = cardPolygonsRef.current
@@ -1397,7 +1398,8 @@ function NaverMapCanvas({
     // 사라진 경계의 라벨 제거
     labelMap.forEach((label, cardId) => {
       if (!boundaryIds.has(cardId)) {
-        label.setMap(null)
+        // 이미 떼어진 라벨(끌기 시작·축소 때 뗀다)을 다시 떼지 않는다 — SDK 는 그래도 떼기 작업을 다 한다
+        if (label.getMap()) label.setMap(null)
         labelMap.delete(cardId)
       }
     })
@@ -1438,18 +1440,24 @@ function NaverMapCanvas({
   const updateCardLabelVisibility = () => {
     if (!mapInstanceRef.current) return
     const show = mapInstanceRef.current.getZoom() >= CARD_LABEL_MIN_ZOOM
+    // 화면 주변 구역선의 라벨만 붙인다. 확대해 들어가는 순간(구역선 정리 전)에
+    // 화면 밖 수백 개 라벨까지 붙였다가 곧바로 떼느라 지도가 멈췄다.
+    const wanted = new Set<number>()
     if (show) {
-      // 아직 안 만든 라벨은 이때 만든다 (숨겨진 라벨을 미리 만들지 않는다)
+      const bounds = boundaryViewBounds()
       cardBoundariesRef.current.forEach((boundary) => {
-        if (cardPolygonsRef.current.has(boundary.cardId) && !parkedPolygonIdsRef.current.has(boundary.cardId)) {
-          createBoundaryLabel(boundary)
-        }
+        if (!cardPolygonsRef.current.has(boundary.cardId) || parkedPolygonIdsRef.current.has(boundary.cardId)) return
+        if (bounds && !boundaryIntersectsBounds(boundary.points, bounds)) return
+        wanted.add(boundary.cardId)
+        // 아직 안 만든 라벨은 이때 만든다 (숨겨진 라벨을 미리 만들지 않는다)
+        createBoundaryLabel(boundary)
       })
     }
-    cardLabelsRef.current.forEach((label) => {
+    cardLabelsRef.current.forEach((label, cardId) => {
       const onMap = !!label.getMap()
-      if (show && !onMap) label.setMap(mapInstanceRef.current)
-      else if (!show && onMap) label.setMap(null)
+      const want = wanted.has(cardId)
+      if (want && !onMap) label.setMap(mapInstanceRef.current)
+      else if (!want && onMap) label.setMap(null)
     })
   }
   updateCardLabelVisibilityRef.current = updateCardLabelVisibility

@@ -303,7 +303,23 @@ test('a hidden boundary whose shape changed is rebuilt when it comes back', () =
   getBounds.mockRestore()
 })
 
+test('zooming in past the label level attaches labels only for boundaries around the view', () => {
+  const near = new Bounds(new LatLng(37.09, 127.09), new LatLng(37.21, 127.21))
+  const getBounds = vi.spyOn(FakeMap.prototype, 'getBounds').mockReturnValue(near)
+  const cards = [testCard(1, '하나'), testCard(2, '둘')]
+  render(<MapCanvas {...props} cards={cards} viewportMemory={{ current: { lat: 37.15, lng: 127.15, zoom: 14 } }} />)
+  // 기준 줌 아래: 구역선은 전부 있고 라벨은 없다
+  expect(shownCardPolygons()).toHaveLength(2)
+  expect(markers).toHaveLength(0)
+  // 확대가 끝나는 순간(구역선 정리 전)에도 화면 밖 구역선의 라벨은 만들거나 붙이지 않는다
+  act(() => { maps[0].setZoom(16); emit(maps[0], 'zoom_changed') })
+  expect(markers).toHaveLength(1)
+  expect(markers[0].getMap()).toBe(maps[0])
+  getBounds.mockRestore()
+})
+
 test('card name labels are not created for hidden boundaries', () => {
+  vi.useFakeTimers()
   const near = new Bounds(new LatLng(37.09, 127.09), new LatLng(37.21, 127.21))
   const far = new Bounds(new LatLng(37.29, 127.29), new LatLng(37.41, 127.41))
   const getBounds = vi.spyOn(FakeMap.prototype, 'getBounds').mockReturnValue(near)
@@ -313,9 +329,11 @@ test('card name labels are not created for hidden boundaries', () => {
   expect(labels()).toHaveLength(1)
   const firstLabel = labels()[0]
   getBounds.mockReturnValue(far)
-  act(() => { emit(maps[0], 'center_changed'); emit(maps[0], 'idle') })
+  // 끌기 시작에 라벨을 뗀다. 멈춘 뒤 화면 밖 라벨은 다시 붙이지도, 두 번 떼지도 않는다
+  act(() => { emit(maps[0], 'dragstart'); emit(maps[0], 'idle'); vi.advanceTimersByTime(200) })
   expect(cardPolygon(37.1).visible).toBe(false)
   expect(firstLabel.getMap()).toBeNull()
+  expect(firstLabel.setMap.mock.calls.filter(([map]) => map === null)).toHaveLength(1)
   expect(labels()).toHaveLength(1)
   expect(labels()[0]).not.toBe(firstLabel)
   getBounds.mockRestore()
